@@ -426,8 +426,16 @@ var DocView = (() => {
       // scaling question the reader most wants answered). Shown in every mode.
       if (L.at_scale) {
         const scale = h("div", "scale-band");
-        scale.appendChild(h("div", "sb-label", "Under load · how it scales"));
+        const sb = h("div", "sb-label", "Under load · how it scales");
+        scale.appendChild(sb);
         scale.appendChild(h("p", null, L.at_scale));
+        // the load path = the payload flow (what the system exists to move) at
+        // this state; tap the band to trace it through the diagram in gold.
+        const st = Diagram.stateAt(doc, L.index);
+        const loadIds = [];
+        st.edges.forEach(e => { if (e.kind === "payload") loadIds.push(e.id, e.from, e.to); });
+        if (loadIds.length) sb.appendChild(h("span", "sb-hint", "◎ trace the load path"));
+        wireSpot(scale, loadIds, "load");
         root.appendChild(scale);
       }
 

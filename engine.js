@@ -18,6 +18,22 @@ function h(tag, cls, text) {
 }
 function $(id) { return document.getElementById(id); }
 
+/* Build an enso brush icon (inline currentColor SVG, so it themes light/dark)
+   from ENSO_ICONS path data. CSP-safe: constructed via DOM, no innerHTML. */
+function ensoIcon(name) {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 100 100");
+  svg.setAttribute("aria-hidden", "true");
+  (ENSO_ICONS[name] || []).forEach(d => {
+    const p = document.createElementNS(NS, "path");
+    p.setAttribute("d", d);
+    p.setAttribute("fill", "currentColor");
+    svg.appendChild(p);
+  });
+  return svg;
+}
+
 let meta = {};                    // cached meta map
 let currentView = null;           // DocView instance when reading
 let currentRec = null;            // open breakdown record
@@ -47,7 +63,7 @@ async function toggleTheme() {
 }
 
 /* ═══ Screen switching ═══ */
-const SCREENS = ["landing", "library", "reader", "generate", "models", "drill", "settings"];
+const SCREENS = ["landing", "library", "reader", "generate", "models", "drill", "tutorial", "settings"];
 function show(screen) {
   SCREENS.forEach(s => { $("screen-" + s).hidden = s !== screen; });
   document.body.classList.toggle("reading", screen === "reader");   // frees topbar room for the audience switch
@@ -167,7 +183,9 @@ function renderLanding() {
   L.sections.forEach(s => {
     const card = h("div", "landing-card");
     const hd = h("div", "lc-head");
-    hd.appendChild(h("span", "lc-icon", s.icon));
+    const ic = h("span", "lc-icon");
+    ic.appendChild(ensoIcon(s.icon));
+    hd.appendChild(ic);
     hd.appendChild(h("span", "lc-title", s.title));
     card.appendChild(hd);
     card.appendChild(h("p", null, s.body));
@@ -183,7 +201,138 @@ function renderLanding() {
     show("library");
   };
   root.appendChild(cta);
+  const learn = h("button", "gbtn", "How to read a study →");
+  learn.style.marginLeft = "8px";
+  learn.onclick = () => { renderTutorial("landing"); show("tutorial"); };
+  cta.after(learn);
   root.appendChild(h("p", "landing-foot", L.footnote));
+}
+
+/* ═══ Tutorial — 'How to read a study' (visitable anytime) ═══ */
+function svgNS(tag, attrs) {
+  const NS = "http://www.w3.org/2000/svg";
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+function nodeSwatch(kind) {                       // mini shape echoing the diagram's node kinds
+  const s = svgNS("svg", { viewBox: "0 0 46 30", class: "tut-swatch" });
+  const stroke = "#2f6f5e";
+  if (kind === "actor") { const c = svgNS("circle", { cx: 23, cy: 15, r: 10, fill: "var(--node-fill)" }); c.style.stroke = stroke; c.style.strokeWidth = 1.6; s.appendChild(c); }
+  else if (kind === "store") {
+    s.appendChild(svgNS("rect", { x: 7, y: 6, width: 32, height: 18, fill: "var(--node-fill)", stroke: "none" }));
+    const p = svgNS("path", { d: "M7 6 L7 24 L39 24 L39 6", fill: "none" }); p.style.stroke = stroke; p.style.strokeWidth = 1.6; s.appendChild(p);
+  } else if (kind === "channel") { const r = svgNS("rect", { x: 7, y: 6, width: 32, height: 18, rx: 9, fill: "var(--node-fill)" }); r.style.stroke = stroke; r.style.strokeWidth = 1.6; s.appendChild(r); }
+  else { const r = svgNS("rect", { x: 7, y: 6, width: 32, height: 18, rx: 2, fill: "var(--node-fill)" }); r.style.stroke = stroke; r.style.strokeWidth = 1.6; s.appendChild(r); }
+  return s;
+}
+function edgeSwatch(kind) {                       // mini arrow echoing the diagram's edge kinds
+  const s = svgNS("svg", { viewBox: "0 0 50 16", class: "tut-swatch tut-swatch-edge" });
+  const color = kind === "money" ? "#9a6212" : kind === "control" ? "#141416" : "#2f6f5e";
+  const dash = kind === "money" ? "1.5 3.5" : kind === "control" ? "5 4" : "0";
+  const ln = svgNS("line", { x1: 3, y1: 8, x2: 40, y2: 8 });
+  ln.style.stroke = color; ln.style.strokeWidth = kind === "payload" ? 2.2 : 1.6; if (dash !== "0") ln.style.strokeDasharray = dash;
+  s.appendChild(ln);
+  const head = svgNS("path", { d: "M40 8 L34 5 L34 11 Z", fill: color });
+  s.appendChild(head);
+  return s;
+}
+function renderTutorial(from) {
+  // capture the return target NOW — show("tutorial") will null currentRec
+  const returnId = (from === "reader" && currentRec) ? currentRec.id : null;
+  const root = $("screen-tutorial").firstElementChild;
+  root.textContent = "";
+  const T = COPY.tutorial;
+  const back = h("button", "gbtn", returnId ? "‹ Back to the study" : "‹ Back");
+  back.onclick = () => {
+    if (returnId) { openReader(returnId); }
+    else if (from === "landing") { renderLanding(); show("landing"); }
+    else { renderSettings(); show("settings"); }
+  };
+  root.appendChild(back);
+  root.appendChild(h("div", "kicker", T.kicker));
+  root.appendChild(h("h1", "title", T.headline));
+  root.appendChild(h("p", "subtitle", T.lede));
+
+  // The path
+  root.appendChild(h("h2", "section-head", T.reading.title));
+  const steps = h("div", "principles");
+  T.reading.steps.forEach(([name, desc]) => {
+    const row = h("div", "principle");
+    const b = h("span"); b.appendChild(h("b", null, name + " — ")); b.appendChild(document.createTextNode(desc));
+    row.appendChild(b);
+    steps.appendChild(row);
+  });
+  root.appendChild(steps);
+
+  // The cards
+  root.appendChild(h("h2", "section-head", T.cards.title));
+  root.appendChild(h("p", "lib-note", T.cards.note));
+  T.cards.items.forEach(([key, title, desc]) => {
+    const row = h("div", "tut-row");
+    row.appendChild(h("span", "tut-chip tut-chip-" + key));
+    const tx = h("div");
+    tx.appendChild(h("div", "tut-row-title", title));
+    tx.appendChild(h("p", "tut-row-desc", desc));
+    row.appendChild(tx);
+    root.appendChild(row);
+  });
+
+  // The diagram legend
+  root.appendChild(h("h2", "section-head", T.diagram.title));
+  root.appendChild(h("p", "lib-note", T.diagram.intro));
+  const nodeLeg = h("div", "tut-legend");
+  T.diagram.nodeKinds.forEach(([kind, name, desc]) => {
+    const item = h("div", "tut-legend-item");
+    item.appendChild(nodeSwatch(kind));
+    const tx = h("div"); tx.appendChild(h("b", null, name)); tx.appendChild(document.createTextNode(" — " + desc));
+    item.appendChild(tx);
+    nodeLeg.appendChild(item);
+  });
+  root.appendChild(nodeLeg);
+  const edgeLeg = h("div", "tut-legend");
+  T.diagram.edgeKinds.forEach(([kind, name, desc]) => {
+    const item = h("div", "tut-legend-item");
+    item.appendChild(edgeSwatch(kind));
+    const tx = h("div"); tx.appendChild(h("b", null, name)); tx.appendChild(document.createTextNode(" — " + desc));
+    item.appendChild(tx);
+    edgeLeg.appendChild(item);
+  });
+  root.appendChild(edgeLeg);
+  T.diagram.extra.forEach(([name, desc]) => {
+    const row = h("div", "tut-row");
+    const tx = h("div"); tx.appendChild(h("div", "tut-row-title", name)); tx.appendChild(h("p", "tut-row-desc", desc));
+    row.appendChild(tx);
+    root.appendChild(row);
+  });
+
+  // Controls
+  root.appendChild(h("h2", "section-head", T.controls.title));
+  T.controls.items.forEach(([name, desc]) => {
+    const row = h("div", "tut-row");
+    const tx = h("div"); tx.appendChild(h("div", "tut-row-title", name)); tx.appendChild(h("p", "tut-row-desc", desc));
+    row.appendChild(tx);
+    root.appendChild(row);
+  });
+
+  // For developers
+  const dev = h("div", "dev-box");
+  dev.style.marginTop = "26px";
+  dev.appendChild(h("div", "db-label", T.forDev.title));
+  dev.appendChild(h("p", "tut-dev-intro", T.forDev.intro));
+  T.forDev.map.forEach(([from2, to2]) => {
+    const row = h("div", "dev-map");
+    row.appendChild(h("span", "dm-mech", from2));
+    row.appendChild(h("span", "dm-arrow", "→"));
+    row.appendChild(h("span", "dm-sw", to2));
+    dev.appendChild(row);
+  });
+  root.appendChild(dev);
+
+  const cta = h("button", "big-btn", T.cta);
+  cta.style.marginTop = "24px";
+  cta.onclick = back.onclick;
+  root.appendChild(cta);
 }
 
 /* ═══ Library ═══ */
@@ -388,6 +537,7 @@ function buildReaderMenu(rec, challengeOn) {
     b.onclick = e => { e.stopPropagation(); pop.hidden = true; fn(); };
     pop.appendChild(b);
   };
+  add("How to read a study", () => { renderTutorial("reader"); show("tutorial"); });
   add((challengeOn ? "✓ " : "") + "Challenge mode (gates)", async () => {
     rec.challengeMode = !challengeOn;
     await Store.saveBreakdownLight(rec);
@@ -717,13 +867,17 @@ function renderSettings(banner) {
   root.appendChild(h("h1", "title", "Keys, defaults, backups"));
   if (banner) root.appendChild(h("div", "narrowing-note", banner));
 
-  /* About / how it works → the landing page */
+  /* About / how it works → landing + tutorial */
   const ab = h("div", "set-block");
-  ab.appendChild(h("h3", null, "About Vitruvian"));
-  ab.appendChild(h("p", "note", "What it is, who it's for, and how to use it."));
+  ab.appendChild(h("h3", null, "About & guide"));
+  ab.appendChild(h("p", "note", "What Vitruvian is, and how to read a study — the cards, the diagram, and the developer lens."));
+  const abRow = h("div", "set-row");
   const abBtn = h("button", "gbtn primary", "Open the intro →");
   abBtn.onclick = () => { renderLanding(); show("landing"); };
-  ab.appendChild(abBtn);
+  const tutBtn = h("button", "gbtn", "How to read a study →");
+  tutBtn.onclick = () => { renderTutorial("settings"); show("tutorial"); };
+  abRow.append(abBtn, tutBtn);
+  ab.appendChild(abRow);
   root.appendChild(ab);
 
   /* API key */

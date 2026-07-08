@@ -663,7 +663,8 @@ html,body{overscroll-behavior:none;}
 @media(max-width:680px){.landing-grid{grid-template-columns:1fr;}}
 .landing-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px;}
 .landing-card .lc-head{display:flex;align-items:center;gap:11px;margin-bottom:9px;}
-.landing-card .lc-icon{font-size:20px;color:var(--accent);width:30px;height:30px;display:grid;place-items:center;border:1.5px solid var(--accent);border-radius:8px;flex-shrink:0;}
+.landing-card .lc-icon{color:var(--accent);width:38px;height:38px;flex-shrink:0;display:grid;place-items:center;}
+.landing-card .lc-icon svg{width:100%;height:100%;display:block;}
 .landing-card .lc-title{font-family:var(--display);font-weight:700;font-size:18px;}
 .landing-card p{font-size:14.5px;line-height:1.6;color:var(--ink-soft);}
 .landing-cta{margin:34px 0 12px;font-size:14px;padding:15px 30px;}
@@ -757,6 +758,9 @@ html,body{overscroll-behavior:none;}
 .problem-card.spot-on::after{color:var(--failure);opacity:1;}
 .solution-card.spot-on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash);}
 .solution-card.spot-on::after{color:var(--accent);opacity:1;}
+.scale-band.spot-on{box-shadow:0 0 0 3px var(--money-wash);}
+.scale-band.spot-on::after{color:var(--money);opacity:1;}
+.sb-hint{font-family:var(--mono);font-size:8.5px;letter-spacing:1px;text-transform:uppercase;color:var(--money);opacity:.7;margin-left:8px;}
 
 /* ── Diagram spotlight: dim the rest, light the linked parts ── */
 .dg-has-spot .dg-node,.dg-has-spot .dg-edge,.dg-has-spot .dg-elabel{opacity:.22;transition:opacity .18s;}
@@ -767,4 +771,38 @@ html,body{overscroll-behavior:none;}
 .dg-spot-solution .dg-shape,.dg-spot-solution .dg-open{stroke:var(--accent)!important;stroke-width:3;}
 .dg-spot-solution .dg-epath{stroke:var(--accent)!important;stroke-width:3.4;}
 .dg-spot-solution .dg-label,.dg-elabel.dg-spot-solution{fill:var(--accent)!important;}
+.dg-spot-load .dg-shape,.dg-spot-load .dg-open{stroke:var(--money)!important;stroke-width:3;}
+.dg-spot-load .dg-epath{stroke:var(--money)!important;stroke-width:3.6;}
+.dg-spot-load .dg-label,.dg-elabel.dg-spot-load{fill:var(--money)!important;}
 @media (prefers-reduced-motion: reduce){.dg-has-spot .dg-node,.dg-has-spot .dg-edge,.dg-has-spot .dg-elabel{transition:none;}}
+
+/* ═══════════════════════════════════════════════════════════════
+   v1.4 — landing enso icons, tutorial / legend page
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Tutorial rows (cards + controls) ── */
+.tut-row{display:grid;grid-template-columns:auto 1fr;gap:13px;align-items:start;padding:11px 0;border-bottom:1px solid var(--line-soft);}
+.tut-row:last-of-type{border-bottom:none;}
+.tut-row-title{font-family:var(--display);font-weight:700;font-size:15.5px;color:var(--ink);margin-bottom:3px;}
+.tut-row-desc{font-size:14px;color:var(--ink-soft);margin:0;line-height:1.55;}
+/* colour chip per card type, echoing the reader */
+.tut-chip{width:14px;height:34px;border-radius:4px;flex-shrink:0;margin-top:2px;}
+.tut-chip-problem{background:var(--failure);}
+.tut-chip-model{background:var(--accent-wash);border:1.5px dashed var(--accent);}
+.tut-chip-solution{background:var(--accent);}
+.tut-chip-lens{background:var(--panel);border:1.5px solid var(--line);}
+.tut-chip-tradeoff{background:linear-gradient(var(--money),var(--money)) center/100% 2px no-repeat, var(--panel);border:1px solid var(--line);}
+.tut-chip-scale{background:var(--money);}
+.tut-chip-defends{background:var(--accent);opacity:.6;}
+.tut-chip-dev{background:var(--ink);}
+.tut-chip-analogy{background:var(--money-wash);border:1.5px solid var(--money);}
+
+/* ── Diagram legend swatches ── */
+.tut-legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 18px;margin:12px 0 6px;}
+.tut-legend-item{display:flex;align-items:center;gap:11px;font-size:13.5px;color:var(--ink-soft);}
+.tut-legend-item b{color:var(--ink);}
+.tut-swatch{width:46px;height:30px;flex-shrink:0;}
+.tut-swatch-edge{width:50px;height:16px;}
+
+.tut-dev-intro{font-size:13.5px;color:#c9c6bd;margin:0 0 10px;line-height:1.55;}
+:root[data-theme="dark"] .tut-chip-lens{background:var(--panel);}
