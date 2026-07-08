@@ -112,7 +112,7 @@ var Generator = (() => {
     let doc, errors = null;
     try {
       doc = parseDoc(text);
-      const res = Schema.validate(doc);
+      const res = Schema.validate(doc, { strict: true });   // freshly generated → full quality gate
       if (res.ok) return { doc, repaired: false };
       errors = res.errors;
     } catch (e) {
@@ -131,7 +131,7 @@ var Generator = (() => {
     }, onProgress, seen);
 
     const doc2 = parseDoc(text2);                          // throws kind:"invalid" with raw attached
-    const res2 = Schema.validate(doc2);
+    const res2 = Schema.validate(doc2, { strict: true });
     if (!res2.ok) throw fail("invalid", `Still invalid after one repair (${res2.errors.length} errors). Your tokens aren't lost — download the raw output below.`, text2);
     return { doc: doc2, repaired: true };
   }

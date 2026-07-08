@@ -63,6 +63,14 @@ function show(screen) {
 /* ═══ Boot ═══ */
 async function boot() {
   meta = await Store.init();
+  // v1.3 migration: gates are now opt-in. Existing installs saved the old
+  // default (true) at first run; flip them once to the new full-deconstruct
+  // default. Deliberate re-enabling afterwards persists normally.
+  if (!meta.challengeDefaultV2) {
+    meta.challengeModeDefault = false;
+    meta.challengeDefaultV2 = true;
+    await Store.saveMeta({ challengeModeDefault: false, challengeDefaultV2: true });
+  }
   // theme: saved choice wins; otherwise follow the OS on first run
   const initialTheme = meta.theme || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
   applyTheme(initialTheme);
@@ -80,25 +88,37 @@ async function boot() {
 }
 
 async function seedFlagships() {
-  if (meta.flagshipsSeeded) return;
+  // Re-seed whenever the shipped flagship content version changes, so existing
+  // installs receive updated flagships — preserving each one's attempts/progress.
+  if (meta.flagshipVersion === CONFIG.flagshipVersion) return;
   const names = ["railway", "whatsapp", "youtube"];
+  const prev = {};
+  (await Store.getBreakdowns()).forEach(b => { if (b.source === "flagship") prev[b.id] = b; });
+  let okCount = 0;
   for (const n of names) {
     try {
-      const res = await fetch("flagships/" + n + ".json");
+      const res = await fetch("flagships/" + n + ".json", { cache: "no-cache" });  // revalidate: pick up content updates
       if (!res.ok) continue;
       const doc = await res.json();
       if (!Schema.validate(doc).ok) continue;
+      const id = "flagship-" + n, was = prev[id];
       await Store.saveBreakdown({
-        id: "flagship-" + n, system: doc.meta.system, created: Date.now(),
-        source: "flagship", schemaVersion: 1, doc,
-        attempts: {}, progress: { layersRead: 0, gatesAnswered: 0, position: 0 }
+        id, system: doc.meta.system, source: "flagship", schemaVersion: 1, doc,
+        created: was ? was.created : Date.now(),
+        lastOpen: was ? was.lastOpen : undefined,
+        challengeMode: was ? was.challengeMode : undefined,
+        attempts: was ? was.attempts : {},
+        progress: was ? was.progress : { layersRead: 0, gatesAnswered: 0, position: 0 }
       });
+      okCount++;
     } catch (e) { /* offline first-open of a partial cache: retry next boot */ }
   }
-  const have = await Store.getBreakdowns();
-  if (have.some(b => b.source === "flagship")) {
+  // Only advance the version when ALL flagships seeded — a partial seed (e.g. one
+  // fetch dropped) must retry next boot, not strand a missing/stale flagship.
+  if (okCount === names.length) {
+    meta.flagshipVersion = CONFIG.flagshipVersion;
     meta.flagshipsSeeded = true;
-    await Store.saveMeta({ flagshipsSeeded: true });
+    await Store.saveMeta({ flagshipVersion: CONFIG.flagshipVersion, flagshipsSeeded: true });
   }
 }
 
@@ -334,7 +354,8 @@ async function openReader(id, layerIndex) {
   pane.appendChild(wrap);
 
   const diagram = Diagram.mount(dscroll, rec.doc);
-  const challengeOn = rec.challengeMode != null ? rec.challengeMode : meta.challengeModeDefault !== false;
+  // gates are opt-in: on only if this breakdown enabled them, or the user set the default on
+  const challengeOn = rec.challengeMode != null ? rec.challengeMode : meta.challengeModeDefault === true;
 
   currentView = DocView.mount({
     docPane, diagram, rec, scrubEl,
@@ -760,11 +781,11 @@ function renderSettings(banner) {
     seg.appendChild(b);
   });
   db.appendChild(seg);
-  const tog = h("div", "toggle" + (meta.challengeModeDefault !== false ? " on" : ""));
+  const tog = h("div", "toggle" + (meta.challengeModeDefault === true ? " on" : ""));
   tog.style.marginTop = "12px";
-  tog.append(h("span", "tg-track"), h("span", "tg-label", "Challenge mode by default (design before the reveal)"));
+  tog.append(h("span", "tg-track"), h("span", "tg-label", "Challenge mode by default — hide each solution behind a 'design it first' gate"));
   tog.onclick = async () => {
-    meta.challengeModeDefault = !(meta.challengeModeDefault !== false);
+    meta.challengeModeDefault = !(meta.challengeModeDefault === true);
     await Store.saveMeta({ challengeModeDefault: meta.challengeModeDefault });
     renderSettings();
   };

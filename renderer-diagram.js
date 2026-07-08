@@ -214,7 +214,7 @@ var Diagram = (() => {
         const from = st.nodes.get(e.from);
         const broken = hl.has(e.id);
         const li = layout.laneIndex[from.lane] || 0;
-        const g = el("g", { class: `dg-edge dg-ekind-${e.kind}` }, edgesG);
+        const g = el("g", { class: `dg-edge dg-ekind-${e.kind}`, "data-id": e.id }, edgesG);
         const p = edgePath(e, pos);
         const path = el("path", { d: p.d, fill: "none", class: "dg-epath", "marker-end": `url(#${broken ? "arr-broken" : "arr-lane" + li})` }, g);
         path.style.stroke = broken ? "#c22f2f" : LANE_COLORS[li % LANE_COLORS.length];
@@ -232,7 +232,7 @@ var Diagram = (() => {
       const nodeRects = [];
       st.nodes.forEach(n => {
         const p = pos[n.id];
-        const g = el("g", { transform: `translate(${p.x} ${p.y})` }, nodesG);
+        const g = el("g", { transform: `translate(${p.x} ${p.y})`, "data-id": n.id }, nodesG);
         drawNode(g, n, laneColor(n.lane));
         if (hl.has(n.id)) g.classList.add("dg-broken");
         if (animate && !prev.has(n.id)) g.classList.add("dg-enter");
@@ -261,15 +261,29 @@ var Diagram = (() => {
           if (score < bestScore) { bestScore = score; fy = y; }
         }
         placed.push({ x0: job.cx - w / 2, y0: fy - hh, x1: job.cx + w / 2, y1: fy + hh });
-        const t = el("text", { x: job.cx, y: fy + 3, "text-anchor": "middle", class: "dg-elabel" }, labelsG);
+        const t = el("text", { x: job.cx, y: fy + 3, "text-anchor": "middle", class: "dg-elabel", "data-id": job.e.id }, labelsG);
         t.style.fill = job.color;
         txt(t, job.e.label);
       });
 
+      svg.classList.remove("dg-has-spot");   // a fresh render clears any spotlight
       shownIds = new Set([...st.nodes.keys(), ...st.edges.keys()]);
     }
 
-    return { show, layout, laneColor };
+    /* spotlight: dim everything, then light the given ids (nodes/edges + their
+       labels, matched by data-id) in the card's colour. kind = problem|solution.
+       Empty/null clears. Used by the reader to link a card to its diagram parts. */
+    function spotlight(ids, kind) {
+      svg.querySelectorAll(".dg-spot").forEach(e => e.classList.remove("dg-spot", "dg-spot-problem", "dg-spot-solution"));
+      if (!ids || !ids.length) { svg.classList.remove("dg-has-spot"); return; }
+      const set = new Set(ids);
+      svg.classList.add("dg-has-spot");
+      svg.querySelectorAll("[data-id]").forEach(e => {
+        if (set.has(e.getAttribute("data-id"))) e.classList.add("dg-spot", "dg-spot-" + kind);
+      });
+    }
+
+    return { show, spotlight, layout, laneColor };
   }
 
   return { mount, stateAt, computeLayout };

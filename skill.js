@@ -74,6 +74,7 @@ var SKILL = (() => {
       user_lens: { gives: "string — what the user gains", costs: "string — what the user pays or loses; NEVER empty" },
       tech_lens: { mechanism: "string — how it works, plainly", principle: "string — the transferable rule" },
       tradeoff: "string — what this layer sacrifices",
+      at_scale: "string — how this mechanism behaves under HEAVY LOAD and as the system grows: does it hold, become the bottleneck, or need to be multiplied/sharded/cached? Name the scaling property or ceiling concretely (e.g. 'one train per block-time caps a line at ~N trains/hour' or 'a blind server fan-out lets one uplink reach a 100k-member group')",
       defends: ["invariant ids this layer protects — at least one"],
       developer: {
         mappings: [{ mechanism: "string — the concrete mechanism", software_concept: "string — its software twin" }],
@@ -102,7 +103,7 @@ var SKILL = (() => {
 METHOD — five movements, in order:
 1. ESSENCE. The system in one breath: what it is, what makes it remarkable. Then 3-6 deep facts — surprising, specific, checkable.
 2. STRIP-DOWN. Remove everything until only the irreducible core remains: the purpose, the actors and what they want, the invariants (what must never be false), the entities, the flows, the hard constraints. This is the system's skeleton.
-3. FAILURE-DRIVEN REBUILD (4-7 layers). Start from the naive version and let each layer be FORCED by a concrete failure of the previous state. Never add a mechanism the failure doesn't demand. Each layer names exactly one thinking model that cracks its problem, poses a gate question (the reader designs before seeing the answer), then gives the solution, both lenses, the tradeoff, and which invariants it defends. When you know the real historical failure (Clayton Tunnel 1861), use it and set history_confidence accordingly; when you don't, construct the inevitable failure honestly and say so in ordering_note.
+3. FAILURE-DRIVEN REBUILD (4-7 layers). Start from the naive version and let each layer be FORCED by a concrete failure of the previous state. Never add a mechanism the failure doesn't demand. Each layer names exactly one thinking model that cracks its problem, poses a gate question (the reader designs before seeing the answer), then gives the solution, both lenses, the tradeoff, HOW IT HOLDS AT SCALE (at_scale), and which invariants it defends. When you know the real historical failure (Clayton Tunnel 1861), use it and set history_confidence accordingly; when you don't, construct the inevitable failure honestly and say so in ordering_note.
 4. STRESS TESTS (2-4). Push the finished system somewhere nasty. Reveal how it copes — or honestly where it breaks.
 5. TRANSFER. Extract the system-neutral principles and map this system's mechanisms to their twins elsewhere.
 
@@ -124,6 +125,7 @@ THE DIAGRAM. You are drawing on a fixed grid, not a canvas:
 HARD RULES:
 - Output ONLY the JSON document. No prose before or after, no code fences, no markdown inside string fields.
 - user_lens.costs is never empty — every mechanism charges its users something.
+- at_scale is never empty — every layer must answer "how does this hold when load is enormous or the system grows?" with a concrete scaling property, ceiling, or the multiplication/sharding/caching it forces. This is how the reader learns to reason about load (e.g. "a million users a second"), not just correctness.
 - defends is never empty — a layer that defends nothing shouldn't exist.
 - Layer indexes are 1-based and sequential.
 - Honesty over drama: if history_confidence is low, never invent named disasters with dates.
@@ -172,6 +174,7 @@ If you receive a message listing validation errors, return the corrected COMPLET
         user_lens: { gives: "Predictability — a passenger can plan a journey to the minute.", costs: "Rigidity: the plan outranks the person. Miss the train and the system does not care." },
         tech_lens: { mechanism: "A pre-computed global schedule against synchronized clocks; gaps enforced by elapsed time.", principle: "When coordination can't happen at run time, move it to plan time." },
         tradeoff: "The plan is blind: it describes where trains SHOULD be, and a broken-down train is exactly where it shouldn't be.",
+        at_scale: "Adding trains means adding timetable rows and safety gaps, not new coordination — one plan scales to a whole network for free. But it scales in a brittle way: one late train ripples delays down every dependent path, so heavy traffic amplifies small disturbances instead of absorbing them.",
         defends: ["inv1"],
         developer: { mappings: [{ mechanism: "the timetable", software_concept: "static scheduling — coordination compiled ahead of time" }], interview_probes: ["Where in your system do you coordinate by plan instead of by signal, and what happens when reality diverges from the plan?"] },
         beginner_analogy: "Like a family sharing one bathroom by agreeing on a morning schedule — it works until someone takes too long, because the schedule can't see.",
@@ -183,6 +186,7 @@ If you receive a message listing validation errors, return the corrected COMPLET
         user_lens: { gives: "Ambient, invisible safety — boarding without wondering if the track ahead is clear.", costs: "Drivers lose authority: the signal decides, not the person driving." },
         tech_lens: { mechanism: "Per-block occupancy tracked by signal boxes; telegraph request/confirm protocol; physical token as uncopyable permission.", principle: "Replace inference with confirmation; guard shared resources with exclusive locks, not etiquette." },
         tradeoff: "Capacity is quantized: one train per block-traversal-time, a hard ceiling. Safety purchased with headroom.",
+        at_scale: "This is the line's throughput ceiling: capacity ≈ one train per block-traversal-time, so you scale a busy route by cutting blocks SHORTER (more, smaller sections) — at the cost of more signal boxes and telegraph traffic. It's horizontal scaling by sharding the track.",
         defends: ["inv1"],
         developer: { mappings: [{ mechanism: "the brass token", software_concept: "distributed mutex / lease — possession is permission" }], interview_probes: ["Your rate limiter infers capacity from elapsed time. What's your Clayton Tunnel?"] },
         beginner_analogy: "Like a single bathroom key at a gas station: whoever holds the key can go in; two people can't hold one key.",

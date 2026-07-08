@@ -23,7 +23,11 @@ var Schema = (() => {
   function isArr(v)      { return Array.isArray(v); }
   function isObj(v)      { return v !== null && typeof v === "object" && !Array.isArray(v); }
 
-  function validate(doc) {
+  // opts.strict = generation-quality gate (requires newer fields like at_scale).
+  // Import/restore/flagship-seed call validate() lenient, so older or
+  // externally-authored docs that predate a field still load — the renderer
+  // degrades gracefully for anything optional.
+  function validate(doc, opts = {}) {
     const errors = [];
     const err = m => errors.push(m);
 
@@ -158,6 +162,10 @@ var Schema = (() => {
       if (!isObj(L.user_lens) || !isFullStr(L.user_lens.costs)) err(`${w}.user_lens.costs must be non-empty — every mechanism charges its users something`);
       if (!isObj(L.tech_lens) || !isFullStr(L.tech_lens.mechanism) || !isFullStr(L.tech_lens.principle)) err(`${w}.tech_lens needs mechanism and principle`);
       if (!isFullStr(L.tradeoff)) err(`${w}.tradeoff must be a non-empty string`);
+      // at_scale: required for freshly generated docs (strict), optional for
+      // import/restore of pre-v1.3 docs — the renderer degrades if it's absent
+      if (opts.strict ? !isFullStr(L.at_scale) : (L.at_scale != null && !isFullStr(L.at_scale)))
+        err(`${w}.at_scale must be non-empty — every layer must answer how it holds under heavy load / as the system grows`);
       if (!isArr(L.defends) || L.defends.length === 0) err(`${w}.defends must name at least one invariant`);
       else L.defends.forEach(d => { if (!invariantIds.has(d)) err(`${w}.defends: "${d}" is not an invariant id`); });
       const dev = L.developer;

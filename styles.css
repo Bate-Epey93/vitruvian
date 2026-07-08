@@ -708,3 +708,40 @@ html,body{overscroll-behavior:none;}
 :root[data-theme="dark"] .dg-broken .dg-epath{stroke:#e0645f!important;}
 :root[data-theme="dark"] .dg-broken .dg-label,
 :root[data-theme="dark"] .dg-broken .dg-elabel{fill:#e0645f!important;}
+
+/* ═══════════════════════════════════════════════════════════════
+   v1.3 — 'Under load' band, card→diagram spotlight
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── 'Under load' scaling band ── */
+.scale-band{
+  background:var(--money-wash);border:1px solid #e7d4ab;border-left:3px solid var(--money);
+  border-radius:0 8px 8px 0;padding:13px 17px;margin:14px 0;
+}
+.scale-band .sb-label{font-family:var(--mono);font-size:9.5px;letter-spacing:1.6px;text-transform:uppercase;color:var(--money);font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:7px;}
+.scale-band .sb-label::before{content:'▚';}
+.scale-band p{font-size:14px;color:#6e4d12;margin:0;line-height:1.6;}
+:root[data-theme="dark"] .scale-band{border-color:#4a3a1a;}
+:root[data-theme="dark"] .scale-band p{color:#d9b877;}
+
+/* ── Spotlightable cards: a small locator affordance + active ring ── */
+.spot-card{cursor:pointer;position:relative;transition:box-shadow .15s, border-color .15s;}
+.spot-card::after{
+  content:'◎';position:absolute;top:10px;right:12px;font-size:13px;color:var(--muted);opacity:.5;transition:opacity .15s;
+}
+.spot-card:hover::after{opacity:1;}
+.problem-card.spot-on{border-color:var(--failure);box-shadow:0 0 0 3px var(--failure-wash);}
+.problem-card.spot-on::after{color:var(--failure);opacity:1;}
+.solution-card.spot-on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash);}
+.solution-card.spot-on::after{color:var(--accent);opacity:1;}
+
+/* ── Diagram spotlight: dim the rest, light the linked parts ── */
+.dg-has-spot .dg-node,.dg-has-spot .dg-edge,.dg-has-spot .dg-elabel{opacity:.22;transition:opacity .18s;}
+.dg-has-spot .dg-node.dg-spot,.dg-has-spot .dg-edge.dg-spot,.dg-has-spot .dg-elabel.dg-spot{opacity:1;}
+.dg-spot-problem .dg-shape,.dg-spot-problem .dg-open{stroke:var(--failure)!important;stroke-width:3;}
+.dg-spot-problem .dg-epath{stroke:var(--failure)!important;stroke-width:3.4;}
+.dg-spot-problem .dg-label,.dg-elabel.dg-spot-problem{fill:var(--failure)!important;}
+.dg-spot-solution .dg-shape,.dg-spot-solution .dg-open{stroke:var(--accent)!important;stroke-width:3;}
+.dg-spot-solution .dg-epath{stroke:var(--accent)!important;stroke-width:3.4;}
+.dg-spot-solution .dg-label,.dg-elabel.dg-spot-solution{fill:var(--accent)!important;}
+@media (prefers-reduced-motion: reduce){.dg-has-spot .dg-node,.dg-has-spot .dg-edge,.dg-has-spot .dg-elabel{transition:none;}}

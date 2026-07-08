@@ -38,6 +38,27 @@ var DocView = (() => {
       if (!rec.attempts[idx]) rec.attempts[idx] = { answer: "", revealed: false, verdict: null, ts: 0 };
       return rec.attempts[idx];
     }
+
+    /* Link a reader card to its diagram parts: tap to spotlight those ids in
+       the card's colour (and dim the rest); tap again to clear. One active
+       card at a time. Reset every render (cards are rebuilt). */
+    let activeSpotCard = null;
+    function wireSpot(cardEl, ids, kind) {
+      ids = (ids || []).filter(Boolean);
+      if (!ids.length) return;                       // nothing to locate (e.g. a layer with no highlights)
+      cardEl.classList.add("spot-card");
+      cardEl.title = "Tap to locate on the diagram";
+      cardEl.addEventListener("click", () => {
+        if (activeSpotCard === cardEl) { diagram.spotlight(null); cardEl.classList.remove("spot-on"); activeSpotCard = null; return; }
+        if (activeSpotCard) activeSpotCard.classList.remove("spot-on");
+        diagram.spotlight(ids, kind);
+        cardEl.classList.add("spot-on");
+        activeSpotCard = cardEl;
+      });
+    }
+    function diffAddedIds(L) {
+      return [...L.diff.add_nodes.map(n => n.id), ...L.diff.add_edges.map(e => e.id)];
+    }
     function refreshProgress() {
       rec.progress.gatesAnswered = Object.values(rec.attempts).filter(a => a.answer && a.answer.trim()).length;
       rec.progress.layersRead = Math.max(rec.progress.layersRead || 0,
@@ -89,7 +110,8 @@ var DocView = (() => {
         if (i <= frontier) {
           seg.onclick = () => {
             lastShown = i;
-            diagram.show(i);
+            diagram.show(i);                              // clears any diagram spotlight…
+            if (activeSpotCard) { activeSpotCard.classList.remove("spot-on"); activeSpotCard = null; }  // …so resync the card too
             capText(i === 0 ? "Peek · the naive baseline" : `Peek · after layer ${i}`);
             renderScrub();
           };
@@ -234,6 +256,8 @@ var DocView = (() => {
       prob.appendChild(h("div", "pc-label", "The problem"));
       prob.appendChild(h("p", null, audience === "beginner" ? L.problem.beginner : L.problem.statement));
       root.appendChild(prob);
+      // once revealed, the problem card locates what BREAKS (red) on the diagram
+      if (!gated) wireSpot(prob, L.diff.highlight, "problem");
 
       if (gated) renderGate(root, L, a);
       else renderRevealed(root, L, a);
@@ -352,6 +376,8 @@ var DocView = (() => {
       sol.appendChild(h("div", "sc-label", "What was actually built"));
       sol.appendChild(h("p", null, L.solution));
       root.appendChild(sol);
+      // the solution card locates what this layer ADDS (accent) on the diagram
+      wireSpot(sol, diffAddedIds(L), "solution");
 
       if (a.answer && a.answer.trim()) {
         if (a.verdict) root.appendChild(h("div", "verdict-card", a.verdict));
@@ -395,6 +421,15 @@ var DocView = (() => {
       root.appendChild(grid);
 
       root.appendChild(h("div", "tradeoff-band", L.tradeoff));
+
+      // "Under load" — how this mechanism holds as the system grows (the
+      // scaling question the reader most wants answered). Shown in every mode.
+      if (L.at_scale) {
+        const scale = h("div", "scale-band");
+        scale.appendChild(h("div", "sb-label", "Under load · how it scales"));
+        scale.appendChild(h("p", null, L.at_scale));
+        root.appendChild(scale);
+      }
 
       const def = h("div", "defends-row");
       def.appendChild(h("span", "mono-label", "Defends"));
@@ -477,6 +512,7 @@ var DocView = (() => {
     /* ── master render ── */
     function render(animateDiagram) {
       const scroll = docPane.scrollTop;
+      activeSpotCard = null;                 // cards are rebuilt; syncDiagram clears the diagram spotlight
       const inner = h("div", "doc-inner rise");
       inner.appendChild(stepper());
       const body = h("div");

@@ -87,7 +87,7 @@ var Store = (() => {
         await this.saveMeta({
           schemaVersion: SCHEMA_VERSION,
           audienceMode: "enthusiast",
-          challengeModeDefault: true,
+          challengeModeDefault: false,   // full deconstruct by default; gates are opt-in
           modelId: "claude-sonnet-5"
         });
       }

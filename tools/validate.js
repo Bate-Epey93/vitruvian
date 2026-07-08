@@ -23,7 +23,7 @@ for (const t of targets) {
   let doc;
   try { doc = JSON.parse(fs.readFileSync(p, "utf8")); }
   catch (e) { console.log(`✗ ${t}: unparseable JSON — ${e.message}`); failed = true; continue; }
-  const res = Schema.validate(doc);
+  const res = Schema.validate(doc, { strict: true });   // flagships are held to the full generation-quality bar
   if (res.ok) {
     const nodes = doc.visual.nodes.length + doc.layers.reduce((n, L) => n + L.diff.add_nodes.length, 0);
     const edges = doc.visual.edges.length + doc.layers.reduce((n, L) => n + L.diff.add_edges.length, 0);

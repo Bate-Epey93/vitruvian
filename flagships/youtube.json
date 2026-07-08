@@ -21,30 +21,94 @@
   "strip_down": {
     "purpose": "Let anyone publish a video that anyone else can instantly watch — and keep that exchange funded, findable, and lawful at planetary scale.",
     "actors": [
-      { "id": "a1", "name": "Creator", "want": "Upload once, reach an audience, and get paid for their attention" },
-      { "id": "a2", "name": "Viewer", "want": "Instant, smooth playback — and something good to watch next, without searching" },
-      { "id": "a3", "name": "Advertiser", "want": "Attention from the right people, next to content that won't embarrass the brand" },
-      { "id": "a4", "name": "Rights holder", "want": "Control over their work: taken down, tracked, or paid for — their choice" },
-      { "id": "a5", "name": "The platform", "want": "Maximum watch time to sell, at a serving cost the ads can cover" }
+      {
+        "id": "a1",
+        "name": "Creator",
+        "want": "Upload once, reach an audience, and get paid for their attention"
+      },
+      {
+        "id": "a2",
+        "name": "Viewer",
+        "want": "Instant, smooth playback — and something good to watch next, without searching"
+      },
+      {
+        "id": "a3",
+        "name": "Advertiser",
+        "want": "Attention from the right people, next to content that won't embarrass the brand"
+      },
+      {
+        "id": "a4",
+        "name": "Rights holder",
+        "want": "Control over their work: taken down, tracked, or paid for — their choice"
+      },
+      {
+        "id": "a5",
+        "name": "The platform",
+        "want": "Maximum watch time to sell, at a serving cost the ads can cover"
+      }
     ],
     "invariants": [
-      { "id": "inv1", "text": "A published video plays for any viewer, on any device, on any connection." },
-      { "id": "inv2", "text": "The write path and the read path never starve each other: a flood of viewers cannot block uploads, and a flood of uploads cannot stall playback." },
-      { "id": "inv3", "text": "The platform's costs are covered by its own activity: every hour served is paid for by the attention it gathers." },
-      { "id": "inv4", "text": "Nothing publishes to the world without crossing the policy boundary." },
-      { "id": "inv5", "text": "Any video can reach the audience that would want it — discovery must not depend on the viewer already knowing it exists." }
+      {
+        "id": "inv1",
+        "text": "A published video plays for any viewer, on any device, on any connection."
+      },
+      {
+        "id": "inv2",
+        "text": "The write path and the read path never starve each other: a flood of viewers cannot block uploads, and a flood of uploads cannot stall playback."
+      },
+      {
+        "id": "inv3",
+        "text": "The platform's costs are covered by its own activity: every hour served is paid for by the attention it gathers."
+      },
+      {
+        "id": "inv4",
+        "text": "Nothing publishes to the world without crossing the policy boundary."
+      },
+      {
+        "id": "inv5",
+        "text": "Any video can reach the audience that would want it — discovery must not depend on the viewer already knowing it exists."
+      }
     ],
     "entities": [
-      { "id": "en1", "name": "Raw upload", "note": "Whatever the camera produced — enormous, and playable almost nowhere else" },
-      { "id": "en2", "name": "Rendition", "note": "A device-ready copy at one resolution and codec; every video becomes a ladder of them" },
-      { "id": "en3", "name": "Watch signal", "note": "Clicks, skips, abandons, completions — the exhaust that fuels ranking" },
-      { "id": "en4", "name": "Ad impression", "note": "A slice of attention, auctioned in milliseconds; the platform's actual product" },
-      { "id": "en5", "name": "Fingerprint", "note": "A compact perceptual signature of a video, matchable even against disguised copies" }
+      {
+        "id": "en1",
+        "name": "Raw upload",
+        "note": "Whatever the camera produced — enormous, and playable almost nowhere else"
+      },
+      {
+        "id": "en2",
+        "name": "Rendition",
+        "note": "A device-ready copy at one resolution and codec; every video becomes a ladder of them"
+      },
+      {
+        "id": "en3",
+        "name": "Watch signal",
+        "note": "Clicks, skips, abandons, completions — the exhaust that fuels ranking"
+      },
+      {
+        "id": "en4",
+        "name": "Ad impression",
+        "note": "A slice of attention, auctioned in milliseconds; the platform's actual product"
+      },
+      {
+        "id": "en5",
+        "name": "Fingerprint",
+        "note": "A compact perceptual signature of a video, matchable even against disguised copies"
+      }
     ],
     "flows": [
-      { "id": "f1", "text": "Video flows from creator to viewer, transformed from one raw file into many cached copies along the way." },
-      { "id": "f2", "text": "Attention flows back against the video: watch signals feed the ranking loop that decides what flows next." },
-      { "id": "f3", "text": "Money flows from advertisers through the platform to creators, tracking the same watch-time signal the ranker optimizes." }
+      {
+        "id": "f1",
+        "text": "Video flows from creator to viewer, transformed from one raw file into many cached copies along the way."
+      },
+      {
+        "id": "f2",
+        "text": "Attention flows back against the video: watch signals feed the ranking loop that decides what flows next."
+      },
+      {
+        "id": "f3",
+        "text": "Money flows from advertisers through the platform to creators, tracking the same watch-time signal the ranker optimizes."
+      }
     ],
     "constraints": [
       "Raw video is enormous — storage and bandwidth costs scale with every viewer, so an unoptimized platform bankrupts itself by succeeding.",
@@ -56,21 +120,75 @@
   },
   "visual": {
     "lanes": [
-      { "id": "people", "label": "People" },
-      { "id": "content", "label": "Content path" },
-      { "id": "control", "label": "Control" },
-      { "id": "money", "label": "Money" }
+      {
+        "id": "people",
+        "label": "People"
+      },
+      {
+        "id": "content",
+        "label": "Content path"
+      },
+      {
+        "id": "control",
+        "label": "Control"
+      },
+      {
+        "id": "money",
+        "label": "Money"
+      }
     ],
     "nodes": [
-      { "id": "uploader", "label": "Creator", "kind": "actor", "lane": "people", "order": 0 },
-      { "id": "server", "label": "One server", "kind": "process", "lane": "content", "order": 2 },
-      { "id": "video_file", "label": "Raw video file", "kind": "store", "lane": "content", "order": 3 },
-      { "id": "viewer", "label": "Viewer", "kind": "actor", "lane": "people", "order": 7 }
+      {
+        "id": "uploader",
+        "label": "Creator",
+        "kind": "actor",
+        "lane": "people",
+        "order": 0
+      },
+      {
+        "id": "server",
+        "label": "One server",
+        "kind": "process",
+        "lane": "content",
+        "order": 2
+      },
+      {
+        "id": "video_file",
+        "label": "Raw video file",
+        "kind": "store",
+        "lane": "content",
+        "order": 3
+      },
+      {
+        "id": "viewer",
+        "label": "Viewer",
+        "kind": "actor",
+        "lane": "people",
+        "order": 7
+      }
     ],
     "edges": [
-      { "id": "e_upload", "from": "uploader", "to": "server", "kind": "payload", "label": "uploads" },
-      { "id": "e_save", "from": "server", "to": "video_file", "kind": "payload", "label": "saves raw" },
-      { "id": "e_watch", "from": "server", "to": "viewer", "kind": "payload", "label": "streams raw" }
+      {
+        "id": "e_upload",
+        "from": "uploader",
+        "to": "server",
+        "kind": "payload",
+        "label": "uploads"
+      },
+      {
+        "id": "e_save",
+        "from": "server",
+        "to": "video_file",
+        "kind": "payload",
+        "label": "saves raw"
+      },
+      {
+        "id": "e_watch",
+        "from": "server",
+        "to": "viewer",
+        "kind": "payload",
+        "label": "streams raw"
+      }
     ]
   },
   "layers": [
@@ -99,11 +217,20 @@
         "principle": "Turn a rate mismatch into latency with a queue, and do expensive work once at write time so every read is cheap forever."
       },
       "tradeoff": "Storage explodes: every video is stored many times over, and most renditions of most videos will barely ever be watched. And the queue hides failure — a stuck or crashed job is an invisible video, so the pipeline needs its own watchdogs.",
-      "defends": ["inv1"],
+      "at_scale": "Transcoding is embarrassingly parallel — the job queue lets you throw as many workers at a spike as you are willing to pay for, and it absorbs bursty uploads so playback never waits on an encode. The ceiling is worker-fleet cost, a dial you turn, rather than an architectural wall you hit.",
+      "defends": [
+        "inv1"
+      ],
       "developer": {
         "mappings": [
-          { "mechanism": "the transcode job queue", "software_concept": "message-queue worker pattern (SQS/Kafka consumers) — absorb bursts, drain steadily, scale workers on backlog" },
-          { "mechanism": "the rendition ladder", "software_concept": "build-time artifacts: compile once, serve many — CI builds, pre-rendered pages, pre-sized image thumbnails" }
+          {
+            "mechanism": "the transcode job queue",
+            "software_concept": "message-queue worker pattern (SQS/Kafka consumers) — absorb bursts, drain steadily, scale workers on backlog"
+          },
+          {
+            "mechanism": "the rendition ladder",
+            "software_concept": "build-time artifacts: compile once, serve many — CI builds, pre-rendered pages, pre-sized image thumbnails"
+          }
         ],
         "interview_probes": [
           "Where does your system do expensive work on the read path that could be done once at write time instead?",
@@ -113,17 +240,63 @@
       "beginner_analogy": "Like a restaurant prepping ingredients all morning so dinner service is just fast plating — nobody chops onions after the order arrives, and the same prep serves every table all night.",
       "diff": {
         "add_nodes": [
-          { "id": "job_queue", "label": "Transcode queue", "kind": "store", "lane": "control", "order": 1 },
-          { "id": "transcoder", "label": "Transcoder fleet", "kind": "process", "lane": "content", "order": 1 },
-          { "id": "renditions", "label": "Rendition ladder", "kind": "store", "lane": "content", "order": 4 }
+          {
+            "id": "job_queue",
+            "label": "Transcode queue",
+            "kind": "store",
+            "lane": "control",
+            "order": 1
+          },
+          {
+            "id": "transcoder",
+            "label": "Transcoder fleet",
+            "kind": "process",
+            "lane": "content",
+            "order": 1
+          },
+          {
+            "id": "renditions",
+            "label": "Rendition ladder",
+            "kind": "store",
+            "lane": "content",
+            "order": 4
+          }
         ],
         "add_edges": [
-          { "id": "e_enqueue", "from": "server", "to": "job_queue", "kind": "control", "label": "job queued" },
-          { "id": "e_dequeue", "from": "job_queue", "to": "transcoder", "kind": "control", "label": "next job" },
-          { "id": "e_readraw", "from": "video_file", "to": "transcoder", "kind": "payload", "label": "raw in" },
-          { "id": "e_ladder", "from": "transcoder", "to": "renditions", "kind": "payload", "label": "renditions out" }
+          {
+            "id": "e_enqueue",
+            "from": "server",
+            "to": "job_queue",
+            "kind": "control",
+            "label": "job queued"
+          },
+          {
+            "id": "e_dequeue",
+            "from": "job_queue",
+            "to": "transcoder",
+            "kind": "control",
+            "label": "next job"
+          },
+          {
+            "id": "e_readraw",
+            "from": "video_file",
+            "to": "transcoder",
+            "kind": "payload",
+            "label": "raw in"
+          },
+          {
+            "id": "e_ladder",
+            "from": "transcoder",
+            "to": "renditions",
+            "kind": "payload",
+            "label": "renditions out"
+          }
         ],
-        "highlight": ["video_file", "e_watch", "server"],
+        "highlight": [
+          "video_file",
+          "e_watch",
+          "server"
+        ],
         "remove": []
       }
     },
@@ -152,11 +325,21 @@
         "principle": "Split responsibilities along traffic shape — bursty writes and voracious reads should never share a machine — and make the boundary a simple, immutable contract."
       },
       "tradeoff": "The single machine's simplicity is gone forever: there are now boundaries to version, contracts to keep honest, and a whole class of failures that live only in the seams between services.",
-      "defends": ["inv2", "inv1"],
+      "at_scale": "Splitting the write path (upload, transcode) from the read path (serve) lets each scale INDEPENDENTLY — and reads outnumber writes by orders of magnitude, so you scale serving enormously while processing grows only modestly. Left coupled, the whole system would have been forced to grow at the punishing read rate.",
+      "defends": [
+        "inv2",
+        "inv1"
+      ],
       "developer": {
         "mappings": [
-          { "mechanism": "the write/read split", "software_concept": "CQRS and primary/replica databases — separate the mutation path from the query path so each scales alone" },
-          { "mechanism": "blob store of finished renditions", "software_concept": "artifact registry / content-addressed storage: immutable outputs as the contract between build and deploy" }
+          {
+            "mechanism": "the write/read split",
+            "software_concept": "CQRS and primary/replica databases — separate the mutation path from the query path so each scales alone"
+          },
+          {
+            "mechanism": "blob store of finished renditions",
+            "software_concept": "artifact registry / content-addressed storage: immutable outputs as the contract between build and deploy"
+          }
         ],
         "interview_probes": [
           "Which of your services would take down an unrelated feature if it got popular tonight — and what contract would you cut between them?"
@@ -165,18 +348,66 @@
       "beginner_analogy": "Like a bakery separating the kitchen from the counter: bakers bake at dawn, the shelf in between holds finished loaves, and a long line of customers never slows the ovens.",
       "diff": {
         "add_nodes": [
-          { "id": "upload_svc", "label": "Upload service", "kind": "process", "lane": "content", "order": 2 },
-          { "id": "playback", "label": "Playback service", "kind": "process", "lane": "content", "order": 5 }
+          {
+            "id": "upload_svc",
+            "label": "Upload service",
+            "kind": "process",
+            "lane": "content",
+            "order": 2
+          },
+          {
+            "id": "playback",
+            "label": "Playback service",
+            "kind": "process",
+            "lane": "content",
+            "order": 5
+          }
         ],
         "add_edges": [
-          { "id": "e_upload2", "from": "uploader", "to": "upload_svc", "kind": "payload", "label": "uploads" },
-          { "id": "e_save2", "from": "upload_svc", "to": "video_file", "kind": "payload", "label": "saves raw" },
-          { "id": "e_enqueue2", "from": "upload_svc", "to": "job_queue", "kind": "control", "label": "job queued" },
-          { "id": "e_fetch", "from": "renditions", "to": "playback", "kind": "payload", "label": "renditions" },
-          { "id": "e_stream", "from": "playback", "to": "viewer", "kind": "payload", "label": "streams" }
+          {
+            "id": "e_upload2",
+            "from": "uploader",
+            "to": "upload_svc",
+            "kind": "payload",
+            "label": "uploads"
+          },
+          {
+            "id": "e_save2",
+            "from": "upload_svc",
+            "to": "video_file",
+            "kind": "payload",
+            "label": "saves raw"
+          },
+          {
+            "id": "e_enqueue2",
+            "from": "upload_svc",
+            "to": "job_queue",
+            "kind": "control",
+            "label": "job queued"
+          },
+          {
+            "id": "e_fetch",
+            "from": "renditions",
+            "to": "playback",
+            "kind": "payload",
+            "label": "renditions"
+          },
+          {
+            "id": "e_stream",
+            "from": "playback",
+            "to": "viewer",
+            "kind": "payload",
+            "label": "streams"
+          }
         ],
-        "highlight": ["server", "e_watch", "e_upload"],
-        "remove": ["server"]
+        "highlight": [
+          "server",
+          "e_watch",
+          "e_upload"
+        ],
+        "remove": [
+          "server"
+        ]
       }
     },
     {
@@ -204,11 +435,21 @@
         "principle": "Distance is latency and repetition is money: put copies where demand is, and pay for the speed with staleness and eviction complexity."
       },
       "tradeoff": "Un-publishing becomes a distributed operation: a deleted or struck video now has copies scattered across thousands of edges that must all be chased down, and the cache only pays for itself on popular content — the edge subsidizes hits, never the archive.",
-      "defends": ["inv1", "inv2"],
+      "at_scale": "This is the scaling layer for viewing: edge caches turn one origin into thousands of near-viewer copies, so a video going viral is served by cache-fill fan-out while origin load stays roughly FLAT no matter how large the audience. You scale by adding edges at the rim, not by growing the center.",
+      "defends": [
+        "inv1",
+        "inv2"
+      ],
       "developer": {
         "mappings": [
-          { "mechanism": "edge caches inside ISPs", "software_concept": "the cache hierarchy pattern — CPU L1/L2/L3, CDN points of presence, DNS resolvers: hot data migrates toward demand" },
-          { "mechanism": "cache fill on first miss", "software_concept": "lazy loading and memoization: pay the full cost once, amortize it across every later request" }
+          {
+            "mechanism": "edge caches inside ISPs",
+            "software_concept": "the cache hierarchy pattern — CPU L1/L2/L3, CDN points of presence, DNS resolvers: hot data migrates toward demand"
+          },
+          {
+            "mechanism": "cache fill on first miss",
+            "software_concept": "lazy loading and memoization: pay the full cost once, amortize it across every later request"
+          }
         ],
         "interview_probes": [
           "What is your cache invalidation story when 'delete' must become true worldwide, on thousands of independent copies?"
@@ -217,13 +458,35 @@
       "beginner_analogy": "Like supermarkets and regional warehouses: milk doesn't ship from one national dairy to each shopper's door — it gets staged in bulk near the neighborhoods that drink it, and your corner store just restocks the local favorites.",
       "diff": {
         "add_nodes": [
-          { "id": "cdn", "label": "Edge caches (CDN)", "kind": "store", "lane": "content", "order": 6 }
+          {
+            "id": "cdn",
+            "label": "Edge caches (CDN)",
+            "kind": "store",
+            "lane": "content",
+            "order": 6
+          }
         ],
         "add_edges": [
-          { "id": "e_fill", "from": "playback", "to": "cdn", "kind": "payload", "label": "cache fill" },
-          { "id": "e_edge", "from": "cdn", "to": "viewer", "kind": "payload", "label": "nearby stream" }
+          {
+            "id": "e_fill",
+            "from": "playback",
+            "to": "cdn",
+            "kind": "payload",
+            "label": "cache fill"
+          },
+          {
+            "id": "e_edge",
+            "from": "cdn",
+            "to": "viewer",
+            "kind": "payload",
+            "label": "nearby stream"
+          }
         ],
-        "highlight": ["playback", "e_stream", "viewer"],
+        "highlight": [
+          "playback",
+          "e_stream",
+          "viewer"
+        ],
         "remove": []
       }
     },
@@ -252,11 +515,21 @@
         "principle": "Whatever metric closes a feedback loop becomes the thing the system actually optimizes — regardless of what anyone intended. Choose it knowing it will be both amplified and gamed."
       },
       "tradeoff": "Positive feedback compounds: small early advantages snowball into monster hits while near-identical videos starve, and the metric quietly becomes the platform's editorial policy — an editorial line that emerged from an objective function, which nobody chose and nobody can fully see.",
-      "defends": ["inv5", "inv3"],
+      "at_scale": "Ranking is precomputed and approximate, so cost per request stays sub-linear even across billions of videos — you scale it by pouring more offline compute into candidate generation. The honest catch: the loop optimizes a proxy, watch time, and amplifies whatever scales fastest, indifferent to whether that thing is worth watching.",
+      "defends": [
+        "inv5",
+        "inv3"
+      ],
       "developer": {
         "mappings": [
-          { "mechanism": "the watch-time ranking loop", "software_concept": "engagement-driven objective functions and multi-armed bandits: explore/exploit over content, trained on their own outputs" },
-          { "mechanism": "candidate generation then ranking", "software_concept": "two-stage retrieval — cheap recall over billions, expensive precision over hundreds — the shape of every large recommender and search stack" }
+          {
+            "mechanism": "the watch-time ranking loop",
+            "software_concept": "engagement-driven objective functions and multi-armed bandits: explore/exploit over content, trained on their own outputs"
+          },
+          {
+            "mechanism": "candidate generation then ranking",
+            "software_concept": "two-stage retrieval — cheap recall over billions, expensive precision over hundreds — the shape of every large recommender and search stack"
+          }
         ],
         "interview_probes": [
           "What does your system's core metric silently optimize for that nobody on the team would defend out loud?",
@@ -266,15 +539,48 @@
       "beginner_analogy": "Like a street performer who keeps adjusting the act toward whatever makes the crowd stay: over months the show becomes whatever stops feet — which is not necessarily the show anyone would have chosen to make, or to watch.",
       "diff": {
         "add_nodes": [
-          { "id": "signals", "label": "Watch signals", "kind": "store", "lane": "control", "order": 6 },
-          { "id": "ranker", "label": "Ranking loop", "kind": "process", "lane": "control", "order": 5 }
+          {
+            "id": "signals",
+            "label": "Watch signals",
+            "kind": "store",
+            "lane": "control",
+            "order": 6
+          },
+          {
+            "id": "ranker",
+            "label": "Ranking loop",
+            "kind": "process",
+            "lane": "control",
+            "order": 5
+          }
         ],
         "add_edges": [
-          { "id": "e_watchsig", "from": "viewer", "to": "signals", "kind": "control", "label": "watch time" },
-          { "id": "e_feed", "from": "signals", "to": "ranker", "kind": "control", "label": "trains" },
-          { "id": "e_next", "from": "ranker", "to": "viewer", "kind": "control", "label": "up next" }
+          {
+            "id": "e_watchsig",
+            "from": "viewer",
+            "to": "signals",
+            "kind": "control",
+            "label": "watch time"
+          },
+          {
+            "id": "e_feed",
+            "from": "signals",
+            "to": "ranker",
+            "kind": "control",
+            "label": "trains"
+          },
+          {
+            "id": "e_next",
+            "from": "ranker",
+            "to": "viewer",
+            "kind": "control",
+            "label": "up next"
+          }
         ],
-        "highlight": ["viewer", "renditions"],
+        "highlight": [
+          "viewer",
+          "renditions"
+        ],
         "remove": []
       }
     },
@@ -303,11 +609,20 @@
         "principle": "Fund a system from its own activity, and pay contributors from the same metric that ranks them — alignment recruits an army, and the army inherits the metric's blind spots."
       },
       "tradeoff": "A third master joins the table: the platform's editorial gravity now bends toward advertiser comfort, not just viewer interest. And welding money to the recommendation loop means the loop's pathologies now have a payroll — whatever the ranker over-rewards, the economy over-produces.",
-      "defends": ["inv3"],
+      "at_scale": "The per-impression ad auction is cheap and parallel, so it scales with the supply of watch time — which is exactly what the recommendation loop is built to maximize. The money model scales BY reinforcing the same metric the system already optimizes, which is at once its efficiency and its pathology.",
+      "defends": [
+        "inv3"
+      ],
       "developer": {
         "mappings": [
-          { "mechanism": "the creator revenue share", "software_concept": "marketplace take rates and app-store splits: aligning a supply side by paying it from the platform's own metric" },
-          { "mechanism": "the real-time ad auction", "software_concept": "auction-based resource allocation — real-time bidding exchanges, spot-instance pricing: scarce slots priced by live demand" }
+          {
+            "mechanism": "the creator revenue share",
+            "software_concept": "marketplace take rates and app-store splits: aligning a supply side by paying it from the platform's own metric"
+          },
+          {
+            "mechanism": "the real-time ad auction",
+            "software_concept": "auction-based resource allocation — real-time bidding exchanges, spot-instance pricing: scarce slots priced by live demand"
+          }
         ],
         "interview_probes": [
           "When you pay people by a metric, how do you detect the ones serving the metric instead of the purpose it was a proxy for?"
@@ -316,17 +631,63 @@
       "beginner_analogy": "Like a shopping mall: entry is free, the stores keep most of what they sell, and the mall pays its bills by renting out the one thing it truly owns — the crowd walking past.",
       "diff": {
         "add_nodes": [
-          { "id": "advertiser", "label": "Advertiser", "kind": "actor", "lane": "people", "order": 4 },
-          { "id": "ad_auction", "label": "Ad auction", "kind": "process", "lane": "money", "order": 4 },
-          { "id": "revshare", "label": "Revenue share", "kind": "process", "lane": "money", "order": 1 }
+          {
+            "id": "advertiser",
+            "label": "Advertiser",
+            "kind": "actor",
+            "lane": "people",
+            "order": 4
+          },
+          {
+            "id": "ad_auction",
+            "label": "Ad auction",
+            "kind": "process",
+            "lane": "money",
+            "order": 4
+          },
+          {
+            "id": "revshare",
+            "label": "Revenue share",
+            "kind": "process",
+            "lane": "money",
+            "order": 1
+          }
         ],
         "add_edges": [
-          { "id": "e_bid", "from": "advertiser", "to": "ad_auction", "kind": "money", "label": "bids" },
-          { "id": "e_adplay", "from": "ad_auction", "to": "viewer", "kind": "payload", "label": "ad plays" },
-          { "id": "e_cut", "from": "ad_auction", "to": "revshare", "kind": "money", "label": "creator's cut" },
-          { "id": "e_payout", "from": "revshare", "to": "uploader", "kind": "money", "label": "payout" }
+          {
+            "id": "e_bid",
+            "from": "advertiser",
+            "to": "ad_auction",
+            "kind": "money",
+            "label": "bids"
+          },
+          {
+            "id": "e_adplay",
+            "from": "ad_auction",
+            "to": "viewer",
+            "kind": "payload",
+            "label": "ad plays"
+          },
+          {
+            "id": "e_cut",
+            "from": "ad_auction",
+            "to": "revshare",
+            "kind": "money",
+            "label": "creator's cut"
+          },
+          {
+            "id": "e_payout",
+            "from": "revshare",
+            "to": "uploader",
+            "kind": "money",
+            "label": "payout"
+          }
         ],
-        "highlight": ["cdn", "playback", "transcoder"],
+        "highlight": [
+          "cdn",
+          "playback",
+          "transcoder"
+        ],
         "remove": []
       }
     },
@@ -355,11 +716,21 @@
         "principle": "Verify at the line where things change trust levels, scale the verification like the traffic — machines for volume, humans for ambiguity — and never let anything skip the crossing."
       },
       "tradeoff": "The checkpoint can never be both fast and certain: automate more and wrongful strikes multiply; humanize more and you buy delay, cost, and a workforce paid to stare at the worst of humanity. And the boundary's real customer quietly drifts from 'is this allowed?' toward 'is this comfortable for advertisers?' — a stricter and less accountable test.",
-      "defends": ["inv4", "inv3"],
+      "at_scale": "The hardest thing here to scale: Content ID fingerprinting rides a hash index and scales with content cheaply, but human gray-zone review scales with PEOPLE, so the boundary bends under volume and the review backlog — not compute — becomes the real ceiling. Automation clears the obvious cases; the ambiguous middle is where scale genuinely hurts.",
+      "defends": [
+        "inv4",
+        "inv3"
+      ],
       "developer": {
         "mappings": [
-          { "mechanism": "Content ID fingerprinting", "software_concept": "perceptual hashing and signature scanning — matching by resemblance, robust to transformation, like antivirus for media" },
-          { "mechanism": "auto-act plus human gray zone", "software_concept": "human-in-the-loop pipelines: confidence thresholds decide what machines handle and what escalates to people" }
+          {
+            "mechanism": "Content ID fingerprinting",
+            "software_concept": "perceptual hashing and signature scanning — matching by resemblance, robust to transformation, like antivirus for media"
+          },
+          {
+            "mechanism": "auto-act plus human gray zone",
+            "software_concept": "human-in-the-loop pipelines: confidence thresholds decide what machines handle and what escalates to people"
+          }
         ],
         "interview_probes": [
           "Where in your system does data change trust levels, and what actually inspects it at that line — versus what you assume was inspected earlier?"
@@ -368,19 +739,77 @@
       "beginner_analogy": "Like customs at an airport: nearly all luggage flows through the scanners in seconds, the machines flag a small fraction for hand inspection, and a suspicious bag does not get on the plane while people argue about it.",
       "diff": {
         "add_nodes": [
-          { "id": "contentid", "label": "Content ID", "kind": "process", "lane": "control", "order": 2 },
-          { "id": "policy", "label": "Policy classifier", "kind": "process", "lane": "control", "order": 3 },
-          { "id": "reviewer", "label": "Human review", "kind": "actor", "lane": "people", "order": 3 }
+          {
+            "id": "contentid",
+            "label": "Content ID",
+            "kind": "process",
+            "lane": "control",
+            "order": 2
+          },
+          {
+            "id": "policy",
+            "label": "Policy classifier",
+            "kind": "process",
+            "lane": "control",
+            "order": 3
+          },
+          {
+            "id": "reviewer",
+            "label": "Human review",
+            "kind": "actor",
+            "lane": "people",
+            "order": 3
+          }
         ],
         "add_edges": [
-          { "id": "e_scan", "from": "upload_svc", "to": "contentid", "kind": "control", "label": "fingerprints" },
-          { "id": "e_class", "from": "upload_svc", "to": "policy", "kind": "control", "label": "classifies" },
-          { "id": "e_gray", "from": "policy", "to": "reviewer", "kind": "control", "label": "gray zone" },
-          { "id": "e_verdict", "from": "reviewer", "to": "policy", "kind": "control", "label": "verdict" },
-          { "id": "e_gate", "from": "policy", "to": "playback", "kind": "control", "label": "publish gate" },
-          { "id": "e_claim", "from": "contentid", "to": "revshare", "kind": "money", "label": "claims revenue" }
+          {
+            "id": "e_scan",
+            "from": "upload_svc",
+            "to": "contentid",
+            "kind": "control",
+            "label": "fingerprints"
+          },
+          {
+            "id": "e_class",
+            "from": "upload_svc",
+            "to": "policy",
+            "kind": "control",
+            "label": "classifies"
+          },
+          {
+            "id": "e_gray",
+            "from": "policy",
+            "to": "reviewer",
+            "kind": "control",
+            "label": "gray zone"
+          },
+          {
+            "id": "e_verdict",
+            "from": "reviewer",
+            "to": "policy",
+            "kind": "control",
+            "label": "verdict"
+          },
+          {
+            "id": "e_gate",
+            "from": "policy",
+            "to": "playback",
+            "kind": "control",
+            "label": "publish gate"
+          },
+          {
+            "id": "e_claim",
+            "from": "contentid",
+            "to": "revshare",
+            "kind": "money",
+            "label": "claims revenue"
+          }
         ],
-        "highlight": ["uploader", "e_upload2", "cdn"],
+        "highlight": [
+          "uploader",
+          "e_upload2",
+          "cdn"
+        ],
         "remove": []
       }
     }
@@ -415,11 +844,26 @@
       "Verification belongs at the line where things change trust levels, scaled like the traffic itself — machines for volume, humans for the gray zone, and no path around the crossing."
     ],
     "mappings": [
-      { "mechanism": "the transcode job queue", "elsewhere": "Message queues decouple bursty producers from steady consumers everywhere: order processing, print spoolers, CI build farms." },
-      { "mechanism": "the rendition ladder", "elsewhere": "Compile-once artifacts across software: container registries, pre-rendered static sites, thumbnail pipelines — pay at write, serve forever." },
-      { "mechanism": "edge caches", "elsewhere": "The same shelf-near-demand shape as CPU cache hierarchies, DNS resolvers, and supermarket regional warehouses." },
-      { "mechanism": "the watch-time ranking loop", "elsewhere": "Every engagement-optimized feed, search ranker, and momentum-driven market: systems trained on their own outputs, amplifying what they measure." },
-      { "mechanism": "Content ID at the publish boundary", "elsewhere": "Spam filters on email, review gates on app stores, customs at borders: fingerprint the flood, hand-inspect the flagged, hold the line at the crossing." }
+      {
+        "mechanism": "the transcode job queue",
+        "elsewhere": "Message queues decouple bursty producers from steady consumers everywhere: order processing, print spoolers, CI build farms."
+      },
+      {
+        "mechanism": "the rendition ladder",
+        "elsewhere": "Compile-once artifacts across software: container registries, pre-rendered static sites, thumbnail pipelines — pay at write, serve forever."
+      },
+      {
+        "mechanism": "edge caches",
+        "elsewhere": "The same shelf-near-demand shape as CPU cache hierarchies, DNS resolvers, and supermarket regional warehouses."
+      },
+      {
+        "mechanism": "the watch-time ranking loop",
+        "elsewhere": "Every engagement-optimized feed, search ranker, and momentum-driven market: systems trained on their own outputs, amplifying what they measure."
+      },
+      {
+        "mechanism": "Content ID at the publish boundary",
+        "elsewhere": "Spam filters on email, review gates on app stores, customs at borders: fingerprint the flood, hand-inspect the flagged, hold the line at the crossing."
+      }
     ]
   }
 }

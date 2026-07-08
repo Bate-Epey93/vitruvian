@@ -20,26 +20,76 @@
   "strip_down": {
     "purpose": "Move people and goods over long distances, on schedule, without collisions.",
     "actors": [
-      { "id": "a1", "name": "Passenger", "want": "Arrive safely and on time, without thinking about how" },
-      { "id": "a2", "name": "Driver", "want": "Clear, unambiguous permission: may I move, and how fast?" },
-      { "id": "a3", "name": "Signalman", "want": "Certain knowledge of where every train is in their patch" },
-      { "id": "a4", "name": "Railway company", "want": "Maximum traffic through minimum track — capacity is revenue" }
+      {
+        "id": "a1",
+        "name": "Passenger",
+        "want": "Arrive safely and on time, without thinking about how"
+      },
+      {
+        "id": "a2",
+        "name": "Driver",
+        "want": "Clear, unambiguous permission: may I move, and how fast?"
+      },
+      {
+        "id": "a3",
+        "name": "Signalman",
+        "want": "Certain knowledge of where every train is in their patch"
+      },
+      {
+        "id": "a4",
+        "name": "Railway company",
+        "want": "Maximum traffic through minimum track — capacity is revenue"
+      }
     ],
     "invariants": [
-      { "id": "inv1", "text": "Two trains never occupy the same stretch of track at the same time." },
-      { "id": "inv2", "text": "No two conflicting routes through a junction are ever set simultaneously." },
-      { "id": "inv3", "text": "Loss of information always results in stopping, never in proceeding." }
+      {
+        "id": "inv1",
+        "text": "Two trains never occupy the same stretch of track at the same time."
+      },
+      {
+        "id": "inv2",
+        "text": "No two conflicting routes through a junction are ever set simultaneously."
+      },
+      {
+        "id": "inv3",
+        "text": "Loss of information always results in stopping, never in proceeding."
+      }
     ],
     "entities": [
-      { "id": "en1", "name": "Train", "note": "Fast, heavy, nearly blind — cannot stop within sighting distance" },
-      { "id": "en2", "name": "Track section", "note": "The shared resource; exclusive by physics, since two objects cannot share it" },
-      { "id": "en3", "name": "Signal", "note": "The system's voice: permission made visible" },
-      { "id": "en4", "name": "Junction", "note": "Where routes cross — the only place trains can meet at an angle" }
+      {
+        "id": "en1",
+        "name": "Train",
+        "note": "Fast, heavy, nearly blind — cannot stop within sighting distance"
+      },
+      {
+        "id": "en2",
+        "name": "Track section",
+        "note": "The shared resource; exclusive by physics, since two objects cannot share it"
+      },
+      {
+        "id": "en3",
+        "name": "Signal",
+        "note": "The system's voice: permission made visible"
+      },
+      {
+        "id": "en4",
+        "name": "Junction",
+        "note": "Where routes cross — the only place trains can meet at an angle"
+      }
     ],
     "flows": [
-      { "id": "f1", "text": "Trains and their cargo flow along the track." },
-      { "id": "f2", "text": "Permission flows against the trains: from control, through signals, to drivers." },
-      { "id": "f3", "text": "Knowledge of occupancy flows from the track back to control." }
+      {
+        "id": "f1",
+        "text": "Trains and their cargo flow along the track."
+      },
+      {
+        "id": "f2",
+        "text": "Permission flows against the trains: from control, through signals, to drivers."
+      },
+      {
+        "id": "f3",
+        "text": "Knowledge of occupancy flows from the track back to control."
+      }
     ],
     "constraints": [
       "Stopping distance exceeds sighting distance — a driver cannot react their way out of danger.",
@@ -49,24 +99,97 @@
   },
   "visual": {
     "lanes": [
-      { "id": "people", "label": "People" },
-      { "id": "service", "label": "Trains & track" },
-      { "id": "control", "label": "Control" }
+      {
+        "id": "people",
+        "label": "People"
+      },
+      {
+        "id": "service",
+        "label": "Trains & track"
+      },
+      {
+        "id": "control",
+        "label": "Control"
+      }
     ],
     "nodes": [
-      { "id": "passenger", "label": "Passenger", "kind": "actor", "lane": "people", "order": 0 },
-      { "id": "station_a", "label": "Station A", "kind": "store", "lane": "service", "order": 0 },
-      { "id": "train1", "label": "Train A", "kind": "process", "lane": "service", "order": 1 },
-      { "id": "train2", "label": "Train B", "kind": "process", "lane": "service", "order": 2 },
-      { "id": "track_main", "label": "Shared track", "kind": "channel", "lane": "service", "order": 3 },
-      { "id": "station_b", "label": "Station B", "kind": "store", "lane": "service", "order": 4 }
+      {
+        "id": "passenger",
+        "label": "Passenger",
+        "kind": "actor",
+        "lane": "people",
+        "order": 0
+      },
+      {
+        "id": "station_a",
+        "label": "Station A",
+        "kind": "store",
+        "lane": "service",
+        "order": 0
+      },
+      {
+        "id": "train1",
+        "label": "Train A",
+        "kind": "process",
+        "lane": "service",
+        "order": 1
+      },
+      {
+        "id": "train2",
+        "label": "Train B",
+        "kind": "process",
+        "lane": "service",
+        "order": 2
+      },
+      {
+        "id": "track_main",
+        "label": "Shared track",
+        "kind": "channel",
+        "lane": "service",
+        "order": 3
+      },
+      {
+        "id": "station_b",
+        "label": "Station B",
+        "kind": "store",
+        "lane": "service",
+        "order": 4
+      }
     ],
     "edges": [
-      { "id": "e_board", "from": "passenger", "to": "train1", "kind": "payload", "label": "boards" },
-      { "id": "e_dep", "from": "station_a", "to": "train1", "kind": "payload", "label": "departs" },
-      { "id": "e_run1", "from": "train1", "to": "track_main", "kind": "payload" },
-      { "id": "e_run2", "from": "train2", "to": "track_main", "kind": "payload" },
-      { "id": "e_arr", "from": "track_main", "to": "station_b", "kind": "payload", "label": "arrives" }
+      {
+        "id": "e_board",
+        "from": "passenger",
+        "to": "train1",
+        "kind": "payload",
+        "label": "boards"
+      },
+      {
+        "id": "e_dep",
+        "from": "station_a",
+        "to": "train1",
+        "kind": "payload",
+        "label": "departs"
+      },
+      {
+        "id": "e_run1",
+        "from": "train1",
+        "to": "track_main",
+        "kind": "payload"
+      },
+      {
+        "id": "e_run2",
+        "from": "train2",
+        "to": "track_main",
+        "kind": "payload"
+      },
+      {
+        "id": "e_arr",
+        "from": "track_main",
+        "to": "station_b",
+        "kind": "payload",
+        "label": "arrives"
+      }
     ]
   },
   "layers": [
@@ -95,11 +218,20 @@
         "principle": "When coordination cannot happen at run time, move it to plan time — and give everyone the same clock."
       },
       "tradeoff": "The plan is blind. It describes where trains SHOULD be, and reality is under no obligation to comply: a broken-down train is exactly where the timetable says it isn't.",
-      "defends": ["inv1"],
+      "at_scale": "Adding trains means adding timetable rows and safety gaps, not new coordination — one plan scales to an entire national network essentially for free. But it scales brittly: a single late train ripples delay down every path that depended on it, so heavy traffic amplifies small disturbances rather than absorbing them.",
+      "defends": [
+        "inv1"
+      ],
       "developer": {
         "mappings": [
-          { "mechanism": "the timetable", "software_concept": "static scheduling — coordination compiled ahead of time (cron, TDMA slots, build-time resolution)" },
-          { "mechanism": "railway standard time", "software_concept": "clock synchronization as a precondition for any time-based protocol (NTP before TOTP)" }
+          {
+            "mechanism": "the timetable",
+            "software_concept": "static scheduling — coordination compiled ahead of time (cron, TDMA slots, build-time resolution)"
+          },
+          {
+            "mechanism": "railway standard time",
+            "software_concept": "clock synchronization as a precondition for any time-based protocol (NTP before TOTP)"
+          }
         ],
         "interview_probes": [
           "Where in your system do you coordinate by plan instead of by signal — and what happens when reality diverges from the plan?"
@@ -108,13 +240,35 @@
       "beginner_analogy": "Like a family sharing one bathroom by agreeing on a morning schedule. It works beautifully — until the day someone takes too long, because the schedule can't see who's actually inside.",
       "diff": {
         "add_nodes": [
-          { "id": "timetable", "label": "Timetable", "kind": "store", "lane": "control", "order": 0 }
+          {
+            "id": "timetable",
+            "label": "Timetable",
+            "kind": "store",
+            "lane": "control",
+            "order": 0
+          }
         ],
         "add_edges": [
-          { "id": "e_plan1", "from": "timetable", "to": "train1", "kind": "control", "label": "departs 09:00" },
-          { "id": "e_plan2", "from": "timetable", "to": "train2", "kind": "control", "label": "departs 09:10" }
+          {
+            "id": "e_plan1",
+            "from": "timetable",
+            "to": "train1",
+            "kind": "control",
+            "label": "departs 09:00"
+          },
+          {
+            "id": "e_plan2",
+            "from": "timetable",
+            "to": "train2",
+            "kind": "control",
+            "label": "departs 09:10"
+          }
         ],
-        "highlight": ["train1", "train2", "track_main"],
+        "highlight": [
+          "train1",
+          "train2",
+          "track_main"
+        ],
         "remove": []
       }
     },
@@ -143,11 +297,20 @@
         "principle": "Replace inference with confirmation; guard shared resources with exclusive locks, not etiquette."
       },
       "tradeoff": "Capacity is quantized: one train per block-traversal-time, a hard ceiling even when trains could safely run closer. Safety purchased with headroom.",
-      "defends": ["inv1"],
+      "at_scale": "This is the line's throughput ceiling: capacity ≈ one train per block-traversal-time. You scale a busy route by cutting the blocks SHORTER — more, smaller sections packed closer — at the cost of more signal boxes and more telegraph chatter. It is horizontal scaling by sharding the track itself.",
+      "defends": [
+        "inv1"
+      ],
       "developer": {
         "mappings": [
-          { "mechanism": "the brass token", "software_concept": "distributed mutex / lease — possession is permission, uniqueness is enforcement" },
-          { "mechanism": "block sections", "software_concept": "resource sharding: turn one contested resource into N independently-locked ones" }
+          {
+            "mechanism": "the brass token",
+            "software_concept": "distributed mutex / lease — possession is permission, uniqueness is enforcement"
+          },
+          {
+            "mechanism": "block sections",
+            "software_concept": "resource sharding: turn one contested resource into N independently-locked ones"
+          }
         ],
         "interview_probes": [
           "Your rate limiter infers capacity from elapsed time. What's your Clayton Tunnel?",
@@ -157,15 +320,49 @@
       "beginner_analogy": "Like a single bathroom key at a gas station: whoever holds the key can go in; two people can't hold one key.",
       "diff": {
         "add_nodes": [
-          { "id": "signalbox_a", "label": "Signal box A", "kind": "process", "lane": "control", "order": 1 },
-          { "id": "telegraph", "label": "Telegraph line", "kind": "channel", "lane": "control", "order": 2 },
-          { "id": "signalbox_b", "label": "Signal box B", "kind": "process", "lane": "control", "order": 3 }
+          {
+            "id": "signalbox_a",
+            "label": "Signal box A",
+            "kind": "process",
+            "lane": "control",
+            "order": 1
+          },
+          {
+            "id": "telegraph",
+            "label": "Telegraph line",
+            "kind": "channel",
+            "lane": "control",
+            "order": 2
+          },
+          {
+            "id": "signalbox_b",
+            "label": "Signal box B",
+            "kind": "process",
+            "lane": "control",
+            "order": 3
+          }
         ],
         "add_edges": [
-          { "id": "e_confirm", "from": "signalbox_b", "to": "signalbox_a", "kind": "control", "label": "block clear" },
-          { "id": "e_permit", "from": "signalbox_a", "to": "train1", "kind": "control", "label": "may enter" }
+          {
+            "id": "e_confirm",
+            "from": "signalbox_b",
+            "to": "signalbox_a",
+            "kind": "control",
+            "label": "block clear"
+          },
+          {
+            "id": "e_permit",
+            "from": "signalbox_a",
+            "to": "train1",
+            "kind": "control",
+            "label": "may enter"
+          }
         ],
-        "highlight": ["track_main", "train1", "train2"],
+        "highlight": [
+          "track_main",
+          "train1",
+          "train2"
+        ],
         "remove": []
       }
     },
@@ -194,10 +391,17 @@
         "principle": "Make illegal states unrepresentable — enforce constraints in the substrate, not in the operator's memory."
       },
       "tradeoff": "The locking encodes yesterday's layout: safety hardens the system against change, and every alteration to the track demands re-engineering the constraint machine to match.",
-      "defends": ["inv2", "inv1"],
+      "at_scale": "Interlocking scales with junction COMPLEXITY, not traffic volume: each added route multiplies the pairwise conflicts to lock out, so a busy junction needed a room-sized frame of steel bars. The machine grows with the track layout's combinations — which is exactly why simplifying topology is how real railways keep the locking tractable.",
+      "defends": [
+        "inv2",
+        "inv1"
+      ],
       "developer": {
         "mappings": [
-          { "mechanism": "the interlocking frame", "software_concept": "type systems and state machines — invalid transitions rejected at compile time, not caught at runtime" }
+          {
+            "mechanism": "the interlocking frame",
+            "software_concept": "type systems and state machines — invalid transitions rejected at compile time, not caught at runtime"
+          }
         ],
         "interview_probes": [
           "Which invalid states does your API merely document as forbidden, rather than make unrepresentable?"
@@ -206,14 +410,42 @@
       "beginner_analogy": "Like a car that won't let you shift into reverse while driving forward — the gearbox doesn't trust your memory of the rule; it removes the option.",
       "diff": {
         "add_nodes": [
-          { "id": "junction", "label": "Junction", "kind": "channel", "lane": "service", "order": 5 },
-          { "id": "interlocking", "label": "Interlocking", "kind": "process", "lane": "control", "order": 5 }
+          {
+            "id": "junction",
+            "label": "Junction",
+            "kind": "channel",
+            "lane": "service",
+            "order": 5
+          },
+          {
+            "id": "interlocking",
+            "label": "Interlocking",
+            "kind": "process",
+            "lane": "control",
+            "order": 5
+          }
         ],
         "add_edges": [
-          { "id": "e_route", "from": "signalbox_b", "to": "interlocking", "kind": "control", "label": "route request" },
-          { "id": "e_lock", "from": "interlocking", "to": "junction", "kind": "control", "label": "route locked" }
+          {
+            "id": "e_route",
+            "from": "signalbox_b",
+            "to": "interlocking",
+            "kind": "control",
+            "label": "route request"
+          },
+          {
+            "id": "e_lock",
+            "from": "interlocking",
+            "to": "junction",
+            "kind": "control",
+            "label": "route locked"
+          }
         ],
-        "highlight": ["signalbox_a", "signalbox_b", "track_main"],
+        "highlight": [
+          "signalbox_a",
+          "signalbox_b",
+          "track_main"
+        ],
         "remove": []
       }
     },
@@ -242,11 +474,21 @@
         "principle": "Sensors beat ledgers: derive state from the resource itself, and wire the sensor so its failure mode is the safe reading."
       },
       "tradeoff": "The railway now trusts electricity: rusty rails, leaf film, or a broken bond wire produce false 'occupied' readings that throttle capacity — false alarms are the tax paid for never missing a real train.",
-      "defends": ["inv1", "inv3"],
+      "at_scale": "Detection scales cheaply and linearly — one relay per block, no human in the loop — so an entire network can watch itself continuously without adding staff. The load it adds is electrical: every section is now a circuit that can fail, so scale multiplies the number of things that can false-alarm and throttle a line for a ghost.",
+      "defends": [
+        "inv1",
+        "inv3"
+      ],
       "developer": {
         "mappings": [
-          { "mechanism": "the track circuit", "software_concept": "heartbeats and health checks — liveness derived from the resource, with silence treated as failure" },
-          { "mechanism": "relay drops on power loss", "software_concept": "fail-safe defaults: the unpowered state is the safe state (deny-by-default)" }
+          {
+            "mechanism": "the track circuit",
+            "software_concept": "heartbeats and health checks — liveness derived from the resource, with silence treated as failure"
+          },
+          {
+            "mechanism": "relay drops on power loss",
+            "software_concept": "fail-safe defaults: the unpowered state is the safe state (deny-by-default)"
+          }
         ],
         "interview_probes": [
           "Which facts does your system remember in a 'ledger' that it could instead measure from the resource itself?"
@@ -255,13 +497,34 @@
       "beginner_analogy": "Like a fridge door that beeps because a circuit knows it's open — nobody has to remember they left it open; the door itself tells on you.",
       "diff": {
         "add_nodes": [
-          { "id": "track_circuit", "label": "Track circuit", "kind": "process", "lane": "control", "order": 4 }
+          {
+            "id": "track_circuit",
+            "label": "Track circuit",
+            "kind": "process",
+            "lane": "control",
+            "order": 4
+          }
         ],
         "add_edges": [
-          { "id": "e_sense", "from": "track_main", "to": "track_circuit", "kind": "control", "label": "axle shunts" },
-          { "id": "e_occupied", "from": "track_circuit", "to": "interlocking", "kind": "control", "label": "occupied" }
+          {
+            "id": "e_sense",
+            "from": "track_main",
+            "to": "track_circuit",
+            "kind": "control",
+            "label": "axle shunts"
+          },
+          {
+            "id": "e_occupied",
+            "from": "track_circuit",
+            "to": "interlocking",
+            "kind": "control",
+            "label": "occupied"
+          }
         ],
-        "highlight": ["signalbox_a", "signalbox_b"],
+        "highlight": [
+          "signalbox_a",
+          "signalbox_b"
+        ],
         "remove": []
       }
     },
@@ -290,11 +553,21 @@
         "principle": "Choose the failure direction: design every component so the cheap, likely failure lands in the safe state, and spend energy to stay in the risky one."
       },
       "tradeoff": "Availability is sacrificed to safety at every margin: fail-safe systems fail often and visibly, trading uptime and capacity for the guarantee that failure is never silent motion.",
-      "defends": ["inv3", "inv1"],
+      "at_scale": "Fail-safe scales perfectly on paper because it needs no central capacity — each brake and signal decides locally from the energy it already holds. The catch under heavy traffic: the safe direction is expensive, so one fault stops many trains at once, and the busier the line the more a single fail-safe trip cascades into system-wide delay.",
+      "defends": [
+        "inv3",
+        "inv1"
+      ],
       "developer": {
         "mappings": [
-          { "mechanism": "pressure holds brakes off", "software_concept": "deny-by-default and dead-man switches: the absent credential, the expired lease, the missed heartbeat all fail closed" },
-          { "mechanism": "automatic train protection", "software_concept": "guardrails outside the operator: circuit breakers and admission controllers that act when the human or the process misbehaves" }
+          {
+            "mechanism": "pressure holds brakes off",
+            "software_concept": "deny-by-default and dead-man switches: the absent credential, the expired lease, the missed heartbeat all fail closed"
+          },
+          {
+            "mechanism": "automatic train protection",
+            "software_concept": "guardrails outside the operator: circuit breakers and admission controllers that act when the human or the process misbehaves"
+          }
         ],
         "interview_probes": [
           "For each critical component you own: if it lost power mid-operation, does the system land in the safe state or the live one — and did you choose that, or inherit it?"
@@ -303,13 +576,34 @@
       "beginner_analogy": "Like a dead-man's switch on a lawnmower: you must hold the lever to keep the blade spinning. Let go — on purpose, by accident, or because you fainted — and the machine stops itself.",
       "diff": {
         "add_nodes": [
-          { "id": "atp", "label": "Auto protection", "kind": "process", "lane": "control", "order": 6 }
+          {
+            "id": "atp",
+            "label": "Auto protection",
+            "kind": "process",
+            "lane": "control",
+            "order": 6
+          }
         ],
         "add_edges": [
-          { "id": "e_sigstate", "from": "interlocking", "to": "atp", "kind": "control", "label": "signal state" },
-          { "id": "e_brake", "from": "atp", "to": "train2", "kind": "control", "label": "brakes if red" }
+          {
+            "id": "e_sigstate",
+            "from": "interlocking",
+            "to": "atp",
+            "kind": "control",
+            "label": "signal state"
+          },
+          {
+            "id": "e_brake",
+            "from": "atp",
+            "to": "train2",
+            "kind": "control",
+            "label": "brakes if red"
+          }
         ],
-        "highlight": ["train1", "train2"],
+        "highlight": [
+          "train1",
+          "train2"
+        ],
         "remove": []
       }
     }
@@ -344,11 +638,26 @@
       "Expect safety to cost capacity — quantized blocks, ghost delays, and dark lines are the price of the invariant, and the price is worth paying."
     ],
     "mappings": [
-      { "mechanism": "block + token", "elsewhere": "Mutexes, leases, and semaphores guard shared resources in every operating system and distributed database." },
-      { "mechanism": "the timetable", "elsewhere": "Static scheduling everywhere coordination is cheaper at plan time: cron, airline slots, TDMA radio, school bells." },
-      { "mechanism": "interlocking frame", "elsewhere": "Type systems, database constraints, and hardware enable-lines: invalid combinations rejected by construction." },
-      { "mechanism": "track circuit", "elsewhere": "Heartbeats, health checks, and liveness probes: presence measured continuously, silence read as danger." },
-      { "mechanism": "fail-safe brakes", "elsewhere": "Deny-by-default security, dead-man switches, and watchdog timers: the unpowered state is the safe state." }
+      {
+        "mechanism": "block + token",
+        "elsewhere": "Mutexes, leases, and semaphores guard shared resources in every operating system and distributed database."
+      },
+      {
+        "mechanism": "the timetable",
+        "elsewhere": "Static scheduling everywhere coordination is cheaper at plan time: cron, airline slots, TDMA radio, school bells."
+      },
+      {
+        "mechanism": "interlocking frame",
+        "elsewhere": "Type systems, database constraints, and hardware enable-lines: invalid combinations rejected by construction."
+      },
+      {
+        "mechanism": "track circuit",
+        "elsewhere": "Heartbeats, health checks, and liveness probes: presence measured continuously, silence read as danger."
+      },
+      {
+        "mechanism": "fail-safe brakes",
+        "elsewhere": "Deny-by-default security, dead-man switches, and watchdog timers: the unpowered state is the safe state."
+      }
     ]
   }
 }
