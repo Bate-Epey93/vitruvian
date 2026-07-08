@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════
-   SYSTEM DECONSTRUCTOR — CONTENT LAYER
+   VITRUVIAN — CONTENT LAYER
    ───────────────────────────────────────────────────────────────
    Branding (CONFIG), the thinking-model library (MODEL_LIBRARY),
    and UI copy (COPY). The engine never contains copy; this file
@@ -15,15 +15,16 @@
 
 /* ---------- CONFIG ---------- */
 var CONFIG = {
-  toolName: "System·Deconstructor",     // "·" renders as the accent dot
+  toolName: "Vitruvian",
   tagline:  "Rebuild it to understand it",
   accent:     "#0e7a63",
   accentDeep: "#0a5748",
   accentWash: "#e2f0ec",
   failure:    "#c22f2f",
   money:      "#9a6212",
-  storageKey: "system_deconstructor_v1",
-  appVersion: "1.0.0"
+  vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
+  storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
+  appVersion: "1.1.0"
 };
 
 /* ---------- MODEL_LIBRARY · the 14 thinking models ----------
@@ -122,7 +123,7 @@ var MODEL_LIBRARY = [
 var COPY = {
   libraryTitle: "Library",
   libraryFlagshipNote: "Start with these — they're the bar.",
-  deconstructPlaceholder: "Name a system to deconstruct…",
+  deconstructPlaceholder: "Name a system to study…",
   deconstructBtn: "Deconstruct",
   audienceModes: [
     { id: "beginner",   label: "Beginner" },

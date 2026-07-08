@@ -384,8 +384,9 @@ details.analogy-fold summary{font-family:var(--mono);font-size:10px;letter-spaci
 .fine{font-size:11px;color:var(--faint);margin-top:16px;line-height:1.6;}
 a{color:var(--accent);}
 
-/* toggle */
-.toggle{display:inline-flex;align-items:center;gap:9px;cursor:pointer;-webkit-user-select:none;user-select:none;}
+/* toggle — block-level flex so it always sits on its own row and never
+   wraps up beside the segmented control ("hanging off" bug) */
+.toggle{display:flex;align-items:center;gap:9px;cursor:pointer;-webkit-user-select:none;user-select:none;width:fit-content;}
 .toggle .tg-track{width:38px;height:22px;border-radius:11px;background:var(--line);position:relative;transition:background .2s;flex-shrink:0;}
 .toggle .tg-track::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s;}
 .toggle.on .tg-track{background:var(--accent);}
@@ -402,15 +403,18 @@ a{color:var(--accent);}
 .dg-node .dg-fill{fill:#fbfaf6;stroke:none;}
 .dg-node .dg-open{stroke:#141416;stroke-width:1.5;}
 .dg-kind-actor .dg-shape{fill:#fbfaf6;}
-.dg-label{font-size:10.5px;fill:#141416;}
+.dg-label{font-size:10.5px;fill:#141416;paint-order:stroke;stroke:#fbfaf6;stroke-width:3px;stroke-linejoin:round;}
+/* stroke COLOR comes inline from the origin layer; kind stays in the dash */
 .dg-epath{stroke-width:1.5;}
-.dg-ekind-payload .dg-epath{stroke:#0e7a63;stroke-width:2;}
-.dg-ekind-control .dg-epath{stroke:#141416;stroke-dasharray:5 4;}
-.dg-ekind-money .dg-epath{stroke:#9a6212;stroke-dasharray:1.5 3.5;}
-.dg-elabel{font-size:9px;fill:#38383e;paint-order:stroke;stroke:#f2f0ea;stroke-width:3px;stroke-linejoin:round;}
-.dg-broken .dg-shape,.dg-broken .dg-open{stroke:var(--failure);animation:dg-pulse 1.1s ease-in-out infinite;}
-.dg-broken .dg-epath{stroke:var(--failure);animation:dg-pulse 1.1s ease-in-out infinite;}
+.dg-ekind-payload .dg-epath{stroke-width:2;}
+.dg-ekind-control .dg-epath{stroke-dasharray:5 4;}
+.dg-ekind-money .dg-epath{stroke-dasharray:1.5 3.5;}
+.dg-elabel{font-size:9px;paint-order:stroke;stroke:#f2f0ea;stroke-width:3.5px;stroke-linejoin:round;}
+/* failure pulse must beat the inline layer color */
+.dg-broken .dg-shape,.dg-broken .dg-open{stroke:var(--failure)!important;animation:dg-pulse 1.1s ease-in-out infinite;}
+.dg-broken .dg-epath{stroke:var(--failure)!important;animation:dg-pulse 1.1s ease-in-out infinite;}
 .dg-broken .dg-label{fill:var(--failure);}
+.dg-broken .dg-elabel{fill:var(--failure)!important;}
 @keyframes dg-pulse{0%,100%{stroke-width:1.5;opacity:1;}50%{stroke-width:2.6;opacity:.55;}}
 .dg-ekind-payload.dg-broken .dg-epath{animation:dg-pulse-w 1.1s ease-in-out infinite;}
 @keyframes dg-pulse-w{0%,100%{stroke-width:2;opacity:1;}50%{stroke-width:3;opacity:.55;}}
@@ -519,4 +523,80 @@ html,body{overscroll-behavior:none;}
 @media(max-width:700px){
   .tbtn.icon-only{position:relative;}
   .tbtn.icon-only::after{content:'';position:absolute;inset:-6px;}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v1.1 — VITRUVIAN: scrubber, predict gates, drill, enso stamps,
+   wet-ink gloss + glass
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Timeline scrubber (strata sweep) ── */
+.scrub-wrap{padding:8px 14px 2px;background:var(--panel);border-top:1px solid var(--line-soft);}
+.scrub-row{display:flex;gap:4px;touch-action:none;}
+.scrub-seg{
+  flex:1;height:22px;border-radius:4px;cursor:pointer;
+  font-family:var(--mono);font-size:9px;font-weight:700;
+  border:1.5px solid var(--seg,var(--line));color:var(--seg,var(--muted));
+  background:transparent;transition:all .12s;padding:0;min-width:20px;
+}
+.scrub-seg.on{background:var(--seg,var(--ink));color:#fff;}
+.scrub-seg.locked{border-style:dashed;opacity:.35;cursor:default;}
+.scrub-seg:not(.on):not(.locked):hover{background:color-mix(in srgb, var(--seg) 14%, transparent);}
+
+/* ── Predict-the-break ── */
+.predict-box{background:var(--panel);border:1px dashed var(--line);border-radius:9px;padding:13px 16px;margin:14px 0;}
+.predict-box .pb-label{font-family:var(--mono);font-size:9.5px;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:9px;}
+.predict-row{display:flex;gap:7px;flex-wrap:wrap;}
+.predict-chip{
+  font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.5px;
+  border:1.5px solid var(--accent);color:var(--accent);background:transparent;
+  border-radius:5px;padding:6px 12px;cursor:pointer;transition:all .12s;
+}
+.predict-chip:not(:disabled):hover{background:var(--accent);color:#fff;}
+.predict-chip:disabled{cursor:default;opacity:.55;}
+.predict-chip.hit{background:var(--accent);color:#fff;opacity:1;}
+.predict-chip.miss{background:var(--failure);border-color:var(--failure);color:#fff;opacity:1;}
+.predict-chip.answer{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash);opacity:1;}
+.predict-chip.static{pointer-events:none;padding:3px 9px;font-size:9.5px;}
+.pb-result{font-size:13px;color:var(--ink-soft);margin:10px 0 0;font-style:italic;}
+
+/* ── Enso stamps: brushwork for human moments only ── */
+.enso-stamp{width:26px;height:26px;vertical-align:middle;margin-left:9px;opacity:.85;}
+.enso-stamp.complete{width:34px;height:34px;margin-left:12px;}
+.enso-stamp.card-stamp{width:30px;height:30px;margin:0;}
+.layer-head .enso-stamp{margin-left:8px;}
+
+/* ── Wet-ink gloss: a specular skim on raised surfaces; paper stays matte ── */
+.bd-card,.ml-card,.set-block,.gate-card,.stress-card,.lens-box,.solution-card,
+.model-card,.your-answer,.sd-purpose,.sd-item,.ml-use,.analogy-box,.verdict-card,
+.narrowing-note,.predict-box,.gen-error{
+  background-image:linear-gradient(172deg,rgba(255,255,255,.5),rgba(255,255,255,0) 36%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6),
+             0 1px 2px rgba(20,20,22,.05),
+             0 10px 26px -18px rgba(20,20,22,.28);
+}
+.problem-card{
+  background-image:linear-gradient(172deg,rgba(255,255,255,.35),rgba(255,255,255,0) 36%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45), 0 10px 26px -18px rgba(194,47,47,.3);
+}
+.dev-box{
+  background-image:linear-gradient(168deg,rgba(255,255,255,.09),rgba(255,255,255,0) 40%),linear-gradient(135deg,var(--ink),#23232b);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12), 0 12px 30px -18px rgba(0,0,0,.5);
+}
+.gbtn,.step-btn,.big-btn,.mbtn{
+  background-image:linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,0) 55%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.5), 0 1px 2px rgba(20,20,22,.08);
+}
+.gbtn.primary,.big-btn{
+  background-image:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0) 55%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.25), 0 2px 6px rgba(20,20,22,.18);
+}
+.gbtn:active,.step-btn:active,.big-btn:active,.mbtn:active{transform:translateY(1px);box-shadow:inset 0 1px 2px rgba(20,20,22,.15);}
+
+/* ── Glass chrome: topbar, menus, sticky panes ── */
+.topbar{background:rgba(18,18,21,.86);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);}
+.menu-pop{background:rgba(251,250,246,.82);-webkit-backdrop-filter:blur(14px) saturate(1.3);backdrop-filter:blur(14px) saturate(1.3);}
+.stepper{background:rgba(242,240,234,.72);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);}
+@media(max-width:860px){
+  .diagram-pane{background:rgba(242,240,234,.82);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2);}
 }

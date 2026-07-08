@@ -21,9 +21,10 @@ var DocView = (() => {
   function modelById(id) { return MODEL_LIBRARY.find(m => m.id === id); }
 
   function mount(opts) {
-    const { docPane, diagram, rec, onSave, onCompare, canCompare } = opts;
+    const { docPane, diagram, rec, onSave, onCompare, canCompare, scrubEl } = opts;
     const doc = rec.doc;
     const N = doc.layers.length;
+    let lastShown = 0;           // diagram state currently on screen
     let audience = opts.audience;
     let challenge = opts.challenge;
     let pos = Math.min(rec.progress.position || 0, N + 2);
@@ -45,19 +46,65 @@ var DocView = (() => {
     function persist() { refreshProgress(); onSave(rec); }
 
     /* ── diagram sync ── */
-    function syncDiagram(animate) {
+    function maxRevealed() {
+      let m = 0;
+      doc.layers.forEach(L => { if (attemptFor(L.index).revealed) m = Math.max(m, L.index); });
+      return m;
+    }
+    function capText(s) {
       const cap = docPane.parentElement.querySelector(".diagram-cap-state");
-      if (pos === 0) { diagram.show(0); if (cap) cap.textContent = "Layer 0 · the naive baseline"; return; }
-      if (pos > N) { diagram.show(N); if (cap) cap.textContent = "Final state · all layers"; return; }
-      const L = doc.layers[pos - 1];
-      const gated = challenge && !attemptFor(L.index).revealed;
-      if (gated) {
-        diagram.show(pos - 1, { highlight: L.diff.highlight });
-        if (cap) cap.textContent = `Before layer ${pos} · red = what breaks`;
-      } else {
-        diagram.show(pos, { animate: !!animate });
-        if (cap) cap.textContent = `Layer ${pos} of ${N} · ${L.name}`;
+      if (cap) cap.textContent = s;
+    }
+    function syncDiagram(animate) {
+      if (pos === 0) { lastShown = 0; diagram.show(0); capText("Layer 0 · the naive baseline"); }
+      else if (pos > N) { lastShown = N; diagram.show(N); capText("Final state · all layers"); }
+      else {
+        const L = doc.layers[pos - 1];
+        const gated = challenge && !attemptFor(L.index).revealed;
+        if (gated) {
+          lastShown = pos - 1;
+          diagram.show(pos - 1, { highlight: L.diff.highlight });
+          capText(`Before layer ${pos} · red = what breaks`);
+        } else {
+          lastShown = pos;
+          diagram.show(pos, { animate: !!animate });
+          capText(`Layer ${pos} of ${N} · ${L.name}`);
+        }
       }
+      renderScrub();
+    }
+
+    /* ── timeline scrubber: sweep the diagram baseline → frontier.
+       A peek only — position/navigation re-syncs on next render. In
+       challenge mode the frontier stops at the furthest revealed layer,
+       so scrubbing can't spoil un-earned strata. ── */
+    function renderScrub() {
+      if (!scrubEl) return;
+      scrubEl.textContent = "";
+      const frontier = challenge ? maxRevealed() : N;
+      const row = h("div", "scrub-row");
+      for (let i = 0; i <= N; i++) {
+        const seg = h("button", "scrub-seg" + (i === lastShown ? " on" : "") + (i > frontier ? " locked" : ""), i === 0 ? "0" : String(i));
+        seg.setAttribute("aria-label", i === 0 ? "Baseline state" : "State after layer " + i);
+        if (i <= frontier) {
+          seg.style.setProperty("--seg", Diagram.layerColor(i));
+          seg.onclick = () => {
+            lastShown = i;
+            diagram.show(i);
+            capText(i === 0 ? "Peek · the naive baseline" : `Peek · after layer ${i}`);
+            renderScrub();
+          };
+        } else seg.disabled = true;
+        row.appendChild(seg);
+      }
+      // drag to sweep
+      row.onpointerdown = row.onpointermove = ev => {
+        if (ev.type === "pointermove" && ev.buttons !== 1) return;
+        const segs = [...row.children].filter(s => !s.disabled);
+        const hit = segs.find(s => { const r = s.getBoundingClientRect(); return ev.clientX >= r.left && ev.clientX <= r.right; });
+        if (hit && !hit.classList.contains("on")) hit.click();
+      };
+      scrubEl.appendChild(row);
     }
 
     /* ── stepper ── */
@@ -77,6 +124,11 @@ var DocView = (() => {
       doc.layers.forEach(L => {
         const a = attemptFor(L.index);
         mk(L.index, String(L.index), a.revealed ? " done" : (challenge ? " gated" : ""));
+        const dot = rail.lastElementChild;
+        if (a.revealed && L.index !== pos) {
+          dot.style.borderColor = Diagram.layerColor(L.index);
+          dot.style.color = Diagram.layerColor(L.index);
+        }
       });
       mk(N + 1, "S");
       mk(N + 2, "T");
@@ -89,8 +141,16 @@ var DocView = (() => {
 
     /* ── overview (position 0) ── */
     function renderOverview(root) {
-      root.appendChild(h("div", "kicker", "System breakdown · " + doc.meta.history_confidence + " historical confidence"));
-      root.appendChild(h("h1", "title", doc.meta.system));
+      root.appendChild(h("div", "kicker", "System study · " + doc.meta.history_confidence + " historical confidence"));
+      const titleRow = h("h1", "title", doc.meta.system);
+      if (doc.layers.every(L => attemptFor(L.index).revealed)) {
+        const stamp = h("img", "enso-stamp complete");
+        stamp.src = "assets/enso-complete.svg";
+        stamp.alt = "Study complete";
+        stamp.title = "Every layer rebuilt";
+        titleRow.appendChild(stamp);
+      }
+      root.appendChild(titleRow);
       if (doc.meta.narrowing) {
         const nn = h("div", "narrowing-note");
         nn.appendChild(h("b", null, "Scope: "));
@@ -164,7 +224,18 @@ var DocView = (() => {
       const gated = challenge && !a.revealed;
 
       const head = h("div", "layer-head");
-      head.appendChild(h("span", "layer-num", "LAYER " + String(L.index).padStart(2, "0") + " / " + String(N).padStart(2, "0")));
+      const badge = h("span", "layer-num", "LAYER " + String(L.index).padStart(2, "0") + " / " + String(N).padStart(2, "0"));
+      const lc = Diagram.layerColor(L.index);
+      badge.style.color = lc;
+      badge.style.background = `color-mix(in srgb, ${lc} 13%, transparent)`;
+      head.appendChild(badge);
+      if (a.revealed) {
+        const stamp = h("img", "enso-stamp");
+        stamp.src = "assets/enso-gate.svg";
+        stamp.alt = "";
+        stamp.title = "Gate earned";
+        head.appendChild(stamp);
+      }
       // the name can spoil the solution — withhold it at the gate
       head.appendChild(h("div", "layer-name", gated ? "The next failure" : L.name));
       root.appendChild(head);
@@ -189,7 +260,43 @@ var DocView = (() => {
       return card;
     }
 
+    /* one-tap prediction: which invariant does this failure attack?
+       Rendered before the design question; needs ≥2 invariants to be
+       a real choice. Persists once — no retries, honesty over score. */
+    function renderPredict(root, L, a) {
+      const invs = doc.strip_down.invariants;
+      if (invs.length < 2) return;
+      const box = h("div", "predict-box");
+      box.appendChild(h("div", "pb-label", "First, a prediction — which law does this failure attack?"));
+      const row = h("div", "predict-row");
+      invs.forEach(iv => {
+        const chip = h("button", "predict-chip", "INV " + invNumber[iv.id]);
+        chip.title = iv.text;
+        if (a.predict) {
+          chip.disabled = true;
+          if (iv.id === a.predict.chosen) chip.classList.add(a.predict.correct ? "hit" : "miss");
+          if (!a.predict.correct && L.defends.includes(iv.id)) chip.classList.add("answer");
+        } else {
+          chip.onclick = () => {
+            a.predict = { chosen: iv.id, correct: L.defends.includes(iv.id) };
+            a.ts = Date.now();
+            persist();
+            render();
+          };
+        }
+        row.appendChild(chip);
+      });
+      box.appendChild(row);
+      if (a.predict) {
+        box.appendChild(h("p", "pb-result", a.predict.correct
+          ? "Called it — this failure attacks " + L.defends.map(d => "INV " + invNumber[d]).join(", ") + "."
+          : "It actually attacks " + L.defends.map(d => "INV " + invNumber[d]).join(", ") + " — watch for why."));
+      }
+      root.appendChild(box);
+    }
+
     function renderGate(root, L, a) {
+      renderPredict(root, L, a);
       const card = h("div", "gate-card");
       card.appendChild(h("div", "gate-kick", COPY.gateKicker));
       card.appendChild(h("div", "gate-q", L.gate.question));
@@ -236,6 +343,13 @@ var DocView = (() => {
     }
 
     function renderRevealed(root, L, a) {
+      if (a.predict) {
+        const pr = h("div", "defends-row");
+        pr.appendChild(h("span", "mono-label", "Your prediction"));
+        pr.appendChild(h("span", "predict-chip static " + (a.predict.correct ? "hit" : "miss"), "INV " + invNumber[a.predict.chosen]));
+        pr.appendChild(h("span", "bd-last", a.predict.correct ? "correct" : "it attacks " + L.defends.map(d => "INV " + invNumber[d]).join(", ")));
+        root.appendChild(pr);
+      }
       root.appendChild(modelCard(L, false));
 
       if (a.answer && a.answer.trim()) {
@@ -336,7 +450,7 @@ var DocView = (() => {
     /* ── stress tests (position N+1) ── */
     function renderStress(root) {
       root.appendChild(h("div", "kicker", "Push it somewhere nasty"));
-      root.appendChild(h("h1", "title", "Stress tests"));
+      root.appendChild(h("h1", "title", "Trials"));
       doc.stress_tests.forEach(s => {
         const card = h("div", "stress-card");
         card.appendChild(h("div", "st-title", s.title));

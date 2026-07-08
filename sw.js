@@ -1,4 +1,4 @@
-const CACHE_VERSION = "sdc-v1.0.1";   // bump on EVERY deploy, including content edits
+const CACHE_VERSION = "vitruvian-v1.1.0";   // bump on EVERY deploy, including content edits
 const SHELL = [
   "./",
   "./index.html",
@@ -16,6 +16,8 @@ const SHELL = [
   "./flagships/railway.json",
   "./flagships/whatsapp.json",
   "./flagships/youtube.json",
+  "./assets/enso-gate.svg",
+  "./assets/enso-complete.svg",
   "./fonts/BricolageGrotesque.woff2",
   "./fonts/HankenGrotesk.woff2",
   "./fonts/JetBrainsMono.woff2",

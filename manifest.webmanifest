@@ -1,7 +1,7 @@
 {
-  "name": "System Deconstructor",
-  "short_name": "Deconstructor",
-  "description": "Deconstruct any system: strip it to essence, rebuild it failure by failure with a diagram that grows, and test yourself at every layer.",
+  "name": "Vitruvian",
+  "short_name": "Vitruvian",
+  "description": "Vitruvian — studies of working systems: strip to essence, rebuild failure by failure with a diagram that grows, and test yourself at every layer.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
@@ -16,7 +16,7 @@
     { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "New breakdown", "url": "./?action=new", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "New study", "url": "./?action=new", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Continue reading", "url": "./?action=resume", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

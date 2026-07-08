@@ -32,7 +32,7 @@ window.addEventListener("pagehide", () => { flushSaves(); });
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushSaves(); });
 
 /* ═══ Screen switching ═══ */
-const SCREENS = ["library", "reader", "generate", "models", "settings"];
+const SCREENS = ["library", "reader", "generate", "models", "drill", "settings"];
 function show(screen) {
   SCREENS.forEach(s => { $("screen-" + s).hidden = s !== screen; });
   $("audSwitch").hidden = screen !== "reader";
@@ -84,6 +84,7 @@ function wireTopbar() {
   $("brand").onclick = async () => { await flushSaves(); await renderLibrary(); show("library"); };
   $("backBtn").onclick = async () => { await flushSaves(); await renderLibrary(); show("library"); };
   $("modelsBtn").onclick = () => { renderModels(); show("models"); };
+  $("drillBtn").onclick = () => { renderDrill(); show("drill"); };
   $("settingsBtn").onclick = () => { renderSettings(); show("settings"); };
   $("readerMenuBtn").onclick = e => { e.stopPropagation(); $("menuPop").hidden = !$("menuPop").hidden; };
   document.addEventListener("click", () => { $("menuPop").hidden = true; });
@@ -142,18 +143,25 @@ async function renderLibrary() {
     const card = h("button", "bd-card");
     card.appendChild(h("div", "bd-name", rec.system));
     const metaRow = h("div", "bd-meta");
-    metaRow.appendChild(h("span", "chip" + (rec.source === "flagship" ? " flagship" : ""), rec.source));
+    metaRow.appendChild(h("span", "chip" + (rec.source === "flagship" ? " flagship" : ""), rec.source === "flagship" ? "flagship" : "your study"));
     metaRow.appendChild(h("span", "chip", rec.doc.layers.length + " layers"));
     card.appendChild(metaRow);
     const foot = h("div", "bd-foot");
     const n = rec.doc.layers.length;
     const done = rec.doc.layers.filter(L => rec.attempts[L.index] && rec.attempts[L.index].revealed).length;
     const pct = Math.round(100 * done / n);
-    const ring = h("div", "ring");
-    ring.style.background = `conic-gradient(var(--accent) ${pct * 3.6}deg, var(--line-soft) 0deg)`;
-    ring.appendChild(h("span", null, pct + ""));
     foot.appendChild(h("span", "bd-last", rec.lastOpen ? "opened " + timeAgo(rec.lastOpen) : "new"));
-    foot.appendChild(ring);
+    if (pct === 100) {
+      const stamp = h("img", "enso-stamp card-stamp");
+      stamp.src = "assets/enso-complete.svg";
+      stamp.alt = "Study complete";
+      foot.appendChild(stamp);
+    } else {
+      const ring = h("div", "ring");
+      ring.style.background = `conic-gradient(var(--accent) ${pct * 3.6}deg, var(--line-soft) 0deg)`;
+      ring.appendChild(h("span", null, pct + ""));
+      foot.appendChild(ring);
+    }
     card.appendChild(foot);
     card.onclick = () => openReader(rec.id);
     grid.appendChild(card);
@@ -235,7 +243,8 @@ async function openReader(id, layerIndex) {
     capToggle.textContent = dpane.classList.contains("collapsed") ? "show" : "hide";
   };
   dcap.append(capState, capToggle);
-  dpane.append(dscroll, dcap);
+  const scrubEl = h("div", "scrub-wrap");
+  dpane.append(dscroll, scrubEl, dcap);
   const docPane = h("div", "doc-pane");
   wrap.append(dpane, docPane);
   pane.appendChild(wrap);
@@ -244,7 +253,7 @@ async function openReader(id, layerIndex) {
   const challengeOn = rec.challengeMode != null ? rec.challengeMode : meta.challengeModeDefault !== false;
 
   currentView = DocView.mount({
-    docPane, diagram, rec,
+    docPane, diagram, rec, scrubEl,
     audience: meta.audienceMode || "enthusiast",
     challenge: challengeOn,
     onSave(r) { Store.saveBreakdownLight(r); },
@@ -457,6 +466,143 @@ async function renderModels(detailId) {
     grid.appendChild(card);
   });
   root.appendChild(grid);
+}
+
+/* ═══ Drill mode — re-earn what you've read (§value-add) ═══
+   Gates you have revealed become drillable, oldest practice first;
+   interview probes from revealed layers deal as a cross-library deck.
+   Fully offline; grades write back to the attempt record. */
+let drillState = null;
+
+async function renderDrill(keep) {
+  const root = $("screen-drill").firstElementChild;
+  root.textContent = "";
+  const recs = await Store.getBreakdowns();
+  const gates = [], probes = [];
+  recs.forEach(rec => {
+    rec.doc.layers.forEach(L => {
+      const a = rec.attempts[L.index];
+      if (a && a.revealed) {
+        gates.push({ rec, L, a });
+        L.developer.interview_probes.forEach(p => probes.push({ rec, L, p }));
+      }
+    });
+  });
+  gates.sort((x, y) => (x.a.lastDrill || x.a.ts || 0) - (y.a.lastDrill || y.a.ts || 0));
+  if (!drillState || !keep) drillState = { tab: "gates", gi: 0, done: 0 };
+  drillState.gates = gates;
+  drillState.probes = probes;
+
+  root.appendChild(h("div", "kicker", "Practice — re-earn what you've read"));
+  root.appendChild(h("h1", "title", "Drill"));
+
+  const seg = h("div", "seg");
+  [["gates", "Gates · " + gates.length], ["probes", "Probes · " + probes.length]].forEach(([id, label]) => {
+    const b = h("button", drillState.tab === id ? "on" : "", label);
+    b.onclick = () => { drillState.tab = id; drillState.gi = 0; renderDrill(true); };
+    seg.appendChild(b);
+  });
+  root.appendChild(seg);
+
+  const body = h("div");
+  body.style.marginTop = "22px";
+  root.appendChild(body);
+
+  if (drillState.tab === "gates") renderGateDrill(body);
+  else renderProbeDrill(body);
+}
+
+function renderGateDrill(body) {
+  const { gates } = drillState;
+  if (!gates.length) {
+    body.appendChild(h("p", "lib-note", "Nothing to drill yet — reveal some gates in a study first. Drills re-test what you've already earned."));
+    return;
+  }
+  const item = gates[drillState.gi % gates.length];
+  const { rec, L, a } = item;
+
+  body.appendChild(h("p", "mono-label", `card ${(drillState.gi % gates.length) + 1} / ${gates.length} · ${drillState.done} graded this session`));
+
+  const card = h("div", "gate-card");
+  const metaRow = h("div", "bd-meta");
+  metaRow.style.marginBottom = "10px";
+  metaRow.appendChild(h("span", "chip flagship", rec.system));
+  const lc = Diagram.layerColor(L.index);
+  const lchip = h("span", "chip", "layer " + L.index);
+  lchip.style.color = lc;
+  lchip.style.borderColor = lc;
+  metaRow.appendChild(lchip);
+  metaRow.appendChild(h("span", "chip", a.lastDrill ? "last drilled " + timeAgo(a.lastDrill) : "never drilled"));
+  card.appendChild(metaRow);
+
+  card.appendChild(h("p", "st-scenario", L.problem.statement));
+  card.appendChild(h("div", "gate-q", L.gate.question));
+  const ta = h("textarea");
+  ta.placeholder = "Answer from memory — then check yourself.";
+  card.appendChild(ta);
+
+  const actions = h("div", "gate-actions");
+  const revealBtn = h("button", "gbtn primary", "Check my answer");
+  actions.appendChild(revealBtn);
+  const skipBtn = h("button", "gbtn", "Skip ›");
+  skipBtn.onclick = () => { drillState.gi++; renderDrill(true); };
+  actions.appendChild(skipBtn);
+  card.appendChild(actions);
+
+  revealBtn.onclick = () => {
+    actions.remove();
+    const sol = h("div", "solution-card");
+    sol.appendChild(h("div", "sc-label", "The canonical solution"));
+    sol.appendChild(h("p", null, L.solution));
+    card.appendChild(sol);
+    if (a.answer && a.answer.trim()) {
+      const ya = h("div", "your-answer");
+      ya.appendChild(h("div", "ya-label", "Your original gate answer"));
+      ya.appendChild(h("p", null, a.answer));
+      card.appendChild(ya);
+    }
+    const grade = h("div", "gate-actions");
+    const good = h("button", "gbtn primary", "✓ Got it");
+    const again = h("button", "gbtn", "↻ Again soon");
+    const finish = ok => {
+      a.lastDrill = Date.now();
+      a.drillGrade = ok ? "good" : "again";
+      Store.saveBreakdownLight(rec);
+      drillState.gi++;
+      drillState.done++;
+      renderDrill(true);
+    };
+    good.onclick = () => finish(true);
+    again.onclick = () => finish(false);
+    grade.append(good, again);
+    card.appendChild(grade);
+  };
+
+  body.appendChild(card);
+}
+
+function renderProbeDrill(body) {
+  const { probes } = drillState;
+  if (!probes.length) {
+    body.appendChild(h("p", "lib-note", "No probes yet — they unlock as you reveal layers."));
+    return;
+  }
+  probes.forEach(({ rec, L, p }) => {
+    const card = h("div", "stress-card");
+    card.appendChild(h("div", "st-scenario", p));
+    const reveal = h("div", "st-reveal");
+    reveal.hidden = true;
+    reveal.appendChild(h("p", null, L.tech_lens.principle));
+    const open = h("button", "gbtn", `Open ${rec.system} · layer ${L.index}`);
+    open.style.marginTop = "8px";
+    open.onclick = () => openReader(rec.id, L.index);
+    reveal.appendChild(open);
+    const btn = h("button", "gbtn", "What is it probing?");
+    btn.onclick = () => { reveal.hidden = false; btn.remove(); };
+    card.appendChild(btn);
+    card.appendChild(reveal);
+    body.appendChild(card);
+  });
 }
 
 /* ═══ Settings (§11.5) ═══ */

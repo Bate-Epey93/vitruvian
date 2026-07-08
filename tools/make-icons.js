@@ -42,20 +42,40 @@ function disc(c, cx, cy, r, col) {
     }
 }
 
+/* The Vitruvian mark: a precise square (the machine) overlapped by a
+   hand-brushed open ring (the human) — Leonardo's circle-and-square,
+   reduced to the app's thesis. The ring is drawn with a tapered,
+   wobbling width and an open gap, enso-style, in raster. */
 function drawMark(c, opts) {
   const s = c.size;
-  const side = Math.round(s * 0.56);
-  const x0 = Math.round((s - side) / 2), y0 = x0;
-  const t = Math.max(2, Math.round(s * 0.045));
+  const side = Math.round(s * 0.46);
+  const x0 = Math.round((s - side) / 2);
+  const y0 = Math.round(s * 0.335);                 // square sits low; ring rides high
+  const t = Math.max(2, Math.round(s * 0.038));
   frame(c, x0, y0, side, t, opts.frameCol);
-  // 3x3 dot grid inside the frame
-  const inset = t + Math.round(side * 0.14);
-  const span = side - inset * 2;
-  const step = span / 2;
-  const r = Math.max(1.5, s * 0.022);
-  for (let gy = 0; gy < 3; gy++)
-    for (let gx = 0; gx < 3; gx++)
-      disc(c, x0 + inset + gx * step, y0 + inset + gy * step, r, opts.dotCol);
+
+  // brush ring: for each pixel near radius R(θ), inside if |d-R(θ)| < W(θ)/2
+  const cx = s / 2, cy = s * 0.465, R = s * 0.30;
+  const rot = -Math.PI / 2 + 0.5;                   // gap ends up top-right
+  const GAP = 0.85, span = Math.PI * 2 - GAP;
+  const maxW = s * 0.052, wob = s * 0.012;
+  const lo = R - maxW, hi = R + maxW;
+  for (let y = Math.floor(cy - hi - 2); y <= cy + hi + 2; y++) {
+    for (let x = Math.floor(cx - hi - 2); x <= cx + hi + 2; x++) {
+      const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+      const d = Math.hypot(dx, dy);
+      if (d < lo || d > hi) continue;
+      let th = Math.atan2(dy, dx) - rot;
+      th = ((th % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+      if (th > span) continue;                      // the enso gap
+      const tt = th / span;                         // 0 = stroke start, 1 = tail
+      const w = maxW * (0.35 + 0.65 * Math.pow(1 - tt, 1.2)) * Math.min(1, 0.2 + tt * 7);
+      const rTh = R + Math.sin(tt * Math.PI * 2 + 1.1) * wob + Math.sin(tt * Math.PI * 5 + 2.7) * wob * 0.4;
+      const dist = Math.abs(d - rTh);
+      if (dist <= w / 2 - 0.7) px(c, x, y, opts.dotCol);
+      else if (dist <= w / 2 + 0.7) px(c, x, y, opts.dotCol, (w / 2 + 0.7 - dist) / 1.4);
+    }
+  }
 }
 
 function encodePNG(c) {
