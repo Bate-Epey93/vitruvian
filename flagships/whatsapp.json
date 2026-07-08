@@ -1,0 +1,373 @@
+{
+  "schemaVersion": 1,
+  "meta": {
+    "system": "WhatsApp",
+    "narrowing": "The message-delivery path: everything between one person tapping send and another person's devices showing the message. Not calls, media storage, Status, or business tooling — just how a message reliably, privately crosses the gap.",
+    "ordering_note": "The layers follow the order in which the problems bite, which is also roughly the order WhatsApp built them: store-and-forward and delivery receipts were core from the early days, Signal-protocol encryption arrived across the whole user base in 2016, and sender keys and true multi-device came after — each new layer forced to preserve every guarantee beneath it. Where no public incident anchors a failure, the failure is reconstructed as the inevitable consequence of the previous state, not asserted as history.",
+    "history_confidence": "medium"
+  },
+  "essence": {
+    "text": "WhatsApp moves on the order of a hundred billion messages a day between phones that are asleep most of the time, across networks that lose things constantly, through servers that cannot read a single word they carry. The marvel is not speed — it is that a system assembled entirely from unreliable parts feels like certainty: two grey ticks, and you simply know.",
+    "beginner": "WhatsApp is how a message typed on one phone dependably appears on another phone — even when that phone is switched off, the network keeps dropping things, and the company in the middle is not able to read what it is delivering.",
+    "deep_facts": [
+      "At around 450 million users, WhatsApp was famously run by an engineering team of roughly 32 people — a ratio of over ten million users per engineer, owed largely to Erlang, a language built for telephone switches.",
+      "In 2016 WhatsApp switched on Signal-protocol end-to-end encryption for its entire user base of over a billion people — widely described as the largest deployment of end-to-end encryption in history.",
+      "Your phone is unreachable most of the time: its radio sleeps to save battery. 'Instant' messaging is actually a queue on a server plus a push notification that wakes the phone up to come and collect.",
+      "The second grey tick means delivered to the device, not read — and the server confirms delivery of a message it cannot decrypt. The receipt system and the secrecy system are deliberately independent.",
+      "A message to a 256-member group is uploaded from your phone essentially once. The server multiplies it into hundreds of copies — without ever being able to read the one you gave it."
+    ]
+  },
+  "strip_down": {
+    "purpose": "Deliver a message from one person's device to another person's devices — exactly once, readable only by them — no matter when those devices happen to be online.",
+    "actors": [
+      { "id": "a1", "name": "Sender", "want": "Hit send and stop thinking about it — and later, know for certain that it arrived" },
+      { "id": "a2", "name": "Recipient", "want": "Every message meant for them, exactly once, waiting whenever they come back online" },
+      { "id": "a3", "name": "Operator", "want": "Billions of messages moved on minimal hardware, with minimal ability to be blamed, breached, or subpoenaed for their content" },
+      { "id": "a4", "name": "Adversary", "want": "To read, alter, or trace messages they are not a party to — from the network, the server, or a stolen phone" }
+    ],
+    "invariants": [
+      { "id": "inv1", "text": "No accepted message is ever lost, however long its recipient stays offline." },
+      { "id": "inv2", "text": "No message is ever shown twice, no matter how many times the network forces a resend." },
+      { "id": "inv3", "text": "Only the conversation's own devices can read message content — never the server, never its operator." },
+      { "id": "inv4", "text": "Every legitimate party to a conversation — every member, every device — eventually sees the same messages, and no illegitimate device can silently join." }
+    ],
+    "entities": [
+      { "id": "en1", "name": "Message", "note": "The payload; born on one device, must die delivered on others" },
+      { "id": "en2", "name": "Message id", "note": "The message's unforgeable name — what makes retries recognizable as repeats" },
+      { "id": "en3", "name": "Per-user queue", "note": "The waiting room on the server for everything an offline device hasn't collected" },
+      { "id": "en4", "name": "Receipt", "note": "A tick: a small message about a message, flowing backwards" },
+      { "id": "en5", "name": "Key session", "note": "The shared secret two devices build so the middleman carries only ciphertext" },
+      { "id": "en6", "name": "Device list", "note": "The signed roster of which devices may speak for an account" }
+    ],
+    "flows": [
+      { "id": "f1", "text": "Messages flow forward: sender's device, through the server's queues, to every recipient device." },
+      { "id": "f2", "text": "Acknowledgments flow backward against the messages: device to server, server to sender — the ticks." },
+      { "id": "f3", "text": "Keys flow device-to-device through a server that stores and forwards them but can never use them." }
+    ],
+    "constraints": [
+      "Phones are offline most of the time — radios sleep to save battery, coverage dies in elevators and villages. 'Always connected' is an illusion that must be manufactured.",
+      "Mobile networks drop, delay, and duplicate packets — and a sender can never distinguish a lost message from a lost acknowledgment.",
+      "Whatever the server can read, it can be forced to disclose — by breach, by insider, or by court order. The only unreadable data is data the server never could read.",
+      "Uplink bandwidth at the edge — one phone on a 2G village connection — is the scarcest resource in the system; server-side bandwidth is nearly free by comparison.",
+      "Battery and mobile data are paid by the user: every retry, receipt, and key exchange spends someone's phone bill."
+    ]
+  },
+  "visual": {
+    "lanes": [
+      { "id": "people", "label": "People" },
+      { "id": "devices", "label": "Devices" },
+      { "id": "service", "label": "Service" },
+      { "id": "trust", "label": "Trust" }
+    ],
+    "nodes": [
+      { "id": "sender", "label": "Sender", "kind": "actor", "lane": "people", "order": 0 },
+      { "id": "recipient", "label": "Recipient", "kind": "actor", "lane": "people", "order": 7 },
+      { "id": "phone_a", "label": "Sender's phone", "kind": "process", "lane": "devices", "order": 0 },
+      { "id": "cell_net", "label": "Cell network", "kind": "channel", "lane": "devices", "order": 3 },
+      { "id": "phone_b", "label": "Recipient's phone", "kind": "process", "lane": "devices", "order": 7 },
+      { "id": "relay", "label": "Relay server", "kind": "process", "lane": "service", "order": 3 }
+    ],
+    "edges": [
+      { "id": "e_type", "from": "sender", "to": "phone_a", "kind": "payload", "label": "types" },
+      { "id": "e_up", "from": "phone_a", "to": "cell_net", "kind": "payload", "label": "sends" },
+      { "id": "e_to_relay", "from": "cell_net", "to": "relay", "kind": "payload" },
+      { "id": "e_down", "from": "relay", "to": "phone_b", "kind": "payload", "label": "forwards" },
+      { "id": "e_read", "from": "phone_b", "to": "recipient", "kind": "payload", "label": "displays" }
+    ]
+  },
+  "layers": [
+    {
+      "index": 1,
+      "name": "Store-and-Forward: Nobody Has to Be Home",
+      "problem": {
+        "statement": "The naive relay is a wire, not a service: it takes the message and immediately pushes it toward the recipient's phone. But that phone is in a pocket with its radio asleep, or in a basement, or out of battery — phones are unreachable most of the day by design. The push hits nothing, and the message simply dies in flight. A chat system that requires both people online at the same moment is a phone call with extra steps.",
+        "beginner": "The middle computer just passes the message along right away. If the other person's phone is off or has no signal at that exact second — and phones are offline a lot — the message hits nothing and is gone.",
+        "model": {
+          "id": "queue-and-buffer",
+          "application": "Put a waiting room between sender and recipient: the server holds each user's undelivered messages in a per-recipient queue, converting 'you were offline' from message loss into mere delay."
+        }
+      },
+      "gate": {
+        "question": "Design a messaging system where either phone may be dark at any moment — the sender's may die the instant after sending, the recipient's may stay off for three days — yet every message still gets through. What has to exist, and where?",
+        "hint": "If neither endpoint can be relied on to stay awake, something between them has to — something that never sleeps and remembers who is owed what."
+      },
+      "solution": "The server stops being a wire and becomes a post office: it accepts the message, appends it to a queue kept per recipient, and takes over responsibility for delivery. When the recipient's phone next connects — or is woken by a push notification — it drains its queue. WhatsApp built exactly this shape in Erlang, a language whose native unit is a lightweight process with a mailbox: in effect, one tiny post office per user, millions of them per machine.",
+      "user_lens": {
+        "gives": "Freedom from the other person's schedule: you send whenever you like, they receive whenever they surface, and neither of you ever thinks about whether the other is reachable right now.",
+        "costs": "Your message now sits on someone else's computer for as long as the recipient stays away — and 'sent' quietly stops meaning 'received'. The gap between the two is now a fact of your life."
+      },
+      "tech_lens": {
+        "mechanism": "Per-recipient durable queues on the server; clients hold a long-lived connection when they can, and a push notification service wakes the phone's radio when a queue has something waiting.",
+        "principle": "When producers and consumers can't be online together, a buffer converts a rate-and-presence mismatch into latency instead of loss."
+      },
+      "tradeoff": "The server is now stateful and load-bearing: it holds everyone's undelivered traffic, must never lose it, and has just become the single most attractive target in the whole design — a warehouse of everyone's private mail.",
+      "defends": ["inv1"],
+      "developer": {
+        "mappings": [
+          { "mechanism": "the per-user queue", "software_concept": "message brokers and actor mailboxes — SQS, Kafka consumer offsets, Erlang processes: the consumer's absence is the normal case, not the error case" },
+          { "mechanism": "the push wake-up", "software_concept": "interrupts over polling: don't make the client burn battery asking 'anything for me?' — signal it when there is" }
+        ],
+        "interview_probes": [
+          "Your consumer goes away for a week. Who holds the backlog, how large may it grow, and what is deliberately allowed to happen when it grows past that?"
+        ]
+      },
+      "beginner_analogy": "An apartment mailbox. The mail carrier doesn't stand at your door until you come home — they drop the letter in the box, and you empty it whenever you get back. The box is the whole trick: it waits so that neither of you has to.",
+      "diff": {
+        "add_nodes": [
+          { "id": "inbox_q", "label": "Per-user queue", "kind": "store", "lane": "service", "order": 4 }
+        ],
+        "add_edges": [
+          { "id": "e_park", "from": "relay", "to": "inbox_q", "kind": "payload", "label": "if offline" },
+          { "id": "e_drain", "from": "inbox_q", "to": "phone_b", "kind": "payload", "label": "on reconnect" },
+          { "id": "e_wake", "from": "relay", "to": "phone_b", "kind": "control", "label": "push wakes" }
+        ],
+        "highlight": ["relay", "e_down", "phone_b"],
+        "remove": []
+      }
+    },
+    {
+      "index": 2,
+      "name": "The Ticks: Making Retries Harmless",
+      "problem": {
+        "statement": "Mobile networks lose packets as a matter of routine — and they are just as happy to lose the acknowledgment as the message. The sender's phone now faces an unwinnable guess: silence after sending means either 'the message never arrived' or 'it arrived and the reply got lost'. Don't retry, and messages vanish. Retry naively, and the recipient gets 'Happy birthday!' three times — or worse, a payment instruction twice. The queue solved absence; it did nothing for uncertainty.",
+        "beginner": "Bad phone networks lose things — sometimes the message, sometimes the 'got it!' reply. The sending phone can't tell which happened. If it sends again just in case, the other person might get the same message twice.",
+        "model": {
+          "id": "idempotency",
+          "application": "Give every message a unique id at birth, and make every hop treat a repeated id as 'already have it — acknowledged, discarded'. Once a repeat changes nothing, retrying becomes free, and the phone can resend as stubbornly as it likes."
+        }
+      },
+      "gate": {
+        "question": "You may resend a message as many times as you want, over a network that eats messages and receipts alike. Design the protocol so the recipient sees the message exactly once and the sender ends up knowing the truth. What must the message carry, and what must everyone remember?",
+        "hint": "What if the message carried its own name — the same name every time it's resent?"
+      },
+      "solution": "Every message gets a client-generated unique id the moment it is composed. The phone retransmits until the server acknowledges receipt — the first grey tick. The server retains and redelivers until the recipient's device acknowledges — the second tick. Every hop keeps a short memory of ids it has seen and silently drops repeats while still acknowledging them, so a lost ack triggers a resend that is absorbed harmlessly. WhatsApp then did something quietly radical: it surfaced the protocol as UX. The ticks are TCP-style acknowledgments promoted to a user interface.",
+      "user_lens": {
+        "gives": "Certainty as a feature: the ticks tell you exactly how far your message has actually gotten, and messages stop vanishing or doubling no matter how wretched the network is.",
+        "costs": "The certainty machine is also an anxiety machine — 'delivered, not answered' is now a fact you can see and cannot un-see. And every message drags bookkeeping with it: ids, receipts, and return traffic paid for in your data and battery."
+      },
+      "tech_lens": {
+        "mechanism": "At-least-once delivery on every hop (send, await ack, timeout, resend) composed with dedup-by-message-id at every receiver — which together produce exactly-once presentation.",
+        "principle": "Exactly-once is not a network property; it is at-least-once plus idempotent receivers. Name the operation, then retries cost nothing but bandwidth."
+      },
+      "tradeoff": "Roughly half the system's chatter is now messages about messages — and every hop must remember what it has already seen. The guarantee is bought with memory and reverse traffic, and receipts leak activity: the ticks tell the sender when your device came online.",
+      "defends": ["inv2", "inv1"],
+      "developer": {
+        "mappings": [
+          { "mechanism": "the client-generated message id", "software_concept": "idempotency keys on payment APIs — Stripe's Idempotency-Key header is this exact move" },
+          { "mechanism": "tick one, then tick two", "software_concept": "hop-by-hop acknowledgment: TCP ACKs, broker delivery confirmations, end-to-end receipts layered over link-level ones" }
+        ],
+        "interview_probes": [
+          "Your client POSTs a payment and the connection times out. Walk me through making the retry safe — who generates the id, who remembers it, and for how long?",
+          "Where in your system does a lost acknowledgment currently masquerade as a lost operation?"
+        ]
+      },
+      "beginner_analogy": "Registered mail with a tracking number. Post the same numbered letter twice and the post office knows it's one letter — the recipient gets a single copy, and the signed return receipt tells you it truly arrived.",
+      "diff": {
+        "add_nodes": [
+          { "id": "dedup", "label": "Dedup by msg id", "kind": "store", "lane": "devices", "order": 6 }
+        ],
+        "add_edges": [
+          { "id": "e_srv_ack", "from": "relay", "to": "phone_a", "kind": "control", "label": "one tick" },
+          { "id": "e_dlv_ack", "from": "phone_b", "to": "relay", "kind": "control", "label": "delivered" },
+          { "id": "e_two_ticks", "from": "relay", "to": "phone_a", "kind": "control", "label": "two ticks" },
+          { "id": "e_dedup", "from": "phone_b", "to": "dedup", "kind": "control", "label": "seen ids" }
+        ],
+        "highlight": ["cell_net", "e_up", "e_drain"],
+        "remove": []
+      }
+    },
+    {
+      "index": 3,
+      "name": "End-to-End Encryption: Blind the Middleman",
+      "problem": {
+        "statement": "Layers 1 and 2 made the server the hero of the story — and that is exactly the problem. Every message rests, readable, in its queues; every conversation of two billion people transits one company's machines in plaintext. That is not a system with a privacy risk; it is a wiretap with a delivery feature. One breach, one insider, one subpoena — or one change of corporate heart — and everything ever queued is on the table. The invariant 'only the endpoints can read it' isn't weakly protected. It doesn't exist yet.",
+        "beginner": "The middle computer can read every message it holds and delivers. So anyone who hacks it, works at the company, or shows up with a court order can read them too. The mail carrier can currently open every letter.",
+        "model": {
+          "id": "trust-boundary",
+          "application": "Redraw the line so the server stands outside it: encryption and decryption happen only on the phones, keys exist only on the phones, and everything that crosses the server is ciphertext it has no means to open."
+        }
+      },
+      "gate": {
+        "question": "The server must keep doing everything it does — queueing, retrying, receipting — but must lose the ability to read what it carries. The hard part: two phones that have never met must agree on a secret key, and their only channel to each other runs through the very server you're defending against. How can they share a secret in front of the eavesdropper who delivers their mail?",
+        "hint": "There are kinds of locks whose closing and opening are different powers. What could a phone publish openly so that anyone can lock a box for it — that only it can open?"
+      },
+      "solution": "The Signal protocol. Each device generates keypairs and uploads only the public halves — 'prekey bundles' — to a directory on the server. A sender fetches the recipient's bundle and runs a key agreement that yields a shared session secret the server never sees, even though it carried every byte of the exchange. From then on, a double ratchet churns the keys forward with every message, so even a key stolen later can't unlock the past. In 2016 WhatsApp completed the rollout across more than a billion users: every message, every chat, by default. The queues still queue and the ticks still tick — over content that is now noise to the machine holding it.",
+      "user_lens": {
+        "gives": "Privacy as the default rather than a setting: not the company, not a server breach, not a wiretap on the wire can read your messages — and you did nothing to earn it but update the app.",
+        "costs": "The protection cuts both ways. Lose your phone and the server cannot restore your history — it never had it. Cloud backups become the escape hatch that can quietly reintroduce the risk. And your metadata — who, when, how often — remains perfectly visible; only the words are dark."
+      },
+      "tech_lens": {
+        "mechanism": "Asymmetric prekeys published through an untrusted directory bootstrap a Diffie-Hellman-style agreement; the double ratchet derives a fresh key per message for forward secrecy; the server relays opaque blobs plus routing headers.",
+        "principle": "Draw the trust boundary at the endpoints and verify at every crossing. The middleman that cannot read what it carries cannot leak it, sell it, or be compelled to surrender it."
+      },
+      "tradeoff": "The server is deliberately blinded, and everything that needed sight gets harder: no server-side search, no content-based spam filtering, no 'restore history from the cloud'. Abuse moderation must lean on metadata and reports. And the trust problem doesn't vanish — it moves to key authenticity, which is why 'security code changed' notices exist and why almost nobody verifies them.",
+      "defends": ["inv3"],
+      "developer": {
+        "mappings": [
+          { "mechanism": "the prekey bundle directory", "software_concept": "key exchange through an untrusted broker — the same shape as a TLS handshake, with the server as a dumb pipe for public material" },
+          { "mechanism": "the double ratchet", "software_concept": "forward secrecy via key rotation: compromise of the current secret must not decrypt the past (rotating session tokens, ephemeral credentials)" }
+        ],
+        "interview_probes": [
+          "Where in your architecture does plaintext cross a machine that doesn't strictly need to read it — and what would it cost to blind that machine?"
+        ]
+      },
+      "beginner_analogy": "You mail someone your opened padlock and keep the only key. Anyone — including the postal service — can snap that padlock shut on a box addressed to you, but nobody except you can open it. The carrier still carries everything; it just carries boxes it can never look inside.",
+      "diff": {
+        "add_nodes": [
+          { "id": "keys_a", "label": "Sender keys", "kind": "store", "lane": "trust", "order": 0 },
+          { "id": "keyserver", "label": "Key directory", "kind": "store", "lane": "service", "order": 2 },
+          { "id": "keys_b", "label": "Recipient keys", "kind": "store", "lane": "trust", "order": 7 }
+        ],
+        "add_edges": [
+          { "id": "e_prekeys", "from": "keyserver", "to": "phone_a", "kind": "control", "label": "prekey bundle" },
+          { "id": "e_encrypt", "from": "keys_a", "to": "phone_a", "kind": "control", "label": "encrypts" },
+          { "id": "e_decrypt", "from": "keys_b", "to": "phone_b", "kind": "control", "label": "decrypts" }
+        ],
+        "highlight": ["relay", "inbox_q", "e_to_relay"],
+        "remove": []
+      }
+    },
+    {
+      "index": 4,
+      "name": "Sender Keys: One Ciphertext, 255 Copies",
+      "problem": {
+        "statement": "Pairwise encryption has a brutal multiplication hiding in it. A message to a 256-member group means the sender's phone must encrypt separately for each member — 255 encryptions, 255 uploads. On fast wifi you'd never notice. On the connections where WhatsApp actually won — a 2G link in a village, a congested festival cell — that's minutes of radio time and a visible bite of battery and data for one 'happy birthday'. The narrowest pipe in the entire system, the sender's uplink, has just been multiplied by the size of the group.",
+        "beginner": "In a group of 256 people, the sending phone would have to lock and send the message 255 separate times — once per member. On a slow village connection, one short message becomes minutes of sending.",
+        "model": {
+          "id": "bottleneck",
+          "application": "The sender's uplink is the constraint that governs the whole group's experience; the fix is to move the multiplication off it — send one copy through the narrow pipe, and let the wide, cheap server-side pipes do the duplicating."
+        }
+      },
+      "gate": {
+        "question": "Every group member must receive an end-to-end encrypted copy, the server must stay unable to read anything — but the sender's phone may only upload roughly one message's worth of bytes. The server is allowed to copy. Reconcile those three demands.",
+        "hint": "The server can duplicate a sealed box, just not open one. What would have to be true of the members' keys for a single sealed box to open for all of them?"
+      },
+      "solution": "Sender keys. On joining a group, each member generates a 'sender key' for that group and distributes it once to every other member — through the already-secure pairwise channels from Layer 3. From then on, a group message is encrypted once under the sender's group key, uploaded once, and the server fans the single ciphertext out into 255 per-user queues. Every member holds the key to open it; the server still holds nothing. Upload cost per message: constant. The O(n) work didn't disappear — it moved to the rare event (membership change) and off the scarce link.",
+      "user_lens": {
+        "gives": "Groups that feel as instant as one-to-one chats even on dreadful connections — the 256-person family group works on the same 2G link as a private message.",
+        "costs": "Slightly weaker cryptographic promises inside groups: keys rotate on membership changes rather than every message, and any single compromised member exposes the group's stream — though that much is true of any group anywhere: the circle is only as tight as its loosest member."
+      },
+      "tech_lens": {
+        "mechanism": "A per-sender-per-group symmetric key distributed pairwise-encrypted at join time; message encryption once under that key; server-side fan-out of one opaque blob into N delivery queues; rekey and redistribute on every membership change.",
+        "principle": "Never push N copies through the narrowest link. Ship one copy to the widest point and duplicate there — and if the duplicator isn't trusted, make sure duplication doesn't require understanding."
+      },
+      "tradeoff": "Key management complexity explodes: every join and leave forces new sender keys distributed pairwise to everyone, so churn-heavy groups pay the old O(n) cost at every membership event. The multiplication was not destroyed, only relocated — and it waits there for the day a 10,000-member community churns constantly.",
+      "defends": ["inv4", "inv3"],
+      "developer": {
+        "mappings": [
+          { "mechanism": "one-ciphertext fan-out", "software_concept": "CDNs and pub-sub: upload once, replicate at the edge nearest demand — origin bandwidth is sacred, edge bandwidth is cheap" },
+          { "mechanism": "rekey on member leave", "software_concept": "cache and credential invalidation on ACL change: revoking access means rotating the secret, not just editing the list" }
+        ],
+        "interview_probes": [
+          "Your mobile client notifies 200 followers by sending 200 requests. Where should that fan-out actually live, and what changes if the fan-out node isn't allowed to read the payload?"
+        ]
+      },
+      "beginner_analogy": "A club newsletter written in the club's private code. You write it once and hand one page to the copy shop; the shop happily prints 255 copies of text it can't read, and every member decodes their copy with the codebook they were quietly handed when they joined.",
+      "diff": {
+        "add_nodes": [
+          { "id": "senderkey", "label": "Group sender key", "kind": "store", "lane": "trust", "order": 3 },
+          { "id": "fanout", "label": "Fan-out service", "kind": "process", "lane": "service", "order": 5 },
+          { "id": "members", "label": "255 members", "kind": "actor", "lane": "people", "order": 5 }
+        ],
+        "add_edges": [
+          { "id": "e_skey", "from": "senderkey", "to": "phone_a", "kind": "control", "label": "encrypts once" },
+          { "id": "e_skey_share", "from": "senderkey", "to": "phone_b", "kind": "control", "label": "shared via E2E" },
+          { "id": "e_cipher", "from": "phone_a", "to": "fanout", "kind": "payload", "label": "one ciphertext" },
+          { "id": "e_fan_copy", "from": "fanout", "to": "phone_b", "kind": "payload", "label": "copy" },
+          { "id": "e_fan_all", "from": "fanout", "to": "members", "kind": "payload", "label": "×255 copies" }
+        ],
+        "highlight": ["phone_a", "cell_net", "e_up"],
+        "remove": []
+      }
+    },
+    {
+      "index": 5,
+      "name": "Multi-Device: The Phone Anoints Its Peers",
+      "problem": {
+        "statement": "End-to-end encryption quietly welded your identity to one physical phone — the keys live there and nowhere else. The first WhatsApp Web ducked the problem by tethering: the browser was a mirror, the phone did all the cryptography, and if the phone went dark the laptop went dumb. Real multi-device means every device needs its own keys — which detonates a new question: who decides which devices belong to you? If the answer is 'the server's list', then a coerced or compromised server can quietly append one more 'device' to your account, and layer 3's entire promise dissolves into a wiretap with a device id.",
+        "beginner": "The secret keys live on your one phone, so only that phone can read your messages. To let your laptop join, it needs keys too — but then someone has to keep the list of your devices. If the company's computer keeps that list unsupervised, it could sneak an extra 'device' onto it that is really a listener.",
+        "model": {
+          "id": "single-source-of-truth",
+          "application": "When copies of the device list could disagree or be forged, appoint one authority whose word is final: the primary phone. It alone signs devices into existence, so everyone else can treat the server's copy as a claim to verify, never a truth to trust."
+        }
+      },
+      "gate": {
+        "question": "Let a user add a laptop that can read and send on its own — with the server never holding a private key, and never able to slip an unauthorized 'device' into the account without it being detectable. Who keeps the device list, and what makes an entry on it legitimate?",
+        "hint": "Storage and authority don't have to live in the same place. What object does the user already possess that every contact already implicitly trusts?"
+      },
+      "solution": "Each device gets its own keypair and its own pairwise sessions; senders now encrypt each message for every device on each recipient's device list. The list itself lives on the server — but authority over it does not: enrolling a companion is a ceremony where the primary phone scans a QR code and signs the new device's identity key. Contacts' phones verify those signatures, so a device the primary never anointed stands out as illegitimate rather than blending in. The server stores the roster; only the phone can bless it.",
+      "user_lens": {
+        "gives": "Your laptop and phone are finally both first-class: the phone can be off, out of battery, or in another country, and messages still arrive everywhere — each device decrypting with its own keys.",
+        "costs": "Every message is now encrypted once per (sender device × recipient device) session pair — more bulk, more battery, more sessions to ratchet. New devices start with amnesia, since history can't be conjured from a server that can't read it. And you have new homework: those 'you added a new device' notices deserve a glance you'll probably never give them."
+      },
+      "tech_lens": {
+        "mechanism": "Per-device identity keypairs; pairwise ratcheting sessions between all device pairs in a conversation; a server-hosted device list whose entries carry signatures from the account's primary device, verified by every peer before encrypting to a new member.",
+        "principle": "Separate storage from authority. Anyone convenient can hold the record; only one pre-trusted party may author it — and everyone else verifies the signature, not the storekeeper."
+      },
+      "tradeoff": "The primary phone becomes a root of trust and therefore a single point of ceremony: lose it and you re-enroll your world from scratch. And cryptographic honesty has a UX ceiling — the system can make a forged device visible, but it cannot make a human look.",
+      "defends": ["inv4", "inv3"],
+      "developer": {
+        "mappings": [
+          { "mechanism": "the primary-signed device list", "software_concept": "a certificate chain in miniature: the primary is the CA, companions carry its signature, peers validate the chain rather than trusting the registry" },
+          { "mechanism": "encrypt-to-every-device", "software_concept": "per-replica delivery with independent credentials — no shared key that one leak would burn for all devices" }
+        ],
+        "interview_probes": [
+          "Your server keeps the list of a user's authorized clients. Walk me through how a peer detects an entry the user never added — and what breaks if only the server can answer that question."
+        ]
+      },
+      "beginner_analogy": "Membership cards for a club where only the founder's signature counts. The doorman keeps the card file — that's convenient — but he can't sneak his friends in, because everyone at the door checks for the founder's ink, not the doorman's word.",
+      "diff": {
+        "add_nodes": [
+          { "id": "laptop", "label": "Linked laptop", "kind": "process", "lane": "devices", "order": 5 },
+          { "id": "keys_l", "label": "Laptop keys", "kind": "store", "lane": "trust", "order": 5 },
+          { "id": "devlist", "label": "Device list", "kind": "store", "lane": "service", "order": 6 }
+        ],
+        "add_edges": [
+          { "id": "e_sign", "from": "phone_b", "to": "devlist", "kind": "control", "label": "primary signs" },
+          { "id": "e_devlist", "from": "devlist", "to": "phone_a", "kind": "control", "label": "verified list" },
+          { "id": "e_copy_dev", "from": "relay", "to": "laptop", "kind": "payload", "label": "per-device copy" },
+          { "id": "e_lkeys", "from": "keys_l", "to": "laptop", "kind": "control", "label": "own session" }
+        ],
+        "highlight": ["keys_b", "phone_b", "e_decrypt"],
+        "remove": []
+      }
+    }
+  ],
+  "stress_tests": [
+    {
+      "id": "st1",
+      "title": "The queue that nobody empties",
+      "scenario": "A user in a dozen hyperactive groups loses their phone and stays offline for two months. Their per-user queue on the server swallows tens of thousands of messages — and end-to-end encryption forbids the server from compacting, deduplicating, or summarizing content it cannot read. Multiply by millions of dormant accounts.",
+      "reveal": "The waiting room has a closing time. Undelivered messages are held for a bounded period — on the order of a month — and then deleted; senders' phones keep their own copies, but the server's promise is delivery-soon, not archival-forever. This is an honest, deliberate breach of inv1 at the margin: the system chooses bounded storage over eternal delivery, because an unbounded queue is not a buffer, it is a slowly detonating archive. The lesson generalizes: every queue needs a policy for the day the consumer never comes back."
+    },
+    {
+      "id": "st2",
+      "title": "The keys walk out the door",
+      "scenario": "A phone is stolen unlocked. The thief holds the only thing the entire architecture swore to protect: a legitimate device, with legitimate keys, inside the trust boundary.",
+      "reveal": "Encryption defends transit and servers, not a phone in the wrong hands — the boundary was drawn at the device, and the device is gone. What the system can do, it does: the owner re-registers their number on a new phone, which evicts the old registration from the account; contacts see 'security code changed' notices; and the signed device list means the thief cannot quietly enroll further devices. What it cannot do is un-read the messages already on the stolen screen. The honest summary: E2E encryption moves the crown jewels from one giant vault everyone attacks to two billion small ones — which is a massive win in aggregate and zero comfort for the person whose vault was in their pocket."
+    },
+    {
+      "id": "st3",
+      "title": "The datacenter forgets",
+      "scenario": "A catastrophic failure wipes the servers holding undelivered queues. Every message in flight — accepted from senders, one tick issued, not yet delivered — is gone. And by design, no readable backup of that content can exist anywhere else on Earth.",
+      "reveal": "The acknowledgment chain turns out to be a quiet replication protocol: a sender's phone keeps every message until the server acks, and the server is only ever the second copy holder until delivery — so replicated queues cover the ordinary failure, and the narrow window between server-ack and delivery bounds the true exposure. Messages lost inside that window stay lost, and here the ticks earn their keep a final time: the sender's message rests at one tick forever — a stuck honest signal rather than a comforting lie. The design accepts rare, visible loss over silent corruption, and E2E means even the disaster recovery plan never got to read the mail."
+    }
+  ],
+  "transfer": {
+    "principles": [
+      "Between two unreliable endpoints, install one reliable thing that waits — and let acknowledgments, not timers or hope, decide when it may forget.",
+      "Exactly-once is manufactured, never given: name every operation at birth, retry without shame, and let receivers recognize repeats.",
+      "Push trust to the edges. A middleman that cannot read what it carries cannot leak it, sell it, or be compelled to surrender it — blindness is the strongest privacy policy.",
+      "Never send N copies through the narrowest link; send one to the widest point and duplicate there — and if the duplicator is untrusted, design duplication to require no understanding.",
+      "Separate storage from authority: let the convenient party hold the record, let one pre-trusted party sign it, and make everyone verify the signature rather than the storekeeper.",
+      "Every guarantee has a bill: queues cost storage policy, receipts cost reverse traffic, encryption costs the server's usefulness, fan-out costs key ceremony. Reliability is line items, not defaults."
+    ],
+    "mappings": [
+      { "mechanism": "the per-user queue", "elsewhere": "SMTP mail spools, voicemail, Kafka and SQS, actor mailboxes — every system where the consumer's absence is normal interposes a store that forwards." },
+      { "mechanism": "message ids + dedup", "elsewhere": "Payment idempotency keys, TCP sequence numbers, exactly-once stream processing — at-least-once plus recognized repeats, everywhere." },
+      { "mechanism": "the prekey directory", "elsewhere": "TLS handshakes, PGP keyservers, Matrix and Signal itself: secrets agreed across an untrusted broker that carries only public material." },
+      { "mechanism": "one-ciphertext fan-out", "elsewhere": "CDNs, IP multicast, pub-sub brokers: upload once, replicate at the point where bandwidth is cheap and demand is wide." },
+      { "mechanism": "the primary-signed device list", "elsewhere": "PKI certificate chains, certificate transparency logs, SSH known_hosts: registries anyone can host, authority only a signature can grant." }
+    ]
+  }
+}

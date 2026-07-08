@@ -1,0 +1,425 @@
+{
+  "schemaVersion": 1,
+  "meta": {
+    "system": "YouTube",
+    "narrowing": "The upload-to-playback path — one video's journey from a creator's phone to a viewer's screen — plus the two loops that keep that path alive: the recommendation loop that feeds it viewers and the ad-revenue loop that pays for it. Live streaming, Shorts, comments, and the creator studio are out of scope.",
+    "ordering_note": "Layers follow the order the pressures arrive as a video platform grows: first the file won't play, then the machine melts under its own success, then distance melts the origin, then discovery drowns, then the bandwidth bill comes due, then the lawyers and the advertisers arrive. Where a specific incident is well known (the pre-acquisition bandwidth crisis, Content ID's origin in copyright litigation pressure), it is named without invented dates; where it is not, the failure is constructed as the inevitable consequence and stated generically.",
+    "history_confidence": "medium"
+  },
+  "essence": {
+    "text": "YouTube is a machine that takes a video from one phone and makes it playable, findable, and profitable for two billion people — a broadcast tower anyone can climb. Its genius is not the player; it is three interlocking answers to three brutal questions: how do you serve a planet's worth of video without going bankrupt, how does anyone find anything in an unbrowsable ocean, and how do you let everyone publish without becoming a landfill?",
+    "beginner": "YouTube is how a video filmed on one person's phone can be watched smoothly by millions of strangers around the world — for free — with the site suggesting it to exactly the people likely to enjoy it, and the person who filmed it getting paid.",
+    "deep_facts": [
+      "On the order of 500 hours of video are uploaded every minute — in one day, YouTube ingests more video than a person could watch in eighty years of nonstop viewing. No workforce of editors or reviewers could ever see it all; every gatekeeping decision must start as a machine's decision.",
+      "The original file you upload is never what anyone watches. Every video is re-encoded into a ladder of copies — multiple resolutions, multiple codecs — and your player silently hops between rungs as your signal wobbles.",
+      "Early YouTube's bandwidth bills were an existential threat: the site grew so fast that serving its own success was bankrupting it, which is part of why the 19-month-old company sold to Google in 2006 for about 1.65 billion dollars.",
+      "The video you watch usually never leaves your neighborhood: it is served from cache racks that Google places inside internet providers' own networks, not from a distant Google datacenter.",
+      "Content ID has existed since around 2007, and it inverted the copyright war: a rights holder who finds their movie in your video can take your ad money instead of taking the video down — and most choose the money, converting infringement into an accidental licensing business.",
+      "In the 2010s YouTube changed its ranking currency from clicks to watch time — a one-metric swap that visibly reshaped what videos across the whole platform look like, because millions of creators' incomes moved with it."
+    ]
+  },
+  "strip_down": {
+    "purpose": "Let anyone publish a video that anyone else can instantly watch — and keep that exchange funded, findable, and lawful at planetary scale.",
+    "actors": [
+      { "id": "a1", "name": "Creator", "want": "Upload once, reach an audience, and get paid for their attention" },
+      { "id": "a2", "name": "Viewer", "want": "Instant, smooth playback — and something good to watch next, without searching" },
+      { "id": "a3", "name": "Advertiser", "want": "Attention from the right people, next to content that won't embarrass the brand" },
+      { "id": "a4", "name": "Rights holder", "want": "Control over their work: taken down, tracked, or paid for — their choice" },
+      { "id": "a5", "name": "The platform", "want": "Maximum watch time to sell, at a serving cost the ads can cover" }
+    ],
+    "invariants": [
+      { "id": "inv1", "text": "A published video plays for any viewer, on any device, on any connection." },
+      { "id": "inv2", "text": "The write path and the read path never starve each other: a flood of viewers cannot block uploads, and a flood of uploads cannot stall playback." },
+      { "id": "inv3", "text": "The platform's costs are covered by its own activity: every hour served is paid for by the attention it gathers." },
+      { "id": "inv4", "text": "Nothing publishes to the world without crossing the policy boundary." },
+      { "id": "inv5", "text": "Any video can reach the audience that would want it — discovery must not depend on the viewer already knowing it exists." }
+    ],
+    "entities": [
+      { "id": "en1", "name": "Raw upload", "note": "Whatever the camera produced — enormous, and playable almost nowhere else" },
+      { "id": "en2", "name": "Rendition", "note": "A device-ready copy at one resolution and codec; every video becomes a ladder of them" },
+      { "id": "en3", "name": "Watch signal", "note": "Clicks, skips, abandons, completions — the exhaust that fuels ranking" },
+      { "id": "en4", "name": "Ad impression", "note": "A slice of attention, auctioned in milliseconds; the platform's actual product" },
+      { "id": "en5", "name": "Fingerprint", "note": "A compact perceptual signature of a video, matchable even against disguised copies" }
+    ],
+    "flows": [
+      { "id": "f1", "text": "Video flows from creator to viewer, transformed from one raw file into many cached copies along the way." },
+      { "id": "f2", "text": "Attention flows back against the video: watch signals feed the ranking loop that decides what flows next." },
+      { "id": "f3", "text": "Money flows from advertisers through the platform to creators, tracking the same watch-time signal the ranker optimizes." }
+    ],
+    "constraints": [
+      "Raw video is enormous — storage and bandwidth costs scale with every viewer, so an unoptimized platform bankrupts itself by succeeding.",
+      "The speed of light is non-negotiable: a viewer an ocean away from the server gets latency and rebuffering no server upgrade can fix.",
+      "Devices and networks are hopelessly fragmented — codecs, resolutions, and bandwidths differ, and no single file suits them all.",
+      "Human attention is finite and human review does not scale: uploads arrive faster than any workforce could ever watch them.",
+      "Copyright law and advertiser tolerance are real forces: a platform that ignores either gets sued or defunded out of existence."
+    ]
+  },
+  "visual": {
+    "lanes": [
+      { "id": "people", "label": "People" },
+      { "id": "content", "label": "Content path" },
+      { "id": "control", "label": "Control" },
+      { "id": "money", "label": "Money" }
+    ],
+    "nodes": [
+      { "id": "uploader", "label": "Creator", "kind": "actor", "lane": "people", "order": 0 },
+      { "id": "server", "label": "One server", "kind": "process", "lane": "content", "order": 2 },
+      { "id": "video_file", "label": "Raw video file", "kind": "store", "lane": "content", "order": 3 },
+      { "id": "viewer", "label": "Viewer", "kind": "actor", "lane": "people", "order": 7 }
+    ],
+    "edges": [
+      { "id": "e_upload", "from": "uploader", "to": "server", "kind": "payload", "label": "uploads" },
+      { "id": "e_save", "from": "server", "to": "video_file", "kind": "payload", "label": "saves raw" },
+      { "id": "e_watch", "from": "server", "to": "viewer", "kind": "payload", "label": "streams raw" }
+    ]
+  },
+  "layers": [
+    {
+      "index": 1,
+      "name": "The Transcode Pipeline: One Upload, Many Copies",
+      "problem": {
+        "statement": "The naive server stores the raw upload and streams it straight back — and it plays almost nowhere. A raw upload is whatever the camera happened to produce: a codec the viewer's phone can't decode, a bitrate their connection can't sustain, a resolution their screen doesn't have. Worse, converting video is brutally expensive — serious compute per minute of footage — so doing it during the upload means the creator stares at a spinner while the server chokes, and uploads arrive in bursts that no fixed fleet can absorb in real time.",
+        "beginner": "A video straight off a camera is like a document in a language only that camera speaks — most phones and TVs can't play it. Translating it takes a lot of computer work, and if you do that work while the person waits, uploads grind to a halt every time a busy hour hits.",
+        "model": {
+          "id": "queue-and-buffer",
+          "application": "Decouple accepting the upload from processing it: take the raw bytes instantly, drop a job in a queue, and let a fleet of transcoders drain the queue at its own steady pace — bursts become backlog, not failure."
+        }
+      },
+      "gate": {
+        "question": "Uploads arrive in hundreds of camera formats, in unpredictable bursts, and converting one hour of video takes serious compute. Viewers on flaky phone connections and 4K living-room TVs must both play the same video smoothly. Design the path between 'upload finished' and 'plays everywhere' — without ever making the creator wait for it.",
+        "hint": "The upload and the processing don't have to be one event. What can sit between a bursty producer and a steady consumer — and how many versions of the video should come out the other end?"
+      },
+      "solution": "Accept the raw file into storage, enqueue a transcode job, and tell the creator 'processing' immediately. Workers pull jobs from the queue, decode the original once, and encode a ladder of renditions — multiple resolutions and codecs, chopped into small segments with a manifest, so the player can hop between quality rungs mid-stream as the network wobbles (adaptive bitrate streaming). Lower rungs publish first so the video goes live fast; the expensive top rungs arrive later. One costly write buys millions of cheap reads.",
+      "user_lens": {
+        "gives": "Upload once, plays everywhere: the creator never thinks about codecs, and the viewer's player invisibly picks the right rung for their screen and signal.",
+        "costs": "The wait — a fresh video sits at 'processing', and its sharpest resolutions arrive late. And what viewers watch is never your original file: it is the platform's compressed re-encode, with the platform choosing how much quality your work keeps."
+      },
+      "tech_lens": {
+        "mechanism": "Raw bytes land in blob storage; a message on a job queue triggers a stateless transcoder fleet that scales with backlog depth; output is a ladder of segmented renditions plus a manifest the player uses to switch rungs on the fly.",
+        "principle": "Turn a rate mismatch into latency with a queue, and do expensive work once at write time so every read is cheap forever."
+      },
+      "tradeoff": "Storage explodes: every video is stored many times over, and most renditions of most videos will barely ever be watched. And the queue hides failure — a stuck or crashed job is an invisible video, so the pipeline needs its own watchdogs.",
+      "defends": ["inv1"],
+      "developer": {
+        "mappings": [
+          { "mechanism": "the transcode job queue", "software_concept": "message-queue worker pattern (SQS/Kafka consumers) — absorb bursts, drain steadily, scale workers on backlog" },
+          { "mechanism": "the rendition ladder", "software_concept": "build-time artifacts: compile once, serve many — CI builds, pre-rendered pages, pre-sized image thumbnails" }
+        ],
+        "interview_probes": [
+          "Where does your system do expensive work on the read path that could be done once at write time instead?",
+          "Your queue absorbed the burst — who notices the job that silently died inside it?"
+        ]
+      },
+      "beginner_analogy": "Like a restaurant prepping ingredients all morning so dinner service is just fast plating — nobody chops onions after the order arrives, and the same prep serves every table all night.",
+      "diff": {
+        "add_nodes": [
+          { "id": "job_queue", "label": "Transcode queue", "kind": "store", "lane": "control", "order": 1 },
+          { "id": "transcoder", "label": "Transcoder fleet", "kind": "process", "lane": "content", "order": 1 },
+          { "id": "renditions", "label": "Rendition ladder", "kind": "store", "lane": "content", "order": 4 }
+        ],
+        "add_edges": [
+          { "id": "e_enqueue", "from": "server", "to": "job_queue", "kind": "control", "label": "job queued" },
+          { "id": "e_dequeue", "from": "job_queue", "to": "transcoder", "kind": "control", "label": "next job" },
+          { "id": "e_readraw", "from": "video_file", "to": "transcoder", "kind": "payload", "label": "raw in" },
+          { "id": "e_ladder", "from": "transcoder", "to": "renditions", "kind": "payload", "label": "renditions out" }
+        ],
+        "highlight": ["video_file", "e_watch", "server"],
+        "remove": []
+      }
+    },
+    {
+      "index": 2,
+      "name": "Split the Write Path from the Read Path",
+      "problem": {
+        "statement": "One tier still does everything: accepts uploads, feeds the transcoders, and streams playback. That machine dies of its own success, and the failure modes are cross-wired — a burst of uploads steals the CPU and bandwidth that playback needed, and one video getting popular makes every creator's upload time out. Success in any one job is an outage in the other two, which means growth itself is the bug.",
+        "beginner": "Imagine one worker who takes in packages, repacks them, and hands them out at the counter — all at once. The moment a crowd forms at the counter, the intake line stops dead. On this platform, a popular video literally breaks uploading.",
+        "model": {
+          "id": "separation-of-concerns",
+          "application": "Split the write path (accept and process uploads) from the read path (serve playback) into separate services with one clear contract between them, so each side can fail, scale, and change without touching the other."
+        }
+      },
+      "gate": {
+        "question": "Your one server does three jobs: accept uploads, crunch transcodes, and stream playback. Tonight one video gets popular and uploads start timing out. Split the system so each job can fail, scale, and be upgraded alone — and say precisely what each side promises the other.",
+        "hint": "The finished renditions are immutable files. What is the simplest thing that could serve an immutable file — and what does the write side owe that thing?"
+      },
+      "solution": "Three separate tiers with blob storage as the boundary: an upload service that owns the write path, the transcoder fleet that owns processing, and a playback service that only ever reads finished renditions. The contract is the blob store itself — the write side promises complete, immutable renditions and never touches them again; the read side promises to serve only what is there and never reach back into the pipeline. Each tier now scales on its own dial: upload capacity, transcode capacity, and serving capacity are three different bills.",
+      "user_lens": {
+        "gives": "Watching never lags because someone else is uploading, and upload day never breaks because something went viral — each crowd gets its own door.",
+        "costs": "The seams become visible: a video can say 'published' while a rendition is still missing, and the platform is now capable of being half-broken — uploads down while playback hums along, or the reverse — which is confusing in a way one shared machine never was."
+      },
+      "tech_lens": {
+        "mechanism": "Independent services around an immutable blob store: the upload tier writes raw files and enqueues jobs, transcoders write renditions, the playback tier reads renditions only. No tier shares compute, deploys, or failure domains with another.",
+        "principle": "Split responsibilities along traffic shape — bursty writes and voracious reads should never share a machine — and make the boundary a simple, immutable contract."
+      },
+      "tradeoff": "The single machine's simplicity is gone forever: there are now boundaries to version, contracts to keep honest, and a whole class of failures that live only in the seams between services.",
+      "defends": ["inv2", "inv1"],
+      "developer": {
+        "mappings": [
+          { "mechanism": "the write/read split", "software_concept": "CQRS and primary/replica databases — separate the mutation path from the query path so each scales alone" },
+          { "mechanism": "blob store of finished renditions", "software_concept": "artifact registry / content-addressed storage: immutable outputs as the contract between build and deploy" }
+        ],
+        "interview_probes": [
+          "Which of your services would take down an unrelated feature if it got popular tonight — and what contract would you cut between them?"
+        ]
+      },
+      "beginner_analogy": "Like a bakery separating the kitchen from the counter: bakers bake at dawn, the shelf in between holds finished loaves, and a long line of customers never slows the ovens.",
+      "diff": {
+        "add_nodes": [
+          { "id": "upload_svc", "label": "Upload service", "kind": "process", "lane": "content", "order": 2 },
+          { "id": "playback", "label": "Playback service", "kind": "process", "lane": "content", "order": 5 }
+        ],
+        "add_edges": [
+          { "id": "e_upload2", "from": "uploader", "to": "upload_svc", "kind": "payload", "label": "uploads" },
+          { "id": "e_save2", "from": "upload_svc", "to": "video_file", "kind": "payload", "label": "saves raw" },
+          { "id": "e_enqueue2", "from": "upload_svc", "to": "job_queue", "kind": "control", "label": "job queued" },
+          { "id": "e_fetch", "from": "renditions", "to": "playback", "kind": "payload", "label": "renditions" },
+          { "id": "e_stream", "from": "playback", "to": "viewer", "kind": "payload", "label": "streams" }
+        ],
+        "highlight": ["server", "e_watch", "e_upload"],
+        "remove": ["server"]
+      }
+    },
+    {
+      "index": 3,
+      "name": "The CDN: Move the Video Near the Viewer",
+      "problem": {
+        "statement": "Every viewer on earth still pulls from one origin, and that fails twice at once. Economically: a million concurrent viewers of one video means the same bytes shipped from the origin a million times — early YouTube's bandwidth bills were famously an existential threat before the Google acquisition. Physically: a viewer an ocean away gets round-trip latency and rebuffering that no faster origin server can fix, because the speed of light does not negotiate.",
+        "beginner": "Every viewer in the world is fetching the video from the same faraway building. That costs a fortune in internet traffic, and for someone on another continent the video keeps pausing to load — not because the server is slow, but because the data literally has too far to travel.",
+        "model": {
+          "id": "locality-and-caching",
+          "application": "Put copies of the popular renditions on machines near the viewers — inside their internet providers when possible — so a video crosses the ocean once and is then served locally to everyone nearby."
+        }
+      },
+      "gate": {
+        "question": "One video, a million simultaneous viewers on five continents. Your origin holds the only copies, bandwidth costs are eating you alive, and distant viewers see endless buffering. You may place machines anywhere on earth. What do you put on them, when, and how do you decide which videos deserve the space?",
+        "hint": "Viewing is wildly concentrated — a small fraction of videos gets most of the watching, and viewers cluster geographically. What if a distant viewer's request crossed the ocean only once, on behalf of everyone near them who asks after?"
+      },
+      "solution": "Edge caches: racks of storage placed near — and, in Google's case, physically inside — internet providers' networks. The first local request for a video misses and fills the cache from the origin; every later viewer nearby is served from down the road instead of across the planet. Popularity decides what lives at each edge, and it differs by region — the origin becomes the quiet library of everything, the edges the loud local shelf of whatever is hot right here, right now.",
+      "user_lens": {
+        "gives": "Instant start and stable HD wherever the crowd is — the video behaves as if it lived next door, because a copy of it does.",
+        "costs": "The long tail rides second class: an obscure video starts slower than a hit, because nothing obscure earns shelf space at the edge. And there is a quiet intimacy tax — the cache in your provider's building is, in aggregate, a record of what your region watches."
+      },
+      "tech_lens": {
+        "mechanism": "A hierarchy of caches keyed by rendition segments: request routing sends each viewer to the nearest healthy edge, misses fill from upstream, and eviction continuously trades shelf space toward whatever is currently popular in that region.",
+        "principle": "Distance is latency and repetition is money: put copies where demand is, and pay for the speed with staleness and eviction complexity."
+      },
+      "tradeoff": "Un-publishing becomes a distributed operation: a deleted or struck video now has copies scattered across thousands of edges that must all be chased down, and the cache only pays for itself on popular content — the edge subsidizes hits, never the archive.",
+      "defends": ["inv1", "inv2"],
+      "developer": {
+        "mappings": [
+          { "mechanism": "edge caches inside ISPs", "software_concept": "the cache hierarchy pattern — CPU L1/L2/L3, CDN points of presence, DNS resolvers: hot data migrates toward demand" },
+          { "mechanism": "cache fill on first miss", "software_concept": "lazy loading and memoization: pay the full cost once, amortize it across every later request" }
+        ],
+        "interview_probes": [
+          "What is your cache invalidation story when 'delete' must become true worldwide, on thousands of independent copies?"
+        ]
+      },
+      "beginner_analogy": "Like supermarkets and regional warehouses: milk doesn't ship from one national dairy to each shopper's door — it gets staged in bulk near the neighborhoods that drink it, and your corner store just restocks the local favorites.",
+      "diff": {
+        "add_nodes": [
+          { "id": "cdn", "label": "Edge caches (CDN)", "kind": "store", "lane": "content", "order": 6 }
+        ],
+        "add_edges": [
+          { "id": "e_fill", "from": "playback", "to": "cdn", "kind": "payload", "label": "cache fill" },
+          { "id": "e_edge", "from": "cdn", "to": "viewer", "kind": "payload", "label": "nearby stream" }
+        ],
+        "highlight": ["playback", "e_stream", "viewer"],
+        "remove": []
+      }
+    },
+    {
+      "index": 4,
+      "name": "Recommendations: The Loop That Decides What Plays Next",
+      "problem": {
+        "statement": "The delivery machine is now superb — and it is delivering into a void. With hundreds of hours arriving every minute, the catalog is unbrowsable by any human means; search only works when the viewer already knows what they want, and almost every video that exists will never be searched for. A perfect pipeline full of videos nobody can find is a warehouse, not a platform. Discovery is the bottleneck now, and no editorial staff on earth scales to the inventory.",
+        "beginner": "There are now far more videos than anyone could ever look through — millions of lifetimes' worth. Searching only helps if you already know a video exists. Without something choosing what to show each person, almost every video ever uploaded would simply never be seen by anyone.",
+        "model": {
+          "id": "feedback-loop",
+          "application": "Close the loop: feed what viewers actually watch back into what gets shown next, so the audience's own behavior — not an editor — routes each video toward the people likely to watch it. And know what you are building: this loop amplifies whatever it measures."
+        }
+      },
+      "gate": {
+        "question": "You have more videos than any staff could triage in many lifetimes, and each viewer will glance at maybe thirty suggestions today. Editors can't scale and you can't afford them anyway. What signal do you use to decide what surfaces next — and before you answer, ask what optimizing that exact signal will do to the whole platform's content over a few years?",
+        "hint": "The viewers themselves generate a torrent of evidence every second — clicks, skips, abandons, completions. Which of those signals is hardest to fake with a flashy thumbnail, and what happens when you feed it back into the ranking?"
+      },
+      "solution": "Watch signals — what each viewer clicks, skips, abandons, and finishes, and how long the whole session runs — stream into ranking models that pick what appears on the home page and in the up-next rail. In the 2010s the ranking currency shifted from clicks to watch time, because a misleading thumbnail can buy a click but not twenty minutes of dwell. The loop closes: what gets watched gets recommended, which gets it watched more. Most of YouTube's viewing now arrives through this loop, not through search.",
+      "user_lens": {
+        "gives": "The platform feels like it knows you, and the long tail comes alive: a niche creator can find their exact audience worldwide — something no broadcaster in history could have offered them.",
+        "costs": "The loop optimizes watch time, not truth and not your wellbeing. It will amplify whatever holds attention — outrage, fear, rabbit holes — with exactly the same enthusiasm as excellence, and your feed becomes a mirror that exaggerates you back at yourself. The hours it captures from you are not a side effect; they are the objective."
+      },
+      "tech_lens": {
+        "mechanism": "Behavioral event streams feed candidate generation (narrow billions of videos to hundreds) and then a ranking model (order those hundreds per viewer per moment), trained continuously on watch-time-flavored objectives; every recommendation is also an experiment that generates the next round of training data.",
+        "principle": "Whatever metric closes a feedback loop becomes the thing the system actually optimizes — regardless of what anyone intended. Choose it knowing it will be both amplified and gamed."
+      },
+      "tradeoff": "Positive feedback compounds: small early advantages snowball into monster hits while near-identical videos starve, and the metric quietly becomes the platform's editorial policy — an editorial line that emerged from an objective function, which nobody chose and nobody can fully see.",
+      "defends": ["inv5", "inv3"],
+      "developer": {
+        "mappings": [
+          { "mechanism": "the watch-time ranking loop", "software_concept": "engagement-driven objective functions and multi-armed bandits: explore/exploit over content, trained on their own outputs" },
+          { "mechanism": "candidate generation then ranking", "software_concept": "two-stage retrieval — cheap recall over billions, expensive precision over hundreds — the shape of every large recommender and search stack" }
+        ],
+        "interview_probes": [
+          "What does your system's core metric silently optimize for that nobody on the team would defend out loud?",
+          "Your model trains on data produced by its own recommendations. Where does that loop drift, and what would you measure to notice?"
+        ]
+      },
+      "beginner_analogy": "Like a street performer who keeps adjusting the act toward whatever makes the crowd stay: over months the show becomes whatever stops feet — which is not necessarily the show anyone would have chosen to make, or to watch.",
+      "diff": {
+        "add_nodes": [
+          { "id": "signals", "label": "Watch signals", "kind": "store", "lane": "control", "order": 6 },
+          { "id": "ranker", "label": "Ranking loop", "kind": "process", "lane": "control", "order": 5 }
+        ],
+        "add_edges": [
+          { "id": "e_watchsig", "from": "viewer", "to": "signals", "kind": "control", "label": "watch time" },
+          { "id": "e_feed", "from": "signals", "to": "ranker", "kind": "control", "label": "trains" },
+          { "id": "e_next", "from": "ranker", "to": "viewer", "kind": "control", "label": "up next" }
+        ],
+        "highlight": ["viewer", "renditions"],
+        "remove": []
+      }
+    },
+    {
+      "index": 5,
+      "name": "Monetization: Ads Pay the Bandwidth Bill",
+      "problem": {
+        "statement": "Everything built so far burns money at planetary scale — transcoder fleets, exabytes of renditions, edge racks on every continent — and nothing yet pays for a byte of it. Viewers won't pay per view; history already showed the bandwidth bill nearly sinking the young company. And the supply side has the same hole: the machine needs creators to keep feeding it forever, and goodwill is not a salary. Two deficits, one design question: who pays, and why do creators keep coming?",
+        "beginner": "Running this costs a fortune — all those computers converting, storing, and shipping video worldwide — and viewers expect it free. Meanwhile the people making the videos are working for nothing. Without money coming in and money going to creators, the whole thing quietly starves.",
+        "model": {
+          "id": "incentive-alignment",
+          "application": "Sell the attention to advertisers, then split the revenue with the creators who attracted it — so the platform's need (more watch time to sell) and the creator's need (income) become the same number moving in the same direction."
+        }
+      },
+      "gate": {
+        "question": "Your platform burns a fortune in compute and bandwidth, viewers won't pay per view, and you need millions of creators to keep uploading forever. Design a money loop that covers the bill AND makes creators want exactly what the platform wants. Then the hard part: predict what people will do to your chosen metric once their rent depends on it.",
+        "hint": "You already hold the scarcest commodity on earth in one place: attention. Who pays for attention — and what changes if you split the check with the people who gathered it?"
+      },
+      "solution": "An ad auction sells slices of viewer attention: advertisers bid in real time for slots against videos being watched, targeting by audience. Then the masterstroke — revenue sharing: the creator keeps the majority of the ad money their videos earn (famously a 55 percent share). Suddenly creators are not users of the platform; they are partners whose paycheck moves with the same watch-time metric the recommender optimizes. Everyone in the building is now pushing on the same lever, and 'YouTuber' becomes a profession.",
+      "user_lens": {
+        "gives": "Everything stays free at the point of use, and an entirely new livelihood exists: ordinary people earn a real living directly from an audience, no studio or network required.",
+        "costs": "The metric becomes the master. Creators tune thumbnails toward clickbait and stretch runtimes toward the ad breaks, because the algorithm is now their boss and their landlord at once — and a classifier's opinion that a video isn't 'advertiser-friendly' is a pay cut delivered by software. Viewers pay in interruptions, and in the knowledge that their attention is the product on the shelf."
+      },
+      "tech_lens": {
+        "mechanism": "Real-time bidding fills each ad slot in milliseconds using viewer and content signals; earnings attribute per-impression back to the video that earned them and flow through the revenue-share ledger to creator payouts.",
+        "principle": "Fund a system from its own activity, and pay contributors from the same metric that ranks them — alignment recruits an army, and the army inherits the metric's blind spots."
+      },
+      "tradeoff": "A third master joins the table: the platform's editorial gravity now bends toward advertiser comfort, not just viewer interest. And welding money to the recommendation loop means the loop's pathologies now have a payroll — whatever the ranker over-rewards, the economy over-produces.",
+      "defends": ["inv3"],
+      "developer": {
+        "mappings": [
+          { "mechanism": "the creator revenue share", "software_concept": "marketplace take rates and app-store splits: aligning a supply side by paying it from the platform's own metric" },
+          { "mechanism": "the real-time ad auction", "software_concept": "auction-based resource allocation — real-time bidding exchanges, spot-instance pricing: scarce slots priced by live demand" }
+        ],
+        "interview_probes": [
+          "When you pay people by a metric, how do you detect the ones serving the metric instead of the purpose it was a proxy for?"
+        ]
+      },
+      "beginner_analogy": "Like a shopping mall: entry is free, the stores keep most of what they sell, and the mall pays its bills by renting out the one thing it truly owns — the crowd walking past.",
+      "diff": {
+        "add_nodes": [
+          { "id": "advertiser", "label": "Advertiser", "kind": "actor", "lane": "people", "order": 4 },
+          { "id": "ad_auction", "label": "Ad auction", "kind": "process", "lane": "money", "order": 4 },
+          { "id": "revshare", "label": "Revenue share", "kind": "process", "lane": "money", "order": 1 }
+        ],
+        "add_edges": [
+          { "id": "e_bid", "from": "advertiser", "to": "ad_auction", "kind": "money", "label": "bids" },
+          { "id": "e_adplay", "from": "ad_auction", "to": "viewer", "kind": "payload", "label": "ad plays" },
+          { "id": "e_cut", "from": "ad_auction", "to": "revshare", "kind": "money", "label": "creator's cut" },
+          { "id": "e_payout", "from": "revshare", "to": "uploader", "kind": "money", "label": "payout" }
+        ],
+        "highlight": ["cdn", "playback", "transcoder"],
+        "remove": []
+      }
+    },
+    {
+      "index": 6,
+      "name": "Moderation: The Trust Boundary at Publish",
+      "problem": {
+        "statement": "Anyone on earth can hand this machine anything, and everything built so far — transcode, split paths, worldwide edges, a recommendation loop, an ad economy — is an amplifier that treats a pirated film, a scam, or something far worse exactly like a piano recital. Rights holders sue platforms built on their stolen catalogs; advertisers flee the moment their brand appears beside the unacceptable; laws in every country demand removals. The upload path crosses from an untrusted stranger to worldwide, monetized distribution with no checkpoint at all — and at hundreds of hours a minute, 'hire people to watch it' is arithmetic that can never work.",
+        "beginner": "Right now a total stranger's video goes straight from their phone to the whole world, with ads on it — no questions asked. Stolen movies, scams, and much worse get the same megaphone as everything else. And far too much arrives every minute for humans to watch it all, so the checking itself has to be a machine.",
+        "model": {
+          "id": "trust-boundary",
+          "application": "Draw an explicit line between 'uploaded' and 'published' and verify at the crossing: machines fingerprint and classify every upload, humans judge only the gray zone, and nothing gets the amplifier until it has crossed."
+        }
+      },
+      "gate": {
+        "question": "Hundreds of hours arrive per minute, so watching everything with humans is impossible by arithmetic. Rights holders demand their films come down, laws differ by country, advertisers are skittish — yet most uploads are perfectly innocent. Design the checkpoint between 'uploaded' and 'published': what do machines judge, what must humans judge, and what happens to the money on a disputed video?",
+        "hint": "You don't have to choose between block and allow. On a copyright match there is a third option involving the ad money — one that can turn your biggest legal enemy into a business partner."
+      },
+      "solution": "Layered checks at the boundary. Content ID — running since around 2007 — fingerprints every upload against a reference library supplied by rights holders, and a match offers them a choice: block it, track it, or take its ad revenue. Most take the money, converting mass infringement into an accidental licensing market. In parallel, policy classifiers score every upload against platform rules, acting automatically on the clear cases at machine speed; the genuinely ambiguous slice routes to human reviewers. Only what crosses the boundary gets recommended and monetized — the amplifier is on the trusted side of the line.",
+      "user_lens": {
+        "gives": "Viewers get a platform that mostly isn't a landfill; creators get 'the rights holder takes the ad money' instead of a lawsuit over background music; rights holders get a revenue pipe out of what used to be pure theft.",
+        "costs": "False positives with salaries attached: a misfired match or classifier demonetizes or blocks a legitimate video, and the appeal moves at human speed while the penalty arrived at machine speed. And the boundary is also a censorship lever — enforced by models the public can't inspect, tuned under pressure from advertisers and governments alike."
+      },
+      "tech_lens": {
+        "mechanism": "Perceptual fingerprints match content even through cropping, re-encoding, and speed changes; classifier scores split traffic into auto-allow, auto-act, and an uncertainty band routed to human review queues; verdicts gate what the ranker and the ad auction are allowed to touch.",
+        "principle": "Verify at the line where things change trust levels, scale the verification like the traffic — machines for volume, humans for ambiguity — and never let anything skip the crossing."
+      },
+      "tradeoff": "The checkpoint can never be both fast and certain: automate more and wrongful strikes multiply; humanize more and you buy delay, cost, and a workforce paid to stare at the worst of humanity. And the boundary's real customer quietly drifts from 'is this allowed?' toward 'is this comfortable for advertisers?' — a stricter and less accountable test.",
+      "defends": ["inv4", "inv3"],
+      "developer": {
+        "mappings": [
+          { "mechanism": "Content ID fingerprinting", "software_concept": "perceptual hashing and signature scanning — matching by resemblance, robust to transformation, like antivirus for media" },
+          { "mechanism": "auto-act plus human gray zone", "software_concept": "human-in-the-loop pipelines: confidence thresholds decide what machines handle and what escalates to people" }
+        ],
+        "interview_probes": [
+          "Where in your system does data change trust levels, and what actually inspects it at that line — versus what you assume was inspected earlier?"
+        ]
+      },
+      "beginner_analogy": "Like customs at an airport: nearly all luggage flows through the scanners in seconds, the machines flag a small fraction for hand inspection, and a suspicious bag does not get on the plane while people argue about it.",
+      "diff": {
+        "add_nodes": [
+          { "id": "contentid", "label": "Content ID", "kind": "process", "lane": "control", "order": 2 },
+          { "id": "policy", "label": "Policy classifier", "kind": "process", "lane": "control", "order": 3 },
+          { "id": "reviewer", "label": "Human review", "kind": "actor", "lane": "people", "order": 3 }
+        ],
+        "add_edges": [
+          { "id": "e_scan", "from": "upload_svc", "to": "contentid", "kind": "control", "label": "fingerprints" },
+          { "id": "e_class", "from": "upload_svc", "to": "policy", "kind": "control", "label": "classifies" },
+          { "id": "e_gray", "from": "policy", "to": "reviewer", "kind": "control", "label": "gray zone" },
+          { "id": "e_verdict", "from": "reviewer", "to": "policy", "kind": "control", "label": "verdict" },
+          { "id": "e_gate", "from": "policy", "to": "playback", "kind": "control", "label": "publish gate" },
+          { "id": "e_claim", "from": "contentid", "to": "revshare", "kind": "money", "label": "claims revenue" }
+        ],
+        "highlight": ["uploader", "e_upload2", "cdn"],
+        "remove": []
+      }
+    }
+  ],
+  "stress_tests": [
+    {
+      "id": "st1",
+      "title": "Viral in minutes",
+      "scenario": "A video goes from a hundred views to ten million in under an hour — pushed, of course, by the recommendation loop itself. Every part of the pipeline feels it at once.",
+      "reveal": "The delivery layers shine: the transcode was already done once, forever, so the read path carries the whole event; edge caches fan the video out so the origin serves each region roughly once instead of ten million times. The uncomfortable truth is that the crisis was self-inflicted — positive feedback in the ranker is the accelerant — and moderation is the layer that loses the race: a rule-breaking video can bank millions of views in the gap before classifiers and human review catch up, and at that point the takedown must also chase cached copies across thousands of edges. The machine amplifies faster than it can judge."
+    },
+    {
+      "id": "st2",
+      "title": "Two hundred disguised copies",
+      "scenario": "A copyrighted film is uploaded in two hundred variants: cropped, mirrored, sped up a few percent, color-shifted, screen-recorded, buried inside 'reaction' framing.",
+      "reveal": "Perceptual fingerprints are built for exactly this — matching by resemblance, not by bytes — and they catch most transformations at upload time; the rights holder's likeliest response is monetize, quietly turning all two hundred pirates into unpaid distributors. But it is honestly an arms race: adversaries iterate until a disguise slips through, the borderline cases flood human review, and the same aggressive matching produces the collateral damage — fair-use critics and reviewers hit by claims on footage they had every right to use, appealing at human speed against a penalty applied at machine speed."
+    },
+    {
+      "id": "st3",
+      "title": "The advertisers walk",
+      "scenario": "Major brands discover their ads running beside extremist and exploitative content, and pull their budgets together in protest.",
+      "reveal": "This attacks inv3, the load-bearing invariant — the money loop funds everything, so the platform must respond, fast. The response is structural: the trust boundary's test tightens from 'is this allowed?' to 'is this comfortable for a brand?', enforced by broad demonetization classifiers tuned for advertiser safety. The costs land largely on the innocent — creators on difficult but legitimate topics (news, war, health) lose income to cautious classifiers, and a wave of demonetization anxiety reshapes what people dare to make. The system survives by proving that when advertisers and creators pull in different directions, the boundary serves whoever pays the bandwidth bill."
+    }
+  ],
+  "transfer": {
+    "principles": [
+      "Do expensive work once at write time so every read is cheap: one transcode, millions of plays.",
+      "Split paths by their traffic shape — bursty writes and voracious reads should never share a machine, and the boundary between them should be a simple, immutable contract.",
+      "Distance is latency and repetition is money: put copies where demand is, and accept that un-publishing becomes a distributed chase.",
+      "Whatever metric closes your feedback loop becomes the thing your system actually optimizes — it will be amplified, gamed, and inherited by everyone you pay from it.",
+      "Fund the system from its own activity and split the proceeds with contributors: alignment recruits an army, and the army inherits the metric's blind spots.",
+      "Verification belongs at the line where things change trust levels, scaled like the traffic itself — machines for volume, humans for the gray zone, and no path around the crossing."
+    ],
+    "mappings": [
+      { "mechanism": "the transcode job queue", "elsewhere": "Message queues decouple bursty producers from steady consumers everywhere: order processing, print spoolers, CI build farms." },
+      { "mechanism": "the rendition ladder", "elsewhere": "Compile-once artifacts across software: container registries, pre-rendered static sites, thumbnail pipelines — pay at write, serve forever." },
+      { "mechanism": "edge caches", "elsewhere": "The same shelf-near-demand shape as CPU cache hierarchies, DNS resolvers, and supermarket regional warehouses." },
+      { "mechanism": "the watch-time ranking loop", "elsewhere": "Every engagement-optimized feed, search ranker, and momentum-driven market: systems trained on their own outputs, amplifying what they measure." },
+      { "mechanism": "Content ID at the publish boundary", "elsewhere": "Spam filters on email, review gates on app stores, customs at borders: fingerprint the flood, hand-inspect the flagged, hold the line at the crossing." }
+    ]
+  }
+}

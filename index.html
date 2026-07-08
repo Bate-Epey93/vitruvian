@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'; connect-src 'self' https://api.anthropic.com">
+<title>System Deconstructor — Rebuild it to understand it</title>
+<meta name="theme-color" content="#141416">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Deconstructor">
+<link rel="stylesheet" href="styles.css">
+<script src="content.js" defer></script>
+<script src="skill.js" defer></script>
+<script src="schema.js" defer></script>
+<script src="storage.js" defer></script>
+<script src="renderer-diagram.js" defer></script>
+<script src="renderer-doc.js" defer></script>
+<script src="generator.js" defer></script>
+<script src="engine.js" defer></script>
+<script src="pwa.js" defer></script>
+</head>
+<body>
+<div class="app">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <button class="tbtn icon-only" id="backBtn" aria-label="Back to library" hidden>‹</button>
+    <div class="brand" id="brand" title="Home">
+      <div class="brand-mark"></div>
+      <div>
+        <div class="brand-name" id="brandName">System<span>·</span>Deconstructor</div>
+        <div class="brand-sub" id="brandSub">Rebuild it to understand it</div>
+      </div>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="aud-switch" id="audSwitch" hidden></div>
+    <button class="tbtn" id="modelsBtn" aria-label="Thinking models"><span class="tbtn-ico">◈</span><span class="tbtn-label">Models</span></button>
+    <button class="tbtn" id="settingsBtn" aria-label="Settings"><span class="tbtn-ico">⚙</span><span class="tbtn-label">Settings</span></button>
+    <div class="menu-wrap">
+      <button class="tbtn icon-only" id="readerMenuBtn" aria-label="Breakdown menu" hidden>⋯</button>
+      <div class="menu-pop" id="menuPop" hidden></div>
+    </div>
+  </div>
+
+  <!-- SCREENS -->
+  <main class="screen" id="screen-library" hidden><div class="screen-inner"></div></main>
+  <section id="screen-reader" hidden></section>
+  <main class="screen" id="screen-generate" hidden><div class="screen-inner"></div></main>
+  <main class="screen" id="screen-models" hidden><div class="screen-inner"></div></main>
+  <main class="screen" id="screen-settings" hidden><div class="screen-inner"></div></main>
+
+</div>
+
+<div class="save-toast" id="saveToast">Saved</div>
+
+<!-- UPDATE TOAST (shown by pwa.js when a new version is waiting) -->
+<div class="update-toast" id="updateToast" hidden>
+  <span>Update ready</span>
+  <button id="updateReload">Reload</button>
+</div>
+
+<!-- iOS INSTALL HINT (second non-installed visit) -->
+<div class="install-hint" id="iosHint" hidden>
+  <div class="ih-label">Install System Deconstructor</div>
+  <p>Add this to your home screen for offline reading and safer data — installed apps are exempt from Safari's storage cleanup. Tap <b>Share ▹ Add to Home Screen</b>.</p>
+  <button class="ih-close" id="iosHintClose" aria-label="Dismiss">×</button>
+</div>
+
+</body>
+</html>
