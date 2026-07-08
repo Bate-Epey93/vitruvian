@@ -138,7 +138,9 @@ function renderAudSwitch() {
   const box = $("audSwitch");
   box.textContent = "";
   COPY.audienceModes.forEach(m => {
-    const b = h("button", meta.audienceMode === m.id ? "on" : "", m.label);
+    const b = h("button", meta.audienceMode === m.id ? "on" : "");
+    b.append(h("span", "aud-full", m.label), h("span", "aud-abbr", m.label[0]));  // full text ↔ single letter on mobile
+    b.setAttribute("aria-label", m.label);
     b.onclick = async () => {
       meta.audienceMode = m.id;
       await Store.saveMeta({ audienceMode: m.id });

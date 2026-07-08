@@ -1,4 +1,4 @@
-const CACHE_VERSION = "vitruvian-v1.3.0";   // bump on EVERY deploy, including content edits
+const CACHE_VERSION = "vitruvian-v1.3.2";   // bump on EVERY deploy, including content edits
 const SHELL = [
   "./",
   "./index.html",
@@ -27,7 +27,14 @@ const SHELL = [
   "./icons/apple-touch-icon.png"
 ];
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE_VERSION).then(c => c.addAll(SHELL)));
+  // Fetch each shell asset with cache:"reload" so a stale entry in the browser's
+  // HTTP cache can never poison this cache — the SW always precaches the version
+  // that was just deployed, not whatever the disk cache happened to hold.
+  e.waitUntil(caches.open(CACHE_VERSION).then(c =>
+    Promise.all(SHELL.map(u =>
+      fetch(new Request(u, { cache: "reload" })).then(r => { if (r.ok) return c.put(u, r); })
+    ))
+  ));
 });
 self.addEventListener("activate", e => {
   e.waitUntil(

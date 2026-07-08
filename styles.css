@@ -68,12 +68,15 @@ body{
 ::selection{background:var(--accent);color:#fff;}
 button{font:inherit;color:inherit;}   /* card buttons must inherit --ink, not UA black */
 
-.app{display:grid;grid-template-rows:auto 1fr;grid-template-columns:1fr;height:100vh;overflow:hidden;}
-.app > .topbar{grid-row:1;grid-column:1;}
+/* minmax(0,1fr): without the 0-min, the column's `auto` minimum grows to the
+   content min-content (the 960px diagram, the topbar row) and blows the whole
+   app past the viewport — which body{overflow:hidden} then clips. */
+.app{display:grid;grid-template-rows:auto 1fr;grid-template-columns:minmax(0,1fr);height:100vh;overflow:hidden;}
+.app > .topbar{grid-row:1;grid-column:1;min-width:0;}
 /* every screen shares the single 1fr cell (row 2); only one is ever
    [hidden]-visible. Without this they auto-place into implicit
    content-height rows and overflow the viewport instead of scrolling. */
-.app > .screen,.app > #screen-reader{grid-row:2;grid-column:1;min-height:0;}
+.app > .screen,.app > #screen-reader{grid-row:2;grid-column:1;min-height:0;min-width:0;}
 
 /* ── Topbar ── */
 .topbar{
@@ -118,6 +121,7 @@ button{font:inherit;color:inherit;}   /* card buttons must inherit --ink, not UA
 }
 .aud-switch button.on{background:var(--accent);color:#fff;}
 .aud-switch button:not(.on):hover{color:var(--paper);}
+.aud-abbr{display:none;}   /* full label on desktop; single letter on phones (below) */
 
 /* overflow menu */
 .menu-wrap{position:relative;}
@@ -523,6 +527,18 @@ g.dg-node.dg-enter{animation:dg-fade .3s ease both;}
   .tbtn-label{display:none;}
   .aud-switch button{padding:6px 9px;}
   .deconstruct-bar{flex-direction:column;}
+}
+/* phones: compact the audience switch to single letters and tighten the row so
+   the reader topbar (back + brand + B/E/D + Models/Drill/theme/Settings/menu)
+   fits without overflowing the viewport */
+@media(max-width:560px){
+  .topbar{gap:6px;padding:0 9px;}
+  .aud-full{display:none;}
+  .aud-abbr{display:inline;}
+  .aud-switch{padding:2px;gap:1px;}
+  .aud-switch button{padding:6px 8px;letter-spacing:0;}
+  .tbtn{padding:7px 8px;}
+  .tbtn.icon-only{padding:7px 8px;}
 }
 @media(max-width:420px){
   .brand-name{display:none;}
