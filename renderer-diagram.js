@@ -4,15 +4,20 @@
    Deterministic lane layout — no graph auto-layout, ever. The AI
    assigns lane + order; this file does arithmetic:
    · lanes = horizontal bands, order = column, kind = glyph.
-   · every node/edge is COLOR-CODED by the layer that introduced
-     it (layer 0 = ink), so you can read the system's strata at a
-     glance; edge KIND stays encoded in the dash pattern.
-   · viewBox is computed from the FINAL state (all diffs applied)
-     so the diagram never jumps or rescales between layers.
-   · Diagram.mount(container, doc) → instance
-       instance.show(uptoLayer, { highlight, animate }) renders
-       baseline + diffs 1..uptoLayer; highlight pulses the ids
-       that the NEXT layer will fix (gate state).
+   · COLOR ENCODES LANE (People, Trains&track, Control, Money…):
+     each lane has a hue; a node wears its lane's color, and an
+     EDGE wears the color of the lane its INPUT comes from (its
+     source node's lane). Edge KIND stays in the dash pattern
+     (payload solid · control dashed · money dotted). Lane bands
+     and left-edge labels are tinted to serve as the legend.
+   · viewBox is computed from the FINAL state so the diagram never
+     jumps or rescales between layers.
+   · Edge labels render in a TOP layer and are placed to avoid the
+     node boxes, so no label ever hides behind a shape.
+   · Diagram.mount(container, doc) → { show, layout, laneColor }
+       show(uptoLayer, { highlight, animate }) renders baseline +
+       diffs 1..uptoLayer; highlight pulses the ids the NEXT layer
+       will fix (gate state).
    All SVG built via DOM APIs; labels are text nodes — generated
    content is structurally inert here (§13).
    ═══════════════════════════════════════════════════════════════ */
@@ -23,11 +28,10 @@ var Diagram = (() => {
   const LANE_H = 100, COL_W = 132, GUTTER = 18, PAD_TOP = 8, PAD_BOTTOM = 12;
   const CELL_GAP = 6;   // vertical gap between co-located nodes in one lane+order cell
 
-  /* Layer strata palette — index 0 is the ink baseline; 1..7 are the
-     layers. Chosen to stay distinct from the failure red and from each
-     other at 1.5-2px stroke weight on warm paper. */
-  const LAYER_COLORS = ["#141416", "#0e7a63", "#3057b0", "#7048a8", "#aa3f7e", "#6b7a1c", "#40707e", "#8a5a2a"];
-  function layerColor(i) { return LAYER_COLORS[Math.min(i, LAYER_COLORS.length - 1)]; }
+  /* Lane palette — assigned by lane order. Distinct hues, all legible
+     as 1.8px strokes and 9px labels on warm paper, and distinct from
+     the failure red used for the "what breaks" pulse. */
+  const LANE_COLORS = ["#2f6f5e", "#b5651d", "#3a5bb0", "#9a3f6f", "#5f7d2e"];
 
   function el(tag, attrs, parent) {
     const e = document.createElementNS(NS, tag);
@@ -36,14 +40,17 @@ var Diagram = (() => {
     return e;
   }
   function txt(node, s) { node.appendChild(document.createTextNode(s)); return node; }
+  function overlap(a, b, pad) {
+    return !(a.x0 > b.x1 + pad || a.x1 < b.x0 - pad || a.y0 > b.y1 + pad || a.y1 < b.y0 - pad);
+  }
 
   /* ── Layout: column x + lane-center y, sized to the union of every
      node that ever exists so the viewBox never rescales. Vertical
      stagger is applied per-state in show(). ── */
   function computeLayout(doc) {
     const lanes = doc.visual.lanes;
-    const laneY = {};                       // lane id → band top
-    lanes.forEach((l, i) => { laneY[l.id] = PAD_TOP + i * LANE_H; });
+    const laneY = {}, laneIndex = {};       // lane id → band top / palette index
+    lanes.forEach((l, i) => { laneY[l.id] = PAD_TOP + i * LANE_H; laneIndex[l.id] = i; });
 
     const allNodes = [...doc.visual.nodes];
     doc.layers.forEach(L => allNodes.push(...L.diff.add_nodes));
@@ -58,19 +65,7 @@ var Diagram = (() => {
     allNodes.forEach(n => {
       pos[n.id] = { x: GUTTER + n.order * COL_W + COL_W / 2, y: laneY[n.lane] + LANE_H / 2 };
     });
-    return { lanes, laneY, pos, width, height, maxOrder };
-  }
-
-  /* ── origin map: element id → index of the layer that introduced it ── */
-  function computeOrigins(doc) {
-    const origin = {};
-    doc.visual.nodes.forEach(n => { origin[n.id] = 0; });
-    doc.visual.edges.forEach(e => { origin[e.id] = 0; });
-    doc.layers.forEach(L => {
-      L.diff.add_nodes.forEach(n => { origin[n.id] = L.index; });
-      L.diff.add_edges.forEach(e => { origin[e.id] = L.index; });
-    });
-    return origin;
+    return { lanes, laneY, laneIndex, pos, width, height, maxOrder };
   }
 
   /* ── State N = baseline + diffs 1..N, honoring remove ── */
@@ -98,18 +93,18 @@ var Diagram = (() => {
     if (Math.abs(a.y - b.y) < 6) {                       // same band → horizontal
       const dir = b.x > a.x ? 1 : -1;
       const x1 = a.x + dir * (NODE_W / 2 + 2), x2 = b.x - dir * (NODE_W / 2 + 6);
-      return { d: `M ${x1} ${a.y} L ${x2} ${b.y}`, mx: (x1 + x2) / 2, my: a.y - 7 };
+      return { d: `M ${x1} ${a.y} L ${x2} ${b.y}`, mx: (x1 + x2) / 2, my: a.y - 7, sameLane: true };
     }
     const down = b.y > a.y ? 1 : -1;
     const y1 = a.y + down * (NODE_H / 2 + 2);
     const y2 = b.y - down * (NODE_H / 2 + 6);
     const midY = (y1 + y2) / 2;
     if (Math.abs(a.x - b.x) < 6)                          // same column → vertical
-      return { d: `M ${a.x} ${y1} L ${a.x} ${y2}`, mx: a.x, my: midY };
-    return { d: `M ${a.x} ${y1} L ${a.x} ${midY} L ${b.x} ${midY} L ${b.x} ${y2}`, mx: (a.x + b.x) / 2, my: midY - 7 };
+      return { d: `M ${a.x} ${y1} L ${a.x} ${y2}`, mx: a.x + 3, my: midY, sameLane: false };
+    return { d: `M ${a.x} ${y1} L ${a.x} ${midY} L ${b.x} ${midY} L ${b.x} ${y2}`, mx: (a.x + b.x) / 2, my: midY - 7, sameLane: false };
   }
 
-  /* ── Node glyphs by kind; stroke tinted by origin layer ── */
+  /* ── Node glyphs by kind; stroke tinted by lane color ── */
   function drawNode(g, n, color) {
     g.setAttribute("class", `dg-node dg-kind-${n.kind}`);
     const w = NODE_W, h = NODE_H, x = -w / 2, y = -h / 2;
@@ -150,43 +145,10 @@ var Diagram = (() => {
     txt(t, label);
   }
 
-  /* ── Edge-label collision pass: after insertion (so getBBox works),
-     greedily push overlapping labels down in 11px steps, a few rounds.
-     Crossings in LINES are tolerated by design; unreadable TEXT is not. ── */
-  function resolveLabelCollisions(edgesG, maxY) {
-    const labels = [...edgesG.querySelectorAll(".dg-elabel")];
-    const boxes = labels.map(t => {
-      let b;
-      try { b = t.getBBox(); } catch (e) { return null; }   // detached/hidden svg: skip pass
-      return { t, x: b.x, y: b.y, w: b.width, h: b.height };
-    });
-    if (boxes.some(b => !b)) return;
-    boxes.sort((a, b) => a.y - b.y || a.x - b.x);
-    for (let round = 0; round < 3; round++) {
-      let moved = false;
-      for (let i = 0; i < boxes.length; i++) {
-        for (let j = 0; j < i; j++) {
-          const a = boxes[j], c = boxes[i];
-          const overlap = !(c.x > a.x + a.w + 2 || c.x + c.w + 2 < a.x || c.y > a.y + a.h + 1 || c.y + c.h + 1 < a.y);
-          if (overlap) {
-            const dy = (a.y + a.h + 2) - c.y;
-            const newY = +c.t.getAttribute("y") + dy;
-            if (newY < maxY - 4) {
-              c.t.setAttribute("y", newY);
-              c.y += dy;
-              moved = true;
-            }
-          }
-        }
-      }
-      if (!moved) break;
-    }
-  }
-
   /* ── Mount ── */
   function mount(container, doc) {
     const layout = computeLayout(doc);
-    const origin = computeOrigins(doc);
+    const laneColor = id => LANE_COLORS[(layout.laneIndex[id] || 0) % LANE_COLORS.length];
     container.textContent = "";
     const svg = el("svg", {
       viewBox: `0 0 ${layout.width} ${layout.height}`,
@@ -195,28 +157,29 @@ var Diagram = (() => {
     }, container);
     svg.style.minWidth = Math.min(layout.width, 760) + "px";
 
-    // arrow markers: one per layer color + the failure marker
+    // one arrowhead marker per lane color + the failure marker
     const defs = el("defs", {}, svg);
-    const markerFor = {};
-    for (let i = 0; i <= doc.layers.length; i++) {
-      const m = el("marker", { id: "arr-l" + i, viewBox: "0 0 10 10", refX: 8, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, defs);
-      el("path", { d: "M 0 1 L 9 5 L 0 9 z", fill: layerColor(i) }, m);
-      markerFor[i] = "arr-l" + i;
-    }
+    layout.lanes.forEach((l, i) => {
+      const m = el("marker", { id: "arr-lane" + i, viewBox: "0 0 10 10", refX: 8, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, defs);
+      el("path", { d: "M 0 1 L 9 5 L 0 9 z", fill: LANE_COLORS[i % LANE_COLORS.length] }, m);
+    });
     const mb = el("marker", { id: "arr-broken", viewBox: "0 0 10 10", refX: 8, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, defs);
     el("path", { d: "M 0 1 L 9 5 L 0 9 z", fill: "#c22f2f" }, mb);
 
-    // lane bands + labels (static)
+    // lane bands (tinted by lane color = built-in legend) + labels
     const bandsG = el("g", {}, svg);
     layout.lanes.forEach((l, i) => {
-      const y = layout.laneY[l.id];
-      el("rect", { x: 0, y, width: layout.width, height: LANE_H, class: "dg-lane" + (i % 2 ? " alt" : "") }, bandsG);
+      const y = layout.laneY[l.id], color = LANE_COLORS[i % LANE_COLORS.length];
+      el("rect", { x: 0, y, width: layout.width, height: LANE_H, fill: color, "fill-opacity": 0.05 }, bandsG);
       if (i) el("line", { x1: 0, y1: y, x2: layout.width, y2: y, class: "dg-lane-line" }, bandsG);
-      txt(el("text", { x: 6, y: y + 13, class: "dg-lane-label" }, bandsG), l.label.toUpperCase());
+      const lab = el("text", { x: 7, y: y + 14, class: "dg-lane-label" }, bandsG);
+      lab.style.fill = color;
+      txt(lab, l.label.toUpperCase());
     });
 
     const edgesG = el("g", {}, svg);
     const nodesG = el("g", {}, svg);
+    const labelsG = el("g", {}, svg);       // labels on TOP — never hidden by a box
     let shownIds = new Set();
 
     function show(upto, opts = {}) {
@@ -226,6 +189,7 @@ var Diagram = (() => {
       const prev = shownIds;
       edgesG.textContent = "";
       nodesG.textContent = "";
+      labelsG.textContent = "";
 
       // Vertical stagger over the nodes VISIBLE in this state, grouped by
       // lane+order cell: a sole occupant sits on the centerline; N co-located
@@ -241,36 +205,70 @@ var Diagram = (() => {
         pos[n.id] = { x: b.x, y: b.y + dy };
       });
 
+      // edges (paths only — colored by the SOURCE lane, the input's origin)
+      const labelJobs = [];
       st.edges.forEach(e => {
         if (!st.nodes.has(e.from) || !st.nodes.has(e.to)) return;
-        const o = origin[e.id] || 0;
+        const from = st.nodes.get(e.from);
+        const broken = hl.has(e.id);
+        const li = layout.laneIndex[from.lane] || 0;
         const g = el("g", { class: `dg-edge dg-ekind-${e.kind}` }, edgesG);
         const p = edgePath(e, pos);
-        const path = el("path", { d: p.d, fill: "none", class: "dg-epath", "marker-end": `url(#${hl.has(e.id) ? "arr-broken" : markerFor[o]})` }, g);
-        path.style.stroke = layerColor(o);
-        if (e.label) {
-          const t = el("text", { x: p.mx, y: p.my, "text-anchor": "middle", class: "dg-elabel" }, g);
-          t.style.fill = layerColor(o);
-          txt(t, e.label);
-        }
-        if (hl.has(e.id)) g.classList.add("dg-broken");
+        const path = el("path", { d: p.d, fill: "none", class: "dg-epath", "marker-end": `url(#${broken ? "arr-broken" : "arr-lane" + li})` }, g);
+        path.style.stroke = broken ? "#c22f2f" : LANE_COLORS[li % LANE_COLORS.length];
+        if (broken) g.classList.add("dg-broken");
         if (animate && !prev.has(e.id)) g.classList.add("dg-enter");
+        if (e.label) {
+          // same-lane edges: lift the label into the band's clear upper strip
+          const cx = p.sameLane ? (pos[e.from].x + pos[e.to].x) / 2 : p.mx;
+          const cy = p.sameLane ? layout.laneY[from.lane] + 13 : p.my;
+          labelJobs.push({ e, cx, cy, color: broken ? "#c22f2f" : LANE_COLORS[li % LANE_COLORS.length] });
+        }
       });
 
+      // nodes (colored by their own lane)
+      const nodeRects = [];
       st.nodes.forEach(n => {
         const p = pos[n.id];
         const g = el("g", { transform: `translate(${p.x} ${p.y})` }, nodesG);
-        drawNode(g, n, layerColor(origin[n.id] || 0));
+        drawNode(g, n, laneColor(n.lane));
         if (hl.has(n.id)) g.classList.add("dg-broken");
         if (animate && !prev.has(n.id)) g.classList.add("dg-enter");
+        const hw = n.kind === "actor" ? ACTOR_R : NODE_W / 2;
+        const hh = n.kind === "actor" ? ACTOR_R : NODE_H / 2;
+        nodeRects.push({ x0: p.x - hw, y0: p.y - hh, x1: p.x + hw, y1: p.y + hh });
       });
 
-      resolveLabelCollisions(edgesG, layout.height);
+      // labels last, on top. For each, sample a fine vertical range around
+      // its anchor and pick the LEAST-overlapping slot — box overlap weighted
+      // heavily, ties broken toward the anchor. Guarantees the best available
+      // position (and a truly clear one whenever it exists), so a label is
+      // never hidden behind a shape.
+      const placed = [];
+      const olArea = (a, b, pad) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) + pad) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) + pad);
+      labelJobs.forEach(job => {
+        const w = job.e.label.length * 5.3 + 6, hh = 6.5;
+        let fy = job.cy, bestScore = Infinity;
+        for (let off = -66; off <= 66; off += 6) {
+          const y = job.cy + off;
+          if (y < 8 || y > layout.height - 6) continue;
+          const box = { x0: job.cx - w / 2, y0: y - hh, x1: job.cx + w / 2, y1: y + hh };
+          let score = Math.abs(off) * 0.02;                          // gentle pull toward the edge
+          nodeRects.forEach(r => { score += olArea(box, r, 2) * 4; });  // hiding behind a box is worst
+          placed.forEach(r => { score += olArea(box, r, 1); });
+          if (score < bestScore) { bestScore = score; fy = y; }
+        }
+        placed.push({ x0: job.cx - w / 2, y0: fy - hh, x1: job.cx + w / 2, y1: fy + hh });
+        const t = el("text", { x: job.cx, y: fy + 3, "text-anchor": "middle", class: "dg-elabel" }, labelsG);
+        t.style.fill = job.color;
+        txt(t, job.e.label);
+      });
+
       shownIds = new Set([...st.nodes.keys(), ...st.edges.keys()]);
     }
 
-    return { show, layout, origin };
+    return { show, layout, laneColor };
   }
 
-  return { mount, stateAt, computeLayout, layerColor };
+  return { mount, stateAt, computeLayout };
 })();

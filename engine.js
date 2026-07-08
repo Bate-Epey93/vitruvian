@@ -527,11 +527,7 @@ function renderGateDrill(body) {
   const metaRow = h("div", "bd-meta");
   metaRow.style.marginBottom = "10px";
   metaRow.appendChild(h("span", "chip flagship", rec.system));
-  const lc = Diagram.layerColor(L.index);
-  const lchip = h("span", "chip", "layer " + L.index);
-  lchip.style.color = lc;
-  lchip.style.borderColor = lc;
-  metaRow.appendChild(lchip);
+  metaRow.appendChild(h("span", "chip", "layer " + L.index));
   metaRow.appendChild(h("span", "chip", a.lastDrill ? "last drilled " + timeAgo(a.lastDrill) : "never drilled"));
   card.appendChild(metaRow);
 

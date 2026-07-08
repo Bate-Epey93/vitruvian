@@ -84,10 +84,9 @@ var DocView = (() => {
       const frontier = challenge ? maxRevealed() : N;
       const row = h("div", "scrub-row");
       for (let i = 0; i <= N; i++) {
-        const seg = h("button", "scrub-seg" + (i === lastShown ? " on" : "") + (i > frontier ? " locked" : ""), i === 0 ? "0" : String(i));
+        const seg = h("button", "scrub-seg" + (i === lastShown ? " on" : (i <= frontier ? " reached" : "")) + (i > frontier ? " locked" : ""), i === 0 ? "0" : String(i));
         seg.setAttribute("aria-label", i === 0 ? "Baseline state" : "State after layer " + i);
         if (i <= frontier) {
-          seg.style.setProperty("--seg", Diagram.layerColor(i));
           seg.onclick = () => {
             lastShown = i;
             diagram.show(i);
@@ -124,11 +123,6 @@ var DocView = (() => {
       doc.layers.forEach(L => {
         const a = attemptFor(L.index);
         mk(L.index, String(L.index), a.revealed ? " done" : (challenge ? " gated" : ""));
-        const dot = rail.lastElementChild;
-        if (a.revealed && L.index !== pos) {
-          dot.style.borderColor = Diagram.layerColor(L.index);
-          dot.style.color = Diagram.layerColor(L.index);
-        }
       });
       mk(N + 1, "S");
       mk(N + 2, "T");
@@ -224,11 +218,7 @@ var DocView = (() => {
       const gated = challenge && !a.revealed;
 
       const head = h("div", "layer-head");
-      const badge = h("span", "layer-num", "LAYER " + String(L.index).padStart(2, "0") + " / " + String(N).padStart(2, "0"));
-      const lc = Diagram.layerColor(L.index);
-      badge.style.color = lc;
-      badge.style.background = `color-mix(in srgb, ${lc} 13%, transparent)`;
-      head.appendChild(badge);
+      head.appendChild(h("span", "layer-num", "LAYER " + String(L.index).padStart(2, "0") + " / " + String(N).padStart(2, "0")));
       if (a.revealed) {
         const stamp = h("img", "enso-stamp");
         stamp.src = "assets/enso-gate.svg";
