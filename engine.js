@@ -717,6 +717,15 @@ function renderSettings(banner) {
   root.appendChild(h("h1", "title", "Keys, defaults, backups"));
   if (banner) root.appendChild(h("div", "narrowing-note", banner));
 
+  /* About / how it works → the landing page */
+  const ab = h("div", "set-block");
+  ab.appendChild(h("h3", null, "About Vitruvian"));
+  ab.appendChild(h("p", "note", "What it is, who it's for, and how to use it."));
+  const abBtn = h("button", "gbtn primary", "Open the intro →");
+  abBtn.onclick = () => { renderLanding(); show("landing"); };
+  ab.appendChild(abBtn);
+  root.appendChild(ab);
+
   /* API key */
   const kb = h("div", "set-block");
   kb.appendChild(h("h3", null, "Anthropic API key"));
