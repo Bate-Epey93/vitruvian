@@ -274,7 +274,9 @@ var Diagram = (() => {
        labels, matched by data-id) in the card's colour. kind = problem|solution.
        Empty/null clears. Used by the reader to link a card to its diagram parts. */
     function spotlight(ids, kind) {
-      svg.querySelectorAll(".dg-spot").forEach(e => e.classList.remove("dg-spot", "dg-spot-problem", "dg-spot-solution"));
+      // strip every dg-spot* class (problem/solution/load/future kinds), or a
+      // leftover kind class keeps its stroke on after toggle-off
+      svg.querySelectorAll(".dg-spot").forEach(e => [...e.classList].filter(c => c.indexOf("dg-spot") === 0).forEach(c => e.classList.remove(c)));
       if (!ids || !ids.length) { svg.classList.remove("dg-has-spot"); return; }
       const set = new Set(ids);
       svg.classList.add("dg-has-spot");

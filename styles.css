@@ -765,14 +765,14 @@ html,body{overscroll-behavior:none;}
 /* ── Diagram spotlight: dim the rest, light the linked parts ── */
 .dg-has-spot .dg-node,.dg-has-spot .dg-edge,.dg-has-spot .dg-elabel{opacity:.22;transition:opacity .18s;}
 .dg-has-spot .dg-node.dg-spot,.dg-has-spot .dg-edge.dg-spot,.dg-has-spot .dg-elabel.dg-spot{opacity:1;}
-.dg-spot-problem .dg-shape,.dg-spot-problem .dg-open{stroke:var(--failure)!important;stroke-width:3;}
-.dg-spot-problem .dg-epath{stroke:var(--failure)!important;stroke-width:3.4;}
+.dg-spot-problem .dg-shape,.dg-spot-problem .dg-open{stroke:var(--failure)!important;stroke-width:2.1;}
+.dg-spot-problem .dg-epath{stroke:var(--failure)!important;stroke-width:2.4;}
 .dg-spot-problem .dg-label,.dg-elabel.dg-spot-problem{fill:var(--failure)!important;}
-.dg-spot-solution .dg-shape,.dg-spot-solution .dg-open{stroke:var(--accent)!important;stroke-width:3;}
-.dg-spot-solution .dg-epath{stroke:var(--accent)!important;stroke-width:3.4;}
+.dg-spot-solution .dg-shape,.dg-spot-solution .dg-open{stroke:var(--accent)!important;stroke-width:2.1;}
+.dg-spot-solution .dg-epath{stroke:var(--accent)!important;stroke-width:2.4;}
 .dg-spot-solution .dg-label,.dg-elabel.dg-spot-solution{fill:var(--accent)!important;}
-.dg-spot-load .dg-shape,.dg-spot-load .dg-open{stroke:var(--money)!important;stroke-width:3;}
-.dg-spot-load .dg-epath{stroke:var(--money)!important;stroke-width:3.6;}
+.dg-spot-load .dg-shape,.dg-spot-load .dg-open{stroke:var(--money)!important;stroke-width:2.1;}
+.dg-spot-load .dg-epath{stroke:var(--money)!important;stroke-width:2.4;}
 .dg-spot-load .dg-label,.dg-elabel.dg-spot-load{fill:var(--money)!important;}
 @media (prefers-reduced-motion: reduce){.dg-has-spot .dg-node,.dg-has-spot .dg-edge,.dg-has-spot .dg-elabel{transition:none;}}
 
