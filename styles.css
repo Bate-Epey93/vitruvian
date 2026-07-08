@@ -43,6 +43,13 @@
   --money:#9a6212;
   --money-wash:#f7eedd;
   --dot:rgba(14,122,99,0.13);
+  /* diagram surfaces (flip in dark) */
+  --node-fill:#fbfaf6;
+  --diagram-ink:#141416;
+  --diagram-halo:#f2f0ea;
+  --gloss:rgba(255,255,255,.5);
+  --gloss-soft:rgba(255,255,255,.22);
+  --gloss-edge:rgba(255,255,255,.6);
   --sans:'Hanken Grotesk',-apple-system,BlinkMacSystemFont,sans-serif;
   --display:'Bricolage Grotesque','Hanken Grotesk',sans-serif;
   --mono:'JetBrains Mono','SF Mono',ui-monospace,monospace;
@@ -59,7 +66,7 @@ body{
   overflow:hidden;
 }
 ::selection{background:var(--accent);color:#fff;}
-button{font:inherit;}
+button{font:inherit;color:inherit;}   /* card buttons must inherit --ink, not UA black */
 
 .app{display:grid;grid-template-rows:auto 1fr;grid-template-columns:1fr;height:100vh;overflow:hidden;}
 .app > .topbar{grid-row:1;grid-column:1;}
@@ -183,9 +190,14 @@ h1.title{font-family:var(--display);font-weight:800;font-size:clamp(28px,4vw,40p
 }
 /* min-width:0 lets these flex items shrink below the SVG's min-width so
    diagram-scroll actually clips and pans, instead of overflowing the page */
-.diagram-scroll{flex:1;overflow:auto;padding:16px;display:grid;place-items:center;min-width:0;}
+/* vertical-center, horizontal-start: a wide diagram scrolls from its left
+   edge (centering an overflowing child hides its start in some browsers) */
+.diagram-scroll{flex:1;overflow:auto;padding:16px;display:grid;place-items:center start;min-width:0;overscroll-behavior-x:contain;}
+/* always-visible slim scrollbar so the pan affordance is discoverable */
+.diagram-scroll::-webkit-scrollbar{width:9px;height:9px;}
+.diagram-scroll::-webkit-scrollbar-thumb{background:var(--faint);border-radius:5px;border:2px solid var(--canvas);}
 .doc-pane{min-width:0;}
-.diagram-scroll svg{width:100%;height:auto;display:block;}
+.diagram-scroll svg{width:100%;height:auto;display:block;}   /* min-width (inline, natural) makes it overflow → scroll when the pane is narrow */
 .diagram-cap{
   font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;
   color:var(--muted);padding:9px 16px;border-top:1px solid var(--line-soft);
@@ -404,17 +416,17 @@ a{color:var(--accent);}
 .dg-lane.alt{fill:rgba(20,20,22,0.025);}
 .dg-lane-line{stroke:var(--line);stroke-width:1;stroke-dasharray:2 4;}
 .dg-lane-label{font-size:9px;font-weight:700;letter-spacing:1.6px;fill:var(--muted);}
-.dg-node .dg-shape{fill:#fbfaf6;stroke:#141416;stroke-width:1.5;}
-.dg-node .dg-fill{fill:#fbfaf6;stroke:none;}
-.dg-node .dg-open{stroke:#141416;stroke-width:1.5;}
-.dg-kind-actor .dg-shape{fill:#fbfaf6;}
-.dg-label{font-size:10.5px;fill:#141416;paint-order:stroke;stroke:#fbfaf6;stroke-width:3px;stroke-linejoin:round;}
-/* stroke COLOR comes inline from the origin layer; kind stays in the dash */
+.dg-node .dg-shape{fill:var(--node-fill);stroke:var(--diagram-ink);stroke-width:1.5;}
+.dg-node .dg-fill{fill:var(--node-fill);stroke:none;}
+.dg-node .dg-open{stroke:var(--diagram-ink);stroke-width:1.5;}
+.dg-kind-actor .dg-shape{fill:var(--node-fill);}
+.dg-label{font-size:10.5px;fill:var(--diagram-ink);paint-order:stroke;stroke:var(--node-fill);stroke-width:3px;stroke-linejoin:round;}
+/* stroke COLOR comes inline from the lane; kind stays in the dash */
 .dg-epath{stroke-width:1.5;}
 .dg-ekind-payload .dg-epath{stroke-width:2;}
 .dg-ekind-control .dg-epath{stroke-dasharray:5 4;}
 .dg-ekind-money .dg-epath{stroke-dasharray:1.5 3.5;}
-.dg-elabel{font-size:9px;paint-order:stroke;stroke:#f2f0ea;stroke-width:3.5px;stroke-linejoin:round;}
+.dg-elabel{font-size:9px;paint-order:stroke;stroke:var(--diagram-halo);stroke-width:3.5px;stroke-linejoin:round;}
 /* failure pulse must beat the inline layer color */
 .dg-broken .dg-shape,.dg-broken .dg-open{stroke:var(--failure)!important;animation:dg-pulse 1.1s ease-in-out infinite;}
 .dg-broken .dg-epath{stroke:var(--failure)!important;animation:dg-pulse 1.1s ease-in-out infinite;}
@@ -575,27 +587,27 @@ html,body{overscroll-behavior:none;}
 /* ── Wet-ink gloss: a specular skim on raised surfaces; paper stays matte ── */
 .bd-card,.ml-card,.set-block,.gate-card,.stress-card,.lens-box,.solution-card,
 .model-card,.your-answer,.sd-purpose,.sd-item,.ml-use,.analogy-box,.verdict-card,
-.narrowing-note,.predict-box,.gen-error{
-  background-image:linear-gradient(172deg,rgba(255,255,255,.5),rgba(255,255,255,0) 36%);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.6),
+.narrowing-note,.predict-box,.gen-error,.landing-card{
+  background-image:linear-gradient(172deg,var(--gloss),rgba(255,255,255,0) 36%);
+  box-shadow:inset 0 1px 0 var(--gloss-edge),
              0 1px 2px rgba(20,20,22,.05),
              0 10px 26px -18px rgba(20,20,22,.28);
 }
 .problem-card{
-  background-image:linear-gradient(172deg,rgba(255,255,255,.35),rgba(255,255,255,0) 36%);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.45), 0 10px 26px -18px rgba(194,47,47,.3);
+  background-image:linear-gradient(172deg,var(--gloss-soft),rgba(255,255,255,0) 36%);
+  box-shadow:inset 0 1px 0 var(--gloss-soft), 0 10px 26px -18px rgba(194,47,47,.3);
 }
 .dev-box{
   background-image:linear-gradient(168deg,rgba(255,255,255,.09),rgba(255,255,255,0) 40%),linear-gradient(135deg,var(--ink),#23232b);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.12), 0 12px 30px -18px rgba(0,0,0,.5);
 }
-.gbtn,.step-btn,.big-btn,.mbtn{
-  background-image:linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,0) 55%);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.5), 0 1px 2px rgba(20,20,22,.08);
+.gbtn,.step-btn,.mbtn{
+  background-image:linear-gradient(180deg,var(--gloss),rgba(255,255,255,0) 55%);
+  box-shadow:inset 0 1px 0 var(--gloss-edge), 0 1px 2px rgba(20,20,22,.08);
 }
 .gbtn.primary,.big-btn{
-  background-image:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0) 55%);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.25), 0 2px 6px rgba(20,20,22,.18);
+  background-image:linear-gradient(180deg,var(--gloss-soft),rgba(255,255,255,0) 55%);
+  box-shadow:inset 0 1px 0 var(--gloss-soft), 0 2px 6px rgba(20,20,22,.18);
 }
 .gbtn:active,.step-btn:active,.big-btn:active,.mbtn:active{transform:translateY(1px);box-shadow:inset 0 1px 2px rgba(20,20,22,.15);}
 
@@ -606,3 +618,93 @@ html,body{overscroll-behavior:none;}
 @media(max-width:860px){
   .diagram-pane{background:rgba(242,240,234,.82);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2);}
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   v1.2 — landing page, library sections, light/dark toggle
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Library section headers + empty panel ── */
+.lib-section-head{display:flex;align-items:baseline;gap:12px;margin:34px 0 4px;}
+.lib-section-head:first-of-type{margin-top:8px;}
+.lib-section-title{font-family:var(--display);font-weight:800;font-size:21px;letter-spacing:-.015em;}
+.lib-section-sub{font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+.card-grid{margin-top:12px;}
+.empty-panel{border:1px dashed var(--line);border-radius:10px;padding:20px 22px;margin-top:12px;background:var(--panel);}
+.empty-panel p{font-size:14px;color:var(--ink-soft);margin-top:6px;max-width:52ch;}
+
+/* ── Landing ── */
+.landing-inner{max-width:920px;}
+.landing-head{font-family:var(--display);font-weight:800;font-size:clamp(30px,5vw,50px);line-height:1.04;letter-spacing:-.025em;margin:6px 0 18px;}
+.landing-lede{font-size:clamp(16px,2.1vw,19px);line-height:1.6;color:var(--ink-soft);max-width:64ch;margin-bottom:36px;}
+.landing-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media(max-width:680px){.landing-grid{grid-template-columns:1fr;}}
+.landing-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px;}
+.landing-card .lc-head{display:flex;align-items:center;gap:11px;margin-bottom:9px;}
+.landing-card .lc-icon{font-size:20px;color:var(--accent);width:30px;height:30px;display:grid;place-items:center;border:1.5px solid var(--accent);border-radius:8px;flex-shrink:0;}
+.landing-card .lc-title{font-family:var(--display);font-weight:700;font-size:18px;}
+.landing-card p{font-size:14.5px;line-height:1.6;color:var(--ink-soft);}
+.landing-cta{margin:34px 0 12px;font-size:14px;padding:15px 30px;}
+.landing-foot{font-family:var(--mono);font-size:11px;letter-spacing:.5px;color:var(--muted);}
+
+/* ── Dark theme (toggle-driven, not media) ── */
+:root[data-theme="dark"]{
+  --paper:#0f0f12;
+  --canvas:#151519;
+  --panel:#1d1d24;
+  --ink:#ece9e1;
+  --ink-soft:#c4c2b9;
+  --muted:#8f8c82;
+  --faint:#54514a;
+  --line:#33333c;
+  --line-soft:#2a2a31;
+  --accent:#3fae90;
+  --accent-deep:#63c8ad;
+  --accent-wash:#16302a;
+  --failure:#e0645f;
+  --failure-wash:#331c1c;
+  --money:#d19a3d;
+  --money-wash:#2c2312;
+  --dot:rgba(63,174,144,0.11);
+  --node-fill:#20202a;
+  --diagram-ink:#d7d5cc;
+  --diagram-halo:#151519;
+  --gloss:rgba(255,255,255,.05);
+  --gloss-soft:rgba(255,255,255,.03);
+  --gloss-edge:rgba(255,255,255,.07);
+  --chrome:#0a0a0d;
+  --chrome-soft:#26262e;
+}
+:root[data-theme="dark"] ::selection{background:var(--accent);color:#0a0a0d;}
+/* the topbar is ALWAYS dark chrome — its text must stay light even though
+   --paper/--ink flip for the page body */
+:root[data-theme="dark"] .topbar{background:rgba(10,10,13,.86);border-bottom-color:#000;color:#e8e6de;}
+:root[data-theme="dark"] .tbtn{color:#cbc8bf;border-color:#3a3a44;}
+:root[data-theme="dark"] .tbtn:hover{color:#fff;border-color:var(--accent);}
+:root[data-theme="dark"] .brand-name{color:#e8e6de;}
+:root[data-theme="dark"] .aud-switch button:not(.on):hover{color:#e8e6de;}
+:root[data-theme="dark"] .menu-pop{background:rgba(29,29,36,.9);}
+:root[data-theme="dark"] .stepper{background:rgba(21,21,25,.75);}
+:root[data-theme="dark"] .station-link.active,
+:root[data-theme="dark"] .aud-switch{background:var(--chrome-soft);}
+:root[data-theme="dark"] .aud-switch{border-color:#3a3a44;}
+:root[data-theme="dark"] .step-dot.on,
+:root[data-theme="dark"] .scrub-seg.on{background:var(--chrome-soft);border-color:var(--chrome-soft);color:#fff;}
+:root[data-theme="dark"] .gbtn.primary,
+:root[data-theme="dark"] .flow-btn.next{background:var(--chrome-soft);border-color:var(--chrome-soft);color:#fff;}
+:root[data-theme="dark"] .big-btn{background:var(--accent);color:#08110e;}
+:root[data-theme="dark"] .big-btn:hover{background:var(--accent-deep);}
+:root[data-theme="dark"] .layer-name.dark,
+:root[data-theme="dark"] .modal{background:var(--panel);}
+:root[data-theme="dark"] .dev-box{background-image:linear-gradient(168deg,rgba(255,255,255,.04),rgba(255,255,255,0) 40%),linear-gradient(135deg,#0c0c10,#191920);}
+:root[data-theme="dark"] .problem-card{border-color:#4a2a2a;}
+:root[data-theme="dark"] .problem-card p{color:#e8b3b0;}
+:root[data-theme="dark"] .gen-error p{color:#e8b3b0;}
+:root[data-theme="dark"] .analogy-box{border-color:#4a3a1a;color:#d9b877;}
+:root[data-theme="dark"] .lib-note,
+:root[data-theme="dark"] .diagram-cap{color:var(--muted);}
+/* the failure-red diagram pulse needs a lighter red on dark paper */
+:root[data-theme="dark"] .dg-broken .dg-shape,
+:root[data-theme="dark"] .dg-broken .dg-open,
+:root[data-theme="dark"] .dg-broken .dg-epath{stroke:#e0645f!important;}
+:root[data-theme="dark"] .dg-broken .dg-label,
+:root[data-theme="dark"] .dg-broken .dg-elabel{fill:#e0645f!important;}

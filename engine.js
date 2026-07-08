@@ -31,13 +31,28 @@ async function flushSaves() {
 window.addEventListener("pagehide", () => { flushSaves(); });
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushSaves(); });
 
+/* ═══ Theme (light / dark toggle) ═══ */
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", t === "dark" ? "#0d0d10" : "#141416");
+  const btn = $("themeBtn");
+  if (btn) { btn.textContent = t === "dark" ? "☀" : "☾"; btn.setAttribute("aria-label", t === "dark" ? "Switch to light mode" : "Switch to dark mode"); }
+}
+async function toggleTheme() {
+  const next = (document.documentElement.dataset.theme === "dark") ? "light" : "dark";
+  applyTheme(next);
+  meta.theme = next;
+  await Store.saveMeta({ theme: next });
+}
+
 /* ═══ Screen switching ═══ */
-const SCREENS = ["library", "reader", "generate", "models", "drill", "settings"];
+const SCREENS = ["landing", "library", "reader", "generate", "models", "drill", "settings"];
 function show(screen) {
   SCREENS.forEach(s => { $("screen-" + s).hidden = s !== screen; });
   $("audSwitch").hidden = screen !== "reader";
   $("readerMenuBtn").hidden = screen !== "reader";
-  $("backBtn").hidden = screen === "library";
+  $("backBtn").hidden = screen === "library" || screen === "landing";
   $("menuPop").hidden = true;
   if (screen !== "reader") {
     if (currentView) currentView.destroy();   // cancel any pending debounce timer
@@ -48,11 +63,19 @@ function show(screen) {
 /* ═══ Boot ═══ */
 async function boot() {
   meta = await Store.init();
+  // theme: saved choice wins; otherwise follow the OS on first run
+  const initialTheme = meta.theme || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  applyTheme(initialTheme);
   await seedFlagships();
   wireTopbar();
   renderAudSwitch();
-  await renderLibrary();
-  show("library");
+  if (!meta.landingSeen) {
+    renderLanding();
+    show("landing");
+  } else {
+    await renderLibrary();
+    show("library");
+  }
   window.dispatchEvent(new Event("sdc:ready"));
 }
 
@@ -86,6 +109,7 @@ function wireTopbar() {
   $("modelsBtn").onclick = () => { renderModels(); show("models"); };
   $("drillBtn").onclick = () => { renderDrill(); show("drill"); };
   $("settingsBtn").onclick = () => { renderSettings(); show("settings"); };
+  $("themeBtn").onclick = () => toggleTheme();
   $("readerMenuBtn").onclick = e => { e.stopPropagation(); $("menuPop").hidden = !$("menuPop").hidden; };
   document.addEventListener("click", () => { $("menuPop").hidden = true; });
 }
@@ -105,7 +129,79 @@ function renderAudSwitch() {
   });
 }
 
+/* ═══ Landing (first-run explainer, §value-add) ═══ */
+function renderLanding() {
+  const root = $("screen-landing").firstElementChild;
+  root.textContent = "";
+  const L = COPY.landing;
+  root.appendChild(h("div", "kicker", L.kicker));
+  const head = h("h1", "landing-head");
+  L.headline.split("\n").forEach((line, i) => { if (i) head.appendChild(document.createElement("br")); head.appendChild(document.createTextNode(line)); });
+  root.appendChild(head);
+  root.appendChild(h("p", "landing-lede", L.lede));
+
+  const grid = h("div", "landing-grid");
+  L.sections.forEach(s => {
+    const card = h("div", "landing-card");
+    const hd = h("div", "lc-head");
+    hd.appendChild(h("span", "lc-icon", s.icon));
+    hd.appendChild(h("span", "lc-title", s.title));
+    card.appendChild(hd);
+    card.appendChild(h("p", null, s.body));
+    grid.appendChild(card);
+  });
+  root.appendChild(grid);
+
+  const cta = h("button", "big-btn landing-cta", L.cta);
+  cta.onclick = async () => {
+    await Store.saveMeta({ landingSeen: true });
+    meta.landingSeen = true;
+    await renderLibrary();
+    show("library");
+  };
+  root.appendChild(cta);
+  root.appendChild(h("p", "landing-foot", L.footnote));
+}
+
 /* ═══ Library ═══ */
+function sectionHead(title, sub) {
+  const wrap = h("div", "lib-section-head");
+  wrap.appendChild(h("h2", "lib-section-title", title));
+  if (sub) wrap.appendChild(h("span", "lib-section-sub", sub));
+  return wrap;
+}
+function cardGrid(recs) {
+  const grid = h("div", "card-grid");
+  recs.forEach(rec => {
+    const card = h("button", "bd-card");
+    card.appendChild(h("div", "bd-name", rec.system));
+    const metaRow = h("div", "bd-meta");
+    metaRow.appendChild(h("span", "chip" + (rec.source === "flagship" ? " flagship" : ""), rec.source === "flagship" ? "sample" : "your study"));
+    metaRow.appendChild(h("span", "chip", rec.doc.layers.length + " layers"));
+    card.appendChild(metaRow);
+    const foot = h("div", "bd-foot");
+    const n = rec.doc.layers.length;
+    const done = rec.doc.layers.filter(L => rec.attempts[L.index] && rec.attempts[L.index].revealed).length;
+    const pct = Math.round(100 * done / n);
+    foot.appendChild(h("span", "bd-last", rec.lastOpen ? "opened " + timeAgo(rec.lastOpen) : "new"));
+    if (pct === 100) {
+      const stamp = h("img", "enso-stamp card-stamp");
+      stamp.src = "assets/enso-complete.svg";
+      stamp.alt = "Study complete";
+      foot.appendChild(stamp);
+    } else {
+      const ring = h("div", "ring");
+      ring.style.background = `conic-gradient(var(--accent) ${pct * 3.6}deg, var(--line-soft) 0deg)`;
+      ring.appendChild(h("span", null, pct + ""));
+      foot.appendChild(ring);
+    }
+    card.appendChild(foot);
+    card.onclick = () => openReader(rec.id);
+    grid.appendChild(card);
+  });
+  return grid;
+}
+
 async function renderLibrary() {
   const root = $("screen-library").firstElementChild;
   root.textContent = "";
@@ -135,38 +231,23 @@ async function renderLibrary() {
   root.appendChild(bar);
 
   const all = (await Store.getBreakdowns()).sort((a, b) => (b.lastOpen || b.created) - (a.lastOpen || a.created));
-  const flagOnly = all.every(b => b.source === "flagship");
-  if (flagOnly) root.appendChild(h("p", "lib-note", COPY.libraryFlagshipNote));
+  const flagships = all.filter(b => b.source === "flagship");
+  const yours = all.filter(b => b.source !== "flagship");
 
-  const grid = h("div", "card-grid");
-  all.forEach(rec => {
-    const card = h("button", "bd-card");
-    card.appendChild(h("div", "bd-name", rec.system));
-    const metaRow = h("div", "bd-meta");
-    metaRow.appendChild(h("span", "chip" + (rec.source === "flagship" ? " flagship" : ""), rec.source === "flagship" ? "flagship" : "your study"));
-    metaRow.appendChild(h("span", "chip", rec.doc.layers.length + " layers"));
-    card.appendChild(metaRow);
-    const foot = h("div", "bd-foot");
-    const n = rec.doc.layers.length;
-    const done = rec.doc.layers.filter(L => rec.attempts[L.index] && rec.attempts[L.index].revealed).length;
-    const pct = Math.round(100 * done / n);
-    foot.appendChild(h("span", "bd-last", rec.lastOpen ? "opened " + timeAgo(rec.lastOpen) : "new"));
-    if (pct === 100) {
-      const stamp = h("img", "enso-stamp card-stamp");
-      stamp.src = "assets/enso-complete.svg";
-      stamp.alt = "Study complete";
-      foot.appendChild(stamp);
-    } else {
-      const ring = h("div", "ring");
-      ring.style.background = `conic-gradient(var(--accent) ${pct * 3.6}deg, var(--line-soft) 0deg)`;
-      ring.appendChild(h("span", null, pct + ""));
-      foot.appendChild(ring);
-    }
-    card.appendChild(foot);
-    card.onclick = () => openReader(rec.id);
-    grid.appendChild(card);
-  });
-  root.appendChild(grid);
+  // Your own studies first (once you have any), then the samples below.
+  if (yours.length) {
+    root.appendChild(sectionHead(COPY.yoursHeading, yours.length + " stud" + (yours.length > 1 ? "ies" : "y")));
+    root.appendChild(cardGrid(yours));
+  }
+  root.appendChild(sectionHead(COPY.sampleHeading, null));
+  root.appendChild(h("p", "lib-note", COPY.sampleNote));
+  root.appendChild(cardGrid(flagships));
+  if (!yours.length) {
+    const empty = h("div", "empty-panel");
+    empty.appendChild(h("div", "mono-label", COPY.yoursHeading));
+    empty.appendChild(h("p", null, COPY.yoursEmpty));
+    root.appendChild(empty);
+  }
 
   // quiet foundation of future sharing: single-breakdown import
   const importRow = h("div", "gate-actions");
@@ -187,6 +268,9 @@ async function renderLibrary() {
     } catch (e) { alert("Could not import: " + e.message); }
   });
   importRow.appendChild(imp);
+  const about = h("button", "gbtn", "About Vitruvian");
+  about.onclick = () => { renderLanding(); show("landing"); };
+  importRow.appendChild(about);
   root.appendChild(importRow);
 }
 
@@ -708,6 +792,7 @@ function renderSettings(banner) {
       const results = await Store.importAll(state);
       const bad = results.filter(r => !r.ok);
       meta = await Store.getMeta();
+      applyTheme(meta.theme || document.documentElement.dataset.theme);   // a restored backup may carry a different theme
       renderAudSwitch();
       toast(`Restored ${results.length - bad.length}/${results.length} breakdowns`);
       if (bad.length) alert("Skipped invalid entries:\n" + bad.map(r => `${r.system || r.id}: ${r.errors[0]}`).join("\n"));

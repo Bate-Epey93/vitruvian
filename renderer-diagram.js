@@ -155,7 +155,9 @@ var Diagram = (() => {
       class: "dg-svg", role: "img",
       "aria-label": `System diagram: ${doc.meta.system}`
     }, container);
-    svg.style.minWidth = Math.min(layout.width, 760) + "px";
+    // render at natural width so dense diagrams keep readable node sizes and
+    // the pane scrolls horizontally, rather than squishing everything to fit
+    svg.style.minWidth = layout.width + "px";
 
     // one arrowhead marker per lane color + the failure marker
     const defs = el("defs", {}, svg);

@@ -16,7 +16,7 @@
 /* ---------- CONFIG ---------- */
 var CONFIG = {
   toolName: "Vitruvian",
-  tagline:  "Rebuild it to understand it",
+  tagline:  "The anatomy of everyday systems, simplified",
   accent:     "#0e7a63",
   accentDeep: "#0a5748",
   accentWash: "#e2f0ec",
@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.1.0"
+  appVersion: "1.2.0"
 };
 
 /* ---------- MODEL_LIBRARY · the 14 thinking models ----------
@@ -122,7 +122,10 @@ var MODEL_LIBRARY = [
 /* ---------- UI COPY ---------- */
 var COPY = {
   libraryTitle: "Library",
-  libraryFlagshipNote: "Start with these — they're the bar.",
+  sampleHeading: "Sample Deconstructs",
+  sampleNote: "Three worked examples — the bar for what a study looks like.",
+  yoursHeading: "Your Deconstructions",
+  yoursEmpty: "Nothing here yet. Name any system above and Vitruvian will take it apart, failure by failure.",
   deconstructPlaceholder: "Name a system to study…",
   deconstructBtn: "Deconstruct",
   audienceModes: [
@@ -143,6 +146,25 @@ var COPY = {
   offlineGenNote: "Generation needs a connection. Reading never does.",
   bridgeToast: "Reference notes copied — paste into UX-First Studio's Structure It station.",
   studioUrl: "https://bate-epey93.github.io/uxfirst-studio/",
+  /* ---------- LANDING (first-run explainer) ---------- */
+  landing: {
+    kicker: "Welcome to Vitruvian",
+    headline: "Take anything apart.\nPut it back together. Now you get it.",
+    lede: "Vitruvian studies the systems you use every day — the railway, WhatsApp, YouTube, your bank — and rebuilds each one from scratch, one failure at a time. You don't read a description. You watch a working thing get invented in front of you.",
+    sections: [
+      { icon: "◱", title: "What it is",
+        body: "A study tool for systems. Pick something — a railway, a chat app, an ATM — and Vitruvian strips it to its bones, then rebuilds it layer by layer. Every layer exists because the previous version broke in a specific, often historical way (yes, real train crashes). A diagram grows beside the text as the system comes together." },
+      { icon: "◑", title: "Who it's for",
+        body: "Curious people who want to understand how things actually work, systems-design enthusiasts, and developers prepping for architecture interviews. If you've ever thought \"but WHY is it built that way?\", this is for you. No jargon required — three reading levels, from plain-English to engineer." },
+      { icon: "◈", title: "Why it works",
+        body: "You remember what you rebuild, not what you're told. Before each reveal, Vitruvian hands you the problem and asks you to design the fix yourself. Getting it a little wrong is the point — that's the moment the idea sticks. A named thinking model travels with every layer, so you collect reusable patterns, not trivia." },
+      { icon: "⛌", title: "How to use it",
+        body: "Open a sample study and just read — the diagram and gates guide you. Feeling brave? Answer the challenge before you reveal it. Bring your own Anthropic API key (Settings) and Vitruvian will deconstruct any system you name. Everything lives on your device and works offline; install it to your home screen and take it anywhere." }
+    ],
+    cta: "Start exploring →",
+    footnote: "No account. No cloud. Your studies stay on this device."
+  },
+
   genPhases: {
     start:      "Reading the system…",
     strip_down: "Stripping it down…",
