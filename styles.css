@@ -86,7 +86,10 @@ button{font:inherit;color:inherit;}   /* card buttons must inherit --ink, not UA
   border-bottom:1px solid #000;
   position:relative;z-index:40;
 }
-.brand{display:flex;align-items:center;gap:11px;cursor:pointer;-webkit-user-select:none;user-select:none;min-width:0;}
+.brand{display:flex;align-items:center;gap:11px;cursor:pointer;-webkit-user-select:none;user-select:none;min-width:0;overflow:hidden;flex-shrink:1;}
+.brand > div{min-width:0;overflow:hidden;}
+.brand-name,.brand-sub{overflow:hidden;text-overflow:ellipsis;}   /* clip, never spill under siblings */
+body.reading .brand-sub{display:none;}   /* the tagline is redundant while reading — reclaim ~450px for the audience switch */
 .brand-mark{
   width:26px;height:26px;border:2px solid var(--accent);
   display:grid;place-items:center;flex-shrink:0;position:relative;
@@ -528,15 +531,19 @@ g.dg-node.dg-enter{animation:dg-fade .3s ease both;}
   .aud-switch button{padding:6px 9px;}
   .deconstruct-bar{flex-direction:column;}
 }
-/* phones: compact the audience switch to single letters and tighten the row so
-   the reader topbar (back + brand + B/E/D + Models/Drill/theme/Settings/menu)
-   fits without overflowing the viewport */
-@media(max-width:560px){
-  .topbar{gap:6px;padding:0 9px;}
+/* Below 960px the reader topbar (back + brand + audience switch + Models/Drill/
+   theme/Settings/menu) gets tight, so collapse the audience switch to single
+   letters (B/E/D) — keeps the brand name intact instead of truncating it. */
+@media(max-width:960px){
   .aud-full{display:none;}
   .aud-abbr{display:inline;}
   .aud-switch{padding:2px;gap:1px;}
-  .aud-switch button{padding:6px 8px;letter-spacing:0;}
+  .aud-switch button{padding:6px 9px;letter-spacing:0;}
+}
+/* phones: tighten the whole row further */
+@media(max-width:560px){
+  .topbar{gap:6px;padding:0 9px;}
+  .aud-switch button{padding:6px 8px;}
   .tbtn{padding:7px 8px;}
   .tbtn.icon-only{padding:7px 8px;}
 }

@@ -50,6 +50,7 @@ async function toggleTheme() {
 const SCREENS = ["landing", "library", "reader", "generate", "models", "drill", "settings"];
 function show(screen) {
   SCREENS.forEach(s => { $("screen-" + s).hidden = s !== screen; });
+  document.body.classList.toggle("reading", screen === "reader");   // frees topbar room for the audience switch
   $("audSwitch").hidden = screen !== "reader";
   $("readerMenuBtn").hidden = screen !== "reader";
   $("backBtn").hidden = screen === "library" || screen === "landing";
