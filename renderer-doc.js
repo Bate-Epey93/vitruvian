@@ -405,7 +405,10 @@ var DocView = (() => {
       setAudience(a) { audience = a; render._keepScroll = true; render(); },
       setChallenge(c) { challenge = c; render(); },
       goToLayer(idx) { goTo(idx); },
-      get position() { return pos; }
+      get position() { return pos; },
+      // cancel the pending debounce so a late timer can't overwrite a fresher
+      // record after this view is torn down / the breakdown is re-opened
+      destroy() { clearTimeout(saveTimer); }
     };
   }
 

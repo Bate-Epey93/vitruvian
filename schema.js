@@ -78,6 +78,18 @@ var Schema = (() => {
       allIds.add(id);
       return true;
     }
+    // Cell occupancy is checked at EVERY state the renderer shows (baseline
+    // and after each layer's diff), not just the final one — the diagram
+    // staggers over co-located nodes per state, so a cell that is legible at
+    // the end can still stack 3+ nodes during an earlier layer/gate view.
+    function checkCells(where) {
+      const c = {};
+      liveNodes.forEach(n => {
+        const k = n.lane + "·" + n.order;
+        c[k] = (c[k] || 0) + 1;
+        if (c[k] === B.nodesPerCellMax + 1) err(`${where}: more than ${B.nodesPerCellMax} nodes share lane "${n.lane}" order ${n.order}`);
+      });
+    }
     function checkNode(n, where) {
       if (!isObj(n)) { err(`${where}: node is not an object`); return; }
       if (!claimId(n.id, where)) return;
@@ -116,6 +128,7 @@ var Schema = (() => {
       else vis.nodes.forEach(n => checkNode(n, "visual.nodes"));
       if (!isArr(vis.edges)) err("visual.edges must be an array");
       else vis.edges.forEach(e => checkEdge(e, "visual.edges"));
+      checkCells("visual (layer 0)");
     }
 
     /* ── layers ── */
@@ -177,17 +190,12 @@ var Schema = (() => {
       });
       if (isArr(diff.add_nodes)) diff.add_nodes.forEach(n => checkNode(n, `${w}.diff.add_nodes`));
       if (isArr(diff.add_edges)) diff.add_edges.forEach(e => checkEdge(e, `${w}.diff.add_edges`));
+      checkCells(`${w} view`);           // this state is rendered — check its cells
     });
 
-    /* ── capacity at final state ── */
+    /* ── total capacity (final state) ── */
     if (totalNodes > B.totalNodesMax) err(`diagram has ${totalNodes} nodes total; max ${B.totalNodesMax} — abstract harder`);
     if (totalEdges > B.totalEdgesMax) err(`diagram has ${totalEdges} edges total; max ${B.totalEdgesMax} — abstract harder`);
-    const cells = {};
-    liveNodes.forEach(n => {
-      const key = n.lane + "·" + n.order;
-      cells[key] = (cells[key] || 0) + 1;
-      if (cells[key] === B.nodesPerCellMax + 1) err(`more than ${B.nodesPerCellMax} nodes share lane "${n.lane}" order ${n.order} at final state`);
-    });
 
     /* ── stress_tests ── */
     const st = doc.stress_tests;

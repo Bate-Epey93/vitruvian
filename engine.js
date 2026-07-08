@@ -21,10 +21,12 @@ function $(id) { return document.getElementById(id); }
 let meta = {};                    // cached meta map
 let currentView = null;           // DocView instance when reading
 let currentRec = null;            // open breakdown record
-let pendingSaveRec = null;        // for pagehide flush
 
-async function flushSaves() {     // pwa.js calls this before update reload
-  if (pendingSaveRec) { await Store.saveBreakdownLight(pendingSaveRec); pendingSaveRec = null; }
+// The reader mutates currentRec in place (attempts/progress) and debounces the
+// IndexedDB write. On teardown — pagehide, tab background, PWA update reload —
+// flush the live record so an answer typed within the debounce window survives.
+async function flushSaves() {
+  if (currentRec) await Store.saveBreakdownLight(currentRec);
 }
 window.addEventListener("pagehide", () => { flushSaves(); });
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushSaves(); });
@@ -37,7 +39,10 @@ function show(screen) {
   $("readerMenuBtn").hidden = screen !== "reader";
   $("backBtn").hidden = screen === "library";
   $("menuPop").hidden = true;
-  if (screen !== "reader") { currentView = null; currentRec = null; }
+  if (screen !== "reader") {
+    if (currentView) currentView.destroy();   // cancel any pending debounce timer
+    currentView = null; currentRec = null;
+  }
 }
 
 /* ═══ Boot ═══ */
@@ -209,6 +214,7 @@ function toast(msg) {
 async function openReader(id, layerIndex) {
   const rec = await Store.getBreakdown(id);
   if (!rec) return;
+  if (currentView) currentView.destroy();   // re-open (e.g. from Models index) skips show()'s teardown
   currentRec = rec;
   rec.lastOpen = Date.now();
   await Store.saveBreakdownLight(rec);
@@ -241,7 +247,7 @@ async function openReader(id, layerIndex) {
     docPane, diagram, rec,
     audience: meta.audienceMode || "enthusiast",
     challenge: challengeOn,
-    onSave(r) { pendingSaveRec = null; Store.saveBreakdownLight(r); },
+    onSave(r) { Store.saveBreakdownLight(r); },
     canCompare() {
       if (!navigator.onLine) return { ok: false, reason: "You're offline. " + COPY.gateCompareOffline };
       if (!meta.apiKey) return { ok: false, reason: "No API key set. " + COPY.gateCompareOffline };

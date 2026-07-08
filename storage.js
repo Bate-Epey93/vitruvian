@@ -142,10 +142,15 @@ var Store = (() => {
       const local = await getMetaMap();
       const kept = {};
       LOCAL_ONLY_META.forEach(k => { if (local[k] !== undefined) kept[k] = local[k]; });
+      // Device-local keys (esp. apiKey) must come only from THIS device, never
+      // from the imported file — a shared/hand-edited backup can't plant a key.
+      const incoming = Object.fromEntries(
+        Object.entries(state.meta || {}).filter(([k]) => !LOCAL_ONLY_META.includes(k))
+      );
       await write(["breakdowns", "meta"], (bs, ms) => {
         bs.clear(); ms.clear();
         good.forEach(b => bs.put(b));
-        Object.entries({ ...(state.meta || {}), ...kept, schemaVersion: SCHEMA_VERSION }).forEach(([key, value]) => {
+        Object.entries({ ...incoming, ...kept, schemaVersion: SCHEMA_VERSION }).forEach(([key, value]) => {
           if (value !== undefined) ms.put({ key, value });
         });
       });

@@ -39,7 +39,7 @@ var Generator = (() => {
   }
 
   /* ── streaming call; returns full text; reports phases ── */
-  async function streamCall(apiKey, modelId, body, onProgress) {
+  async function streamCall(apiKey, modelId, body, onProgress, seen = new Set()) {
     if (!navigator.onLine) throw fail("offline", COPY.offlineGenNote);
     let res;
     try {
@@ -51,8 +51,8 @@ var Generator = (() => {
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
-    let buf = "", text = "", tokens = 0;
-    const seen = new Set();
+    let buf = "", text = "", tokens = 0;   // `seen` (phase keys already emitted) is threaded in so the
+                                           // repair call doesn't replay strip_down…transfer over "repair"
     const PHASES = [
       ['"strip_down"', "strip_down"],
       ['"visual"', "visual"],
@@ -106,7 +106,8 @@ var Generator = (() => {
     const base = { max_tokens: 16000, system: sys, messages: [{ role: "user", content: userMsg }] };
 
     if (onProgress) onProgress({ phase: "start", tokens: 0 });
-    const text = await streamCall(apiKey, modelId, base, onProgress);
+    const seen = new Set();                                 // shared across both calls: no phase replays on repair
+    const text = await streamCall(apiKey, modelId, base, onProgress, seen);
 
     let doc, errors = null;
     try {
@@ -124,8 +125,10 @@ var Generator = (() => {
     const repairMsg = `Your document failed validation with these exact errors:\n${errors.map(e => "- " + e).join("\n")}\n\nReturn the corrected COMPLETE JSON document only — no prose, no code fences.`;
     const text2 = await streamCall(apiKey, modelId, {
       ...base,
-      messages: [...base.messages, { role: "assistant", content: text }, { role: "user", content: repairMsg }]
-    }, onProgress);
+      // omit the assistant turn when the first response was blank — an empty
+      // content block would make a malformed request instead of retrying cleanly
+      messages: [...base.messages, ...(text.trim() ? [{ role: "assistant", content: text }] : []), { role: "user", content: repairMsg }]
+    }, onProgress, seen);
 
     const doc2 = parseDoc(text2);                          // throws kind:"invalid" with raw attached
     const res2 = Schema.validate(doc2);

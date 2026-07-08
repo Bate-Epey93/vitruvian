@@ -1,4 +1,4 @@
-const CACHE_VERSION = "sdc-v1.0.0";   // bump on EVERY deploy, including content edits
+const CACHE_VERSION = "sdc-v1.0.1";   // bump on EVERY deploy, including content edits
 const SHELL = [
   "./",
   "./index.html",
