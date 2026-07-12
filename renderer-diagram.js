@@ -288,5 +288,39 @@ var Diagram = (() => {
     return { show, spotlight, layout, laneColor };
   }
 
-  return { mount, stateAt, computeLayout };
+  /* ── Legend: a compact always-visible key under the diagram (brings the
+     tutorial's grammar to the reader). Pure DOM/SVG, themed via CSS vars. ── */
+  function legend() {
+    const wrap = document.createElement("div");
+    wrap.className = "dg-legend";
+    const item = (svgBuild, label) => {
+      const it = document.createElement("span");
+      it.className = "dgl-item";
+      const svg = el("svg", { viewBox: "0 0 30 16", class: "dgl-glyph", "aria-hidden": "true" });
+      svgBuild(svg);
+      it.appendChild(svg);
+      const t = document.createElement("span");
+      t.textContent = label;
+      it.appendChild(t);
+      wrap.appendChild(it);
+    };
+    // node kinds
+    item(s => el("circle", { cx: 15, cy: 8, r: 5.5, class: "dgl-shape" }, s), "actor");
+    item(s => el("path", { d: "M 6 3 L 6 13 L 24 13 L 24 3", fill: "none", class: "dgl-shape" }, s), "storage");
+    item(s => el("rect", { x: 6, y: 3, width: 18, height: 10, rx: 1.5, class: "dgl-shape" }, s), "process");
+    item(s => el("rect", { x: 6, y: 3, width: 18, height: 10, rx: 5, class: "dgl-shape" }, s), "channel");
+    // edge kinds (pattern = kind; colour follows the source lane)
+    item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line", "stroke-width": 2 }, s), "flow");
+    item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line", "stroke-dasharray": "4 3" }, s), "control");
+    item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line", "stroke-dasharray": "1.5 3" }, s), "money");
+    // failure pulse
+    item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line dgl-broken", "stroke-width": 2 }, s), "breaks next");
+    const note = document.createElement("span");
+    note.className = "dgl-note";
+    note.textContent = "colour = lane";
+    wrap.appendChild(note);
+    return wrap;
+  }
+
+  return { mount, stateAt, computeLayout, legend };
 })();

@@ -17,6 +17,20 @@
 var Generator = (() => {
   const API = "https://api.anthropic.com/v1/messages";
 
+  /* ── model-aware tuning ──
+     max_tokens is a hard ceiling on THINKING + OUTPUT combined. Models that
+     default to adaptive thinking (sonnet-5) silently spend part of the budget
+     reasoning, so the ceiling must leave room for both. output_config.effort
+     caps that thinking spend (faster + cheaper) — but it 400s on models that
+     don't support it (haiku-4-5, sonnet-4-5 and older), so gate by family.
+     The model field is free text; unknown ids just get no effort param. */
+  function effortFor(modelId, speed) {
+    const m = (modelId || "").toLowerCase();
+    const supportsEffort = /sonnet-5|opus-4-6|opus-4-7|opus-4-8|fable|mythos/.test(m);
+    if (!supportsEffort) return {};
+    return { output_config: { effort: speed === "fast" ? "low" : "medium" } };
+  }
+
   function headers(apiKey) {
     return {
       "content-type": "application/json",
@@ -100,10 +114,14 @@ var Generator = (() => {
   }
 
   /* ── the full pipeline: generate → validate → one repair ── */
-  async function generate({ apiKey, modelId, system, focus, onProgress }) {
+  async function generate({ apiKey, modelId, system, focus, speed, onProgress }) {
     const sys = SKILL.text();
     const userMsg = `Deconstruct this system: ${system}` + (focus ? `\n\nFocus note from the reader: ${focus}` : "");
-    const base = { max_tokens: 16000, system: sys, messages: [{ role: "user", content: userMsg }] };
+    // 32k ceiling: a full breakdown runs ~8-15k tokens of JSON, and adaptive
+    // thinking shares the same budget — 16k truncated real generations.
+    // Streaming is already on, so a large ceiling is safe (billed per token
+    // actually generated, not per the cap).
+    const base = { max_tokens: 32000, ...effortFor(modelId, speed), system: sys, messages: [{ role: "user", content: userMsg }] };
 
     if (onProgress) onProgress({ phase: "start", tokens: 0 });
     const seen = new Set();                                 // shared across both calls: no phase replays on repair
@@ -142,9 +160,11 @@ var Generator = (() => {
     const p = SKILL.comparePrompt(layer, attempt);
     let res;
     try {
+      // 1500 not 400: on adaptive-thinking models the ceiling covers thinking
+      // + verdict together — 400 would truncate the verdict mid-sentence
       res = await fetch(API, {
         method: "POST", headers: headers(apiKey),
-        body: JSON.stringify({ model: modelId, max_tokens: 400, system: p.system, messages: [{ role: "user", content: p.user }] })
+        body: JSON.stringify({ model: modelId, max_tokens: 1500, ...effortFor(modelId, "fast"), system: p.system, messages: [{ role: "user", content: p.user }] })
       });
     } catch (e) { throw fail("offline", "Could not reach Anthropic — check your connection."); }
     if (!res.ok) throw await httpError(res);

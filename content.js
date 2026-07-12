@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.4.0",
+  appVersion: "1.5.0",
   flagshipVersion: 2                     // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
 };
 
@@ -157,16 +157,16 @@ var COPY = {
   landing: {
     kicker: "Welcome to Vitruvian",
     headline: "Take anything apart.\nPut it back together. Now you get it.",
-    lede: "Vitruvian studies the systems you use every day — the railway, WhatsApp, YouTube, your bank — and rebuilds each one from scratch, one failure at a time.",
+    lede: "Everyday systems — the railway, WhatsApp, YouTube — rebuilt from scratch, one failure at a time.",
     sections: [
       { icon: "whatItIs", title: "What it is",
-        body: "A study tool for systems. Pick something — a railway, a chat app, an ATM — and Vitruvian strips it to its bones, then rebuilds it layer by layer. Every layer exists because the previous version broke in a specific, often historical way (yes, real train crashes). A diagram grows beside the text as the system comes together." },
+        body: "Pick a system. Vitruvian strips it to its bones, then rebuilds it layer by layer — each layer born from a real failure (yes, real train crashes). A diagram grows as it comes together." },
       { icon: "whoFor", title: "Who it's for",
-        body: "Curious people who want to understand how things actually work, systems-design enthusiasts, and developers prepping for architecture interviews. If you've ever thought \"but WHY is it built that way?\", this is for you. No jargon required — three reading levels, from plain-English to engineer." },
+        body: "Curious minds, systems-design enthusiasts, and developers prepping for architecture interviews. Three reading levels, from plain English to engineer." },
       { icon: "whyWorks", title: "Why it works",
-        body: "You remember what you rebuild, not what you're told. Before each reveal, Vitruvian hands you the problem and asks you to design the fix yourself. Getting it a little wrong is the point — that's the moment the idea sticks. A named thinking model travels with every layer, so you collect reusable patterns, not trivia." },
+        body: "You remember what you rebuild. Design each fix yourself before the reveal — and collect the named thinking models that repeat across systems." },
       { icon: "howTo", title: "How to use it",
-        body: "Open a sample study and just read — the diagram and gates guide you. Feeling brave? Answer the challenge before you reveal it. Bring your own Anthropic API key (Settings) and Vitruvian will deconstruct any system you name. Everything lives on your device and works offline; install it to your home screen and take it anywhere." }
+        body: "Start with a sample study. Add your Anthropic API key in Settings to deconstruct anything you name. Works offline; installs to your home screen." }
     ],
     cta: "Start exploring →",
     footnote: "No account. No cloud. Your studies stay on this device."

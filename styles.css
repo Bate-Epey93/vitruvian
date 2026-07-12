@@ -190,7 +190,9 @@ h1.title{font-family:var(--display);font-weight:800;font-size:clamp(28px,4vw,40p
 .ring span{background:var(--panel);border-radius:50%;width:22px;height:22px;display:grid;place-items:center;}
 
 /* ── Reader ── */
-.reader{display:grid;grid-template-columns:45% 1fr;height:100%;overflow:hidden;min-width:0;}
+/* diagram gets the lion's share; the text pane is capped so the growing
+   system stays the protagonist on wide screens */
+.reader{display:grid;grid-template-columns:1fr clamp(340px,40%,560px);height:100%;overflow:hidden;min-width:0;}
 .diagram-pane{
   border-right:1px solid var(--line);background:var(--canvas);
   display:flex;flex-direction:column;overflow:hidden;min-width:0;
@@ -212,7 +214,7 @@ h1.title{font-family:var(--display);font-weight:800;font-size:clamp(28px,4vw,40p
 }
 .doc-pane{overflow-y:auto;background:
   radial-gradient(circle, var(--dot) 1.1px, transparent 1.6px) 0 0/22px 22px, var(--canvas);}
-.doc-inner{max-width:640px;margin:0 auto;padding:34px 36px 120px;}
+.doc-inner{max-width:560px;margin:0 auto;padding:28px 26px 120px;}
 
 @media(max-width:860px){
   .reader{display:flex;flex-direction:column;}
@@ -806,3 +808,123 @@ html,body{overscroll-behavior:none;}
 
 .tut-dev-intro{font-size:13.5px;color:#c9c6bd;margin:0 0 10px;line-height:1.55;}
 :root[data-theme="dark"] .tut-chip-lens{background:var(--panel);}
+
+/* ═══════════════════════════════════════════════════════════════
+   v1.5 — LIQUID GLASS MATERIALS + DIAGRAM LEGEND
+   Per Apple's material guidance: translucent layers with a bright
+   top edge (light catching the material), blur+saturate underlay,
+   heavier material = more blur + deeper shadow. Text on glass gets
+   vibrancy from the existing high-contrast ink. Solid fallbacks
+   for no-backdrop-filter and prefers-reduced-transparency.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root{
+  --glass:rgba(251,250,246,.58);
+  --glass-heavy:rgba(251,250,246,.8);
+  --glass-edge:rgba(255,255,255,.65);
+  --glass-shadow:0 10px 28px -14px rgba(20,20,22,.22), 0 1px 2px rgba(20,20,22,.05);
+  --glass-blur:14px;
+}
+:root[data-theme="dark"]{
+  --glass:rgba(34,34,44,.5);
+  --glass-heavy:rgba(30,30,40,.74);
+  --glass-edge:rgba(255,255,255,.09);
+  --glass-shadow:0 12px 30px -14px rgba(0,0,0,.6), 0 1px 2px rgba(0,0,0,.3);
+}
+
+/* ── medium material: cards ── */
+.bd-card,.ml-card,.set-block,.landing-card,.gate-card,.stress-card,.lens-box,
+.ml-use,.empty-panel,.tut-card,.solution-card,.your-answer,.sd-purpose,.sd-item{
+  background-color:var(--glass);
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(160%);
+  backdrop-filter:blur(var(--glass-blur)) saturate(160%);
+  box-shadow:inset 0 1px 0 var(--glass-edge), var(--glass-shadow);
+}
+/* tinted cards keep their semantic wash, made translucent */
+.problem-card{background-color:color-mix(in srgb, var(--failure-wash) 68%, transparent);}
+.model-card,.verdict-card,.narrowing-note{background-color:color-mix(in srgb, var(--accent-wash) 68%, transparent);}
+.scale-band,.analogy-box,.gate-hint{background-color:color-mix(in srgb, var(--money-wash) 68%, transparent);}
+.problem-card,.model-card,.verdict-card,.narrowing-note,.scale-band,.analogy-box,.gate-hint{
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(160%);
+  backdrop-filter:blur(var(--glass-blur)) saturate(160%);
+  box-shadow:inset 0 1px 0 var(--glass-edge), var(--glass-shadow);
+}
+
+/* ── heavy material: floating chrome (menus, modals, sticky bars) ── */
+.menu-pop,.modal{
+  background:var(--glass-heavy);
+  -webkit-backdrop-filter:blur(24px) saturate(180%);
+  backdrop-filter:blur(24px) saturate(180%);
+  box-shadow:inset 0 1px 0 var(--glass-edge), 0 24px 60px -20px rgba(0,0,0,.4);
+}
+.stepper{
+  background:var(--glass-heavy);
+  -webkit-backdrop-filter:blur(18px) saturate(170%);
+  backdrop-filter:blur(18px) saturate(170%);
+  border-radius:0 0 10px 10px;
+  box-shadow:inset 0 1px 0 var(--glass-edge), 0 8px 18px -14px rgba(20,20,22,.25);
+  padding-left:8px;padding-right:8px;
+}
+.diagram-cap,.dg-legend,.scrub-wrap{
+  background:var(--glass-heavy);
+  -webkit-backdrop-filter:blur(14px) saturate(160%);
+  backdrop-filter:blur(14px) saturate(160%);
+}
+@media(max-width:860px){
+  .diagram-pane{
+    background:color-mix(in srgb, var(--canvas) 72%, transparent);
+    -webkit-backdrop-filter:blur(18px) saturate(170%);
+    backdrop-filter:blur(18px) saturate(170%);
+  }
+}
+.topbar{
+  background:color-mix(in srgb, var(--chrome, #141416) 84%, transparent);
+  -webkit-backdrop-filter:blur(20px) saturate(180%);
+  backdrop-filter:blur(20px) saturate(180%);
+}
+
+/* ── response: instant press feedback (feedback lives on the press) ── */
+.gbtn:active,.step-btn:active,.big-btn:active,.tbtn:active,.mbtn:active,
+.bd-card:active,.ml-card:active,.ml-use:active,.step-dot:active,.scrub-seg:active{
+  transform:scale(.97);
+  transition:transform 100ms ease-out;
+}
+
+/* ── diagram legend ── */
+.dg-legend{
+  display:flex;flex-wrap:wrap;gap:3px 11px;align-items:center;
+  padding:6px 12px;border-top:1px solid var(--line-soft);
+  font-family:var(--mono);font-size:8.5px;letter-spacing:.7px;text-transform:uppercase;
+  color:var(--muted);
+}
+.dgl-item{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;}
+.dgl-glyph{width:26px;height:14px;flex-shrink:0;}
+.dgl-shape{fill:var(--node-fill);stroke:var(--diagram-ink);stroke-width:1.4;}
+.dgl-line{stroke:var(--diagram-ink);fill:none;stroke-width:1.5;}
+.dgl-broken{stroke:var(--failure);animation:dg-pulse 1.1s ease-in-out infinite;}
+.dgl-note{color:var(--faint);text-transform:none;letter-spacing:.3px;font-style:italic;}
+.diagram-pane.collapsed .dg-legend{display:none;}
+@media(max-width:560px){.dg-legend{gap:2px 8px;padding:5px 9px;}.dgl-note{display:none;}}
+@media (prefers-reduced-motion: reduce){.dgl-broken{animation:none;}}
+
+/* ── fallbacks: solid materials when blur is unavailable or unwanted ── */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){
+  .bd-card,.ml-card,.set-block,.landing-card,.gate-card,.stress-card,.lens-box,
+  .ml-use,.empty-panel,.tut-card,.solution-card,.your-answer,.sd-purpose,.sd-item{background-color:var(--panel);}
+  .problem-card{background-color:var(--failure-wash);}
+  .model-card,.verdict-card,.narrowing-note{background-color:var(--accent-wash);}
+  .scale-band,.analogy-box,.gate-hint{background-color:var(--money-wash);}
+  .menu-pop,.modal,.stepper,.diagram-cap,.dg-legend,.scrub-wrap{background:var(--panel);}
+  .topbar{background:var(--ink);}
+}
+@media (prefers-reduced-transparency: reduce){
+  .bd-card,.ml-card,.set-block,.landing-card,.gate-card,.stress-card,.lens-box,
+  .ml-use,.empty-panel,.tut-card,.solution-card,.your-answer,.sd-purpose,.sd-item{
+    background-color:var(--panel);-webkit-backdrop-filter:none;backdrop-filter:none;
+  }
+  .problem-card{background-color:var(--failure-wash);-webkit-backdrop-filter:none;backdrop-filter:none;}
+  .model-card,.verdict-card,.narrowing-note{background-color:var(--accent-wash);-webkit-backdrop-filter:none;backdrop-filter:none;}
+  .scale-band,.analogy-box,.gate-hint{background-color:var(--money-wash);-webkit-backdrop-filter:none;backdrop-filter:none;}
+  .menu-pop,.modal,.stepper,.diagram-cap,.dg-legend,.scrub-wrap,.diagram-pane{background:var(--panel);-webkit-backdrop-filter:none;backdrop-filter:none;}
+  .topbar{background:var(--ink);-webkit-backdrop-filter:none;backdrop-filter:none;}
+}

@@ -500,7 +500,7 @@ async function openReader(id, layerIndex) {
   };
   dcap.append(capState, capToggle);
   const scrubEl = h("div", "scrub-wrap");
-  dpane.append(dscroll, scrubEl, dcap);
+  dpane.append(dscroll, Diagram.legend(), scrubEl, dcap);   // legend: the tutorial's grammar, always in view
   const docPane = h("div", "doc-pane");
   wrap.append(dpane, docPane);
   pane.appendChild(wrap);
@@ -619,6 +619,7 @@ function renderGenerate(systemName) {
       const { doc, repaired } = await Generator.generate({
         apiKey: meta.apiKey, modelId: meta.modelId,
         system: systemName, focus: focus.value.trim(),
+        speed: meta.genSpeed || "balanced",
         onProgress(p) {
           if (p.phase) {
             phaseEl.textContent = p.phase === "repair" ? "One repair pass — fixing validation errors…" : (COPY.genPhases[p.phase] || phaseEl.textContent);
@@ -957,6 +958,23 @@ function renderSettings(banner) {
   };
   db.appendChild(tog);
   root.appendChild(db);
+
+  /* generation speed */
+  const gs = h("div", "set-block");
+  gs.appendChild(h("h3", null, "Generation speed"));
+  gs.appendChild(h("p", "note", "Balanced lets the model reason more before writing — slightly better structure. Fast trims the thinking for quicker, cheaper runs."));
+  const gseg = h("div", "seg");
+  [["balanced", "Balanced"], ["fast", "Fast"]].forEach(([id, label]) => {
+    const b = h("button", (meta.genSpeed || "balanced") === id ? "on" : "", label);
+    b.onclick = async () => {
+      meta.genSpeed = id;
+      await Store.saveMeta({ genSpeed: id });
+      renderSettings();
+    };
+    gseg.appendChild(b);
+  });
+  gs.appendChild(gseg);
+  root.appendChild(gs);
 
   /* backup / restore */
   const bb = h("div", "set-block");
