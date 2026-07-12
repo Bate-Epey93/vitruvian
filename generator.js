@@ -172,5 +172,21 @@ var Generator = (() => {
     return data.content.map(b => b.text || "").join("").trim();
   }
 
-  return { generate, compare };
+  /* ── Ask-this-layer: one bounded Q&A call (§value-add) ── */
+  async function ask({ apiKey, modelId, doc, layer, question }) {
+    if (!navigator.onLine) throw fail("offline", "Asking needs a connection.");
+    const p = SKILL.askPrompt(doc, layer, question);
+    let res;
+    try {
+      res = await fetch(API, {
+        method: "POST", headers: headers(apiKey),
+        body: JSON.stringify({ model: modelId, max_tokens: 1200, ...effortFor(modelId, "fast"), system: p.system, messages: [{ role: "user", content: p.user }] })
+      });
+    } catch (e) { throw fail("offline", "Could not reach Anthropic — check your connection."); }
+    if (!res.ok) throw await httpError(res);
+    const data = await res.json();
+    return data.content.map(b => b.text || "").join("").trim();
+  }
+
+  return { generate, compare, ask };
 })();

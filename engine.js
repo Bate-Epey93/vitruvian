@@ -498,7 +498,10 @@ async function openReader(id, layerIndex) {
     dpane.classList.toggle("collapsed");
     capToggle.textContent = dpane.classList.contains("collapsed") ? "show" : "hide";
   };
-  dcap.append(capState, capToggle);
+  const playBtn = h("button", "gbtn sim-btn", "▶ play");
+  const loadBtn = h("button", "gbtn sim-btn", "⚡ load");
+  loadBtn.hidden = true;
+  dcap.append(capState, playBtn, loadBtn, capToggle);
   const scrubEl = h("div", "scrub-wrap");
   dpane.append(dscroll, Diagram.legend(), scrubEl, dcap);   // legend: the tutorial's grammar, always in view
   const docPane = h("div", "doc-pane");
@@ -506,6 +509,27 @@ async function openReader(id, layerIndex) {
   pane.appendChild(wrap);
 
   const diagram = Diagram.mount(dscroll, rec.doc);
+
+  /* flow simulation controls — instant response on press; any state change
+     stops the sim (via diagram.show) and this resets the buttons */
+  const resetSimUI = () => {
+    playBtn.textContent = "▶ play";
+    loadBtn.hidden = true;
+    loadBtn.classList.remove("on");
+  };
+  diagram.sim.onStop(resetSimUI);
+  if (!diagram.sim.available) playBtn.hidden = true;   // prefers-reduced-motion
+  playBtn.onclick = () => {
+    if (diagram.sim.running) { diagram.sim.stop(); }
+    else if (diagram.sim.start()) {
+      playBtn.textContent = "⏸ stop";
+      loadBtn.hidden = false;
+    }
+  };
+  loadBtn.onclick = () => {
+    loadBtn.classList.toggle("on", diagram.sim.toggleLoad());
+  };
+
   // gates are opt-in: on only if this breakdown enabled them, or the user set the default on
   const challengeOn = rec.challengeMode != null ? rec.challengeMode : meta.challengeModeDefault === true;
 
@@ -521,6 +545,9 @@ async function openReader(id, layerIndex) {
     },
     onCompare(layer, attempt) {
       return Generator.compare({ apiKey: meta.apiKey, modelId: meta.modelId, layer, attempt });
+    },
+    onAsk(layer, question) {
+      return Generator.ask({ apiKey: meta.apiKey, modelId: meta.modelId, doc: rec.doc, layer, question });
     }
   });
 

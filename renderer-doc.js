@@ -21,7 +21,7 @@ var DocView = (() => {
   function modelById(id) { return MODEL_LIBRARY.find(m => m.id === id); }
 
   function mount(opts) {
-    const { docPane, diagram, rec, onSave, onCompare, canCompare, scrubEl } = opts;
+    const { docPane, diagram, rec, onSave, onCompare, onAsk, canCompare, scrubEl } = opts;
     const doc = rec.doc;
     const N = doc.layers.length;
     let lastShown = 0;           // diagram state currently on screen
@@ -478,6 +478,46 @@ var DocView = (() => {
         }
         root.appendChild(dev);
       }
+
+      /* Ask this layer — one bounded question, answered from this layer's
+         context. Saved Q&As render for every audience and read offline. */
+      const qa = h("div", "qa-block");
+      qa.appendChild(h("div", "lb-label", COPY.askTitle));
+      (a.qa || []).forEach(item => {
+        const q = h("div", "qa-q");
+        q.appendChild(h("b", null, "Q · "));
+        q.appendChild(document.createTextNode(item.q));
+        qa.appendChild(q);
+        qa.appendChild(h("div", "qa-a", item.a));
+      });
+      const row = h("div", "qa-row");
+      const inp = h("input");
+      inp.placeholder = COPY.askPlaceholder;
+      inp.maxLength = 220;
+      const btn = h("button", "gbtn", COPY.askBtn);
+      btn.onclick = async () => {
+        const q = inp.value.trim();
+        if (!q) return;
+        const avail = canCompare();
+        if (!avail.ok) { alert(avail.reason || COPY.gateCompareOffline); return; }
+        btn.disabled = true;
+        btn.textContent = "Thinking…";
+        try {
+          const answer = await onAsk(L, q);
+          (a.qa = a.qa || []).push({ q, a: answer, ts: Date.now() });
+          persist();
+          render._keepScroll = true;
+          render();
+        } catch (e) {
+          btn.disabled = false;
+          btn.textContent = COPY.askBtn;
+          alert("Ask failed: " + e.message);
+        }
+      };
+      inp.onkeydown = ev => { if (ev.key === "Enter") btn.click(); };
+      row.append(inp, btn);
+      qa.appendChild(row);
+      root.appendChild(qa);
     }
 
     /* ── stress tests (position N+1) ── */

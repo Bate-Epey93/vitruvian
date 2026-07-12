@@ -182,9 +182,12 @@ var Diagram = (() => {
     const edgesG = el("g", {}, svg);
     const nodesG = el("g", {}, svg);
     const labelsG = el("g", {}, svg);       // labels on TOP — never hidden by a box
+    const simG = el("g", { class: "dg-sim" }, svg);   // flow tokens above everything
     let shownIds = new Set();
+    let lastState = null, lastHl = new Set();         // the sim reads the shown state
 
     function show(upto, opts = {}) {
+      sim.stop();                            // a state change invalidates in-flight tokens
       const { highlight = [], animate = false } = opts;
       const st = stateAt(doc, upto);
       const hl = new Set(highlight);
@@ -268,6 +271,8 @@ var Diagram = (() => {
 
       svg.classList.remove("dg-has-spot");   // a fresh render clears any spotlight
       shownIds = new Set([...st.nodes.keys(), ...st.edges.keys()]);
+      lastState = st;
+      lastHl = hl;
     }
 
     /* spotlight: dim everything, then light the given ids (nodes/edges + their
@@ -285,7 +290,117 @@ var Diagram = (() => {
       });
     }
 
-    return { show, spotlight, layout, laneColor };
+    /* ── Flow simulation: tokens travel the payload path of the CURRENT
+       state (rAF, transform-only). At a gate state they crash — red burst —
+       on the highlighted "what breaks" elements: the failure, animated.
+       Load mode multiplies spawn rate; ≥3 tokens on one edge slows them and
+       marks the edge congested — saturation you can see. Honors
+       prefers-reduced-motion by refusing to start. ── */
+    const RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const sim = (() => {
+      let running = false, load = false, raf = null, last = 0, spawnAcc = 0, tokens = [], onStopCb = null;
+      const SPAWN_MS = () => (load ? 240 : 1050);
+      const SPEED = () => (load ? 125 : 85);          // px/s along the path
+
+      function payloadGraph() {
+        const out = {};
+        const hasIncoming = new Set();
+        if (lastState) lastState.edges.forEach(e => {
+          if (e.kind !== "payload") return;
+          (out[e.from] = out[e.from] || []).push(e);
+          hasIncoming.add(e.to);
+        });
+        const sources = Object.keys(out).filter(id => !hasIncoming.has(id));
+        // cyclic payload graphs have no sources — fall back to any payload origin
+        return { out, sources: sources.length ? sources : Object.keys(out) };
+      }
+      function pathFor(edgeId) {
+        return edgesG.querySelector(`[data-id="${CSS.escape(edgeId)}"] .dg-epath`);
+      }
+      function spawn(graph) {
+        const src = graph.sources[Math.floor(Math.random() * graph.sources.length)];
+        const edges = src && graph.out[src];
+        if (!edges || !edges.length) return;
+        const e = edges[Math.floor(Math.random() * edges.length)];
+        const p = pathFor(e.id);
+        const from = lastState.nodes.get(e.from);
+        if (!p || !from) return;
+        const c = el("circle", { r: 3.4, class: "dg-token" }, simG);
+        c.style.fill = laneColor(from.lane);
+        tokens.push({ e, p, len: Math.max(1, p.getTotalLength()), t: 0, el: c });
+      }
+      function kill(tok, cls, ms) {
+        tok.dead = true;
+        tok.el.classList.add(cls);
+        setTimeout(() => tok.el.remove(), ms);
+      }
+      function hop(tok, graph) {
+        if (lastHl.has(tok.e.to)) { kill(tok, "dg-token-crash", 400); return; }   // arrived at the broken node
+        const next = graph.out[tok.e.to];
+        if (!next || !next.length) { kill(tok, "dg-token-exit", 300); return; }   // journey complete
+        const e = next[Math.floor(Math.random() * next.length)];
+        const p = pathFor(e.id);
+        if (!p) { kill(tok, "dg-token-exit", 300); return; }
+        tok.e = e; tok.p = p; tok.len = Math.max(1, p.getTotalLength()); tok.t = 0;
+      }
+      function frame(now) {
+        if (!running) return;
+        const dt = Math.min(50, now - last) / 1000;
+        last = now;
+        const graph = payloadGraph();
+        spawnAcc += dt * 1000;
+        const cap = load ? 44 : 14;
+        while (spawnAcc >= SPAWN_MS()) {
+          spawnAcc -= SPAWN_MS();
+          if (tokens.filter(t => !t.dead).length < cap) spawn(graph);
+        }
+        const perEdge = {};
+        tokens.forEach(t => { if (!t.dead) perEdge[t.e.id] = (perEdge[t.e.id] || 0) + 1; });
+        edgesG.querySelectorAll(".dg-congested").forEach(p => p.classList.remove("dg-congested"));
+        Object.entries(perEdge).forEach(([id, n]) => {
+          if (n >= 3) { const p = pathFor(id); if (p) p.classList.add("dg-congested"); }
+        });
+        tokens.forEach(tok => {
+          if (tok.dead) return;
+          const crowd = perEdge[tok.e.id] || 1;
+          tok.t += (SPEED() * (crowd >= 3 ? 0.4 : 1) * dt) / tok.len;   // congestion = continuous resistance
+          if (lastHl.has(tok.e.id) && tok.t > 0.55) { kill(tok, "dg-token-crash", 400); return; }
+          if (tok.t >= 1) { hop(tok, graph); if (tok.dead) return; }
+          let pt;
+          try { pt = tok.p.getPointAtLength(Math.min(1, tok.t) * tok.len); }
+          catch (err) { kill(tok, "dg-token-exit", 200); return; }
+          tok.el.setAttribute("transform", `translate(${pt.x} ${pt.y})`);
+        });
+        tokens = tokens.filter(t => t.el.isConnected);
+        raf = requestAnimationFrame(frame);
+      }
+      return {
+        get available() { return !RM; },
+        get running() { return running; },
+        get load() { return load; },
+        onStop(fn) { onStopCb = fn; },
+        start() {
+          if (RM || running || !lastState) return false;
+          running = true;
+          last = performance.now();
+          spawnAcc = SPAWN_MS();                       // first token on the very first frame
+          raf = requestAnimationFrame(frame);
+          return true;
+        },
+        stop() {
+          const was = running;
+          running = false; load = false;
+          if (raf) cancelAnimationFrame(raf);
+          tokens.forEach(t => t.el.remove());
+          tokens = [];
+          edgesG.querySelectorAll(".dg-congested").forEach(p => p.classList.remove("dg-congested"));
+          if (was && onStopCb) onStopCb();
+        },
+        toggleLoad() { load = !load; return load; }
+      };
+    })();
+
+    return { show, spotlight, layout, laneColor, sim };
   }
 
   /* ── Legend: a compact always-visible key under the diagram (brings the

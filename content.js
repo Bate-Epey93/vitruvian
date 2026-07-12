@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.5.0",
+  appVersion: "1.6.0",
   flagshipVersion: 2                     // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
 };
 
@@ -145,6 +145,9 @@ var COPY = {
   gateHint2: "One more hint",
   gateReveal: "Reveal the solution",
   gateCompare: "Compare my answer (AI)",
+  askTitle: "Ask this layer",
+  askPlaceholder: "One question — e.g. \"why not just use timestamps?\"",
+  askBtn: "Ask",
   gateCompareOffline: "AI comparison needs a connection and an API key (Settings). Your answer is saved — compare it yourself against the reveal.",
   keyNotice: "Your key is stored on this device only and sent only to Anthropic.",
   costNote: "A breakdown typically costs a few cents to a few tens of cents of API usage, depending on the model.",

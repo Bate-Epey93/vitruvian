@@ -928,3 +928,43 @@ html,body{overscroll-behavior:none;}
   .menu-pop,.modal,.stepper,.diagram-cap,.dg-legend,.scrub-wrap,.diagram-pane{background:var(--panel);-webkit-backdrop-filter:none;backdrop-filter:none;}
   .topbar{background:var(--ink);-webkit-backdrop-filter:none;backdrop-filter:none;}
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   v1.6 — FLOW SIMULATION + ASK-THIS-LAYER
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── flow tokens ── */
+.dg-token{stroke:var(--diagram-halo);stroke-width:1;will-change:transform;}
+.dg-token-crash{fill:var(--failure)!important;animation:tok-crash .4s ease-out forwards;}
+@keyframes tok-crash{0%{r:3.4;opacity:1;}100%{r:12;opacity:0;}}
+.dg-token-exit{animation:tok-exit .3s ease-out forwards;}
+@keyframes tok-exit{to{r:1;opacity:0;}}
+.dg-congested{stroke:var(--money)!important;stroke-width:3.2!important;
+  filter:drop-shadow(0 0 3px color-mix(in srgb, var(--money) 65%, transparent));}
+
+/* ── sim controls in the diagram cap ── */
+.sim-btn{padding:2px 9px;flex-shrink:0;}
+.sim-btn.on{border-color:var(--money);color:var(--money);background:color-mix(in srgb, var(--money) 12%, transparent);}
+
+/* ── ask-this-layer ── */
+.qa-block{
+  background-color:var(--glass);
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(160%);
+  backdrop-filter:blur(var(--glass-blur)) saturate(160%);
+  border:1px solid var(--line-soft);border-radius:9px;
+  box-shadow:inset 0 1px 0 var(--glass-edge), var(--glass-shadow);
+  padding:14px 17px;margin:14px 0;
+}
+.qa-block .lb-label{margin-bottom:8px;}
+.qa-q{font-size:13.5px;color:var(--ink);margin:10px 0 5px;}
+.qa-q b{color:var(--accent);font-weight:700;}
+.qa-a{font-size:13.5px;color:var(--ink-soft);background:color-mix(in srgb, var(--accent-wash) 70%, transparent);
+  border-radius:7px;padding:10px 13px;line-height:1.6;white-space:pre-wrap;}
+.qa-row{display:flex;gap:7px;margin-top:11px;}
+.qa-row input{
+  flex:1;font-family:var(--sans);font-size:13.5px;min-width:0;
+  border:1px solid var(--line);border-radius:6px;background:var(--canvas);
+  color:var(--ink);padding:9px 12px;
+}
+.qa-row input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash);}
+@media (prefers-reduced-transparency: reduce){.qa-block{background-color:var(--panel);-webkit-backdrop-filter:none;backdrop-filter:none;}}

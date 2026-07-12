@@ -208,5 +208,25 @@ Be specific and generous; judge the design, not the prose.`,
     };
   }
 
-  return { BOUNDS, SCHEMA_DOC, text, EXEMPLAR, comparePrompt };
+  /* ── Ask-this-layer: one bounded question, answered from the layer's own
+     context (§value-add). Not freeform chat — one question, one answer. ── */
+  function askPrompt(doc, layer, question) {
+    return {
+      system: `You answer ONE question from a reader about ONE layer of a system breakdown. Ground your answer in the provided context plus well-established knowledge of this system; when the context doesn't settle it, say so plainly rather than speculating. Maximum 160 words, plain text, no markdown. Be direct and specific — name the mechanism, tradeoff, or scaling shape that answers the question. If the reader proposes an alternative design, treat it seriously: say what it gets right before what it misses.`,
+      user: `SYSTEM: ${doc.meta.system}
+ESSENCE: ${doc.essence.text}
+
+LAYER ${layer.index}: ${layer.name}
+PROBLEM: ${layer.problem.statement}
+SOLUTION: ${layer.solution}
+MECHANISM: ${layer.tech_lens.mechanism}
+PRINCIPLE: ${layer.tech_lens.principle}
+TRADEOFF: ${layer.tradeoff}
+UNDER LOAD: ${layer.at_scale || "not documented"}
+
+READER'S QUESTION: ${question}`
+    };
+  }
+
+  return { BOUNDS, SCHEMA_DOC, text, EXEMPLAR, comparePrompt, askPrompt };
 })();
