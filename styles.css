@@ -968,3 +968,40 @@ html,body{overscroll-behavior:none;}
 }
 .qa-row input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash);}
 @media (prefers-reduced-transparency: reduce){.qa-block{background-color:var(--panel);-webkit-backdrop-filter:none;backdrop-filter:none;}}
+
+/* ═══════════════════════════════════════════════════════════════
+   v1.7 — MOBILE DIAGRAM: pinch-zoom, follow-the-story, chrome reclaim
+   ═══════════════════════════════════════════════════════════════ */
+
+/* one-finger pans natively; two-finger pinch reaches our pointer handlers */
+.diagram-scroll{touch-action:pan-x pan-y;overscroll-behavior:contain;}
+
+/* caption bar: always one line — the layer name truncates, buttons never wrap */
+.diagram-cap{flex-wrap:nowrap;align-items:center;}
+.diagram-cap-state{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.diagram-cap .gbtn{flex-shrink:0;}
+
+/* scrubber: full 44px touch target without growing the visual */
+.scrub-seg{position:relative;}
+.scrub-seg::before{content:'';position:absolute;inset:-12px -3px;}
+
+/* legend: desktop unchanged; phones float it as a "key" chip over the
+   diagram's top-right corner — the collapsed state costs ZERO rows */
+.dgl-tog{display:none;}
+@media(max-width:860px){
+  .dgl-tog{
+    display:inline-flex;align-items:center;flex-shrink:0;
+    font-family:var(--mono);font-size:8.5px;letter-spacing:1px;text-transform:uppercase;
+    background:var(--glass-heavy);border:1px solid var(--line);border-radius:5px;
+    color:var(--muted);padding:3px 8px;cursor:pointer;position:relative;
+  }
+  .dgl-tog::after{content:'';position:absolute;inset:-9px;}
+  .dg-legend{
+    position:absolute;top:6px;right:6px;z-index:6;
+    max-width:calc(100% - 12px);border:none;border-radius:8px;padding:0;
+  }
+  .dg-legend:not(.open){background:transparent;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;}
+  .dg-legend:not(.open) .dgl-item,.dg-legend:not(.open) .dgl-note{display:none;}
+  .dg-legend.open{padding:7px 10px;gap:4px 10px;border:1px solid var(--line-soft);}
+  .diagram-cap{padding:5px 10px;}
+}

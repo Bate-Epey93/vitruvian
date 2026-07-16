@@ -290,6 +290,117 @@ var Diagram = (() => {
       });
     }
 
+    /* ── Follow-the-story auto-pan: center the given element ids in the
+       scroll viewport (used after each state change so the reader's eye
+       lands on what changed, instead of hunting for it off-screen).
+       null = scroll home. No-op when the diagram fully fits. ── */
+    function focus(ids) {
+      const noOverflow = container.scrollWidth <= container.clientWidth + 4
+                      && container.scrollHeight <= container.clientHeight + 4;
+      if (noOverflow) return;
+      const behavior = RM ? "auto" : "smooth";
+      if (!ids || !ids.length) { container.scrollTo({ left: 0, top: 0, behavior }); return; }
+      const set = new Set(ids);
+      let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity, found = false;
+      svg.querySelectorAll("[data-id]").forEach(e2 => {
+        if (!set.has(e2.getAttribute("data-id"))) return;
+        const bb = e2.getBoundingClientRect();
+        if (!bb.width && !bb.height) return;
+        found = true;
+        l = Math.min(l, bb.left); t = Math.min(t, bb.top);
+        r = Math.max(r, bb.right); b = Math.max(b, bb.bottom);
+      });
+      if (!found) return;
+      const cR = container.getBoundingClientRect();
+      container.scrollTo({
+        left: Math.max(0, container.scrollLeft + (l + r) / 2 - cR.left - container.clientWidth / 2),
+        top: Math.max(0, container.scrollTop + (t + b) / 2 - cR.top - container.clientHeight / 2),
+        behavior
+      });
+    }
+
+    /* ── Pinch-to-zoom + double-tap (mobile): scale between fit-width and
+       1.6x natural, anchored on the gesture midpoint, with soft overshoot
+       that settles back into bounds (rubber-band, then snap). Double-tap
+       (or desktop double-click) toggles fit <-> 100% around the tap. ── */
+    const zoomCtl = (() => {
+      const MAXZ = 1.6;
+      let settleRaf = null;
+      const fitZ = () => Math.min(1, Math.max(0.2, (container.clientWidth - 24) / layout.width));
+      const current = () => (svg.getBoundingClientRect().width || layout.width) / layout.width;
+      function apply(nz, cx, cy) {
+        nz = Math.max(fitZ() * 0.85, Math.min(MAXZ * 1.15, nz));   // soft overshoot beyond bounds
+        const zOld = current();
+        const contentX = (container.scrollLeft + cx) / zOld;
+        const contentY = (container.scrollTop + cy) / zOld;
+        svg.style.minWidth = "0";
+        svg.style.width = (layout.width * nz) + "px";
+        container.scrollLeft = contentX * nz - cx;
+        container.scrollTop = contentY * nz - cy;
+        return nz;
+      }
+      function animateTo(target, cx, cy, ms = 160) {
+        if (settleRaf) cancelAnimationFrame(settleRaf);
+        if (RM) { apply(target, cx, cy); return; }
+        const from = current(), t0 = performance.now();
+        const step = now => {
+          const p = Math.min(1, (now - t0) / ms);
+          apply(from + (target - from) * (1 - Math.pow(1 - p, 3)), cx, cy);   // ease-out cubic
+          if (p < 1) settleRaf = requestAnimationFrame(step);
+        };
+        settleRaf = requestAnimationFrame(step);
+      }
+      function settle() {
+        const z = current(), lo = fitZ();
+        const cx = container.clientWidth / 2, cy = container.clientHeight / 2;
+        if (z < lo) animateTo(lo, cx, cy);
+        else if (z > MAXZ) animateTo(MAXZ, cx, cy);
+      }
+
+      const pts = new Map();
+      let pinch = null, pinchEndedAt = 0, lastTap = 0, lastX = 0, lastY = 0;
+      container.addEventListener("pointerdown", e => {
+        if (e.pointerType !== "touch") return;
+        pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pts.size === 2) {
+          const [a, b2] = [...pts.values()];
+          pinch = { d0: Math.max(20, Math.hypot(a.x - b2.x, a.y - b2.y)), z0: current() };
+        }
+      });
+      container.addEventListener("pointermove", e => {
+        if (!pts.has(e.pointerId)) return;
+        pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pinch && pts.size === 2) {
+          e.preventDefault();                              // we own the pinch (touch-action allows pans only)
+          const [a, b2] = [...pts.values()];
+          const cR = container.getBoundingClientRect();
+          apply(pinch.z0 * Math.hypot(a.x - b2.x, a.y - b2.y) / pinch.d0,
+                (a.x + b2.x) / 2 - cR.left, (a.y + b2.y) / 2 - cR.top);
+        }
+      }, { passive: false });
+      function lift(e) {
+        if (!pts.delete(e.pointerId)) return;
+        if (pinch && pts.size < 2) { pinch = null; pinchEndedAt = performance.now(); settle(); }
+      }
+      container.addEventListener("pointercancel", lift);
+      container.addEventListener("pointerup", e => {
+        lift(e);
+        if (e.pointerType !== "touch" || pts.size) return;
+        const now = performance.now();
+        if (now - pinchEndedAt < 400) { lastTap = 0; return; }   // pinch release ≠ tap
+        if (now - lastTap < 320 && Math.hypot(e.clientX - lastX, e.clientY - lastY) < 26) {
+          const cR = container.getBoundingClientRect();
+          animateTo(current() > fitZ() * 1.15 ? fitZ() : 1, e.clientX - cR.left, e.clientY - cR.top, 200);
+          lastTap = 0;
+        } else { lastTap = now; lastX = e.clientX; lastY = e.clientY; }
+      });
+      container.addEventListener("dblclick", e => {         // desktop parity
+        const cR = container.getBoundingClientRect();
+        animateTo(current() > fitZ() * 1.15 ? fitZ() : 1, e.clientX - cR.left, e.clientY - cR.top, 200);
+      });
+      return { fitZ, current };
+    })();
+
     /* ── Flow simulation: tokens travel the payload path of the CURRENT
        state (rAF, transform-only). At a gate state they crash — red burst —
        on the highlighted "what breaks" elements: the failure, animated.
@@ -400,7 +511,7 @@ var Diagram = (() => {
       };
     })();
 
-    return { show, spotlight, layout, laneColor, sim };
+    return { show, spotlight, focus, layout, laneColor, sim, zoom: zoomCtl };
   }
 
   /* ── Legend: a compact always-visible key under the diagram (brings the
@@ -408,6 +519,16 @@ var Diagram = (() => {
   function legend() {
     const wrap = document.createElement("div");
     wrap.className = "dg-legend";
+    // on phones the legend collapses to this chip (CSS hides it on desktop)
+    const tog = document.createElement("button");
+    tog.className = "dgl-tog";
+    tog.textContent = "key ▸";
+    tog.setAttribute("aria-label", "Toggle diagram key");
+    tog.onclick = () => {
+      const open = wrap.classList.toggle("open");
+      tog.textContent = open ? "key ▾" : "key ▸";
+    };
+    wrap.appendChild(tog);
     const item = (svgBuild, label) => {
       const it = document.createElement("span");
       it.className = "dgl-item";

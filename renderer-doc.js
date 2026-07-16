@@ -52,6 +52,7 @@ var DocView = (() => {
         if (activeSpotCard === cardEl) { diagram.spotlight(null); cardEl.classList.remove("spot-on"); activeSpotCard = null; return; }
         if (activeSpotCard) activeSpotCard.classList.remove("spot-on");
         diagram.spotlight(ids, kind);
+        diagram.focus(ids);                  // pan the spotlighted parts into view (mobile)
         cardEl.classList.add("spot-on");
         activeSpotCard = cardEl;
       });
@@ -77,8 +78,11 @@ var DocView = (() => {
       if (cap) cap.textContent = s;
     }
     function syncDiagram(animate) {
-      if (pos === 0) { lastShown = 0; diagram.show(0); capText("Layer 0 · the naive baseline"); }
-      else if (pos > N) { lastShown = N; diagram.show(N); capText("Final state · all layers"); }
+      // follow the story: after each state change, auto-pan the diagram to
+      // what changed — the gate's broken elements, or the layer's additions —
+      // so on a phone the eye lands on the action instead of hunting for it
+      if (pos === 0) { lastShown = 0; diagram.show(0); capText("Layer 0 · the naive baseline"); diagram.focus(null); }
+      else if (pos > N) { lastShown = N; diagram.show(N); capText("Final state · all layers"); diagram.focus(null); }
       else {
         const L = doc.layers[pos - 1];
         const gated = challenge && !attemptFor(L.index).revealed;
@@ -86,10 +90,13 @@ var DocView = (() => {
           lastShown = pos - 1;
           diagram.show(pos - 1, { highlight: L.diff.highlight });
           capText(`Before layer ${pos} · red = what breaks`);
+          diagram.focus(L.diff.highlight);
         } else {
           lastShown = pos;
           diagram.show(pos, { animate: !!animate });
           capText(`Layer ${pos} of ${N} · ${L.name}`);
+          const added = diffAddedIds(L);
+          diagram.focus(added.length ? added : L.diff.highlight);
         }
       }
       renderScrub();
