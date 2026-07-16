@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.8.0",
+  appVersion: "1.9.0",
   flagshipVersion: 2                     // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
 };
 
@@ -154,6 +154,13 @@ var COPY = {
   askTitle: "Ask this layer",
   askPlaceholder: "One question — e.g. \"why not just use timestamps?\"",
   askBtn: "Ask",
+  whatifMenu: "What if… (propose a change)",
+  whatifKicker: "What if",
+  whatifLede: "Propose a change to this system. Vitruvian shows what it does to the architecture, which invariants it strengthens or threatens, and whether it's worth it — grounded in the system's own rules.",
+  whatifPlaceholder: "e.g. add an HTML renderer to the terminal · cache reads at the edge · drop the acknowledgement step",
+  whatifBtn: "Run what-if",
+  whatifThinking: "Weighing it against the invariants…",
+  whatifVerdicts: { improves: "Improves the system", mixed: "A real tradeoff", harmful: "Works against the system" },
   gateCompareOffline: "AI comparison needs a connection and an API key (Settings). Your answer is saved — compare it yourself against the reveal.",
   keyNotice: "Your key is stored on this device only and sent only to Anthropic.",
   costNote: "A breakdown typically costs a few cents to a few tens of cents of API usage, depending on the model.",

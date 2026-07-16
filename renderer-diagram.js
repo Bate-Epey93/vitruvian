@@ -188,7 +188,8 @@ var Diagram = (() => {
 
     function show(upto, opts = {}) {
       sim.stop();                            // a state change invalidates in-flight tokens
-      const { highlight = [], animate = false } = opts;
+      const { highlight = [], animate = false, ghost = [], stress = [] } = opts;
+      const ghostSet = new Set(ghost), stressSet = new Set(stress);   // what-if: proposed elements + stressed existing ones
       const st = stateAt(doc, upto);
       const hl = new Set(highlight);
       const prev = shownIds;
@@ -222,6 +223,8 @@ var Diagram = (() => {
         const path = el("path", { d: p.d, fill: "none", class: "dg-epath", "marker-end": `url(#${broken ? "arr-broken" : "arr-lane" + li})` }, g);
         path.style.stroke = broken ? "#c22f2f" : LANE_COLORS[li % LANE_COLORS.length];
         if (broken) g.classList.add("dg-broken");
+        if (ghostSet.has(e.id)) g.classList.add("dg-ghost");
+        if (stressSet.has(e.id)) g.classList.add("dg-stress");
         if (animate && !prev.has(e.id)) g.classList.add("dg-enter");
         if (e.label) {
           // same-lane edges: lift the label into the band's clear upper strip
@@ -238,6 +241,8 @@ var Diagram = (() => {
         const g = el("g", { transform: `translate(${p.x} ${p.y})`, "data-id": n.id }, nodesG);
         drawNode(g, n, laneColor(n.lane));
         if (hl.has(n.id)) g.classList.add("dg-broken");
+        if (ghostSet.has(n.id)) g.classList.add("dg-ghost");
+        if (stressSet.has(n.id)) g.classList.add("dg-stress");
         if (animate && !prev.has(n.id)) g.classList.add("dg-enter");
         const hw = n.kind === "actor" ? ACTOR_R : NODE_W / 2;
         const hh = n.kind === "actor" ? ACTOR_R : NODE_H / 2;

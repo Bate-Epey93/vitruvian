@@ -63,7 +63,7 @@ async function toggleTheme() {
 }
 
 /* ═══ Screen switching ═══ */
-const SCREENS = ["landing", "library", "reader", "generate", "models", "drill", "tutorial", "settings"];
+const SCREENS = ["landing", "library", "reader", "generate", "models", "drill", "tutorial", "whatif", "settings"];
 function show(screen) {
   SCREENS.forEach(s => { $("screen-" + s).hidden = s !== screen; });
   document.body.classList.toggle("reading", screen === "reader");   // frees topbar room for the audience switch
@@ -575,6 +575,7 @@ function buildReaderMenu(rec, challengeOn) {
     b.onclick = e => { e.stopPropagation(); pop.hidden = true; fn(); };
     pop.appendChild(b);
   };
+  add(COPY.whatifMenu, () => { renderWhatif(rec); show("whatif"); });
   add("How to read a study", () => { renderTutorial("reader"); show("tutorial"); });
   add((challengeOn ? "✓ " : "") + "Challenge mode (gates)", async () => {
     rec.challengeMode = !challengeOn;
@@ -598,6 +599,146 @@ function buildReaderMenu(rec, challengeOn) {
     await renderLibrary();
     show("library");
   }, "danger");
+}
+
+/* ═══ What-if — propose a change; verdict + ghosted architecture (§value-add) ═══ */
+function renderWhatif(rec, opts = {}) {
+  const root = $("screen-whatif").firstElementChild;
+  root.textContent = "";
+  root.appendChild(h("div", "kicker", COPY.whatifKicker + " · " + rec.system));
+  root.appendChild(h("h1", "title", "Propose a change"));
+  root.appendChild(h("p", "subtitle", COPY.whatifLede));
+
+  const backRow = h("div", "gate-actions");
+  const backBtn2 = h("button", "gbtn", "‹ Back to the study");
+  backBtn2.onclick = () => openReader(rec.id);
+  backRow.appendChild(backBtn2);
+  root.appendChild(backRow);
+
+  const compose = h("div", "whatif-compose");
+  const ta = h("textarea", "design-input");
+  ta.placeholder = COPY.whatifPlaceholder;
+  ta.maxLength = 280;
+  ta.style.minHeight = "70px";
+  if (opts.prefill) ta.value = opts.prefill;
+  const runBtn = h("button", "big-btn", COPY.whatifBtn);
+  compose.append(ta, runBtn);
+  root.appendChild(compose);
+
+  const resultEl = h("div", "whatif-result");
+  root.appendChild(resultEl);
+  const savedWrap = h("div", "whatif-saved");
+  root.appendChild(savedWrap);
+
+  function renderSaved() {
+    savedWrap.textContent = "";
+    const list = rec.whatifs || [];
+    if (!list.length) return;
+    savedWrap.appendChild(h("div", "mono-label", "Earlier what-ifs"));
+    list.slice().reverse().forEach((wi, i) => {
+      const row = h("button", "whatif-saved-row");
+      row.appendChild(h("span", "ws-dot verdict-" + wi.result.verdict));
+      row.appendChild(h("span", "ws-change", wi.change));
+      row.onclick = () => { showResult(wi.result, wi.change); resultEl.scrollIntoView({ behavior: "smooth", block: "start" }); };
+      savedWrap.appendChild(row);
+    });
+  }
+
+  function showResult(w, change) {
+    resultEl.textContent = "";
+    // ghost diagram: the study's final state + the proposal as one extra layer
+    const tempDoc = { ...rec.doc, layers: [...rec.doc.layers, {
+      index: rec.doc.layers.length + 1, name: w.name || "Proposed change",
+      diff: { add_nodes: w.diff.add_nodes, add_edges: w.diff.add_edges, highlight: [], remove: [] }
+    }] };
+    const dpane = h("div", "whatif-diagram");
+    const dscroll = h("div", "diagram-scroll");
+    dpane.appendChild(dscroll);
+    resultEl.appendChild(dpane);
+    const dg = Diagram.mount(dscroll, tempDoc);
+    const ghostIds = [...w.diff.add_nodes.map(n => n.id), ...w.diff.add_edges.map(e => e.id)];
+    dg.show(tempDoc.layers.length, { ghost: ghostIds, stress: w.diff.highlight });
+    setTimeout(() => dg.focus(ghostIds.length ? ghostIds : w.diff.highlight), 60);
+    resultEl.appendChild(verdictCard(w, rec.doc));
+  }
+
+  renderSaved();
+  if (opts.result) showResult(opts.result, opts.change);
+
+  runBtn.onclick = async () => {
+    const change = ta.value.trim();
+    if (change.length < 4) { ta.focus(); return; }
+    if (!meta.apiKey) { renderSettings("Add your Anthropic API key to run what-ifs."); show("settings"); return; }
+    if (!navigator.onLine) { toast("What-if needs a connection"); return; }
+    runBtn.disabled = true;
+    ta.disabled = true;
+    resultEl.textContent = "";
+    resultEl.appendChild(h("div", "gen-phase", COPY.whatifThinking));
+    try {
+      const w = await Generator.whatif({ apiKey: meta.apiKey, modelId: meta.modelId, doc: rec.doc, change, speed: meta.genSpeed || "balanced" });
+      (rec.whatifs = rec.whatifs || []).push({ change, result: w, ts: Date.now() });
+      await Store.saveBreakdownLight(rec);
+      showResult(w, change);
+      renderSaved();
+    } catch (e) {
+      resultEl.textContent = "";
+      const box = h("div", "gen-error");
+      box.appendChild(h("h3", null, e.kind === "key" ? "Invalid API key" : "What-if failed"));
+      box.appendChild(h("p", null, e.message));
+      resultEl.appendChild(box);
+    } finally {
+      runBtn.disabled = false;
+      runBtn.textContent = COPY.whatifBtn;
+      ta.disabled = false;
+    }
+  };
+}
+
+function verdictCard(w, doc) {
+  const invById = {};
+  doc.strip_down.invariants.forEach((iv, i) => { invById[iv.id] = { n: i + 1, text: iv.text }; });
+  const card = h("div", "verdict-full verdict-" + w.verdict);
+  const head = h("div", "vf-head");
+  head.appendChild(h("span", "vf-badge", COPY.whatifVerdicts[w.verdict] || w.verdict));
+  const stamp = h("img", "enso-stamp vf-stamp");
+  stamp.src = "assets/enso-gate.svg";
+  stamp.alt = "";
+  head.appendChild(stamp);
+  card.appendChild(head);
+  if (w.name) card.appendChild(h("div", "vf-name", w.name));
+  card.appendChild(h("p", "vf-assessment", w.assessment));
+  if (w.gain) { const g = h("p", "vf-line"); g.appendChild(h("b", null, "Gains: ")); g.appendChild(document.createTextNode(w.gain)); card.appendChild(g); }
+
+  if (w.stresses && w.stresses.length) {
+    const r = h("div", "defends-row");
+    r.appendChild(h("span", "mono-label", "Threatens"));
+    w.stresses.forEach(id => r.appendChild(h("span", "inv-badge stress", "INV " + (invById[id] ? invById[id].n : "?"))));
+    card.appendChild(r);
+    w.stresses.forEach(id => { if (invById[id]) card.appendChild(h("div", "vf-inv stress", invById[id].text)); });
+  }
+  if (w.defends && w.defends.length) {
+    const r = h("div", "defends-row");
+    r.appendChild(h("span", "mono-label", "Strengthens"));
+    w.defends.forEach(id => r.appendChild(h("span", "inv-badge", "INV " + (invById[id] ? invById[id].n : "?"))));
+    card.appendChild(r);
+  }
+  if (w.tradeoff) card.appendChild(h("div", "tradeoff-band", w.tradeoff));
+  if (w.at_scale) {
+    const s = h("div", "scale-band");
+    s.appendChild(h("div", "sb-label", "Under load · how it scales"));
+    s.appendChild(h("p", null, w.at_scale));
+    card.appendChild(s);
+  }
+  if (w.alternatives && w.alternatives.length) {
+    card.appendChild(h("h2", "section-head", "Cleaner ways to get there"));
+    w.alternatives.forEach(a => {
+      const row = h("div", "alt-row");
+      row.appendChild(h("div", "alt-name", a.name));
+      row.appendChild(h("div", "alt-note", a.note));
+      card.appendChild(row);
+    });
+  }
+  return card;
 }
 
 /* ── the Studio bridge: clipboard reference notes (§11.5) ── */

@@ -190,5 +190,57 @@ var Generator = (() => {
     return data.content.map(b => b.text || "").join("").trim();
   }
 
-  return { generate, compare, ask };
+  /* ── What-if: propose a change → verdict + ghost diff (§value-add) ── */
+  const NODE_KINDS = ["actor", "store", "process", "channel"];
+  const EDGE_KINDS = ["payload", "control", "money"];
+  function sanitizeWhatif(w, doc) {
+    if (!w || typeof w !== "object") throw fail("invalid", "The model returned no verdict.");
+    if (!["improves", "mixed", "harmful"].includes(w.verdict)) w.verdict = "mixed";
+    if (typeof w.assessment !== "string" || !w.assessment.trim()) throw fail("invalid", "The verdict was empty.");
+    const lanes = new Set(doc.visual.lanes.map(l => l.id));
+    const invIds = new Set(doc.strip_down.invariants.map(i => i.id));
+    // existing node/edge ids across the whole doc
+    const existing = new Set();
+    doc.visual.nodes.forEach(n => existing.add(n.id));
+    doc.visual.edges.forEach(e => existing.add(e.id));
+    doc.layers.forEach(L => { L.diff.add_nodes.forEach(n => existing.add(n.id)); L.diff.add_edges.forEach(e => existing.add(e.id)); });
+    const d = w.diff || (w.diff = {});
+    // keep only structurally sound proposed nodes; edges whose endpoints resolve
+    const nodeIds = new Set(existing);
+    d.add_nodes = (Array.isArray(d.add_nodes) ? d.add_nodes : []).filter(n =>
+      n && typeof n.id === "string" && !existing.has(n.id) && typeof n.label === "string" &&
+      NODE_KINDS.includes(n.kind) && lanes.has(n.lane) && Number.isInteger(n.order));
+    d.add_nodes.forEach(n => nodeIds.add(n.id));
+    d.add_edges = (Array.isArray(d.add_edges) ? d.add_edges : []).filter(e =>
+      e && typeof e.id === "string" && !existing.has(e.id) && EDGE_KINDS.includes(e.kind) &&
+      nodeIds.has(e.from) && nodeIds.has(e.to));
+    d.highlight = (Array.isArray(d.highlight) ? d.highlight : []).filter(id => existing.has(id));
+    w.defends = (Array.isArray(w.defends) ? w.defends : []).filter(id => invIds.has(id));
+    w.stresses = (Array.isArray(w.stresses) ? w.stresses : []).filter(id => invIds.has(id));
+    w.alternatives = (Array.isArray(w.alternatives) ? w.alternatives : []).filter(a => a && a.name && a.note);
+    return w;
+  }
+  async function whatif({ apiKey, modelId, doc, change, speed }) {
+    if (!navigator.onLine) throw fail("offline", "What-if needs a connection.");
+    const p = SKILL.whatifPrompt(doc, change);
+    async function call() {
+      let res;
+      try {
+        res = await fetch(API, {
+          method: "POST", headers: headers(apiKey),
+          body: JSON.stringify({ model: modelId, max_tokens: 4000, ...effortFor(modelId, speed), system: p.system, messages: [{ role: "user", content: p.user }] })
+        });
+      } catch (e) { throw fail("offline", "Could not reach Anthropic — check your connection."); }
+      if (!res.ok) throw await httpError(res);
+      const data = await res.json();
+      return data.content.map(b => b.text || "").join("").trim();
+    }
+    let text = await call();
+    try { return sanitizeWhatif(parseDoc(text), doc); }
+    catch (e) { if (e.kind !== "invalid") throw e; }
+    text = await call();                                   // one retry
+    return sanitizeWhatif(parseDoc(text), doc);
+  }
+
+  return { generate, compare, ask, whatif };
 })();

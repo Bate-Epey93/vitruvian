@@ -236,5 +236,68 @@ READER'S QUESTION: ${question}`
     };
   }
 
-  return { BOUNDS, SCHEMA_DOC, text, EXEMPLAR, comparePrompt, askPrompt };
+  /* ── What-if: assess a proposed CHANGE to a deconstructed system, grounded
+     in its invariants, and return a verdict + a diagram diff to ghost-render
+     the proposed architecture. Single JSON object. ── */
+  function finalNodes(doc) {
+    const nodes = new Map();
+    doc.visual.nodes.forEach(n => nodes.set(n.id, n));
+    doc.layers.forEach(L => {
+      L.diff.remove.forEach(id => nodes.delete(id));
+      L.diff.add_nodes.forEach(n => nodes.set(n.id, n));
+    });
+    return [...nodes.values()];
+  }
+  function whatifPrompt(doc, change) {
+    const invs = doc.strip_down.invariants.map(i => `${i.id}: ${i.text}`).join("\n");
+    const lanes = doc.visual.lanes.map(l => `${l.id} ("${l.label}")`).join(", ");
+    const nodeList = finalNodes(doc).map(n => `${n.id} [${n.kind}, lane ${n.lane}] "${n.label}"`).join("\n");
+    const layerList = doc.layers.map(L => `${L.index}. ${L.name} — ${L.solution}`).join("\n");
+    const shape = {
+      name: "string ≤40 — a short name for the proposed change",
+      verdict: "improves | mixed | harmful",
+      assessment: "string, 2-4 sentences — why it works/improves or why it doesn't, GROUNDED in the system's invariants; name the invariant it strengthens or threatens. Honest, specific, never a cheerleader.",
+      gain: "string — the capability or benefit the change is reaching for",
+      defends: ["invariant ids it upholds or strengthens"],
+      stresses: ["invariant ids it threatens or violates — usually the crux of why the change is hard"],
+      tradeoff: "string — what it costs",
+      at_scale: "string — how the changed system behaves under heavy load",
+      diff: {
+        add_nodes: ["new nodes: {id,label ≤24,kind:actor|store|process|channel,lane:<existing lane id>,order:0-7}"],
+        add_edges: ["new edges: {id,from,to,kind:payload|control|money,label ≤16}; from/to reference existing node ids OR your new node ids"],
+        highlight: ["existing node/edge ids the change stresses or breaks"]
+      },
+      alternatives: [{ name: "string", note: "string — a cleaner or established way to get the same benefit" }]
+    };
+    return {
+      system: `You are a rigorous, generous systems-design reviewer. The reader has a fully deconstructed system and proposes a CHANGE to it. Assess the change honestly — never a cheerleader; a change that breaks a core invariant is 'harmful' even if popular.
+
+Output ONLY one JSON object, no prose and no code fences, matching this shape:
+${JSON.stringify(shape, null, 1)}
+
+Rules:
+- The single most valuable thing you do is name which INVARIANT the change strengthens (defends) or threatens (stresses), using the invariant ids provided. stresses is often why a tempting change is actually hard.
+- verdict is one of improves|mixed|harmful. 'mixed' when it helps one goal while costing another.
+- diff renders the change on the existing diagram. New nodes use ONLY the existing lane ids. Edges' from/to must reference an existing node id (listed below) or one of your own new node ids. New ids must be unique and must NOT reuse any existing id. If the change is purely behavioral with no new structure, use empty arrays.
+- alternatives (1-3): the cleaner or established ways people actually achieve this benefit — this is where you point at how it's really done.
+- Be concrete to THIS system; do not answer generically.`,
+      user: `SYSTEM: ${doc.meta.system}
+ESSENCE: ${doc.essence.text}
+
+INVARIANTS (id: what must never be false):
+${invs}
+
+DIAGRAM LANES: ${lanes}
+
+EXISTING DIAGRAM NODES (ids you may connect to):
+${nodeList}
+
+REBUILD LAYERS:
+${layerList}
+
+PROPOSED CHANGE: ${change}`
+    };
+  }
+
+  return { BOUNDS, SCHEMA_DOC, text, EXEMPLAR, comparePrompt, askPrompt, whatifPrompt };
 })();

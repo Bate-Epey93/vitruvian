@@ -1028,3 +1028,74 @@ html,body{overscroll-behavior:none;}
 /* "your design" card chip — distinct from samples (accent) and studies (grey) */
 .chip.design{color:var(--money);border-color:var(--money);
   background:color-mix(in srgb, var(--money-wash) 70%, transparent);}
+
+/* ═══════════════════════════════════════════════════════════════
+   v1.9 — WHAT-IF: proposed architecture (ghosts) + verdict
+   ═══════════════════════════════════════════════════════════════ */
+
+:root{ --proposal:#5a4fcf; }
+:root[data-theme="dark"]{ --proposal:#9c92f0; }
+
+/* proposed elements: dashed blueprint ghosts in the proposal ink */
+.dg-ghost .dg-shape,.dg-ghost .dg-open{stroke:var(--proposal)!important;stroke-dasharray:5 3;stroke-width:1.8;}
+.dg-ghost .dg-epath{stroke:var(--proposal)!important;stroke-dasharray:5 3;}
+.dg-ghost .dg-label{fill:var(--proposal);}
+.dg-ghost .dg-fill{opacity:.35;}
+.dg-ghost{opacity:.92;}
+.dg-elabel.dg-ghost{fill:var(--proposal)!important;}
+/* existing elements the change stresses: red dashed emphasis */
+.dg-stress .dg-shape,.dg-stress .dg-open{stroke:var(--failure)!important;stroke-dasharray:4 2.5;stroke-width:2.4;}
+.dg-stress .dg-epath{stroke:var(--failure)!important;stroke-width:2.4;}
+
+/* compose row */
+.whatif-compose{display:flex;gap:9px;align-items:flex-start;margin:8px 0 4px;}
+.whatif-compose .design-input{flex:1;min-height:70px;margin:0;}
+.whatif-compose .big-btn{flex-shrink:0;}
+@media(max-width:600px){.whatif-compose{flex-direction:column;}.whatif-compose .big-btn{width:100%;}}
+
+/* result diagram pane */
+.whatif-diagram{height:300px;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:18px 0 4px;
+  background:radial-gradient(circle, var(--dot) 1.1px, transparent 1.6px) 0 0/22px 22px, var(--canvas);}
+.whatif-diagram .diagram-scroll{height:100%;}
+
+/* verdict card */
+.verdict-full{border:1px solid var(--line);border-left-width:4px;border-radius:0 12px 12px 0;padding:20px 22px;margin:14px 0;
+  background-color:var(--glass);-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(160%);backdrop-filter:blur(var(--glass-blur)) saturate(160%);
+  box-shadow:inset 0 1px 0 var(--glass-edge), var(--glass-shadow);}
+.verdict-full.verdict-improves{border-left-color:var(--accent);}
+.verdict-full.verdict-mixed{border-left-color:var(--money);}
+.verdict-full.verdict-harmful{border-left-color:var(--failure);}
+.vf-head{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.vf-badge{font-family:var(--mono);font-size:11px;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;padding:5px 11px;border-radius:5px;}
+.verdict-improves .vf-badge{color:var(--accent-deep);background:var(--accent-wash);}
+.verdict-mixed .vf-badge{color:#6e4d12;background:var(--money-wash);}
+.verdict-harmful .vf-badge{color:var(--failure);background:var(--failure-wash);}
+.vf-stamp{width:38px;height:38px;opacity:.8;}
+.vf-name{font-family:var(--display);font-weight:800;font-size:20px;letter-spacing:-.01em;margin:10px 0 6px;}
+.vf-assessment{font-size:15.5px;line-height:1.65;color:var(--ink);margin:8px 0 12px;}
+.vf-line{font-size:14px;color:var(--ink-soft);margin:6px 0;}
+.vf-line b{color:var(--ink);}
+.vf-inv{font-size:13px;color:var(--ink-soft);padding:5px 0 5px 12px;border-left:2px solid var(--line);margin:2px 0;}
+.vf-inv.stress{border-left-color:var(--failure);color:#7a3030;}
+:root[data-theme="dark"] .vf-inv.stress{color:#e2a0a0;}
+.inv-badge.stress{background:var(--failure);}
+.alt-row{padding:9px 0;border-bottom:1px solid var(--line-soft);}
+.alt-row:last-child{border-bottom:none;}
+.alt-name{font-family:var(--display);font-weight:700;font-size:15px;}
+.alt-note{font-size:13.5px;color:var(--ink-soft);margin-top:2px;}
+
+/* saved what-ifs */
+.whatif-saved{margin-top:26px;}
+.whatif-saved .mono-label{margin-bottom:8px;}
+.whatif-saved-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;cursor:pointer;
+  background:var(--panel);border:1px solid var(--line-soft);border-radius:8px;padding:11px 14px;margin-bottom:7px;
+  font-family:var(--sans);font-size:14px;color:var(--ink-soft);}
+.whatif-saved-row:hover{border-color:var(--accent);}
+.ws-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--muted);}
+.ws-dot.verdict-improves{background:var(--accent);}
+.ws-dot.verdict-mixed{background:var(--money);}
+.ws-dot.verdict-harmful{background:var(--failure);}
+.ws-change{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* proposal glyph in the diagram legend note (what-if screen only) */
+@media (prefers-reduced-transparency: reduce){.verdict-full{background-color:var(--panel);-webkit-backdrop-filter:none;backdrop-filter:none;}}
