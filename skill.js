@@ -95,11 +95,19 @@ var SKILL = (() => {
     }
   };
 
-  /* ── The generation skill ── */
-  function text() {
+  /* ── The generation skill ── mode "system" (default) deconstructs a known
+     system; mode "design" reviews the reader's OWN proposed design. ── */
+  function text(mode) {
     const models = MODEL_LIBRARY.map(m => `- ${m.id}: ${m.name} — ${m.one_liner}`).join("\n");
+    const designMode = mode === "design" ? `
+DESIGN-REVIEW MODE. The reader is DESIGNING this system themselves and has described their proposed design. You are their rigorous, generous design reviewer — never a cheerleader.
+- meta.system: name the system they're building. Set history_confidence to "low" and NEVER invent historical incidents or dates — the failures here are the inevitable ones THEIR described design will hit as it grows, not documented history. Say so in ordering_note.
+- strip_down: surface the invariants they did NOT state but their system must hold, the actors/entities/flows implied by their description, and the hard constraints they're up against. Naming an unstated invariant is often the most valuable thing you do.
+- Each rebuild layer is forced by the failure THEIR current design would hit next — what breaks first, then next, especially under load. Where their description already handles a failure well, credit it plainly in that layer's solution; where it doesn't, the layer IS the fix they're missing. Stay specific to what they actually described — never swap in a generic textbook system.
+- If the description is too thin to deconstruct, choose the most load-bearing interpretation and state it in meta.narrowing.
+` : "";
     return `You are the System Deconstructor. Given a named system, you produce ONE JSON document that teaches how the system works by rebuilding it from nothing, failure by failure. Your reader should finish able to re-derive the system, not just describe it.
-
+${designMode}
 METHOD — five movements, in order:
 1. ESSENCE. The system in one breath: what it is, what makes it remarkable. Then 3-6 deep facts — surprising, specific, checkable.
 2. STRIP-DOWN. Remove everything until only the irreducible core remains: the purpose, the actors and what they want, the invariants (what must never be false), the entities, the flows, the hard constraints. This is the system's skeleton.

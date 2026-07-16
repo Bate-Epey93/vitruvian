@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.7.0",
+  appVersion: "1.8.0",
   flagshipVersion: 2                     // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
 };
 
@@ -135,6 +135,12 @@ var COPY = {
   yoursEmpty: "Nothing here yet. Name any system above and Vitruvian will take it apart, failure by failure.",
   deconstructPlaceholder: "Name a system to study…",
   deconstructBtn: "Deconstruct",
+  ownDesignLink: "Building something? Deconstruct your own design →",
+  ownDesignKicker: "Design review",
+  ownDesignTitle: "Deconstruct your design",
+  ownDesignLede: "Describe the system you're building — the pieces, what it must never get wrong, where you expect load. Vitruvian rebuilds it failure by failure and shows what breaks first.",
+  ownDesignPlaceholder: "e.g. A booking app where vendors set their availability and customers reserve time slots. Two customers must never book the same slot; vendors get notified the instant a booking lands; I expect big spikes when a popular vendor opens their calendar…",
+  ownDesignBtn: "Review my design",
   audienceModes: [
     { id: "beginner",   label: "Beginner" },
     { id: "enthusiast", label: "Enthusiast" },

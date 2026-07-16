@@ -114,9 +114,11 @@ var Generator = (() => {
   }
 
   /* ── the full pipeline: generate → validate → one repair ── */
-  async function generate({ apiKey, modelId, system, focus, speed, onProgress }) {
-    const sys = SKILL.text();
-    const userMsg = `Deconstruct this system: ${system}` + (focus ? `\n\nFocus note from the reader: ${focus}` : "");
+  async function generate({ apiKey, modelId, system, focus, speed, mode, onProgress }) {
+    const sys = SKILL.text(mode);
+    const userMsg = (mode === "design"
+      ? `Review and deconstruct this design I'm building:\n\n${system}`
+      : `Deconstruct this system: ${system}`) + (focus ? `\n\nFocus note from the reader: ${focus}` : "");
     // 32k ceiling: a full breakdown runs ~8-15k tokens of JSON, and adaptive
     // thinking shares the same budget — 16k truncated real generations.
     // Streaming is already on, so a large ceiling is safe (billed per token

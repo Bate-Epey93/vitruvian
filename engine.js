@@ -348,7 +348,9 @@ function cardGrid(recs) {
     const card = h("button", "bd-card");
     card.appendChild(h("div", "bd-name", rec.system));
     const metaRow = h("div", "bd-meta");
-    metaRow.appendChild(h("span", "chip" + (rec.source === "flagship" ? " flagship" : ""), rec.source === "flagship" ? "sample" : "your study"));
+    const chipCls = rec.source === "flagship" ? " flagship" : (rec.source === "design" ? " design" : "");
+    const chipLabel = rec.source === "flagship" ? "sample" : (rec.source === "design" ? "your design" : "your study");
+    metaRow.appendChild(h("span", "chip" + chipCls, chipLabel));
     metaRow.appendChild(h("span", "chip", rec.doc.layers.length + " layers"));
     card.appendChild(metaRow);
     const foot = h("div", "bd-foot");
@@ -401,6 +403,15 @@ async function renderLibrary() {
   input.onkeydown = e => { if (e.key === "Enter") launch(); };
   bar.append(input, go);
   root.appendChild(bar);
+
+  // second path: deconstruct a design you're building (not a known system)
+  const ownLink = h("button", "own-design-link", COPY.ownDesignLink);
+  ownLink.onclick = () => {
+    if (!meta.apiKey) { renderSettings("Add your Anthropic API key to generate studies."); show("settings"); return; }
+    renderGenerate("", "design");
+    show("generate");
+  };
+  root.appendChild(ownLink);
 
   const all = (await Store.getBreakdowns()).sort((a, b) => (b.lastOpen || b.created) - (a.lastOpen || a.created));
   const flagships = all.filter(b => b.source === "flagship");
@@ -611,28 +622,42 @@ function bridgeNotes(doc) {
 }
 
 /* ═══ Generation screen (§8, §11.3) ═══ */
-function renderGenerate(systemName) {
+function renderGenerate(systemName, mode) {
+  const design = mode === "design";
   const root = $("screen-generate").firstElementChild;
   root.textContent = "";
-  root.appendChild(h("div", "kicker", "New breakdown"));
-  root.appendChild(h("h1", "title", systemName));
+  root.appendChild(h("div", "kicker", design ? COPY.ownDesignKicker : "New study"));
+  root.appendChild(h("h1", "title", design ? COPY.ownDesignTitle : systemName));
 
-  const focusRow = h("div", "focus-row");
-  const focus = h("input");
-  focus.placeholder = "Optional focus note — e.g. \"emphasize the payments part\"";
-  focus.maxLength = 200;
-  focusRow.appendChild(focus);
-  root.appendChild(focusRow);
+  let designInput = null, focus = null;
+  if (design) {
+    root.appendChild(h("p", "subtitle", COPY.ownDesignLede));
+    designInput = h("textarea", "design-input");
+    designInput.placeholder = COPY.ownDesignPlaceholder;
+    designInput.value = systemName || "";
+    designInput.maxLength = 1400;
+    root.appendChild(designInput);
+  } else {
+    const focusRow = h("div", "focus-row");
+    focus = h("input");
+    focus.placeholder = "Optional focus note — e.g. \"emphasize the payments part\"";
+    focus.maxLength = 200;
+    focusRow.appendChild(focus);
+    root.appendChild(focusRow);
+  }
   root.appendChild(h("p", "lib-note", `Model: ${meta.modelId} · ${COPY.costNote}`));
 
-  const startBtn = h("button", "big-btn", "Generate (1–3 minutes)");
+  const startBtn = h("button", "big-btn", design ? COPY.ownDesignBtn : "Generate (1–3 minutes)");
   root.appendChild(startBtn);
   const prog = h("div", "gen-progress");
   root.appendChild(prog);
 
   startBtn.onclick = async () => {
+    const subject = design ? designInput.value.trim() : systemName;
+    if (design && subject.length < 12) { designInput.focus(); toast("Describe your design a little more"); return; }
     startBtn.disabled = true;
-    focus.disabled = true;
+    if (designInput) designInput.disabled = true;
+    if (focus) focus.disabled = true;
     prog.textContent = "";
     const phaseEl = h("div", "gen-phase", COPY.genPhases.start);
     const barEl = h("div", "gen-bar");
@@ -645,7 +670,7 @@ function renderGenerate(systemName) {
     try {
       const { doc, repaired } = await Generator.generate({
         apiKey: meta.apiKey, modelId: meta.modelId,
-        system: systemName, focus: focus.value.trim(),
+        system: subject, focus: focus ? focus.value.trim() : "", mode,
         speed: meta.genSpeed || "balanced",
         onProgress(p) {
           if (p.phase) {
@@ -658,7 +683,7 @@ function renderGenerate(systemName) {
       fill.style.width = "100%";
       const rec = {
         id: "gen_" + Date.now(), system: doc.meta.system, created: Date.now(),
-        source: "generated", schemaVersion: 1, doc,
+        source: design ? "design" : "generated", schemaVersion: 1, doc,
         attempts: {}, progress: { layersRead: 0, gatesAnswered: 0, position: 0 }
       };
       await Store.saveBreakdown(rec);
@@ -682,7 +707,7 @@ function renderGenerate(systemName) {
       }
       if (e.kind === "overloaded" || e.kind === "rate" || e.kind === "offline" || e.kind === "http") {
         const b = h("button", "gbtn primary", "Retry");
-        b.onclick = () => { startBtn.disabled = false; focus.disabled = false; prog.textContent = ""; startBtn.click(); };
+        b.onclick = () => { startBtn.disabled = false; if (focus) focus.disabled = false; if (designInput) designInput.disabled = false; prog.textContent = ""; startBtn.click(); };
         row.appendChild(b);
       }
       if (e.raw) {
@@ -693,7 +718,8 @@ function renderGenerate(systemName) {
       box.appendChild(row);
       prog.appendChild(box);
       startBtn.disabled = false;
-      focus.disabled = false;
+      if (focus) focus.disabled = false;
+      if (designInput) designInput.disabled = false;
     }
   };
 }

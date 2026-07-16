@@ -1005,3 +1005,26 @@ html,body{overscroll-behavior:none;}
   .dg-legend.open{padding:7px 10px;gap:4px 10px;border:1px solid var(--line-soft);}
   .diagram-cap{padding:5px 10px;}
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   v1.8 — DECONSTRUCT YOUR OWN DESIGN
+   ═══════════════════════════════════════════════════════════════ */
+
+.own-design-link{
+  display:inline-block;background:none;border:none;cursor:pointer;
+  font-family:var(--sans);font-size:14px;color:var(--accent);
+  margin:-22px 0 30px;padding:4px 0;text-align:left;
+}
+.own-design-link:hover{color:var(--accent-deep);text-decoration:underline;}
+
+.design-input{
+  width:100%;font-family:var(--sans);font-size:15.5px;line-height:1.6;
+  border:1.5px solid var(--line);border-radius:10px;
+  padding:15px 17px;background:var(--panel);color:var(--ink);
+  min-height:150px;resize:vertical;margin:6px 0 4px;
+}
+.design-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash);}
+
+/* "your design" card chip — distinct from samples (accent) and studies (grey) */
+.chip.design{color:var(--money);border-color:var(--money);
+  background:color-mix(in srgb, var(--money-wash) 70%, transparent);}
