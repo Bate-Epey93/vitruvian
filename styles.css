@@ -665,7 +665,20 @@ html,body{overscroll-behavior:none;}
 .empty-panel p{font-size:14px;color:var(--ink-soft);margin-top:6px;max-width:52ch;}
 
 /* ── Landing ── */
-.landing-inner{max-width:920px;}
+.landing-inner{max-width:920px;position:relative;z-index:0;}
+/* deconstructed enso, drifting behind the copy */
+.landing-motif{
+  position:absolute;inset:0;width:100%;height:100%;z-index:-1;
+  pointer-events:none;color:var(--ink);opacity:.075;
+}
+.landing-motif .lm-seal{fill:#d95b31;opacity:.55;}
+.lm-spin{animation:lm-spin 240s linear infinite;transform-box:fill-box;transform-origin:center;}
+.lm-spin-counter{animation:lm-spin 300s linear infinite reverse;transform-box:fill-box;transform-origin:center;}
+.lm-float{animation:lm-float 14s ease-in-out infinite alternate;}
+@keyframes lm-spin{to{transform:rotate(360deg);}}
+@keyframes lm-float{from{transform:translateY(0);}to{transform:translateY(-14px);}}
+@media (prefers-reduced-motion: reduce){.lm-spin,.lm-spin-counter,.lm-float{animation:none;}}
+:root[data-theme="dark"] .landing-motif{opacity:.11;}
 .landing-head{font-family:var(--display);font-weight:800;font-size:clamp(30px,5vw,50px);line-height:1.04;letter-spacing:-.025em;margin:6px 0 18px;}
 .landing-lede{font-size:clamp(16px,2.1vw,19px);line-height:1.6;color:var(--ink-soft);max-width:64ch;margin-bottom:36px;}
 .landing-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
@@ -1026,12 +1039,10 @@ html,body{overscroll-behavior:none;}
    v1.8 — DECONSTRUCT YOUR OWN DESIGN
    ═══════════════════════════════════════════════════════════════ */
 
-.own-design-link{
-  display:inline-block;background:none;border:none;cursor:pointer;
-  font-family:var(--sans);font-size:14px;color:var(--accent);
-  margin:-22px 0 30px;padding:4px 0;text-align:left;
+.own-design-btn{
+  margin:-14px 0 30px;color:var(--accent);border-color:var(--accent);
 }
-.own-design-link:hover{color:var(--accent-deep);text-decoration:underline;}
+.own-design-btn:hover{color:var(--accent-deep);border-color:var(--accent-deep);}
 
 .design-input{
   width:100%;font-family:var(--sans);font-size:15.5px;line-height:1.6;

@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.11.0",
+  appVersion: "1.11.1",
   flagshipVersion: 2                     // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
 };
 
@@ -174,18 +174,18 @@ var COPY = {
   landing: {
     kicker: "Welcome to Vitruvian",
     headline: "Take anything apart.\nPut it back together. Now you get it.",
-    lede: "Everyday systems — the railway, WhatsApp, YouTube — rebuilt from scratch, one failure at a time.",
+    lede: "Everyday systems, deconstructed one failure at a time.",
     sections: [
       { icon: "whatItIs", title: "What it is",
-        body: "Pick a system. Vitruvian strips it to its bones, then rebuilds it layer by layer — each layer born from a real failure (yes, real train crashes). A diagram grows as it comes together." },
+        body: "Pick a system. Vitruvian deconstructs it to its bones, then rebuilds it layer by layer — each layer born from a real failure. A diagram grows as it comes together." },
       { icon: "whoFor", title: "Who it's for",
         body: "Curious minds, systems-design enthusiasts, and developers prepping for architecture interviews. Three reading levels, from plain English to engineer." },
       { icon: "whyWorks", title: "Why it works",
         body: "You remember what you rebuild. Design each fix yourself before the reveal — and collect the named thinking models that repeat across systems." },
       { icon: "howTo", title: "How to use it",
-        body: "Start with a sample Deconstruct. Add your Anthropic API key in Settings to deconstruct anything you name. Works offline; installs to your home screen." }
+        body: "Start with a sample Deconstruct. Add your Anthropic API key in Settings to deconstruct anything you name — or put your own system design on the table and watch where it breaks first. Works offline; installs to your home screen." }
     ],
-    cta: "Start exploring →",
+    cta: "Start deconstructing →",
     footnote: "No account. No cloud. Your Deconstructs stay on this device."
   },
 
@@ -245,7 +245,7 @@ var COPY = {
       items: [
         ["Audience — B / E / D", "Three registers of the same Deconstruct: Beginner (plain language, everyday analogies), Enthusiast (the default), and Developer (adds the engineer mappings and interview probes). Switch anytime; your place is kept."],
         ["Step & scrub", "Move layer by layer with Prev / Next, or drag the scrubber to sweep the diagram across every state."],
-        ["Pulse ▶", "Send traffic through the current state of the diagram — watch payloads travel, crash into what's broken, and congest under ⚡ load."],
+        ["Pulse ▶", "Send traffic through the current state of the diagram — watch payloads travel, crash into what's broken, and congest under ◉ load."],
         ["Challenge mode", "Optional, and off by default. Turn it on from the ⋯ menu to hide each solution behind a 'design it first' gate — you predict the fix, then compare."]
       ]
     },
@@ -261,7 +261,7 @@ var COPY = {
         ["Transfer principles", "the reusable patterns to carry into your own design."]
       ]
     },
-    cta: "Got it — back to reading"
+    cta: "Got it — back to deconstructing"
   },
 
   genPhases: {

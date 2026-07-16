@@ -169,10 +169,63 @@ function renderAudSwitch() {
 }
 
 /* ═══ Landing (first-run explainer, §value-add) ═══ */
+
+/* Deconstructed enso — the landing's living background. The brush ring is
+   taken apart: its arcs drift out from the centre, the Vitruvian square
+   splits into corner brackets, one vermillion dot holds still. Motion is a
+   slow rotation of the exploded parts (the app's own idea: separation you
+   can see), disabled under prefers-reduced-motion. Pure decoration:
+   aria-hidden, pointer-events none, behind the copy. */
+function landingMotif() {
+  const arc = (cx, cy, r, a0, a1, w, spread) => {
+    // arc of a circle, its midpoint pushed OUT from the centre by `spread`
+    const mid = ((a0 + a1) / 2) * Math.PI / 180;
+    const ox = Math.cos(mid) * spread, oy = Math.sin(mid) * spread;
+    const p0 = [cx + ox + r * Math.cos(a0 * Math.PI / 180), cy + oy + r * Math.sin(a0 * Math.PI / 180)];
+    const p1 = [cx + ox + r * Math.cos(a1 * Math.PI / 180), cy + oy + r * Math.sin(a1 * Math.PI / 180)];
+    const path = svgNS("path", {
+      d: `M ${p0[0]} ${p0[1]} A ${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${p1[0]} ${p1[1]}`,
+      fill: "none", "stroke-width": w, "stroke-linecap": "round"
+    });
+    path.style.stroke = "currentColor";
+    return path;
+  };
+  const bracket = (x, y, len, dx, dy) => {           // one pulled-apart square corner
+    const b = svgNS("path", { d: `M ${x + dx * len} ${y + dy} H ${x + dx} V ${y + dy * len}`, fill: "none", "stroke-width": 7, "stroke-linecap": "square" });
+    b.style.stroke = "currentColor";
+    return b;
+  };
+  const svg = svgNS("svg", { class: "landing-motif", viewBox: "0 0 1000 1000", preserveAspectRatio: "xMidYMid slice", "aria-hidden": "true" });
+
+  const big = svgNS("g", { class: "lm-spin" });      // exploded enso, upper right
+  big.appendChild(arc(780, 210, 190, -50, 75, 24, 0));
+  big.appendChild(arc(780, 210, 190, 95, 195, 15, 22));
+  big.appendChild(arc(780, 210, 190, 215, 285, 9, 44));
+  svg.appendChild(big);
+
+  const sq = svgNS("g", { class: "lm-float" });      // the square, split at its corners
+  sq.appendChild(bracket(700, 130, 46, 1, 1));
+  sq.appendChild(bracket(900, 130, 46, -1, 1));
+  sq.appendChild(bracket(700, 330, 46, 1, -1));
+  sq.appendChild(bracket(900, 330, 46, -1, -1));
+  svg.appendChild(sq);
+
+  const seal = svgNS("circle", { cx: 892, cy: 372, r: 11, class: "lm-seal" });
+  svg.appendChild(seal);
+
+  const small = svgNS("g", { class: "lm-spin-counter" });   // quieter echo, lower left
+  small.appendChild(arc(120, 840, 110, 30, 165, 13, 0));
+  small.appendChild(arc(120, 840, 110, 190, 300, 8, 18));
+  svg.appendChild(small);
+
+  return svg;
+}
+
 function renderLanding() {
   const root = $("screen-landing").firstElementChild;
   root.textContent = "";
   const L = COPY.landing;
+  root.appendChild(landingMotif());
   root.appendChild(h("div", "kicker", L.kicker));
   const head = h("h1", "landing-head");
   L.headline.split("\n").forEach((line, i) => { if (i) head.appendChild(document.createElement("br")); head.appendChild(document.createTextNode(line)); });
@@ -405,7 +458,7 @@ async function renderLibrary() {
   root.appendChild(bar);
 
   // second path: deconstruct a design you're building (not a known system)
-  const ownLink = h("button", "own-design-link", COPY.ownDesignLink);
+  const ownLink = h("button", "gbtn own-design-btn", COPY.ownDesignLink);
   ownLink.onclick = () => {
     if (!meta.apiKey) { renderSettings("Add your Anthropic API key to generate Deconstructs."); show("settings"); return; }
     renderGenerate("", "design");
@@ -510,7 +563,7 @@ async function openReader(id, layerIndex) {
     capToggle.textContent = dpane.classList.contains("collapsed") ? "show" : "hide";
   };
   const playBtn = h("button", "gbtn sim-btn", "▶ pulse");
-  const loadBtn = h("button", "gbtn sim-btn", "⚡ load");
+  const loadBtn = h("button", "gbtn sim-btn", "◉ load");
   loadBtn.hidden = true;
   dcap.append(capState, playBtn, loadBtn, capToggle);
   const scrubEl = h("div", "scrub-wrap");
