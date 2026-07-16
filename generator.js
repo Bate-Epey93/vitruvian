@@ -31,13 +31,23 @@ var Generator = (() => {
     return { output_config: { effort: speed === "fast" ? "low" : "medium" } };
   }
 
-  function headers(apiKey) {
-    return {
+  const FABLE = /fable|mythos/;
+  function headers(apiKey, modelId) {
+    const h = {
       "content-type": "application/json",
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
       "anthropic-dangerous-direct-browser-access": "true"
     };
+    // Fable runs safety classifiers that can decline benign requests with a
+    // 200 + stop_reason "refusal"; the server-side fallback beta reruns the
+    // same request on Opus 4.8 in one round trip instead of failing.
+    if (FABLE.test(modelId || "")) h["anthropic-beta"] = "server-side-fallback-2026-06-01";
+    return h;
+  }
+
+  function fallbackFor(modelId) {
+    return FABLE.test(modelId) ? { fallbacks: [{ model: "claude-opus-4-8" }] } : {};
   }
 
   function fail(kind, message, raw) { const e = new Error(message); e.kind = kind; e.raw = raw; return e; }
@@ -57,7 +67,7 @@ var Generator = (() => {
     if (!navigator.onLine) throw fail("offline", COPY.offlineGenNote);
     let res;
     try {
-      res = await fetch(API, { method: "POST", headers: headers(apiKey), body: JSON.stringify({ ...body, model: modelId, stream: true }) });
+      res = await fetch(API, { method: "POST", headers: headers(apiKey, modelId), body: JSON.stringify({ ...body, ...fallbackFor(modelId), model: modelId, stream: true }) });
     } catch (e) {
       throw fail("offline", "Could not reach Anthropic — check your connection.");
     }
@@ -98,6 +108,9 @@ var Generator = (() => {
         }
         if (ev.type === "message_delta" && ev.delta && ev.delta.stop_reason === "max_tokens")
           throw fail("toobig", "The breakdown hit the output limit. Try narrowing the system.", text);
+        // Fable/Mythos: whole fallback chain declined — partial text is not a document
+        if (ev.type === "message_delta" && ev.delta && ev.delta.stop_reason === "refusal")
+          throw fail("refusal", "The model declined this request (safety classifiers). Try a different model, or rephrase the system.");
         if (ev.type === "error") throw fail("http", (ev.error && ev.error.message) || "stream error", text);
       }
     }
@@ -165,12 +178,13 @@ var Generator = (() => {
       // 1500 not 400: on adaptive-thinking models the ceiling covers thinking
       // + verdict together — 400 would truncate the verdict mid-sentence
       res = await fetch(API, {
-        method: "POST", headers: headers(apiKey),
-        body: JSON.stringify({ model: modelId, max_tokens: 1500, ...effortFor(modelId, "fast"), system: p.system, messages: [{ role: "user", content: p.user }] })
+        method: "POST", headers: headers(apiKey, modelId),
+        body: JSON.stringify({ model: modelId, max_tokens: 1500, ...effortFor(modelId, "fast"), ...fallbackFor(modelId), system: p.system, messages: [{ role: "user", content: p.user }] })
       });
     } catch (e) { throw fail("offline", "Could not reach Anthropic — check your connection."); }
     if (!res.ok) throw await httpError(res);
     const data = await res.json();
+    if (data.stop_reason === "refusal") throw fail("refusal", "The model declined this request. Try a different model.");
     return data.content.map(b => b.text || "").join("").trim();
   }
 
@@ -181,12 +195,13 @@ var Generator = (() => {
     let res;
     try {
       res = await fetch(API, {
-        method: "POST", headers: headers(apiKey),
-        body: JSON.stringify({ model: modelId, max_tokens: 1200, ...effortFor(modelId, "fast"), system: p.system, messages: [{ role: "user", content: p.user }] })
+        method: "POST", headers: headers(apiKey, modelId),
+        body: JSON.stringify({ model: modelId, max_tokens: 1200, ...effortFor(modelId, "fast"), ...fallbackFor(modelId), system: p.system, messages: [{ role: "user", content: p.user }] })
       });
     } catch (e) { throw fail("offline", "Could not reach Anthropic — check your connection."); }
     if (!res.ok) throw await httpError(res);
     const data = await res.json();
+    if (data.stop_reason === "refusal") throw fail("refusal", "The model declined this question. Try a different model.");
     return data.content.map(b => b.text || "").join("").trim();
   }
 
@@ -227,12 +242,13 @@ var Generator = (() => {
       let res;
       try {
         res = await fetch(API, {
-          method: "POST", headers: headers(apiKey),
-          body: JSON.stringify({ model: modelId, max_tokens: 4000, ...effortFor(modelId, speed), system: p.system, messages: [{ role: "user", content: p.user }] })
+          method: "POST", headers: headers(apiKey, modelId),
+          body: JSON.stringify({ model: modelId, max_tokens: 4000, ...effortFor(modelId, speed), ...fallbackFor(modelId), system: p.system, messages: [{ role: "user", content: p.user }] })
         });
       } catch (e) { throw fail("offline", "Could not reach Anthropic — check your connection."); }
       if (!res.ok) throw await httpError(res);
       const data = await res.json();
+      if (data.stop_reason === "refusal") throw fail("refusal", "The model declined this proposal. Try a different model.");
       return data.content.map(b => b.text || "").join("").trim();
     }
     let text = await call();

@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.9.0",
+  appVersion: "1.10.0",
   flagshipVersion: 2                     // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
 };
 
@@ -164,6 +164,7 @@ var COPY = {
   gateCompareOffline: "AI comparison needs a connection and an API key (Settings). Your answer is saved — compare it yourself against the reveal.",
   keyNotice: "Your key is stored on this device only and sent only to Anthropic.",
   costNote: "A breakdown typically costs a few cents to a few tens of cents of API usage, depending on the model.",
+  modelCostNote: "Rough cost per study — haiku-4-5 ≈ $0.10 · sonnet-5 ≈ $0.30 · opus-4-8 ≈ $0.55 · fable-5 ≈ $1.20. Fable is the most capable and auto-falls back to Opus if it declines a request.",
   pricingUrl: "https://www.anthropic.com/pricing",
   privacyNote: "Everything lives on this device. Breakdowns, attempts, and your key are never sent anywhere except your own calls to Anthropic.",
   offlineGenNote: "Generation needs a connection. Reading never does.",
