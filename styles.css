@@ -435,7 +435,7 @@ a{color:var(--accent);}
 .dg-ekind-payload .dg-epath{stroke-width:2;}
 .dg-ekind-control .dg-epath{stroke-dasharray:5 4;}
 .dg-ekind-money .dg-epath{stroke-dasharray:1.5 3.5;}
-.dg-elabel{font-size:9px;paint-order:stroke;stroke:var(--diagram-halo);stroke-width:3.5px;stroke-linejoin:round;}
+.dg-elabel{font-size:9px;letter-spacing:.3px;paint-order:stroke;stroke:var(--diagram-halo);stroke-width:3.5px;stroke-linejoin:round;}
 /* failure pulse must beat the inline layer color */
 .dg-broken .dg-shape,.dg-broken .dg-open{stroke:var(--failure)!important;animation:dg-pulse 1.1s ease-in-out infinite;}
 .dg-broken .dg-epath{stroke:var(--failure)!important;animation:dg-pulse 1.1s ease-in-out infinite;}
@@ -448,8 +448,15 @@ a{color:var(--accent);}
 @keyframes dg-settle{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:translateY(0);}}
 g.dg-node.dg-enter{animation:dg-fade .3s ease both;}
 @keyframes dg-fade{from{opacity:0;}to{opacity:1;}}
+/* delta emphasis: right after a step, carried-over elements recede for a
+   beat so the eye lands on what's new; dg-fresh drops off the svg via JS */
+.dg-prior{transition:opacity .5s ease;}
+.dg-fresh .dg-prior{opacity:.42;}
+/* kind mark: quiet echo of the node's kind inside the box */
+.dg-kmark{stroke-width:1.3;opacity:.55;stroke-linecap:round;stroke-linejoin:round;}
 @media (prefers-reduced-motion: reduce){
   .dg-enter,g.dg-node.dg-enter{animation:none;}
+  .dg-fresh .dg-prior{opacity:1;}
   .dg-broken .dg-shape,.dg-broken .dg-epath,.dg-broken .dg-open{animation:none;stroke-width:2.6;}
   *{transition-duration:0s!important;}
 }
@@ -774,9 +781,18 @@ html,body{overscroll-behavior:none;}
 .dg-spot-solution .dg-epath{stroke:var(--accent)!important;stroke-width:2.4;}
 .dg-spot-solution .dg-label,.dg-elabel.dg-spot-solution{fill:var(--accent)!important;}
 .dg-spot-load .dg-shape,.dg-spot-load .dg-open{stroke:var(--money)!important;stroke-width:2.1;}
-.dg-spot-load .dg-epath{stroke:var(--money)!important;stroke-width:2.4;}
+.dg-spot-load .dg-epath{stroke:var(--money)!important;stroke-width:2.4;
+  stroke-dasharray:7 5!important;animation:dg-march .8s linear infinite;}   /* the load path MOVES */
+@keyframes dg-march{to{stroke-dashoffset:-12;}}
 .dg-spot-load .dg-label,.dg-elabel.dg-spot-load{fill:var(--money)!important;}
-@media (prefers-reduced-motion: reduce){.dg-has-spot .dg-node,.dg-has-spot .dg-edge,.dg-has-spot .dg-elabel{transition:none;}}
+/* trace: tap a node — it and everything it touches stay lit in the ink color */
+.dg-spot-trace .dg-shape,.dg-spot-trace .dg-open{stroke:var(--diagram-ink)!important;stroke-width:2.1;}
+.dg-spot-trace .dg-epath{stroke-width:2.4;}
+.dg-node{cursor:pointer;}
+@media (prefers-reduced-motion: reduce){
+  .dg-has-spot .dg-node,.dg-has-spot .dg-edge,.dg-has-spot .dg-elabel{transition:none;}
+  .dg-spot-load .dg-epath{animation:none;stroke-dasharray:none!important;}
+}
 
 /* ═══════════════════════════════════════════════════════════════
    v1.4 — landing enso icons, tutorial / legend page

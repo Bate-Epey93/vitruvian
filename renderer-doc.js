@@ -164,12 +164,12 @@ var DocView = (() => {
 
     /* ── overview (position 0) ── */
     function renderOverview(root) {
-      root.appendChild(h("div", "kicker", "System study · " + doc.meta.history_confidence + " historical confidence"));
+      root.appendChild(h("div", "kicker", "Deconstruct · " + doc.meta.history_confidence + " historical confidence"));
       const titleRow = h("h1", "title", doc.meta.system);
       if (doc.layers.every(L => attemptFor(L.index).revealed)) {
         const stamp = h("img", "enso-stamp complete");
         stamp.src = "assets/enso-complete.svg";
-        stamp.alt = "Study complete";
+        stamp.alt = "Deconstruct complete";
         stamp.title = "Every layer rebuilt";
         titleRow.appendChild(stamp);
       }
@@ -187,6 +187,7 @@ var DocView = (() => {
       root.appendChild(facts);
 
       const sd = doc.strip_down;
+      root.appendChild(h("h2", "section-head", "The Skeleton"));
       const block = (title, build) => {
         const b = h("div", "sd-block");
         b.appendChild(h("h3", null, title));

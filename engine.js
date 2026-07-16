@@ -201,7 +201,7 @@ function renderLanding() {
     show("library");
   };
   root.appendChild(cta);
-  const learn = h("button", "gbtn", "How to read a study →");
+  const learn = h("button", "gbtn", "How to read a Deconstruct →");
   learn.style.marginLeft = "8px";
   learn.onclick = () => { renderTutorial("landing"); show("tutorial"); };
   cta.after(learn);
@@ -243,7 +243,7 @@ function renderTutorial(from) {
   const root = $("screen-tutorial").firstElementChild;
   root.textContent = "";
   const T = COPY.tutorial;
-  const back = h("button", "gbtn", returnId ? "‹ Back to the study" : "‹ Back");
+  const back = h("button", "gbtn", returnId ? "‹ Back to the Deconstruct" : "‹ Back");
   back.onclick = () => {
     if (returnId) { openReader(returnId); }
     else if (from === "landing") { renderLanding(); show("landing"); }
@@ -349,7 +349,7 @@ function cardGrid(recs) {
     card.appendChild(h("div", "bd-name", rec.system));
     const metaRow = h("div", "bd-meta");
     const chipCls = rec.source === "flagship" ? " flagship" : (rec.source === "design" ? " design" : "");
-    const chipLabel = rec.source === "flagship" ? "sample" : (rec.source === "design" ? "your design" : "your study");
+    const chipLabel = rec.source === "flagship" ? "sample" : (rec.source === "design" ? "your design" : "your deconstruct");
     metaRow.appendChild(h("span", "chip" + chipCls, chipLabel));
     metaRow.appendChild(h("span", "chip", rec.doc.layers.length + " layers"));
     card.appendChild(metaRow);
@@ -361,7 +361,7 @@ function cardGrid(recs) {
     if (pct === 100) {
       const stamp = h("img", "enso-stamp card-stamp");
       stamp.src = "assets/enso-complete.svg";
-      stamp.alt = "Study complete";
+      stamp.alt = "Deconstruct complete";
       foot.appendChild(stamp);
     } else {
       const ring = h("div", "ring");
@@ -392,7 +392,7 @@ async function renderLibrary() {
     const name = input.value.trim();
     if (!name) return;
     if (!meta.apiKey) {
-      renderSettings("Add your Anthropic API key to generate breakdowns.");
+      renderSettings("Add your Anthropic API key to generate Deconstructs.");
       show("settings");
       return;
     }
@@ -407,7 +407,7 @@ async function renderLibrary() {
   // second path: deconstruct a design you're building (not a known system)
   const ownLink = h("button", "own-design-link", COPY.ownDesignLink);
   ownLink.onclick = () => {
-    if (!meta.apiKey) { renderSettings("Add your Anthropic API key to generate studies."); show("settings"); return; }
+    if (!meta.apiKey) { renderSettings("Add your Anthropic API key to generate Deconstructs."); show("settings"); return; }
     renderGenerate("", "design");
     show("generate");
   };
@@ -435,12 +435,12 @@ async function renderLibrary() {
   // quiet foundation of future sharing: single-breakdown import
   const importRow = h("div", "gate-actions");
   importRow.style.marginTop = "26px";
-  const imp = h("button", "gbtn", "Import a breakdown (.json)");
+  const imp = h("button", "gbtn", "Import a Deconstruct (.json)");
   imp.onclick = () => pickFile(async file => {
     try {
       const doc = JSON.parse(await file.text());
       const res = Schema.validate(doc);
-      if (!res.ok) { alert("Not a valid breakdown:\n" + res.errors.slice(0, 6).join("\n")); return; }
+      if (!res.ok) { alert("Not a valid Deconstruct:\n" + res.errors.slice(0, 6).join("\n")); return; }
       await Store.saveBreakdown({
         id: "imp_" + Date.now(), system: doc.meta.system, created: Date.now(),
         source: "generated", schemaVersion: 1, doc,
@@ -509,7 +509,7 @@ async function openReader(id, layerIndex) {
     dpane.classList.toggle("collapsed");
     capToggle.textContent = dpane.classList.contains("collapsed") ? "show" : "hide";
   };
-  const playBtn = h("button", "gbtn sim-btn", "▶ play");
+  const playBtn = h("button", "gbtn sim-btn", "▶ pulse");
   const loadBtn = h("button", "gbtn sim-btn", "⚡ load");
   loadBtn.hidden = true;
   dcap.append(capState, playBtn, loadBtn, capToggle);
@@ -524,7 +524,7 @@ async function openReader(id, layerIndex) {
   /* flow simulation controls — instant response on press; any state change
      stops the sim (via diagram.show) and this resets the buttons */
   const resetSimUI = () => {
-    playBtn.textContent = "▶ play";
+    playBtn.textContent = "▶ pulse";
     loadBtn.hidden = true;
     loadBtn.classList.remove("on");
   };
@@ -533,7 +533,7 @@ async function openReader(id, layerIndex) {
   playBtn.onclick = () => {
     if (diagram.sim.running) { diagram.sim.stop(); }
     else if (diagram.sim.start()) {
-      playBtn.textContent = "⏸ stop";
+      playBtn.textContent = "⏸ rest";
       loadBtn.hidden = false;
     }
   };
@@ -576,14 +576,14 @@ function buildReaderMenu(rec, challengeOn) {
     pop.appendChild(b);
   };
   add(COPY.whatifMenu, () => { renderWhatif(rec); show("whatif"); });
-  add("How to read a study", () => { renderTutorial("reader"); show("tutorial"); });
+  add("How to read a Deconstruct", () => { renderTutorial("reader"); show("tutorial"); });
   add((challengeOn ? "✓ " : "") + "Challenge mode (gates)", async () => {
     rec.challengeMode = !challengeOn;
     await Store.saveBreakdownLight(rec);
     openReader(rec.id);
   });
   pop.appendChild(h("div", "menu-sep"));
-  add("Export breakdown .json", () => {
+  add("Export Deconstruct .json", () => {
     download(rec.system.replace(/\W+/g, "-").toLowerCase() + ".json", JSON.stringify(rec.doc, null, 2));
   });
   add("Use as reference in UX-First Studio", async () => {
@@ -593,7 +593,7 @@ function buildReaderMenu(rec, challengeOn) {
     } catch (e) { alert("Clipboard unavailable — export the .json instead."); }
   });
   pop.appendChild(h("div", "menu-sep"));
-  add("Delete this breakdown", async () => {
+  add("Delete this Deconstruct", async () => {
     if (!confirm(`Delete "${rec.system}" and its attempts? This cannot be undone.`)) return;
     await Store.deleteBreakdown(rec.id);
     await renderLibrary();
@@ -610,7 +610,7 @@ function renderWhatif(rec, opts = {}) {
   root.appendChild(h("p", "subtitle", COPY.whatifLede));
 
   const backRow = h("div", "gate-actions");
-  const backBtn2 = h("button", "gbtn", "‹ Back to the study");
+  const backBtn2 = h("button", "gbtn", "‹ Back to the Deconstruct");
   backBtn2.onclick = () => openReader(rec.id);
   backRow.appendChild(backBtn2);
   root.appendChild(backRow);
@@ -634,7 +634,7 @@ function renderWhatif(rec, opts = {}) {
     savedWrap.textContent = "";
     const list = rec.whatifs || [];
     if (!list.length) return;
-    savedWrap.appendChild(h("div", "mono-label", "Earlier what-ifs"));
+    savedWrap.appendChild(h("div", "mono-label", "Earlier grafts"));
     list.slice().reverse().forEach((wi, i) => {
       const row = h("button", "whatif-saved-row");
       row.appendChild(h("span", "ws-dot verdict-" + wi.result.verdict));
@@ -668,8 +668,8 @@ function renderWhatif(rec, opts = {}) {
   runBtn.onclick = async () => {
     const change = ta.value.trim();
     if (change.length < 4) { ta.focus(); return; }
-    if (!meta.apiKey) { renderSettings("Add your Anthropic API key to run what-ifs."); show("settings"); return; }
-    if (!navigator.onLine) { toast("What-if needs a connection"); return; }
+    if (!meta.apiKey) { renderSettings("Add your Anthropic API key to run grafts."); show("settings"); return; }
+    if (!navigator.onLine) { toast("A graft needs a connection"); return; }
     runBtn.disabled = true;
     ta.disabled = true;
     resultEl.textContent = "";
@@ -683,7 +683,7 @@ function renderWhatif(rec, opts = {}) {
     } catch (e) {
       resultEl.textContent = "";
       const box = h("div", "gen-error");
-      box.appendChild(h("h3", null, e.kind === "key" ? "Invalid API key" : "What-if failed"));
+      box.appendChild(h("h3", null, e.kind === "key" ? "Invalid API key" : "Graft failed"));
       box.appendChild(h("p", null, e.message));
       resultEl.appendChild(box);
     } finally {
@@ -767,7 +767,7 @@ function renderGenerate(systemName, mode) {
   const design = mode === "design";
   const root = $("screen-generate").firstElementChild;
   root.textContent = "";
-  root.appendChild(h("div", "kicker", design ? COPY.ownDesignKicker : "New study"));
+  root.appendChild(h("div", "kicker", design ? COPY.ownDesignKicker : "New Deconstruct"));
   root.appendChild(h("h1", "title", design ? COPY.ownDesignTitle : systemName));
 
   let designInput = null, focus = null;
@@ -853,7 +853,7 @@ function renderGenerate(systemName, mode) {
       }
       if (e.raw) {
         const b = h("button", "gbtn", "Download raw output");
-        b.onclick = () => download("raw-breakdown.txt", e.raw);
+        b.onclick = () => download("raw-deconstruct.txt", e.raw);
         row.appendChild(b);
       }
       box.appendChild(row);
@@ -968,7 +968,7 @@ async function renderDrill(keep) {
 function renderGateDrill(body) {
   const { gates } = drillState;
   if (!gates.length) {
-    body.appendChild(h("p", "lib-note", "Nothing to drill yet — reveal some gates in a study first. Drills re-test what you've already earned."));
+    body.appendChild(h("p", "lib-note", "Nothing to drill yet — reveal some gates in a Deconstruct first. Drills re-test what you've already earned."));
     return;
   }
   const item = gates[drillState.gi % gates.length];
@@ -1065,11 +1065,11 @@ function renderSettings(banner) {
   /* About / how it works → landing + tutorial */
   const ab = h("div", "set-block");
   ab.appendChild(h("h3", null, "About & guide"));
-  ab.appendChild(h("p", "note", "What Vitruvian is, and how to read a study — the cards, the diagram, and the developer lens."));
+  ab.appendChild(h("p", "note", "What Vitruvian is, and how to read a Deconstruct — the cards, the diagram, and the developer lens."));
   const abRow = h("div", "set-row");
   const abBtn = h("button", "gbtn primary", "Open the intro →");
   abBtn.onclick = () => { renderLanding(); show("landing"); };
-  const tutBtn = h("button", "gbtn", "How to read a study →");
+  const tutBtn = h("button", "gbtn", "How to read a Deconstruct →");
   tutBtn.onclick = () => { renderTutorial("settings"); show("tutorial"); };
   abRow.append(abBtn, tutBtn);
   ab.appendChild(abRow);
@@ -1194,7 +1194,7 @@ function renderSettings(banner) {
       meta = await Store.getMeta();
       applyTheme(meta.theme || document.documentElement.dataset.theme);   // a restored backup may carry a different theme
       renderAudSwitch();
-      toast(`Restored ${results.length - bad.length}/${results.length} breakdowns`);
+      toast(`Restored ${results.length - bad.length}/${results.length} Deconstructs`);
       if (bad.length) alert("Skipped invalid entries:\n" + bad.map(r => `${r.system || r.id}: ${r.errors[0]}`).join("\n"));
       renderSettings();
     } catch (e) { alert("Restore failed: " + e.message); }

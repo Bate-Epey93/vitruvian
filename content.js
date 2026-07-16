@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.10.0",
+  appVersion: "1.11.0",
   flagshipVersion: 2                     // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
 };
 
@@ -130,17 +130,17 @@ var MODEL_LIBRARY = [
 var COPY = {
   libraryTitle: "Library",
   sampleHeading: "Sample Deconstructs",
-  sampleNote: "Three worked examples — the bar for what a study looks like.",
-  yoursHeading: "Your Deconstructions",
+  sampleNote: "Three worked examples — the bar for what a Deconstruct looks like.",
+  yoursHeading: "Your Deconstructs",
   yoursEmpty: "Nothing here yet. Name any system above and Vitruvian will take it apart, failure by failure.",
-  deconstructPlaceholder: "Name a system to study…",
+  deconstructPlaceholder: "Name a system to deconstruct…",
   deconstructBtn: "Deconstruct",
-  ownDesignLink: "Building something? Deconstruct your own design →",
-  ownDesignKicker: "Design review",
-  ownDesignTitle: "Deconstruct your design",
-  ownDesignLede: "Describe the system you're building — the pieces, what it must never get wrong, where you expect load. Vitruvian rebuilds it failure by failure and shows what breaks first.",
+  ownDesignLink: "Building something? Dissect your design →",
+  ownDesignKicker: "Dissection",
+  ownDesignTitle: "Dissect your design",
+  ownDesignLede: "Describe the system you're building — the pieces, what it must never get wrong, where you expect load. Vitruvian puts it on the table, rebuilds it failure by failure, and shows what breaks first.",
   ownDesignPlaceholder: "e.g. A booking app where vendors set their availability and customers reserve time slots. Two customers must never book the same slot; vendors get notified the instant a booking lands; I expect big spikes when a popular vendor opens their calendar…",
-  ownDesignBtn: "Review my design",
+  ownDesignBtn: "Dissect my design",
   audienceModes: [
     { id: "beginner",   label: "Beginner" },
     { id: "enthusiast", label: "Enthusiast" },
@@ -151,22 +151,22 @@ var COPY = {
   gateHint2: "One more hint",
   gateReveal: "Reveal the solution",
   gateCompare: "Compare my answer (AI)",
-  askTitle: "Ask this layer",
+  askTitle: "Probe this layer",
   askPlaceholder: "One question — e.g. \"why not just use timestamps?\"",
-  askBtn: "Ask",
-  whatifMenu: "What if… (propose a change)",
-  whatifKicker: "What if",
-  whatifLede: "Propose a change to this system. Vitruvian shows what it does to the architecture, which invariants it strengthens or threatens, and whether it's worth it — grounded in the system's own rules.",
+  askBtn: "Probe",
+  whatifMenu: "Graft… (propose a change)",
+  whatifKicker: "Graft",
+  whatifLede: "Propose a change — a graft onto this system. Vitruvian shows what it does to the architecture, which invariants it strengthens or threatens, and whether the body accepts it — grounded in the system's own rules.",
   whatifPlaceholder: "e.g. add an HTML renderer to the terminal · cache reads at the edge · drop the acknowledgement step",
-  whatifBtn: "Run what-if",
+  whatifBtn: "Run the graft",
   whatifThinking: "Weighing it against the invariants…",
-  whatifVerdicts: { improves: "Improves the system", mixed: "A real tradeoff", harmful: "Works against the system" },
+  whatifVerdicts: { improves: "The graft takes — improves the system", mixed: "It takes, with scars — a real tradeoff", harmful: "Rejected — works against the system" },
   gateCompareOffline: "AI comparison needs a connection and an API key (Settings). Your answer is saved — compare it yourself against the reveal.",
   keyNotice: "Your key is stored on this device only and sent only to Anthropic.",
-  costNote: "A breakdown typically costs a few cents to a few tens of cents of API usage, depending on the model.",
-  modelCostNote: "Rough cost per study — haiku-4-5 ≈ $0.10 · sonnet-5 ≈ $0.30 · opus-4-8 ≈ $0.55 · fable-5 ≈ $1.20. Fable is the most capable and auto-falls back to Opus if it declines a request.",
+  costNote: "A Deconstruct typically costs a few cents to a few tens of cents of API usage, depending on the model.",
+  modelCostNote: "Rough cost per Deconstruct — haiku-4-5 ≈ $0.10 · sonnet-5 ≈ $0.30 · opus-4-8 ≈ $0.55 · fable-5 ≈ $1.20. Fable is the most capable and auto-falls back to Opus if it declines a request.",
   pricingUrl: "https://www.anthropic.com/pricing",
-  privacyNote: "Everything lives on this device. Breakdowns, attempts, and your key are never sent anywhere except your own calls to Anthropic.",
+  privacyNote: "Everything lives on this device. Deconstructs, attempts, and your key are never sent anywhere except your own calls to Anthropic.",
   offlineGenNote: "Generation needs a connection. Reading never does.",
   bridgeToast: "Reference notes copied — paste into UX-First Studio's Structure It station.",
   studioUrl: "https://bate-epey93.github.io/uxfirst-studio/",
@@ -183,22 +183,22 @@ var COPY = {
       { icon: "whyWorks", title: "Why it works",
         body: "You remember what you rebuild. Design each fix yourself before the reveal — and collect the named thinking models that repeat across systems." },
       { icon: "howTo", title: "How to use it",
-        body: "Start with a sample study. Add your Anthropic API key in Settings to deconstruct anything you name. Works offline; installs to your home screen." }
+        body: "Start with a sample Deconstruct. Add your Anthropic API key in Settings to deconstruct anything you name. Works offline; installs to your home screen." }
     ],
     cta: "Start exploring →",
-    footnote: "No account. No cloud. Your studies stay on this device."
+    footnote: "No account. No cloud. Your Deconstructs stay on this device."
   },
 
-  /* ---------- TUTORIAL — 'How to read a study' (visitable anytime) ---------- */
+  /* ---------- TUTORIAL — 'How to read a Deconstruct' (visitable anytime) ---------- */
   tutorial: {
-    kicker: "How to read a study",
-    headline: "Every study is the same shape.",
-    lede: "A Vitruvian study rebuilds a system from nothing, one failure at a time. Here's how to read the pieces — and, for developers, how to lift a technical spec straight out of one.",
+    kicker: "How to read a Deconstruct",
+    headline: "Every Deconstruct is the same shape.",
+    lede: "A Vitruvian Deconstruct rebuilds a system from nothing, one failure at a time. Here's how to read the pieces — and, for developers, how to lift a technical spec straight out of one.",
     reading: {
-      title: "The path through a study",
+      title: "The path through a Deconstruct",
       steps: [
         ["Essence", "The system in one breath, plus a few surprising, checkable facts."],
-        ["Strip-down", "The irreducible core: who wants what, the invariants (what must never be false), the pieces, the flows, and the hard constraints physics and economics impose."],
+        ["The Skeleton", "The irreducible core — the bones: who wants what, the invariants (what must never be false), the pieces, the flows, and the hard constraints physics and economics impose."],
         ["The rebuild", "4–7 layers, and the heart of it. Each layer is forced by a concrete failure of the version before it — often a real, dated disaster — so you watch the design become necessary, not just described."],
         ["Stress tests", "Push the finished system somewhere nasty and see how it copes, or where it honestly breaks."],
         ["Transfer", "The system-neutral principles, and where the same shapes recur in other systems."]
@@ -243,16 +243,17 @@ var COPY = {
     controls: {
       title: "Controls",
       items: [
-        ["Audience — B / E / D", "Three registers of the same study: Beginner (plain language, everyday analogies), Enthusiast (the default), and Developer (adds the engineer mappings and interview probes). Switch anytime; your place is kept."],
+        ["Audience — B / E / D", "Three registers of the same Deconstruct: Beginner (plain language, everyday analogies), Enthusiast (the default), and Developer (adds the engineer mappings and interview probes). Switch anytime; your place is kept."],
         ["Step & scrub", "Move layer by layer with Prev / Next, or drag the scrubber to sweep the diagram across every state."],
+        ["Pulse ▶", "Send traffic through the current state of the diagram — watch payloads travel, crash into what's broken, and congest under ⚡ load."],
         ["Challenge mode", "Optional, and off by default. Turn it on from the ⋯ menu to hide each solution behind a 'design it first' gate — you predict the fix, then compare."]
       ]
     },
     forDev: {
-      title: "For developers — reading a study as a spec",
-      intro: "A study is already shaped like a design document. Switch to Developer mode first (it surfaces the mappings and probes the other registers tuck away), then lift it across:",
+      title: "For developers — reading a Deconstruct as a spec",
+      intro: "A Deconstruct is already shaped like a design document. Switch to Developer mode first (it surfaces the mappings and probes the other registers tuck away), then lift it across:",
       map: [
-        ["Strip-down", "system context — actors, invariants (your correctness guarantees), entities, data flows, and hard constraints."],
+        ["The Skeleton", "system context — actors, invariants (your correctness guarantees), entities, data flows, and hard constraints."],
         ["Each layer's mechanism + principle", "an architecture decision record: what you built and the rule it encodes."],
         ["Under load", "the scaling / capacity section: throughput ceilings, bottlenecks, and the sharding or caching strategy."],
         ["Tradeoffs + stress tests", "your risk register and failure-mode analysis."],
@@ -265,7 +266,7 @@ var COPY = {
 
   genPhases: {
     start:      "Reading the system…",
-    strip_down: "Stripping it down…",
+    strip_down: "Finding the skeleton…",
     visual:     "Drawing the baseline…",
     layers:     "Rebuilding — layer by layer…",
     stress:     "Stress-testing…",

@@ -86,25 +86,94 @@ var Diagram = (() => {
     return { nodes, edges };
   }
 
-  /* ── Edge path: V-H-V midpoint routing between lanes,
-     straight shot within a lane. Crossings are tolerated. ── */
-  function edgePath(e, pos) {
-    const a = pos[e.from], b = pos[e.to];
-    if (Math.abs(a.y - b.y) < 6) {                       // same band → horizontal
-      const dir = b.x > a.x ? 1 : -1;
-      const x1 = a.x + dir * (NODE_W / 2 + 2), x2 = b.x - dir * (NODE_W / 2 + 6);
-      return { d: `M ${x1} ${a.y} L ${x2} ${b.y}`, mx: (x1 + x2) / 2, my: a.y - 7, sameLane: true };
+  /* ── Edge routing: orthogonal with port discipline. Forward edges leave
+     the source's RIGHT side and enter the target's LEFT side (mirrored when
+     flowing backward), so arrows read with the column flow. Lane-to-lane
+     edges run their vertical segment in the inter-column channel just before
+     the target — nodes never occupy channel x, so verticals cross nothing.
+     Parallel verticals in one channel fan out by a small deterministic
+     offset. Corners are rounded. ── */
+  const CORNER = 8;
+  function roundedPath(pts) {
+    if (pts.length === 2) return `M ${pts[0].x} ${pts[0].y} L ${pts[1].x} ${pts[1].y}`;
+    let d = `M ${pts[0].x} ${pts[0].y}`;
+    for (let i = 1; i < pts.length - 1; i++) {
+      const p = pts[i], prev = pts[i - 1], next = pts[i + 1];
+      const r = Math.min(CORNER, Math.hypot(p.x - prev.x, p.y - prev.y) / 2, Math.hypot(next.x - p.x, next.y - p.y) / 2);
+      const ix = p.x - Math.sign(p.x - prev.x) * r, iy = p.y - Math.sign(p.y - prev.y) * r;
+      const ox = p.x + Math.sign(next.x - p.x) * r, oy = p.y + Math.sign(next.y - p.y) * r;
+      d += ` L ${ix} ${iy} Q ${p.x} ${p.y} ${ox} ${oy}`;
     }
-    const down = b.y > a.y ? 1 : -1;
-    const y1 = a.y + down * (NODE_H / 2 + 2);
-    const y2 = b.y - down * (NODE_H / 2 + 6);
-    const midY = (y1 + y2) / 2;
-    if (Math.abs(a.x - b.x) < 6)                          // same column → vertical
-      return { d: `M ${a.x} ${y1} L ${a.x} ${y2}`, mx: a.x + 3, my: midY, sameLane: false };
-    return { d: `M ${a.x} ${y1} L ${a.x} ${midY} L ${b.x} ${midY} L ${b.x} ${y2}`, mx: (a.x + b.x) / 2, my: midY - 7, sameLane: false };
+    return d + ` L ${pts[pts.length - 1].x} ${pts[pts.length - 1].y}`;
+  }
+  function halfW(n) { return n.kind === "actor" ? ACTOR_R : NODE_W / 2; }
+  function halfH(n) { return n.kind === "actor" ? ACTOR_R : NODE_H / 2; }
+  function edgePath(e, pos, ctx) {
+    const A = ctx.nodes.get(e.from), B = ctx.nodes.get(e.to);
+    const a = pos[e.from], b = pos[e.to];
+    const dx = b.x - a.x;
+
+    if (Math.abs(dx) < 6) {                               // same column → vertical
+      const down = b.y > a.y ? 1 : -1;
+      const y1 = a.y + down * (halfH(A) + 2), y2 = b.y - down * (halfH(B) + 6);
+      return { d: `M ${a.x} ${y1} L ${a.x} ${y2}`, mx: a.x + 3, my: (y1 + y2) / 2, sameLane: false };
+    }
+
+    const dir = dx > 0 ? 1 : -1;
+    const x1 = a.x + dir * (halfW(A) + 2);                // exit port
+    const x2 = b.x - dir * (halfW(B) + 6);                // entry port (arrow inset)
+
+    // a horizontal blocker between the ports at this height?
+    const blockedAt = y => {
+      let hit = false;
+      ctx.nodes.forEach(n => {
+        if (n.id === e.from || n.id === e.to) return;
+        const p = pos[n.id];
+        if (p && Math.abs(p.y - y) < NODE_H * 0.9 &&
+            p.x > Math.min(x1, x2) + 4 && p.x < Math.max(x1, x2) - 4) hit = true;
+      });
+      return hit;
+    };
+
+    if (Math.abs(a.y - b.y) < 6) {                        // same band → horizontal
+      if (!blockedAt(a.y))
+        return { d: `M ${x1} ${a.y} L ${x2} ${b.y}`, mx: (x1 + x2) / 2, my: a.y - 7, sameLane: true };
+      // detour through the band's clear upper strip instead of cutting a node
+      const yTop = ctx.laneY[A.lane] + 16;
+      return { d: roundedPath([{ x: x1, y: a.y }, { x: x1 + dir * 12, y: a.y }, { x: x1 + dir * 12, y: yTop },
+                               { x: x2 - dir * 12, y: yTop }, { x: x2 - dir * 12, y: b.y }, { x: x2, y: b.y }]),
+               mx: (x1 + x2) / 2, my: yTop - 6, sameLane: false };
+    }
+
+    // lane-to-lane: run horizontal in the source lane, drop through the
+    // channel before the target column. Fan parallel verticals apart.
+    const chKey = dir + ":" + Math.round((b.x - dir * COL_W / 2) / 10);
+    const nUse = (ctx.channels[chKey] = (ctx.channels[chKey] || 0) + 1);
+    const OFFS = [0, -5, 5, -9, 9];
+    let chX = b.x - dir * COL_W / 2 + OFFS[(nUse - 1) % OFFS.length];
+    chX = Math.max(Math.min(x1, x2) + 3, Math.min(Math.max(x1, x2) - 3, chX));
+    const pts = [{ x: x1, y: a.y }];
+    if (blockedAt(a.y) && Math.abs(chX - x1) > 30) {      // long run through occupied cells → lift into the strip
+      const yTop = ctx.laneY[A.lane] + 16;
+      pts.push({ x: x1 + dir * 12, y: a.y }, { x: x1 + dir * 12, y: yTop }, { x: chX, y: yTop });
+    } else {
+      pts.push({ x: chX, y: a.y });
+    }
+    pts.push({ x: chX, y: b.y }, { x: x2, y: b.y });
+    return { d: roundedPath(pts), mx: chX, my: (a.y + b.y) / 2, sameLane: false };
   }
 
-  /* ── Node glyphs by kind; stroke tinted by lane color ── */
+  /* ── Node glyphs by kind; stroke tinted by lane color. A small corner
+     mark repeats the kind INSIDE the box — shape alone vanishes when
+     you're deep in a dense diagram; the mark keeps kind readable. ── */
+  function kindMark(g, kind, x, y, color) {
+    let d;
+    if (kind === "store") d = `M ${x + 7} ${y + 7} h 9 M ${x + 7} ${y + 11} h 9`;                      // shelves
+    else if (kind === "channel") d = `M ${x + 11} -4 l 5 4 l -5 4`;                                    // through-arrow, on the pill's midline
+    else d = `M ${x + 8} ${y + 6} l 7 7 M ${x + 15} ${y + 6} l -7 7`;                                  // process: work
+    const m = el("path", { d, class: "dg-kmark", fill: "none" }, g);
+    m.style.stroke = color;
+  }
   function drawNode(g, n, color) {
     g.setAttribute("class", `dg-node dg-kind-${n.kind}`);
     const w = NODE_W, h = NODE_H, x = -w / 2, y = -h / 2;
@@ -121,6 +190,7 @@ var Diagram = (() => {
     } else {                                              // process
       el("rect", { x, y, width: w, height: h, rx: 3, class: "dg-shape" }, g).style.stroke = color;
     }
+    kindMark(g, n.kind, x, y, color);
     labelInside(g, n.label);
   }
 
@@ -161,12 +231,13 @@ var Diagram = (() => {
 
     // one arrowhead marker per lane color + the failure marker
     const defs = el("defs", {}, svg);
+    const ARR = "M 0 1.2 L 8.5 5 L 0 8.8 L 2.4 5 z";      // slim chevron, notched tail
     layout.lanes.forEach((l, i) => {
-      const m = el("marker", { id: "arr-lane" + i, viewBox: "0 0 10 10", refX: 8, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, defs);
-      el("path", { d: "M 0 1 L 9 5 L 0 9 z", fill: LANE_COLORS[i % LANE_COLORS.length] }, m);
+      const m = el("marker", { id: "arr-lane" + i, viewBox: "0 0 10 10", refX: 8, refY: 5, markerWidth: 6.5, markerHeight: 6.5, orient: "auto-start-reverse" }, defs);
+      el("path", { d: ARR, fill: LANE_COLORS[i % LANE_COLORS.length] }, m);
     });
-    const mb = el("marker", { id: "arr-broken", viewBox: "0 0 10 10", refX: 8, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, defs);
-    el("path", { d: "M 0 1 L 9 5 L 0 9 z", fill: "#c22f2f" }, mb);
+    const mb = el("marker", { id: "arr-broken", viewBox: "0 0 10 10", refX: 8, refY: 5, markerWidth: 6.5, markerHeight: 6.5, orient: "auto-start-reverse" }, defs);
+    el("path", { d: ARR, fill: "#c22f2f" }, mb);
 
     // lane bands (tinted by lane color = built-in legend) + labels
     const bandsG = el("g", {}, svg);
@@ -183,8 +254,25 @@ var Diagram = (() => {
     const nodesG = el("g", {}, svg);
     const labelsG = el("g", {}, svg);       // labels on TOP — never hidden by a box
     const simG = el("g", { class: "dg-sim" }, svg);   // flow tokens above everything
+    const laneLabelById = {};
+    layout.lanes.forEach(l => { laneLabelById[l.id] = l.label; });
     let shownIds = new Set();
     let lastState = null, lastHl = new Set();         // the sim reads the shown state
+    let traced = null, freshTimer = null;
+
+    /* trace: tap a node to light it + every edge touching it and dim the
+       rest — follow one part's responsibilities. Tap again to clear. */
+    svg.addEventListener("click", ev => {
+      const g = ev.target.closest && ev.target.closest(".dg-node");
+      if (!g || !svg.contains(g) || !lastState) return;
+      const id = g.getAttribute("data-id");
+      if (!id) return;
+      if (traced === id) { traced = null; spotlight(null); return; }
+      const ids = [id];
+      lastState.edges.forEach(e => { if (e.from === id || e.to === id) ids.push(e.id); });
+      spotlight(ids, "trace");
+      traced = id;
+    });
 
     function show(upto, opts = {}) {
       sim.stop();                            // a state change invalidates in-flight tokens
@@ -200,9 +288,19 @@ var Diagram = (() => {
       // Vertical stagger over the nodes VISIBLE in this state, grouped by
       // lane+order cell: a sole occupant sits on the centerline; N co-located
       // nodes spread symmetrically by (NODE_H + gap) so they never overlap.
+      // Slot order inside a cell follows the barycenter of each node's
+      // connections (fewer edge crossings), id tie-break for determinism.
       const cells = {};
       st.nodes.forEach(n => { const k = n.lane + "|" + n.order; (cells[k] = cells[k] || []).push(n.id); });
-      Object.values(cells).forEach(ids => ids.sort());   // deterministic slot order across renders
+      const nbr = {};
+      st.nodes.forEach(n => { nbr[n.id] = { sum: 0, k: 0 }; });
+      st.edges.forEach(e => {
+        if (!st.nodes.has(e.from) || !st.nodes.has(e.to)) return;
+        nbr[e.from].sum += layout.pos[e.to].y; nbr[e.from].k++;
+        nbr[e.to].sum += layout.pos[e.from].y; nbr[e.to].k++;
+      });
+      const bary = id => nbr[id].k ? nbr[id].sum / nbr[id].k : 0;
+      Object.values(cells).forEach(ids => ids.sort((a, b2) => bary(a) - bary(b2) || (a < b2 ? -1 : 1)));
       const pos = {};
       st.nodes.forEach(n => {
         const ids = cells[n.lane + "|" + n.order];
@@ -212,6 +310,7 @@ var Diagram = (() => {
       });
 
       // edges (paths only — colored by the SOURCE lane, the input's origin)
+      const routeCtx = { nodes: st.nodes, channels: {}, laneY: layout.laneY };
       const labelJobs = [];
       st.edges.forEach(e => {
         if (!st.nodes.has(e.from) || !st.nodes.has(e.to)) return;
@@ -219,13 +318,14 @@ var Diagram = (() => {
         const broken = hl.has(e.id);
         const li = layout.laneIndex[from.lane] || 0;
         const g = el("g", { class: `dg-edge dg-ekind-${e.kind}`, "data-id": e.id }, edgesG);
-        const p = edgePath(e, pos);
+        const p = edgePath(e, pos, routeCtx);
         const path = el("path", { d: p.d, fill: "none", class: "dg-epath", "marker-end": `url(#${broken ? "arr-broken" : "arr-lane" + li})` }, g);
         path.style.stroke = broken ? "#c22f2f" : LANE_COLORS[li % LANE_COLORS.length];
         if (broken) g.classList.add("dg-broken");
         if (ghostSet.has(e.id)) g.classList.add("dg-ghost");
         if (stressSet.has(e.id)) g.classList.add("dg-stress");
         if (animate && !prev.has(e.id)) g.classList.add("dg-enter");
+        else if (animate) g.classList.add("dg-prior");
         if (e.label) {
           // same-lane edges: lift the label into the band's clear upper strip
           const cx = p.sameLane ? (pos[e.from].x + pos[e.to].x) / 2 : p.mx;
@@ -240,10 +340,12 @@ var Diagram = (() => {
         const p = pos[n.id];
         const g = el("g", { transform: `translate(${p.x} ${p.y})`, "data-id": n.id }, nodesG);
         drawNode(g, n, laneColor(n.lane));
+        txt(el("title", {}, g), `${n.label} — ${laneLabelById[n.lane] || n.lane} · ${n.kind}`);
         if (hl.has(n.id)) g.classList.add("dg-broken");
         if (ghostSet.has(n.id)) g.classList.add("dg-ghost");
         if (stressSet.has(n.id)) g.classList.add("dg-stress");
         if (animate && !prev.has(n.id)) g.classList.add("dg-enter");
+        else if (animate) g.classList.add("dg-prior");
         const hw = n.kind === "actor" ? ACTOR_R : NODE_W / 2;
         const hh = n.kind === "actor" ? ACTOR_R : NODE_H / 2;
         nodeRects.push({ x0: p.x - hw, y0: p.y - hh, x1: p.x + hw, y1: p.y + hh });
@@ -275,6 +377,13 @@ var Diagram = (() => {
       });
 
       svg.classList.remove("dg-has-spot");   // a fresh render clears any spotlight
+      traced = null;
+      // delta emphasis: for a beat, what carried over recedes so what's new reads first
+      if (animate && !RM) {
+        svg.classList.add("dg-fresh");
+        clearTimeout(freshTimer);
+        freshTimer = setTimeout(() => svg.classList.remove("dg-fresh"), 1500);
+      }
       shownIds = new Set([...st.nodes.keys(), ...st.edges.keys()]);
       lastState = st;
       lastHl = hl;
