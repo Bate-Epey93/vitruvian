@@ -7,11 +7,11 @@
     "history_confidence": "high"
   },
   "essence": {
-    "text": "A railway is a machine the size of a country that lets thousands of trains share a few threads of steel without touching. Its genius is not the locomotive — it is the invisible discipline of separation: a 200-year accumulation of answers to one question, 'how do you share a track you cannot see the far end of?'",
-    "beginner": "A railway is how many heavy, fast trains share the same few tracks all day without ever crashing into each other — even though no driver can see far enough ahead to stop in time.",
+    "text": "A railway is a machine the size of a country that lets thousands of trains share a few threads of steel without touching. Its genius is not the locomotive but the invisible discipline of separation: a 200-year accumulation of answers to one question, 'how do you share a track you cannot see the far end of?'",
+    "beginner": "A railway is how many heavy, fast trains share the same few tracks all day without ever crashing into each other, even though no driver can see far enough ahead to stop in time.",
     "deep_facts": [
-      "A loaded freight train can need over 2 kilometers to stop — the driver can never stop within the distance they can see. Every safety mechanism exists because reaction is physically impossible; only prevention works.",
-      "Britain legislated standard national time largely because railways could not run on hundreds of local town clocks — the timetable forced a country to agree what time it was.",
+      "A loaded freight train can need over 2 kilometers to stop; the driver can never stop within the distance they can see. Every safety mechanism exists because reaction is physically impossible. Only prevention works.",
+      "Britain legislated standard national time largely because railways could not run on hundreds of local town clocks: the timetable forced a country to agree what time it was.",
       "The 1861 Clayton Tunnel crash killed 23 people while the railway was following its safety rules perfectly. The rules themselves were the defect.",
       "Britain's worst-ever rail disaster, Quintinshill 1915, was caused by a signalman forgetting a train that was standing in plain sight outside his window.",
       "Modern train brakes are held OFF by air pressure: cut any pipe, anywhere on the train, and the brakes apply themselves. The failure and the safe response are the same event."
@@ -38,7 +38,7 @@
       {
         "id": "a4",
         "name": "Railway company",
-        "want": "Maximum traffic through minimum track — capacity is revenue"
+        "want": "Maximum traffic through minimum track; capacity is revenue"
       }
     ],
     "invariants": [
@@ -59,12 +59,12 @@
       {
         "id": "en1",
         "name": "Train",
-        "note": "Fast, heavy, nearly blind — cannot stop within sighting distance"
+        "note": "Fast, heavy, nearly blind; cannot stop within sighting distance"
       },
       {
         "id": "en2",
         "name": "Track section",
-        "note": "The shared resource; exclusive by physics, since two objects cannot share it"
+        "note": "The shared resource; physics makes it exclusive"
       },
       {
         "id": "en3",
@@ -74,7 +74,7 @@
       {
         "id": "en4",
         "name": "Junction",
-        "note": "Where routes cross — the only place trains can meet at an angle"
+        "note": "Where routes cross; the only place trains can meet at an angle"
       }
     ],
     "flows": [
@@ -92,9 +92,9 @@
       }
     ],
     "constraints": [
-      "Stopping distance exceeds sighting distance — a driver cannot react their way out of danger.",
-      "Steel on steel is why trains are efficient AND why they cannot swerve or stop quickly; the strength is the weakness.",
-      "Track is brutally expensive, so almost everything must share it; buying safety with more track is rarely an option."
+      "Stopping distance exceeds sighting distance: a driver cannot react their way out of danger.",
+      "Steel on steel makes trains efficient and also unable to swerve or stop quickly.",
+      "Track is expensive, so almost everything must share it; buying safety with more track is rarely an option."
     ]
   },
   "visual": {
@@ -197,28 +197,28 @@
       "index": 1,
       "name": "The Timetable: One Clock, One Plan",
       "problem": {
-        "statement": "Two trains, one track, and nothing that coordinates them. Each driver knows only what he can see, and he cannot see far enough to matter — at speed, by the time the other train is visible, the collision is already unavoidable. Early railways ran on hope and lineside hand signals.",
-        "beginner": "Two trains share one track, but neither driver knows where the other is — and trains can't stop quickly enough to avoid what they see.",
+        "statement": "Two trains, one track, and nothing that coordinates them. Each driver knows only what he can see, and he cannot see far enough to matter: at speed, by the time the other train is visible, the collision is already unavoidable. Early railways ran on hope and lineside hand signals.",
+        "beginner": "Two trains share one track, but neither driver knows where the other is, and trains can't stop quickly enough to avoid what they see.",
         "model": {
           "id": "single-source-of-truth",
-          "application": "Give every train one authoritative plan — the timetable, run against one standard clock — so that 'where should everyone be right now?' has exactly one answer instead of hundreds of private guesses."
+          "application": "Give every train one authoritative plan (the timetable, run against one standard clock) so that 'where should everyone be right now?' has exactly one answer instead of hundreds of private guesses."
         }
       },
       "gate": {
-        "question": "It's 1830. No telegraph, no radio — trains outrun every message you could send. With only paper, printing presses, and clocks, how do you keep two trains from ever meeting on the same track?",
+        "question": "It's 1830. No telegraph, no radio: trains outrun every message you could send. With only paper, printing presses, and clocks, how do you keep two trains from ever meeting on the same track?",
         "hint": "If information can't travel faster than the trains, the coordination has to happen before anyone starts moving."
       },
-      "solution": "The timetable: every train's movement planned in advance against one standardized clock, published to every driver, signalman, and station. On top of it, the time-interval rule — a following train may not depart until a fixed number of minutes after the one ahead. The plan is the coordinator; the clock is its enforcement.",
+      "solution": "The timetable: every train's movement planned in advance against one standardized clock, published to every driver, signalman, and station. On top of it, the time-interval rule: a following train may not depart until a fixed number of minutes after the one ahead. The plan is the coordinator; the clock is its enforcement.",
       "user_lens": {
-        "gives": "Predictability — for the first time in history, an ordinary person could plan a 200-mile journey to the minute.",
+        "gives": "Predictability: for the first time in history, an ordinary person could plan a 200-mile journey to the minute.",
         "costs": "Rigidity: the plan outranks the person. The train leaves at 09:02 whether you are on it or not, and the whole country now runs on the railway's clock, not its own."
       },
       "tech_lens": {
         "mechanism": "A pre-computed global schedule against synchronized clocks, distributed on paper; separation enforced by mandated departure gaps measured with hourglasses and watches.",
-        "principle": "When coordination cannot happen at run time, move it to plan time — and give everyone the same clock."
+        "principle": "When coordination cannot happen at run time, move it to plan time, and give everyone the same clock."
       },
       "tradeoff": "The plan is blind. It describes where trains SHOULD be, and reality is under no obligation to comply: a broken-down train is exactly where the timetable says it isn't.",
-      "at_scale": "Adding trains means adding timetable rows and safety gaps, not new coordination — one plan scales to an entire national network essentially for free. But it scales brittly: a single late train ripples delay down every path that depended on it, so heavy traffic amplifies small disturbances rather than absorbing them.",
+      "at_scale": "Adding trains means adding timetable rows and safety gaps, not new coordination; one plan covers an entire national network at almost no extra cost. But it scales brittly: a single late train ripples delay down every path that depended on it, so heavy traffic amplifies small disturbances rather than absorbing them.",
       "defends": [
         "inv1"
       ],
@@ -226,7 +226,7 @@
         "mappings": [
           {
             "mechanism": "the timetable",
-            "software_concept": "static scheduling — coordination compiled ahead of time (cron, TDMA slots, build-time resolution)"
+            "software_concept": "static scheduling: coordination compiled ahead of time (cron, TDMA slots, build-time resolution)"
           },
           {
             "mechanism": "railway standard time",
@@ -234,10 +234,10 @@
           }
         ],
         "interview_probes": [
-          "Where in your system do you coordinate by plan instead of by signal — and what happens when reality diverges from the plan?"
+          "Where in your system do you coordinate by plan instead of by signal, and what happens when reality diverges from the plan?"
         ]
       },
-      "beginner_analogy": "Like a family sharing one bathroom by agreeing on a morning schedule. It works beautifully — until the day someone takes too long, because the schedule can't see who's actually inside.",
+      "beginner_analogy": "Like a family sharing one bathroom by agreeing on a morning schedule. It works until the day someone takes too long; the schedule can't see who's actually inside.",
       "diff": {
         "add_nodes": [
           {
@@ -276,28 +276,28 @@
       "index": 2,
       "name": "The Block System: Space, Not Time",
       "problem": {
-        "statement": "Time-based separation rests on a false assumption — 'enough time has passed, so the track must be clear.' A broken-down train doesn't move because ten minutes elapsed. Clayton Tunnel, 1861: a signalman's confusion over whether a train had cleared the tunnel sent a second train in behind it. 23 dead, inside a system following its own rules.",
+        "statement": "Time-based separation rests on a false assumption: 'enough time has passed, so the track must be clear.' A broken-down train doesn't move because ten minutes elapsed. Clayton Tunnel, 1861: a signalman's confusion over whether a train had cleared the tunnel sent a second train in behind it. 23 dead, inside a system following its own rules.",
         "beginner": "The old rule was 'wait 10 minutes, then go.' But waiting doesn't move a broken train. Trains kept crashing into trains that were still there.",
         "model": {
           "id": "first-principles",
-          "application": "Strip the assumption: safety requires KNOWING the section is empty, not inferring it from elapsed time — so rebuild separation on confirmed knowledge, not on clocks."
+          "application": "Strip the assumption: safety requires KNOWING the section is empty, not inferring it from elapsed time. Rebuild separation on confirmed knowledge, not on clocks."
         }
       },
       "gate": {
-        "question": "The telegraph now exists — you can send messages between fixed points along the line, faster than any train. Redesign train separation so it depends on knowledge, not assumption.",
+        "question": "The telegraph now exists: you can send messages between fixed points along the line, faster than any train. Redesign train separation so it depends on knowledge, not assumption.",
         "hint": "What if permission to enter a section were a physical object that can't be duplicated?"
       },
-      "solution": "Divide the line into blocks: one train per block, ever. A train enters only after the signalman ahead confirms by telegraph that the previous train has left the block. On single-track lines, permission becomes physical — the token: one brass object per section, handed to the driver; no token, no entry. Two trains cannot hold one token.",
+      "solution": "Divide the line into blocks: one train per block, ever. A train enters only after the signalman ahead confirms by telegraph that the previous train has left the block. On single-track lines, permission becomes a physical object, the token: one brass object per section, handed to the driver; no token, no entry. Two trains cannot hold one token.",
       "user_lens": {
-        "gives": "Ambient, invisible safety — passengers board without ever wondering whether the track ahead is clear, because someone provably knows.",
-        "costs": "Drivers lose authority: the signal now decides, not the person driving. Obedience replaces judgment — a demotion that is also a liberation."
+        "gives": "Invisible safety: passengers board without wondering whether the track ahead is clear, because someone provably knows.",
+        "costs": "Drivers lose authority: the signal now decides, not the person driving. Obedience replaces judgment."
       },
       "tech_lens": {
         "mechanism": "Per-block occupancy tracked by signal boxes; a telegraph request/confirm protocol between boxes ('train entered' / 'block clear'); a physical token as uncopyable permission on single track.",
         "principle": "Replace inference with confirmation; guard shared resources with exclusive locks, not etiquette."
       },
       "tradeoff": "Capacity is quantized: one train per block-traversal-time, a hard ceiling even when trains could safely run closer. Safety purchased with headroom.",
-      "at_scale": "This is the line's throughput ceiling: capacity ≈ one train per block-traversal-time. You scale a busy route by cutting the blocks SHORTER — more, smaller sections packed closer — at the cost of more signal boxes and more telegraph chatter. It is horizontal scaling by sharding the track itself.",
+      "at_scale": "This is the line's throughput ceiling: capacity ≈ one train per block-traversal-time. You scale a busy route by cutting the blocks shorter (more, smaller sections packed closer) at the cost of more signal boxes and more telegraph chatter. It is horizontal scaling by sharding the track itself.",
       "defends": [
         "inv1"
       ],
@@ -305,7 +305,7 @@
         "mappings": [
           {
             "mechanism": "the brass token",
-            "software_concept": "distributed mutex / lease — possession is permission, uniqueness is enforcement"
+            "software_concept": "distributed mutex / lease: possession is permission, uniqueness is enforcement"
           },
           {
             "mechanism": "block sections",
@@ -370,28 +370,28 @@
       "index": 3,
       "name": "Interlocking: Make the Wrong Move Impossible",
       "problem": {
-        "statement": "Blocks protect a line of trains running nose to tail. But at a junction, routes CROSS — and a signalman controls the points and the signals with separate levers. Nothing physical stops him from setting the points one way and clearing a signal the other, or from clearing two signals into the same crossing. Every junction is a collision that hasn't happened yet, held off only by human care.",
-        "beginner": "Where tracks cross, one person controls both the track switches and the go/stop signals with separate levers — and nothing stops them from pulling a deadly combination by mistake.",
+        "statement": "Blocks protect a line of trains running nose to tail. But at a junction, routes CROSS, and a signalman controls the points and the signals with separate levers. Nothing physical stops him from setting the points one way and clearing a signal the other, or from clearing two signals into the same crossing. Every junction is a collision that hasn't happened yet, held off only by human care.",
+        "beginner": "Where tracks cross, one person controls both the track switches and the go/stop signals with separate levers, and nothing stops them from pulling a deadly combination by mistake.",
         "model": {
           "id": "inversion",
-          "application": "Stop asking 'how does the signalman set a safe route?' and enumerate every UNSAFE lever combination — then build a machine in which those combinations physically cannot be pulled."
+          "application": "Stop asking 'how does the signalman set a safe route?' and enumerate every UNSAFE lever combination, then build a machine in which those combinations physically cannot be pulled."
         }
       },
       "gate": {
-        "question": "A junction has points (track switches) and signals, all worked by levers from one signal box. Signalmen are careful but human. Without electricity, design a way to make a conflicting combination of levers impossible — not forbidden, impossible.",
+        "question": "A junction has points (track switches) and signals, all worked by levers from one signal box. Signalmen are careful but human. Without electricity, design a way to make a conflicting combination of levers impossible: not forbidden, impossible.",
         "hint": "The levers sit next to each other in one frame. What could the position of one lever mechanically do to its neighbors?"
       },
-      "solution": "The interlocking frame: steel bars and cams between the levers so that pulling one lever physically locks the levers that conflict with it. Clearing a signal locks the points it depends on; setting a route locks every route that crosses it. The rulebook is carved into the machine — a signalman cannot pull a collision.",
+      "solution": "The interlocking frame: steel bars and cams between the levers so that pulling one lever physically locks the levers that conflict with it. Clearing a signal locks the points it depends on; setting a route locks every route that crosses it. The rulebook is carved into the machine; a signalman cannot pull a collision.",
       "user_lens": {
         "gives": "Junctions stop being the scariest places on the railway; passengers cross them at speed without knowing they exist.",
-        "costs": "Flexibility: reconfiguring the track layout now means rebuilding the locking. And when something exceptional is truly needed — an emergency move the frame forbids — the machine says no to the expert too."
+        "costs": "Flexibility: reconfiguring the track layout now means rebuilding the locking. And when an emergency demands a move the frame forbids, the machine says no to the expert too."
       },
       "tech_lens": {
         "mechanism": "Mechanical constraint logic between levers: pulling lever 5 slides a bar that blocks levers 7 and 9; every pairwise conflict is encoded in steel at installation time.",
-        "principle": "Make illegal states unrepresentable — enforce constraints in the substrate, not in the operator's memory."
+        "principle": "Make illegal states unrepresentable: enforce constraints in the substrate, not in the operator's memory."
       },
       "tradeoff": "The locking encodes yesterday's layout: safety hardens the system against change, and every alteration to the track demands re-engineering the constraint machine to match.",
-      "at_scale": "Interlocking scales with junction COMPLEXITY, not traffic volume: each added route multiplies the pairwise conflicts to lock out, so a busy junction needed a room-sized frame of steel bars. The machine grows with the track layout's combinations — which is exactly why simplifying topology is how real railways keep the locking tractable.",
+      "at_scale": "Interlocking scales with junction COMPLEXITY, not traffic volume: each added route multiplies the pairwise conflicts to lock out, so a busy junction needed a room-sized frame of steel bars. The machine grows with the track layout's combinations, which is why simplifying topology is how real railways keep the locking tractable.",
       "defends": [
         "inv2",
         "inv1"
@@ -400,14 +400,14 @@
         "mappings": [
           {
             "mechanism": "the interlocking frame",
-            "software_concept": "type systems and state machines — invalid transitions rejected at compile time, not caught at runtime"
+            "software_concept": "type systems and state machines: invalid transitions rejected at compile time, not caught at runtime"
           }
         ],
         "interview_probes": [
           "Which invalid states does your API merely document as forbidden, rather than make unrepresentable?"
         ]
       },
-      "beginner_analogy": "Like a car that won't let you shift into reverse while driving forward — the gearbox doesn't trust your memory of the rule; it removes the option.",
+      "beginner_analogy": "Like a car that won't let you shift into reverse while driving forward: the gearbox doesn't trust your memory of the rule; it removes the option.",
       "diff": {
         "add_nodes": [
           {
@@ -453,15 +453,15 @@
       "index": 4,
       "name": "Track Circuits: The Track Reports Itself",
       "problem": {
-        "statement": "The block system's ledger of 'occupied or clear' lives in a signalman's memory and his register book. Quintinshill, 1915: a signalman forgot a train standing on the main line — visible from his own window — and accepted an express into the same block. Over 200 dead, Britain's worst rail disaster. Human memory was the single point of failure for the most important fact on the railway.",
-        "beginner": "The person in the signal box has to REMEMBER which sections have trains in them. One signalman forgot one train — one he could actually see — and caused Britain's worst-ever rail crash.",
+        "statement": "The block system's ledger of 'occupied or clear' lives in a signalman's memory and his register book. Quintinshill, 1915: a signalman forgot a train standing on the main line, visible from his own window, and accepted an express into the same block. Over 200 dead, Britain's worst rail disaster. Human memory was the single point of failure for the most important fact on the railway.",
+        "beginner": "The person in the signal box has to REMEMBER which sections have trains in them. One signalman forgot a train he could actually see, and caused Britain's worst-ever rail crash.",
         "model": {
           "id": "feedback-loop",
           "application": "Close the loop: let the track continuously sense its own occupancy and feed that signal back into the control system, so the ground truth flows from the ground itself, not from a human ledger."
         }
       },
       "gate": {
-        "question": "You have electricity, rails made of conductive steel, and trains with steel wheels and axles. Design a way for the track itself to know — and announce — that a train is standing on it, with no human involved.",
+        "question": "You have electricity, rails made of conductive steel, and trains with steel wheels and axles. Design a way for the track itself to know, and announce, that a train is standing on it, with no human involved.",
         "hint": "A train's axle is a solid metal bar connecting the two rails. What does that do to an electrical circuit whose two poles are the rails?"
       },
       "solution": "The track circuit: run a low current through the rails to hold a relay closed, showing 'clear'. Any axle anywhere in the section short-circuits the current, the relay drops, and the indication turns to 'occupied'. The train's own presence is the detection. From here, signals and interlocking can be driven by measured occupancy instead of remembered occupancy.",
@@ -470,11 +470,11 @@
         "costs": "A new kind of delay: the system trusts the circuit over any human, so a failed circuit shows 'occupied' and holds trains for a ghost. You will sometimes wait for a train that does not exist."
       },
       "tech_lens": {
-        "mechanism": "A current loop through the running rails holds a relay energized; any axle shunts it, de-energizing the relay — and the de-energized state is wired to mean 'occupied', so power loss reads as danger.",
+        "mechanism": "A current loop through the running rails holds a relay energized; any axle shunts it, de-energizing the relay; the de-energized state is wired to mean 'occupied', so power loss reads as danger.",
         "principle": "Sensors beat ledgers: derive state from the resource itself, and wire the sensor so its failure mode is the safe reading."
       },
-      "tradeoff": "The railway now trusts electricity: rusty rails, leaf film, or a broken bond wire produce false 'occupied' readings that throttle capacity — false alarms are the tax paid for never missing a real train.",
-      "at_scale": "Detection scales cheaply and linearly — one relay per block, no human in the loop — so an entire network can watch itself continuously without adding staff. The load it adds is electrical: every section is now a circuit that can fail, so scale multiplies the number of things that can false-alarm and throttle a line for a ghost.",
+      "tradeoff": "The railway now trusts electricity: rusty rails, leaf film, or a broken bond wire produce false 'occupied' readings that throttle capacity. False alarms are the tax for never missing a real train.",
+      "at_scale": "Detection scales cheaply and linearly (one relay per block, no human in the loop), so an entire network can watch itself continuously without adding staff. The load it adds is electrical: every section is now a circuit that can fail, so scale multiplies the number of things that can false-alarm and throttle a line for a ghost.",
       "defends": [
         "inv1",
         "inv3"
@@ -483,7 +483,7 @@
         "mappings": [
           {
             "mechanism": "the track circuit",
-            "software_concept": "heartbeats and health checks — liveness derived from the resource, with silence treated as failure"
+            "software_concept": "heartbeats and health checks: liveness derived from the resource, with silence treated as failure"
           },
           {
             "mechanism": "relay drops on power loss",
@@ -494,7 +494,7 @@
           "Which facts does your system remember in a 'ledger' that it could instead measure from the resource itself?"
         ]
       },
-      "beginner_analogy": "Like a fridge door that beeps because a circuit knows it's open — nobody has to remember they left it open; the door itself tells on you.",
+      "beginner_analogy": "Like a fridge door that beeps because a circuit knows it's open: nobody has to remember; the door itself tells on you.",
       "diff": {
         "add_nodes": [
           {
@@ -532,20 +532,20 @@
       "index": 5,
       "name": "Fail-Safe: Design for the Day It Breaks",
       "problem": {
-        "statement": "Every layer so far still ends at a human: the driver must see the signal and obey it. Armagh, 1889: a stalled excursion train was divided on a hill, its simple brakes released, and 600 tons of carriages full of children ran away downhill into the next train — 80 dead. Signals were right; brakes and human judgment failed. Any component — a wire, a lamp, a pipe, a person — WILL eventually fail. The question the railway had not answered: fail into what?",
-        "beginner": "Everything still depends on machines not breaking and drivers not missing a signal. But parts break and people blink. The real question is: when something breaks, does the train end up stopped — or running away?",
+        "statement": "Every layer so far still ends at a human: the driver must see the signal and obey it. Armagh, 1889: a stalled excursion train was divided on a hill, its simple brakes released, and 600 tons of carriages full of children ran away downhill into the next train: 80 dead. Signals were right; brakes and human judgment failed. Any component (a wire, a lamp, a pipe, a person) WILL eventually fail. The question the railway had not answered: fail into what?",
+        "beginner": "Everything still depends on machines not breaking and drivers not missing a signal. But parts break and people blink. The real question is: when something breaks, does the train end up stopped, or running away?",
         "model": {
           "id": "graceful-degradation",
           "application": "Stop trying to prevent failure and choose its direction instead: rebuild every component so that its most likely failure leaves the railway stopped, dark, and safe rather than moving and blind."
         }
       },
       "gate": {
-        "question": "A train's brakes are applied by air pressure — pump air in, brakes clamp on. One day a hose bursts and a train runs away. Redesign the brake so that the same burst hose STOPS the train instead. You may not make the hose stronger.",
+        "question": "A train's brakes are applied by air pressure: pump air in, brakes clamp on. One day a hose bursts and a train runs away. Redesign the brake so that the same burst hose STOPS the train instead. You may not make the hose stronger.",
         "hint": "Flip what the air pressure does: what should its PRESENCE hold open, so that its absence closes?"
       },
-      "solution": "Invert the defaults. The automatic air brake: pressure holds the brakes OFF, springs force them on — burst the pipe, part the train, or lose the compressor, and the brakes apply themselves. Signal lamps and relays: the unpowered indication is danger-red. And the final backstop, automatic train protection: a trackside system that applies those same fail-safe brakes if a driver passes a red — closing the last human gap. After Armagh, Parliament made the pattern law.",
+      "solution": "Invert the defaults. The automatic air brake: pressure holds the brakes OFF, springs force them on. Burst the pipe, part the train, or lose the compressor, and the brakes apply themselves. Signal lamps and relays: the unpowered indication is danger-red. And the final backstop, automatic train protection: a trackside system that applies those same fail-safe brakes if a driver passes a red, closing the last human gap. After Armagh, Parliament made the pattern law.",
       "user_lens": {
-        "gives": "A railway that is safest precisely when it is broken — the worst day for the machinery is no longer the worst day for the passengers.",
+        "gives": "A railway that is safest precisely when it is broken: the worst day for the machinery is no longer the worst day for the passengers.",
         "costs": "Failures that would once have been invisible now stop your train: the system chooses YOUR delay over anyone's risk, and a whole line can sit dark because one relay chose safety."
       },
       "tech_lens": {
@@ -553,7 +553,7 @@
         "principle": "Choose the failure direction: design every component so the cheap, likely failure lands in the safe state, and spend energy to stay in the risky one."
       },
       "tradeoff": "Availability is sacrificed to safety at every margin: fail-safe systems fail often and visibly, trading uptime and capacity for the guarantee that failure is never silent motion.",
-      "at_scale": "Fail-safe scales perfectly on paper because it needs no central capacity — each brake and signal decides locally from the energy it already holds. The catch under heavy traffic: the safe direction is expensive, so one fault stops many trains at once, and the busier the line the more a single fail-safe trip cascades into system-wide delay.",
+      "at_scale": "Fail-safe scales perfectly on paper because it needs no central capacity: each brake and signal decides locally from the energy it already holds. The catch under heavy traffic: the safe direction is expensive, so one fault stops many trains at once, and the busier the line the more a single fail-safe trip cascades into system-wide delay.",
       "defends": [
         "inv3",
         "inv1"
@@ -570,10 +570,10 @@
           }
         ],
         "interview_probes": [
-          "For each critical component you own: if it lost power mid-operation, does the system land in the safe state or the live one — and did you choose that, or inherit it?"
+          "For each critical component you own: if it lost power mid-operation, does the system land in the safe state or the live one, and did you choose that or inherit it?"
         ]
       },
-      "beginner_analogy": "Like a dead-man's switch on a lawnmower: you must hold the lever to keep the blade spinning. Let go — on purpose, by accident, or because you fainted — and the machine stops itself.",
+      "beginner_analogy": "Like a dead-man's switch on a lawnmower: you must hold the lever to keep the blade spinning. Let go, on purpose, by accident, or because you fainted, and the machine stops itself.",
       "diff": {
         "add_nodes": [
           {
@@ -613,29 +613,29 @@
       "id": "st1",
       "title": "The telegraph goes dead",
       "scenario": "A storm cuts every telegraph wire between two signal boxes. Six trains are waiting to move through the blocks between them.",
-      "reveal": "The system chooses paralysis: no confirmation means no permission (inv3), so traffic stops dead. Degraded-mode rules exist — a pilotman, one designated human who must ride every train through the section, becomes a living token — restoring movement at walking-pace capacity. The invariant holds; throughput is what burns."
+      "reveal": "The system chooses paralysis: no confirmation means no permission (inv3), so traffic stops dead. Degraded-mode rules exist: a pilotman, one designated human who must ride every train through the section, becomes a living token, restoring movement at walking-pace capacity. The invariant holds; throughput is what burns."
     },
     {
       "id": "st2",
       "title": "Fog swallows every signal",
       "scenario": "Dense fog makes lineside signals invisible at any useful distance. Trains are running and cannot simply be abandoned mid-journey.",
-      "reveal": "Layered degradation: detonators — small explosives clipped to the rail — turn the danger signal from sight into sound, and automatic warning systems repeat the signal's state inside the cab. Speed collapses, capacity collapses, but no train ever passes an unseen red silently. The system degrades from fast-and-seeing to slow-and-listening, never to blind-and-hoping."
+      "reveal": "Layered degradation: detonators (small explosives clipped to the rail) turn the danger signal from sight into sound, and automatic warning systems repeat the signal's state inside the cab. Speed and capacity collapse, but no train ever passes an unseen red silently."
     },
     {
       "id": "st3",
       "title": "Rust lies to the track circuit",
-      "scenario": "On a lightly-used branch line, rust film builds on the railhead. A short, light train fails to short the track circuit — the section containing a real train reads CLEAR.",
-      "reveal": "This is the one the design fears most: the fail-safe failed unsafe. The railway's answer is defense in depth — axle counters at section boundaries cross-check the circuit, minimum-axle rules keep untrustworthy trains off untrustworthy track, and treadles confirm passage mechanically. No single sensor is ever the last line; inv1 is defended by disagreement between independent witnesses."
+      "scenario": "On a lightly-used branch line, rust film builds on the railhead. A short, light train fails to short the track circuit; the section containing a real train reads CLEAR.",
+      "reveal": "This is the one the design fears most: the fail-safe failed unsafe. The railway's answer is defense in depth: axle counters at section boundaries cross-check the circuit, minimum-axle rules keep untrustworthy trains off untrustworthy track, and treadles confirm passage mechanically. No single sensor is ever the last line; inv1 is defended by disagreement between independent witnesses."
     }
   ],
   "transfer": {
     "principles": [
-      "Replace inference with confirmation wherever an invariant is at stake — 'enough time has passed' is not knowledge.",
+      "Replace inference with confirmation wherever an invariant is at stake; 'enough time has passed' is not knowledge.",
       "Guard shared resources with exclusive, possessable locks, not etiquette or schedules.",
       "Make illegal states unrepresentable in the substrate instead of forbidding them in the rulebook.",
-      "Derive state from the resource itself — sensors beat ledgers, and human memory is a single point of failure.",
+      "Derive state from the resource itself: sensors beat ledgers, and human memory is a single point of failure.",
       "Choose the direction of failure: spend energy to stay in the permissive state so that losing energy lands you in the safe one.",
-      "Expect safety to cost capacity — quantized blocks, ghost delays, and dark lines are the price of the invariant, and the price is worth paying."
+      "Expect safety to cost capacity: quantized blocks, ghost delays, and dark lines are the price of the invariant."
     ],
     "mappings": [
       {

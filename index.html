@@ -4,10 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'; connect-src 'self' https://api.anthropic.com">
-<title>Vitruvian — Rebuild it to understand it</title>
+<title>Vitruvian · Rebuild it to understand it</title>
 <meta name="description" content="Everyday systems, deconstructed one failure at a time. Free, offline, no account.">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Vitruvian — the anatomy of everyday systems">
+<meta property="og:title" content="Vitruvian · the anatomy of everyday systems">
 <meta property="og:description" content="Everyday systems, deconstructed one failure at a time. Free, offline, no account.">
 <meta property="og:url" content="https://bate-epey93.github.io/vitruvian/">
 <meta property="og:image" content="https://bate-epey93.github.io/vitruvian/share/og/vitruvian.png">
@@ -19,6 +19,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Vitruvian">
+<script src="splash.js"></script>
 <link rel="stylesheet" href="styles.css">
 <script src="content.js" defer></script>
 <script src="skill.js" defer></script>
@@ -31,6 +32,21 @@
 <script src="pwa.js" defer></script>
 </head>
 <body>
+
+<!-- SPLASH — branded load screen. engine.js removes it once the first
+     screen renders; a CSS safety animation clears it even if JS fails. -->
+<div class="splash" id="splash" aria-hidden="true">
+  <div class="splash-mark">
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <path class="enso-main" pathLength="1" d="M34.1 20.1L37.0 18.4L40.1 17.0L43.4 15.9L46.8 15.3L50.2 15.1L53.7 15.2L57.1 15.8L60.4 16.8L63.6 18.2L66.5 19.9L69.3 21.9L71.7 24.2L74.0 26.7L75.9 29.4L77.6 32.2L79.0 35.1L80.2 38.1L81.1 41.2L81.7 44.4L82.0 47.5L82.1 50.7L81.8 53.9L81.3 57.0L80.4 60.1L79.3 63.0L77.8 65.8L76.0 68.5L74.0 70.9L71.7 73.0L69.2 74.9L66.6 76.6L63.8 77.9L60.9 79.0L57.9 79.8L54.9 80.3L51.9 80.5L48.9 80.5L45.9 80.3L42.8 79.9L39.9 79.2L36.9 78.2L34.1 77.0L31.3 75.5L28.7 73.8L26.2 71.8L24.0 69.5L22.0 66.9L20.3 64.1L18.9 61.2L18.0 58.0L17.4 54.8L17.2 51.6L17.3 48.3L17.9 45.1L18.8 42.0L20.0 39.1"/>
+      <path class="enso-echo" pathLength="1" transform="translate(1.6 1.2)" d="M34.1 20.1L37.0 18.4L40.1 17.0L43.4 15.9L46.8 15.3L50.2 15.1L53.7 15.2L57.1 15.8L60.4 16.8L63.6 18.2L66.5 19.9L69.3 21.9L71.7 24.2L74.0 26.7L75.9 29.4L77.6 32.2L79.0 35.1L80.2 38.1L81.1 41.2L81.7 44.4L82.0 47.5L82.1 50.7L81.8 53.9L81.3 57.0L80.4 60.1L79.3 63.0L77.8 65.8L76.0 68.5L74.0 70.9L71.7 73.0L69.2 74.9L66.6 76.6L63.8 77.9L60.9 79.0L57.9 79.8L54.9 80.3L51.9 80.5L48.9 80.5L45.9 80.3L42.8 79.9L39.9 79.2L36.9 78.2L34.1 77.0L31.3 75.5L28.7 73.8L26.2 71.8L24.0 69.5L22.0 66.9L20.3 64.1L18.9 61.2L18.0 58.0L17.4 54.8L17.2 51.6L17.3 48.3L17.9 45.1L18.8 42.0L20.0 39.1"/>
+    </svg>
+    <span class="splash-seal"></span>
+  </div>
+  <div class="splash-name">Vitruvian<span>·</span></div>
+  <div class="splash-sub">The anatomy of everyday systems</div>
+</div>
+
 <div class="app">
 
   <!-- TOPBAR -->
@@ -79,7 +95,7 @@
 <!-- iOS INSTALL HINT (second non-installed visit) -->
 <div class="install-hint" id="iosHint" hidden>
   <div class="ih-label">Install Vitruvian</div>
-  <p>Add this to your home screen for offline reading and safer data — installed apps are exempt from Safari's storage cleanup. Tap <b>Share ▹ Add to Home Screen</b>.</p>
+  <p>Add this to your home screen for offline reading and safer data; installed apps are exempt from Safari's storage cleanup. Tap <b>Share ▹ Add to Home Screen</b>.</p>
   <button class="ih-close" id="iosHintClose" aria-label="Dismiss">×</button>
 </div>
 

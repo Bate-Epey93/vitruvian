@@ -50,6 +50,7 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 /* ═══ Theme (light / dark toggle) ═══ */
 function applyTheme(t) {
   document.documentElement.dataset.theme = t;
+  try { localStorage.setItem("vitruvian_theme", t); } catch (e) {}   // splash.js reads this pre-paint on the next launch
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute("content", t === "dark" ? "#0d0d10" : "#141416");
   const btn = $("themeBtn");
@@ -108,7 +109,22 @@ async function boot() {
     await renderLibrary();
     show("library");
   }
+  dismissSplash();
   window.dispatchEvent(new Event("sdc:ready"));
+}
+
+/* The splash (static HTML in index.html) stays up until the first screen has
+   rendered, but never less than long enough for the enso stroke + seal to
+   land — and reduced-motion users aren't made to wait for choreography. */
+function dismissSplash() {
+  const sp = document.getElementById("splash");
+  if (!sp) return;
+  const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const minShow = reduced ? 300 : 1350;
+  setTimeout(() => {
+    sp.classList.add("splash-hide");
+    setTimeout(() => sp.remove(), 450);
+  }, Math.max(0, minShow - performance.now()));
 }
 
 async function seedFlagships() {
@@ -319,7 +335,7 @@ function renderTutorial(from) {
   const steps = h("div", "principles");
   T.reading.steps.forEach(([name, desc]) => {
     const row = h("div", "principle");
-    const b = h("span"); b.appendChild(h("b", null, name + " — ")); b.appendChild(document.createTextNode(desc));
+    const b = h("span"); b.appendChild(h("b", null, name + ": ")); b.appendChild(document.createTextNode(desc));
     row.appendChild(b);
     steps.appendChild(row);
   });
@@ -345,7 +361,7 @@ function renderTutorial(from) {
   T.diagram.nodeKinds.forEach(([kind, name, desc]) => {
     const item = h("div", "tut-legend-item");
     item.appendChild(nodeSwatch(kind));
-    const tx = h("div"); tx.appendChild(h("b", null, name)); tx.appendChild(document.createTextNode(" — " + desc));
+    const tx = h("div"); tx.appendChild(h("b", null, name)); tx.appendChild(document.createTextNode(": " + desc));
     item.appendChild(tx);
     nodeLeg.appendChild(item);
   });
@@ -354,7 +370,7 @@ function renderTutorial(from) {
   T.diagram.edgeKinds.forEach(([kind, name, desc]) => {
     const item = h("div", "tut-legend-item");
     item.appendChild(edgeSwatch(kind));
-    const tx = h("div"); tx.appendChild(h("b", null, name)); tx.appendChild(document.createTextNode(" — " + desc));
+    const tx = h("div"); tx.appendChild(h("b", null, name)); tx.appendChild(document.createTextNode(": " + desc));
     item.appendChild(tx);
     edgeLeg.appendChild(item);
   });
@@ -670,7 +686,7 @@ async function exportDiagramPNG(rec) {
     img.onload = () => { ctx.drawImage(img, 0, 0, canvas.width, vb.height * SCALE); resolve(); };
     img.onerror = reject;
     img.src = svgData;
-  }).catch(() => { toast("Export failed — try again"); });
+  }).catch(() => { toast("Export failed. Try again"); });
 
   // footer: hairline, the circle-and-square mark, system name + URL
   const fy = vb.height * SCALE;
@@ -685,7 +701,7 @@ async function exportDiagramPNG(rec) {
   ctx.fillStyle = ink;
   ctx.font = `${10 * SCALE}px ui-monospace, Menlo, Consolas, monospace`;
   ctx.textBaseline = "middle";
-  ctx.fillText(rec.system.toUpperCase() + " · VITRUVIAN — " + CONFIG.siteUrl.replace(/^https:\/\//, "").replace(/\/$/, ""), mX + mS + 8 * SCALE, fy + FOOT / 2);
+  ctx.fillText(rec.system.toUpperCase() + " · VITRUVIAN · " + CONFIG.siteUrl.replace(/^https:\/\//, "").replace(/\/$/, ""), mX + mS + 8 * SCALE, fy + FOOT / 2);
 
   const a = document.createElement("a");
   a.href = canvas.toDataURL("image/png");
@@ -724,7 +740,7 @@ function buildReaderMenu(rec, challengeOn) {
     try {
       await navigator.clipboard.writeText(bridgeNotes(rec.doc));
       toast(COPY.bridgeToast);
-    } catch (e) { alert("Clipboard unavailable — export the .json instead."); }
+    } catch (e) { alert("Clipboard unavailable. Export the .json instead."); }
   });
   pop.appendChild(h("div", "menu-sep"));
   add("Delete this Deconstruct", async () => {
@@ -879,7 +895,7 @@ function verdictCard(w, doc) {
 function bridgeNotes(doc) {
   const lines = [];
   lines.push(`REFERENCE SYSTEM: ${doc.meta.system}`);
-  lines.push(`(from System Deconstructor — paste into UX-First Studio › Structure It)`);
+  lines.push(`(from Vitruvian. Paste into UX-First Studio › Structure It)`);
   lines.push("");
   lines.push(`ESSENCE: ${doc.essence.text}`);
   lines.push("");
@@ -915,7 +931,7 @@ function renderGenerate(systemName, mode) {
   } else {
     const focusRow = h("div", "focus-row");
     focus = h("input");
-    focus.placeholder = "Optional focus note — e.g. \"emphasize the payments part\"";
+    focus.placeholder = "Optional focus, e.g. \"emphasize the payments part\"";
     focus.maxLength = 200;
     focusRow.appendChild(focus);
     root.appendChild(focusRow);
@@ -949,7 +965,7 @@ function renderGenerate(systemName, mode) {
         speed: meta.genSpeed || "balanced",
         onProgress(p) {
           if (p.phase) {
-            phaseEl.textContent = p.phase === "repair" ? "One repair pass — fixing validation errors…" : (COPY.genPhases[p.phase] || phaseEl.textContent);
+            phaseEl.textContent = p.phase === "repair" ? "Repairing validation errors…" : (COPY.genPhases[p.phase] || phaseEl.textContent);
             fill.style.width = (PHASE_PCT[p.phase] || 0) + "%";
           }
           if (p.tokens) tok.textContent = "~" + p.tokens.toLocaleString() + " tokens";
@@ -1086,7 +1102,7 @@ async function renderDrill(keep) {
   drillState.gates = gates;
   drillState.probes = probes;
 
-  root.appendChild(h("div", "kicker", "Practice — re-earn what you've read"));
+  root.appendChild(h("div", "kicker", "Practice: re-earn what you've read"));
   root.appendChild(h("h1", "title", "Drill"));
 
   const seg = h("div", "seg");
@@ -1108,7 +1124,7 @@ async function renderDrill(keep) {
 function renderGateDrill(body) {
   const { gates } = drillState;
   if (!gates.length) {
-    body.appendChild(h("p", "lib-note", "Nothing to drill yet — reveal some gates in a Deconstruct first. Drills re-test what you've already earned."));
+    body.appendChild(h("p", "lib-note", "Nothing to drill yet. Reveal some gates in a Deconstruct first; drills re-test what you've earned."));
     return;
   }
   const item = gates[drillState.gi % gates.length];
@@ -1127,7 +1143,7 @@ function renderGateDrill(body) {
   card.appendChild(h("p", "st-scenario", L.problem.statement));
   card.appendChild(h("div", "gate-q", L.gate.question));
   const ta = h("textarea");
-  ta.placeholder = "Answer from memory — then check yourself.";
+  ta.placeholder = "Answer from memory, then check yourself.";
   card.appendChild(ta);
 
   const actions = h("div", "gate-actions");
@@ -1173,7 +1189,7 @@ function renderGateDrill(body) {
 function renderProbeDrill(body) {
   const { probes } = drillState;
   if (!probes.length) {
-    body.appendChild(h("p", "lib-note", "No probes yet — they unlock as you reveal layers."));
+    body.appendChild(h("p", "lib-note", "No probes yet. They unlock as you reveal layers."));
     return;
   }
   probes.forEach(({ rec, L, p }) => {
@@ -1205,7 +1221,7 @@ function renderSettings(banner) {
   /* About / how it works → landing + tutorial */
   const ab = h("div", "set-block");
   ab.appendChild(h("h3", null, "About & guide"));
-  ab.appendChild(h("p", "note", "What Vitruvian is, and how to read a Deconstruct — the cards, the diagram, and the developer lens."));
+  ab.appendChild(h("p", "note", "What Vitruvian is and how to read a Deconstruct: the cards, the diagram, the developer lens."));
   const abRow = h("div", "set-row");
   const abBtn = h("button", "gbtn primary", "Open the intro →");
   abBtn.onclick = () => { renderLanding(); show("landing"); };
@@ -1247,7 +1263,7 @@ function renderSettings(banner) {
   /* model */
   const mb = h("div", "set-block");
   mb.appendChild(h("h3", null, "Model"));
-  mb.appendChild(h("p", "note", "Any Anthropic model id — new models need no app update."));
+  mb.appendChild(h("p", "note", "Any Anthropic model id; new models need no app update."));
   mb.appendChild(h("p", "note", COPY.modelCostNote));
   const mi = h("input");
   mi.type = "text";
@@ -1285,7 +1301,7 @@ function renderSettings(banner) {
   db.appendChild(seg);
   const tog = h("div", "toggle" + (meta.challengeModeDefault === true ? " on" : ""));
   tog.style.marginTop = "12px";
-  tog.append(h("span", "tg-track"), h("span", "tg-label", "Challenge mode by default — hide each solution behind a 'design it first' gate"));
+  tog.append(h("span", "tg-track"), h("span", "tg-label", "Challenge mode by default: hide each solution behind a design-it-first gate"));
   tog.onclick = async () => {
     meta.challengeModeDefault = !(meta.challengeModeDefault === true);
     await Store.saveMeta({ challengeModeDefault: meta.challengeModeDefault });
@@ -1297,7 +1313,7 @@ function renderSettings(banner) {
   /* generation speed */
   const gs = h("div", "set-block");
   gs.appendChild(h("h3", null, "Generation speed"));
-  gs.appendChild(h("p", "note", "Balanced lets the model reason more before writing — slightly better structure. Fast trims the thinking for quicker, cheaper runs."));
+  gs.appendChild(h("p", "note", "Balanced lets the model reason longer before writing, for better structure. Fast trims thinking for quicker, cheaper runs."));
   const gseg = h("div", "seg");
   [["balanced", "Balanced"], ["fast", "Fast"]].forEach(([id, label]) => {
     const b = h("button", (meta.genSpeed || "balanced") === id ? "on" : "", label);
@@ -1314,7 +1330,7 @@ function renderSettings(banner) {
   /* backup / restore */
   const bb = h("div", "set-block");
   bb.appendChild(h("h3", null, "Backup & restore"));
-  bb.appendChild(h("p", "note", "The backup contains your whole library and attempts — never your API key."));
+  bb.appendChild(h("p", "note", "The backup contains your library and attempts, never your API key."));
   const brow = h("div", "set-row");
   const bexp = h("button", "gbtn primary", "Backup .json");
   bexp.onclick = async () => {

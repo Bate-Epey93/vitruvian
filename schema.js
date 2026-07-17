@@ -159,13 +159,13 @@ var Schema = (() => {
       if (!isObj(L.gate) || !isFullStr(L.gate.question) || !isFullStr(L.gate.hint)) err(`${w}.gate needs question and hint`);
       if (!isFullStr(L.solution)) err(`${w}.solution must be a non-empty string`);
       if (!isObj(L.user_lens) || !isFullStr(L.user_lens.gives)) err(`${w}.user_lens.gives must be a non-empty string`);
-      if (!isObj(L.user_lens) || !isFullStr(L.user_lens.costs)) err(`${w}.user_lens.costs must be non-empty — every mechanism charges its users something`);
+      if (!isObj(L.user_lens) || !isFullStr(L.user_lens.costs)) err(`${w}.user_lens.costs must be non-empty; every mechanism charges its users something`);
       if (!isObj(L.tech_lens) || !isFullStr(L.tech_lens.mechanism) || !isFullStr(L.tech_lens.principle)) err(`${w}.tech_lens needs mechanism and principle`);
       if (!isFullStr(L.tradeoff)) err(`${w}.tradeoff must be a non-empty string`);
       // at_scale: required for freshly generated docs (strict), optional for
       // import/restore of pre-v1.3 docs — the renderer degrades if it's absent
       if (opts.strict ? !isFullStr(L.at_scale) : (L.at_scale != null && !isFullStr(L.at_scale)))
-        err(`${w}.at_scale must be non-empty — every layer must answer how it holds under heavy load / as the system grows`);
+        err(`${w}.at_scale must be non-empty; every layer must answer how it holds under heavy load / as the system grows`);
       if (!isArr(L.defends) || L.defends.length === 0) err(`${w}.defends must name at least one invariant`);
       else L.defends.forEach(d => { if (!invariantIds.has(d)) err(`${w}.defends: "${d}" is not an invariant id`); });
       const dev = L.developer;
@@ -207,8 +207,8 @@ var Schema = (() => {
     });
 
     /* ── total capacity (final state) ── */
-    if (totalNodes > B.totalNodesMax) err(`diagram has ${totalNodes} nodes total; max ${B.totalNodesMax} — abstract harder`);
-    if (totalEdges > B.totalEdgesMax) err(`diagram has ${totalEdges} edges total; max ${B.totalEdgesMax} — abstract harder`);
+    if (totalNodes > B.totalNodesMax) err(`diagram has ${totalNodes} nodes total; max ${B.totalNodesMax}; abstract harder`);
+    if (totalEdges > B.totalEdgesMax) err(`diagram has ${totalEdges} edges total; max ${B.totalEdgesMax}; abstract harder`);
 
     /* ── stress_tests ── */
     const st = doc.stress_tests;

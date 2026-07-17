@@ -200,7 +200,7 @@ var DocView = (() => {
         sd.actors.forEach(a => {
           const it = h("div", "sd-item");
           it.appendChild(h("b", null, a.name));
-          it.appendChild(document.createTextNode(" — " + a.want));
+          it.appendChild(document.createTextNode(": " + a.want));
           list.appendChild(it);
         });
         b.appendChild(list);
@@ -220,7 +220,7 @@ var DocView = (() => {
         sd.entities.forEach(en => {
           const it = h("div", "sd-item");
           it.appendChild(h("b", null, en.name));
-          it.appendChild(document.createTextNode(" — " + en.note));
+          it.appendChild(document.createTextNode(": " + en.note));
           list.appendChild(it);
         });
         b.appendChild(list);
@@ -289,7 +289,7 @@ var DocView = (() => {
       const invs = doc.strip_down.invariants;
       if (invs.length < 2) return;
       const box = h("div", "predict-box");
-      box.appendChild(h("div", "pb-label", "First, a prediction — which law does this failure attack?"));
+      box.appendChild(h("div", "pb-label", "First, a prediction: which law does this failure attack?"));
       const row = h("div", "predict-row");
       invs.forEach(iv => {
         const chip = h("button", "predict-chip", "INV " + invNumber[iv.id]);
@@ -311,8 +311,8 @@ var DocView = (() => {
       box.appendChild(row);
       if (a.predict) {
         box.appendChild(h("p", "pb-result", a.predict.correct
-          ? "Called it — this failure attacks " + L.defends.map(d => "INV " + invNumber[d]).join(", ") + "."
-          : "It actually attacks " + L.defends.map(d => "INV " + invNumber[d]).join(", ") + " — watch for why."));
+          ? "Called it. This failure attacks " + L.defends.map(d => "INV " + invNumber[d]).join(", ") + "."
+          : "It actually attacks " + L.defends.map(d => "INV " + invNumber[d]).join(", ") + ". Watch for why."));
       }
       root.appendChild(box);
     }

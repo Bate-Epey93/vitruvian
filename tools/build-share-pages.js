@@ -133,7 +133,7 @@ console.log("wrote share/og/vitruvian.png");
 
 for (const slug of CONFIG.flagshipNames) {
   const doc = JSON.parse(fs.readFileSync(path.join(root, "flagships", slug + ".json"), "utf8"));
-  const title = `${doc.meta.system} — deconstructed · Vitruvian`;
+  const title = `${doc.meta.system}, deconstructed · Vitruvian`;
   const desc = `${doc.layers.length} layers, each born from a real failure. ` + doc.essence.text.split(". ")[0] + ".";
   fs.writeFileSync(path.join(OUT, slug + ".html"), page(slug, title, desc));
   fs.writeFileSync(path.join(OUT, "og", slug + ".png"), encodePNG(ogCard(slug)));

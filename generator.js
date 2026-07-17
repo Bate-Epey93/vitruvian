@@ -69,7 +69,7 @@ var Generator = (() => {
     try {
       res = await fetch(API, { method: "POST", headers: headers(apiKey, modelId), body: JSON.stringify({ ...body, ...fallbackFor(modelId), model: modelId, stream: true }) });
     } catch (e) {
-      throw fail("offline", "Could not reach Anthropic — check your connection.");
+      throw fail("offline", "Could not reach Anthropic. Check your connection.");
     }
     if (!res.ok) throw await httpError(res);
 
@@ -155,7 +155,7 @@ var Generator = (() => {
 
     /* one repair round — the loop is insurance, not a crutch */
     if (onProgress) onProgress({ phase: "repair", tokens: 0 });
-    const repairMsg = `Your document failed validation with these exact errors:\n${errors.map(e => "- " + e).join("\n")}\n\nReturn the corrected COMPLETE JSON document only — no prose, no code fences.`;
+    const repairMsg = `Your document failed validation with these exact errors:\n${errors.map(e => "- " + e).join("\n")}\n\nReturn the corrected COMPLETE JSON document only: no prose, no code fences.`;
     const text2 = await streamCall(apiKey, modelId, {
       ...base,
       // omit the assistant turn when the first response was blank — an empty
@@ -165,7 +165,7 @@ var Generator = (() => {
 
     const doc2 = parseDoc(text2);                          // throws kind:"invalid" with raw attached
     const res2 = Schema.validate(doc2, { strict: true });
-    if (!res2.ok) throw fail("invalid", `Still invalid after one repair (${res2.errors.length} errors). Your tokens aren't lost — download the raw output below.`, text2, res2.errors);
+    if (!res2.ok) throw fail("invalid", `Still invalid after one repair (${res2.errors.length} errors). Your tokens aren't lost; download the raw output below.`, text2, res2.errors);
     return { doc: doc2, repaired: true };
   }
 
@@ -181,7 +181,7 @@ var Generator = (() => {
         method: "POST", headers: headers(apiKey, modelId),
         body: JSON.stringify({ model: modelId, max_tokens: 1500, ...effortFor(modelId, "fast"), ...fallbackFor(modelId), system: p.system, messages: [{ role: "user", content: p.user }] })
       });
-    } catch (e) { throw fail("offline", "Could not reach Anthropic — check your connection."); }
+    } catch (e) { throw fail("offline", "Could not reach Anthropic. Check your connection."); }
     if (!res.ok) throw await httpError(res);
     const data = await res.json();
     if (data.stop_reason === "refusal") throw fail("refusal", "The model declined this request. Try a different model.");
@@ -198,7 +198,7 @@ var Generator = (() => {
         method: "POST", headers: headers(apiKey, modelId),
         body: JSON.stringify({ model: modelId, max_tokens: 1200, ...effortFor(modelId, "fast"), ...fallbackFor(modelId), system: p.system, messages: [{ role: "user", content: p.user }] })
       });
-    } catch (e) { throw fail("offline", "Could not reach Anthropic — check your connection."); }
+    } catch (e) { throw fail("offline", "Could not reach Anthropic. Check your connection."); }
     if (!res.ok) throw await httpError(res);
     const data = await res.json();
     if (data.stop_reason === "refusal") throw fail("refusal", "The model declined this question. Try a different model.");
@@ -245,7 +245,7 @@ var Generator = (() => {
           method: "POST", headers: headers(apiKey, modelId),
           body: JSON.stringify({ model: modelId, max_tokens: 4000, ...effortFor(modelId, speed), ...fallbackFor(modelId), system: p.system, messages: [{ role: "user", content: p.user }] })
         });
-      } catch (e) { throw fail("offline", "Could not reach Anthropic — check your connection."); }
+      } catch (e) { throw fail("offline", "Could not reach Anthropic. Check your connection."); }
       if (!res.ok) throw await httpError(res);
       const data = await res.json();
       if (data.stop_reason === "refusal") throw fail("refusal", "The model declined this proposal. Try a different model.");

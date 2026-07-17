@@ -1131,3 +1131,30 @@ html,body{overscroll-behavior:none;}
 
 /* proposal glyph in the diagram legend note (what-if screen only) */
 @media (prefers-reduced-transparency: reduce){.verdict-full{background-color:var(--panel);-webkit-backdrop-filter:none;backdrop-filter:none;}}
+
+/* ═══ Splash — branded load screen ═══
+   Painted from static HTML before the deferred app boots; engine.js
+   dismisses it (.splash-hide) once the first screen renders. The
+   splash-safety animation clears it even if JS never runs. */
+.splash{position:fixed;inset:0;z-index:300;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:var(--paper);animation:splash-safety .45s ease 3.4s forwards;}
+.splash-mark{position:relative;width:120px;height:120px;}
+.splash-mark svg{width:100%;height:100%;transform:rotate(-12deg);overflow:visible;}
+.splash-mark path{fill:none;stroke:var(--accent);stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1;animation:enso-draw .95s cubic-bezier(.55,.12,.3,1) .12s forwards;}
+.enso-main{stroke-width:4.6;}
+.enso-echo{stroke-width:1.3;opacity:.3;stroke:var(--accent-deep);animation-delay:.22s;}
+.splash-seal{position:absolute;right:0;bottom:8px;width:11px;height:11px;background:#D95B31;opacity:0;transform:scale(1.6) rotate(-8deg);animation:seal-stamp .2s cubic-bezier(.2,1.5,.45,1) 1.08s forwards;}
+.splash-name{font-family:var(--display);font-weight:800;font-size:30px;color:var(--ink);letter-spacing:.3em;opacity:0;animation:name-settle .6s cubic-bezier(.2,.7,.3,1) .5s forwards;}
+.splash-name span{color:var(--accent);}
+.splash-sub{font-family:var(--mono);font-size:10px;letter-spacing:2.4px;text-transform:uppercase;color:var(--muted);opacity:0;margin-top:-8px;animation:sub-in .5s ease .82s forwards;}
+.splash-hide{animation:none;transition:opacity .4s ease;opacity:0!important;pointer-events:none;}
+@keyframes enso-draw{to{stroke-dashoffset:0;}}
+@keyframes name-settle{to{opacity:1;letter-spacing:.02em;}}
+@keyframes sub-in{to{opacity:.9;}}
+@keyframes seal-stamp{to{opacity:1;transform:scale(1) rotate(2deg);}}
+@keyframes splash-safety{to{opacity:0;visibility:hidden;pointer-events:none;}}
+@media (prefers-reduced-motion: reduce){
+  .splash-mark path{animation:none;stroke-dashoffset:0;}
+  .splash-seal{animation:none;opacity:1;transform:scale(1) rotate(2deg);}
+  .splash-name{animation:none;opacity:1;letter-spacing:.02em;}
+  .splash-sub{animation:none;opacity:.9;}
+}

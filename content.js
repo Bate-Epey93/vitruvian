@@ -24,8 +24,8 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.12.0",
-  flagshipVersion: 2,                    // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
+  appVersion: "1.13.0",
+  flagshipVersion: 3,                    // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   flagshipNames: ["railway", "whatsapp", "youtube"],   // library slugs: seeding, #/study/<slug> deep links, share pages
   siteUrl: "https://bate-epey93.github.io/vitruvian/",
   repoUrl: "https://github.com/Bate-Epey93/vitruvian"
@@ -47,19 +47,19 @@ var MODEL_LIBRARY = [
     id: "first-principles",
     name: "First Principles",
     one_liner: "Strip every assumption; rebuild from what must be true.",
-    description: "Take the problem apart until you reach facts that cannot be argued with, then build the solution up from only those. Most designs inherit assumptions from their predecessors; first-principles thinking asks which inherited beliefs are actually load-bearing — and deletes the rest. The railway's block system was born this way: safety requires knowing a track is empty, not assuming it after enough time has passed."
+    description: "Take the problem apart until you reach facts that cannot be argued with, then build up from only those. Most designs inherit assumptions from their predecessors; first-principles thinking asks which inherited beliefs are load-bearing and deletes the rest. The railway's block system was born this way: safety requires knowing a track is empty, not assuming it after enough time has passed."
   },
   {
     id: "inversion",
     name: "Inversion",
     one_liner: "Design by asking how it would fail, then make that impossible.",
-    description: "Instead of asking 'how do I make this work?', enumerate the ways it could go wrong and design each one out. Interlocking frames, checklists, and type systems are all inversion at work: list the conflicting moves, then make them mechanically unexpressible rather than merely forbidden."
+    description: "Instead of asking 'how do I make this work?', list the ways it could go wrong and design each one out. Interlocking frames, checklists, and type systems are all inversion at work: name the conflicting moves, then make them impossible to express rather than merely forbidden."
   },
   {
     id: "bottleneck",
     name: "Bottleneck Analysis",
     one_liner: "Find the one constraint that governs the whole system's throughput.",
-    description: "Every system has a narrowest point, and the system as a whole cannot go faster than it. Optimizing anywhere else is invisible. Find the bottleneck, widen it or route around it, then find the new one — because there is always a new one."
+    description: "Every system has a narrowest point, and the system as a whole cannot go faster than it. Optimizing anywhere else is invisible. Find the bottleneck, widen it or route around it, then find the new one; there is always a new one."
   },
   {
     id: "feedback-loop",
@@ -77,7 +77,7 @@ var MODEL_LIBRARY = [
     id: "mutual-exclusion",
     name: "Mutual Exclusion",
     one_liner: "One-at-a-time access enforced by possession, not politeness.",
-    description: "When a shared resource can only safely serve one user at a time, etiquette is not enforcement. Make permission a thing that can be held — a token, a lock, a lease — so that uniqueness is physical, not behavioral. Two people cannot hold one brass key."
+    description: "When a shared resource can only safely serve one user at a time, etiquette is not enforcement. Make permission a thing that can be held: a token, a lock, a lease. Then uniqueness is physical, not behavioral. Two people cannot hold one brass key."
   },
   {
     id: "queue-and-buffer",
@@ -89,7 +89,7 @@ var MODEL_LIBRARY = [
     id: "redundancy",
     name: "Redundancy & Failover",
     one_liner: "No single point of failure; spares that take over when parts die.",
-    description: "Any component will eventually fail; the design question is whether the system fails with it. Redundancy buys survival with duplication — spare parts, second paths, replicas — and introduces its own hard problem: detecting failure and switching over without making things worse."
+    description: "Any component will eventually fail; the design question is whether the system fails with it. Redundancy buys survival with duplication: spare parts, second paths, replicas. It also brings its own hard problem, detecting failure and switching over without making things worse."
   },
   {
     id: "separation-of-concerns",
@@ -101,19 +101,19 @@ var MODEL_LIBRARY = [
     id: "trust-boundary",
     name: "Trust Boundaries",
     one_liner: "Decide where verification happens; never trust across the line.",
-    description: "Every system has lines where data or people cross from 'unverified' to 'trusted'. Security failures are almost always a crossing that skipped its checkpoint. Draw the boundaries explicitly, verify at each crossing, and assume everything outside is hostile — not because it is, but because you can't tell."
+    description: "Every system has lines where data or people cross from 'unverified' to 'trusted'. Security failures are almost always a crossing that skipped its checkpoint. Draw the boundaries explicitly, verify at each crossing, and assume everything outside is hostile: not because it is, but because you can't tell."
   },
   {
     id: "incentive-alignment",
     name: "Incentive Alignment",
     one_liner: "Make the selfish choice and the correct choice the same choice.",
-    description: "Systems run by people do what the incentives reward, not what the rules say. If the profitable action and the intended action diverge, the system drifts toward profit. Durable designs make honest behavior the cheapest path — aligning what actors want with what the system needs."
+    description: "Systems run by people do what the incentives reward, not what the rules say. If the profitable action and the intended action diverge, the system drifts toward profit. Durable designs make honest behavior the cheapest path, so what actors want lines up with what the system needs."
   },
   {
     id: "graceful-degradation",
     name: "Graceful Degradation",
     one_liner: "Partial failure yields reduced service, not collapse.",
-    description: "The question is never whether parts fail but what the whole does when they do. Fail-safe defaults (a dead signal shows red; released brakes engage) choose the harmless state when knowledge is lost. Degrading gracefully means the system keeps serving — slower, dumber, safer — instead of stopping."
+    description: "The question is never whether parts fail but what the whole does when they do. Fail-safe defaults (a dead signal shows red; released brakes engage) choose the harmless state when knowledge is lost. Degrading gracefully means the system keeps serving, slower and dumber but safer, instead of stopping."
   },
   {
     id: "locality-and-caching",
@@ -125,7 +125,7 @@ var MODEL_LIBRARY = [
     id: "idempotency",
     name: "Idempotency",
     one_liner: "Safe retries: doing it twice equals doing it once.",
-    description: "Unreliable channels force a brutal choice — retry and risk duplicates, or don't and risk loss. Idempotent operations dissolve the dilemma: design the action so repeating it changes nothing, and retries become free. Message ids, payment ids, and 'set' instead of 'increment' are all the same move."
+    description: "Unreliable channels force a choice: retry and risk duplicates, or don't and risk loss. Idempotent operations dissolve the dilemma. Design the action so repeating it changes nothing, and retries become free. Message ids, payment ids, and 'set' instead of 'increment' are all the same move."
   }
 ];
 
@@ -133,7 +133,7 @@ var MODEL_LIBRARY = [
 var COPY = {
   libraryTitle: "Library",
   sampleHeading: "Sample Deconstructs",
-  sampleNote: "Three worked examples — the bar for what a Deconstruct looks like.",
+  sampleNote: "Three worked examples that set the bar for a Deconstruct.",
   yoursHeading: "Your Deconstructs",
   yoursEmpty: "Nothing here yet. Name any system above and Vitruvian will take it apart, failure by failure.",
   deconstructPlaceholder: "Name a system to deconstruct…",
@@ -141,7 +141,7 @@ var COPY = {
   ownDesignLink: "Building something? Dissect your design →",
   ownDesignKicker: "Dissection",
   ownDesignTitle: "Dissect your design",
-  ownDesignLede: "Describe the system you're building — the pieces, what it must never get wrong, where you expect load. Vitruvian puts it on the table, rebuilds it failure by failure, and shows what breaks first.",
+  ownDesignLede: "Describe the system you're building: the pieces, what it must never get wrong, where you expect load. Vitruvian rebuilds it failure by failure and shows what breaks first.",
   ownDesignPlaceholder: "e.g. A booking app where vendors set their availability and customers reserve time slots. Two customers must never book the same slot; vendors get notified the instant a booking lands; I expect big spikes when a popular vendor opens their calendar…",
   ownDesignBtn: "Dissect my design",
   audienceModes: [
@@ -149,32 +149,32 @@ var COPY = {
     { id: "enthusiast", label: "Enthusiast" },
     { id: "developer",  label: "Developer" }
   ],
-  gateKicker: "Before the reveal — your turn",
+  gateKicker: "Your turn before the reveal",
   gateHint1: "Show the thinking model",
   gateHint2: "One more hint",
   gateReveal: "Reveal the solution",
   gateCompare: "Compare my answer (AI)",
   askTitle: "Probe this layer",
-  askPlaceholder: "One question — e.g. \"why not just use timestamps?\"",
+  askPlaceholder: "One question, e.g. \"why not just use timestamps?\"",
   askBtn: "Probe",
   whatifMenu: "Graft… (propose a change)",
   whatifKicker: "Graft",
-  whatifLede: "Propose a change — a graft onto this system. Vitruvian shows what it does to the architecture, which invariants it strengthens or threatens, and whether the body accepts it — grounded in the system's own rules.",
+  whatifLede: "Propose a change to this system. Vitruvian shows what it does to the architecture, which invariants it strengthens or threatens, and whether the body accepts the graft, judged by the system's own rules.",
   whatifPlaceholder: "e.g. add an HTML renderer to the terminal · cache reads at the edge · drop the acknowledgement step",
   whatifBtn: "Run the graft",
   whatifThinking: "Weighing it against the invariants…",
-  whatifVerdicts: { improves: "The graft takes — improves the system", mixed: "It takes, with scars — a real tradeoff", harmful: "Rejected — works against the system" },
-  gateCompareOffline: "AI comparison needs a connection and an API key (Settings). Your answer is saved — compare it yourself against the reveal.",
+  whatifVerdicts: { improves: "The graft takes: the system improves", mixed: "It takes, with scars: a real tradeoff", harmful: "Rejected: works against the system" },
+  gateCompareOffline: "AI comparison needs a connection and an API key (Settings). Your answer is saved, so you can compare it against the reveal yourself.",
   keyNotice: "Your key is stored on this device only and sent only to Anthropic.",
   costNote: "A Deconstruct typically costs a few cents to a few tens of cents of API usage, depending on the model.",
-  modelCostNote: "Rough cost per Deconstruct — haiku-4-5 ≈ $0.10 · sonnet-5 ≈ $0.30 · opus-4-8 ≈ $0.55 · fable-5 ≈ $1.20. Fable is the most capable and auto-falls back to Opus if it declines a request.",
+  modelCostNote: "Rough cost per Deconstruct: haiku-4-5 ≈ $0.10 · sonnet-5 ≈ $0.30 · opus-4-8 ≈ $0.55 · fable-5 ≈ $1.20. Fable is the most capable and falls back to Opus if it declines a request.",
   pricingUrl: "https://www.anthropic.com/pricing",
   privacyNote: "Everything lives on this device. Deconstructs, attempts, and your key are never sent anywhere except your own calls to Anthropic.",
   offlineGenNote: "Generation needs a connection. Reading never does.",
-  bridgeToast: "Reference notes copied — paste into UX-First Studio's Structure It station.",
+  bridgeToast: "Reference notes copied. Paste into UX-First Studio's Structure It station.",
   shareMenu: "Share link",
-  shareCopied: "Link copied — anyone can open this Deconstruct",
-  shareLocalNote: "This Deconstruct lives on this device — export the .json to share it.",
+  shareCopied: "Link copied. Anyone can open this Deconstruct",
+  shareLocalNote: "This Deconstruct lives on this device. Export the .json to share it.",
   exportPngMenu: "Export diagram (.png)",
   requestLink: "Request a system →",
   studioUrl: "https://bate-epey93.github.io/uxfirst-studio/",
@@ -185,13 +185,13 @@ var COPY = {
     lede: "Everyday systems, deconstructed one failure at a time.",
     sections: [
       { icon: "whatItIs", title: "What it is",
-        body: "Pick a system. Vitruvian deconstructs it to its bones, then rebuilds it layer by layer — each layer born from a real failure. A diagram grows as it comes together." },
+        body: "Pick a system. Vitruvian strips it to its bones, then rebuilds it layer by layer, each layer forced by a real failure. A diagram grows as it comes together." },
       { icon: "whoFor", title: "Who it's for",
         body: "Curious minds, systems-design enthusiasts, and developers prepping for architecture interviews. Three reading levels, from plain English to engineer." },
       { icon: "whyWorks", title: "Why it works",
-        body: "You remember what you rebuild. Design each fix yourself before the reveal — and collect the named thinking models that repeat across systems." },
+        body: "You remember what you rebuild. Design each fix yourself before the reveal, and collect the thinking models that repeat across systems." },
       { icon: "howTo", title: "How to use it",
-        body: "Start with a sample Deconstruct. Add your Anthropic API key in Settings to deconstruct anything you name — or put your own system design on the table and watch where it breaks first. Works offline; installs to your home screen." }
+        body: "Start with a sample Deconstruct. Add your Anthropic API key in Settings to deconstruct anything you name, or submit your own design and see where it breaks first. Works offline; installs to your home screen." }
     ],
     cta: "Start deconstructing →",
     footnote: "No account. No cloud. Your Deconstructs stay on this device."
@@ -201,35 +201,35 @@ var COPY = {
   tutorial: {
     kicker: "How to read a Deconstruct",
     headline: "Every Deconstruct is the same shape.",
-    lede: "A Vitruvian Deconstruct rebuilds a system from nothing, one failure at a time. Here's how to read the pieces — and, for developers, how to lift a technical spec straight out of one.",
+    lede: "A Vitruvian Deconstruct rebuilds a system from nothing, one failure at a time. Here's how to read the pieces, and, for developers, how to lift a technical spec out of one.",
     reading: {
       title: "The path through a Deconstruct",
       steps: [
         ["Essence", "The system in one breath, plus a few surprising, checkable facts."],
-        ["The Skeleton", "The irreducible core — the bones: who wants what, the invariants (what must never be false), the pieces, the flows, and the hard constraints physics and economics impose."],
-        ["The rebuild", "4–7 layers, and the heart of it. Each layer is forced by a concrete failure of the version before it — often a real, dated disaster — so you watch the design become necessary, not just described."],
+        ["The Skeleton", "The irreducible core: who wants what, the invariants (what must never be false), the pieces, the flows, and the hard constraints physics and economics impose."],
+        ["The rebuild", "4–7 layers, the heart of it. Each layer is forced by a concrete failure of the version before it, often a real, dated disaster. You watch the design become necessary, not just described."],
         ["Stress tests", "Push the finished system somewhere nasty and see how it copes, or where it honestly breaks."],
         ["Transfer", "The system-neutral principles, and where the same shapes recur in other systems."]
       ]
     },
     cards: {
-      title: "Inside each layer — the cards",
-      note: "One layer, read top to bottom. Several cards are interactive — tap to locate them on the diagram.",
+      title: "Inside each layer: the cards",
+      note: "One layer, read top to bottom. Several cards are interactive; tap to locate them on the diagram.",
       items: [
-        ["problem", "The problem", "The failure that forces this layer to exist. Tap it to flash — in red — exactly what breaks on the diagram."],
+        ["problem", "The problem", "The failure that forces this layer to exist. Tap to flash what breaks on the diagram, in red."],
         ["model", "Thinking model", "The named, reusable pattern that cracks the problem (there are 14). Tap any model in the Models index to see it recur across systems."],
-        ["solution", "What was actually built", "The mechanism itself. Tap it to light — in teal — what this layer adds to the diagram."],
+        ["solution", "What was actually built", "The mechanism itself. Tap to light what this layer adds to the diagram, in teal."],
         ["lens", "For the people · Under the hood", "Two lenses side by side: what users gain and what they pay, versus how it works and the transferable principle."],
-        ["tradeoff", "The tradeoff", "What this layer sacrifices. Nothing is free — safety costs capacity, caching costs freshness."],
-        ["scale", "Under load", "How the mechanism holds as load grows — its scaling property, its ceiling, or the sharding/caching it forces. Tap it to trace the load path in gold."],
+        ["tradeoff", "The tradeoff", "What this layer sacrifices. Safety costs capacity; caching costs freshness."],
+        ["scale", "Under load", "How the mechanism holds as load grows: its scaling property, its ceiling, or the sharding it forces. Tap to trace the load path in gold."],
         ["defends", "Defends", "Which invariants from the strip-down this layer protects, by number."],
-        ["dev", "For engineers", "Mechanism → software-concept mappings, plus interview probes. In Developer mode this reads as spec-grade material."],
+        ["dev", "For engineers", "Maps each mechanism to its software concept, plus interview probes. In Developer mode this reads as spec material."],
         ["analogy", "In everyday terms", "One plain analogy, for when an idea needs grounding."]
       ]
     },
     diagram: {
       title: "Reading the diagram",
-      intro: "The diagram grows as the system does — every layer adds to it, and it never re-arranges. Colour means role, shape means kind, and the arrows show what moves.",
+      intro: "The diagram grows as the system does; every layer adds to it and nothing re-arranges. Colour means role, shape means kind, arrows show what moves.",
       nodeKinds: [
         ["actor", "Actor", "a person or party"],
         ["store", "Store", "where things wait or accumulate"],
@@ -238,12 +238,12 @@ var COPY = {
       ],
       edgeKinds: [
         ["payload", "Payload", "the thing the system exists to move (solid line). This is the load path."],
-        ["control", "Control", "signals and permissions (dashed) — often flowing back, against the payload."],
+        ["control", "Control", "signals and permissions (dashed), often flowing back against the payload."],
         ["money", "Money", "value changing hands (gold, dotted)."]
       ],
       extra: [
-        ["Lanes & colour", "Horizontal bands are semantic roles — People, Service, Control, Money — each with its own colour. An arrow wears the colour of the lane its input comes from, so you can see at a glance who is driving what."],
-        ["The red pulse", "At a gate, or when you tap the problem card, the parts about to break pulse red — you see the failure before you see the fix."],
+        ["Lanes & colour", "Horizontal bands are semantic roles (People, Service, Control, Money), each with its own colour. An arrow wears the colour of the lane it comes from, so you can see who drives what."],
+        ["The red pulse", "At a gate, or when you tap the problem card, the parts about to break pulse red. You see the failure before the fix."],
         ["Spotlight", "Tap a card to light its parts and dim the rest: the problem card lights what breaks (red), the solution card lights what's added (teal), and Under load traces the path load travels (gold)."],
         ["Pan & scrub", "Dense diagrams pan sideways. Drag the scrubber (0…N) under the diagram to sweep it from the naive baseline to the finished system."]
       ]
@@ -251,32 +251,32 @@ var COPY = {
     controls: {
       title: "Controls",
       items: [
-        ["Audience — B / E / D", "Three registers of the same Deconstruct: Beginner (plain language, everyday analogies), Enthusiast (the default), and Developer (adds the engineer mappings and interview probes). Switch anytime; your place is kept."],
+        ["Audience: B / E / D", "Three registers of the same Deconstruct: Beginner (plain language, everyday analogies), Enthusiast (the default), and Developer (adds the engineer mappings and interview probes). Switch anytime; your place is kept."],
         ["Step & scrub", "Move layer by layer with Prev / Next, or drag the scrubber to sweep the diagram across every state."],
-        ["Pulse ▶", "Send traffic through the current state of the diagram — watch payloads travel, crash into what's broken, and congest under ◉ load."],
-        ["Challenge mode", "Optional, and off by default. Turn it on from the ⋯ menu to hide each solution behind a 'design it first' gate — you predict the fix, then compare."]
+        ["Pulse ▶", "Send traffic through the diagram's current state: payloads travel, crash into what's broken, and congest under ◉ load."],
+        ["Challenge mode", "Off by default. Turn it on from the ⋯ menu to hide each solution behind a design-it-first gate: you predict the fix, then compare."]
       ]
     },
     forDev: {
-      title: "For developers — reading a Deconstruct as a spec",
+      title: "For developers: reading a Deconstruct as a spec",
       intro: "A Deconstruct is already shaped like a design document. Switch to Developer mode first (it surfaces the mappings and probes the other registers tuck away), then lift it across:",
       map: [
-        ["The Skeleton", "system context — actors, invariants (your correctness guarantees), entities, data flows, and hard constraints."],
+        ["The Skeleton", "system context: actors, invariants (your correctness guarantees), entities, data flows, and hard constraints."],
         ["Each layer's mechanism + principle", "an architecture decision record: what you built and the rule it encodes."],
         ["Under load", "the scaling / capacity section: throughput ceilings, bottlenecks, and the sharding or caching strategy."],
         ["Tradeoffs + stress tests", "your risk register and failure-mode analysis."],
-        ["For-engineers mappings", "the concrete tech — the software concept each mechanism maps to."],
+        ["For-engineers mappings", "the concrete tech: the software concept each mechanism maps to."],
         ["Transfer principles", "the reusable patterns to carry into your own design."]
       ]
     },
-    cta: "Got it — back to deconstructing"
+    cta: "Got it. Back to deconstructing"
   },
 
   genPhases: {
     start:      "Reading the system…",
     strip_down: "Finding the skeleton…",
     visual:     "Drawing the baseline…",
-    layers:     "Rebuilding — layer by layer…",
+    layers:     "Rebuilding, layer by layer…",
     stress:     "Stress-testing…",
     transfer:   "Extracting principles…"
   }

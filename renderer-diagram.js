@@ -340,7 +340,7 @@ var Diagram = (() => {
         const p = pos[n.id];
         const g = el("g", { transform: `translate(${p.x} ${p.y})`, "data-id": n.id }, nodesG);
         drawNode(g, n, laneColor(n.lane));
-        txt(el("title", {}, g), `${n.label} — ${laneLabelById[n.lane] || n.lane} · ${n.kind}`);
+        txt(el("title", {}, g), `${n.label} · ${laneLabelById[n.lane] || n.lane} · ${n.kind}`);
         if (hl.has(n.id)) g.classList.add("dg-broken");
         if (ghostSet.has(n.id)) g.classList.add("dg-ghost");
         if (stressSet.has(n.id)) g.classList.add("dg-stress");
