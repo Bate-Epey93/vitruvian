@@ -94,7 +94,14 @@ async function boot() {
   await seedFlagships();
   wireTopbar();
   renderAudSwitch();
-  if (!meta.landingSeen) {
+  // deep link: #/study/<slug> opens a library Deconstruct directly (share pages
+  // land here). Only library studies have stable ids on every device.
+  const deep = location.hash.match(/^#\/study\/([a-z0-9-]+)/);
+  const deepRec = deep && (await Store.getBreakdown("flagship-" + deep[1]).catch(() => null));
+  if (deepRec) {
+    await renderLibrary();                // back button needs a library behind it
+    openReader(deepRec.id);
+  } else if (!meta.landingSeen) {
     renderLanding();
     show("landing");
   } else {
@@ -108,7 +115,7 @@ async function seedFlagships() {
   // Re-seed whenever the shipped flagship content version changes, so existing
   // installs receive updated flagships — preserving each one's attempts/progress.
   if (meta.flagshipVersion === CONFIG.flagshipVersion) return;
-  const names = ["railway", "whatsapp", "youtube"];
+  const names = CONFIG.flagshipNames;
   const prev = {};
   (await Store.getBreakdowns()).forEach(b => { if (b.source === "flagship") prev[b.id] = b; });
   let okCount = 0;
@@ -507,6 +514,11 @@ async function renderLibrary() {
   const about = h("button", "gbtn", "About Vitruvian");
   about.onclick = () => { renderLanding(); show("landing"); };
   importRow.appendChild(about);
+  const req = h("a", "gbtn", COPY.requestLink);   // demand signal, no backend: a GitHub issue
+  req.href = CONFIG.repoUrl + "/issues/new?template=request-a-system.md&title=Deconstruct%3A+";
+  req.target = "_blank";
+  req.rel = "noopener";
+  importRow.appendChild(req);
   root.appendChild(importRow);
 }
 
@@ -620,6 +632,68 @@ async function openReader(id, layerIndex) {
   if (layerIndex != null) currentView.goToLayer(layerIndex);
 }
 
+/* ═══ Branded diagram export: current diagram state → PNG with the Vitruvian
+   mark and URL in a footer bar, so every shared screenshot carries the brand.
+   The SVG's classed styles live in styles.css, which a serialized SVG can't
+   see — so computed styles are inlined onto a clone first. Fonts inside an
+   SVG-as-image never load; labels get a system mono stack instead. ═══ */
+async function exportDiagramPNG(rec) {
+  const svgEl = document.querySelector("#screen-reader .dg-svg");
+  if (!svgEl) { toast("Open the diagram first"); return; }
+  const clone = svgEl.cloneNode(true);
+  const src = [svgEl, ...svgEl.querySelectorAll("*")];
+  const dst = [clone, ...clone.querySelectorAll("*")];
+  const PROPS = ["stroke", "stroke-width", "stroke-dasharray", "stroke-linecap", "fill", "fill-opacity", "opacity", "font-size", "font-weight", "letter-spacing", "paint-order"];
+  src.forEach((el, i) => {
+    const cs = getComputedStyle(el);
+    PROPS.forEach(p => { const v = cs.getPropertyValue(p); if (v) dst[i].style.setProperty(p, v); });
+    if (el.tagName === "text" || el.tagName === "tspan")
+      dst[i].style.fontFamily = "ui-monospace, Menlo, Consolas, monospace";
+  });
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  clone.style.width = ""; clone.style.minWidth = "";
+
+  const vb = svgEl.viewBox.baseVal;
+  const SCALE = 2, FOOT = 30 * SCALE;
+  const canvas = document.createElement("canvas");
+  canvas.width = vb.width * SCALE;
+  canvas.height = vb.height * SCALE + FOOT;
+  const ctx = canvas.getContext("2d");
+  const paper = getComputedStyle(document.documentElement).getPropertyValue("--paper").trim() || "#f7f4ed";
+  const ink = getComputedStyle(document.documentElement).getPropertyValue("--ink").trim() || "#211e19";
+  ctx.fillStyle = paper;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const svgData = "data:image/svg+xml," + encodeURIComponent(new XMLSerializer().serializeToString(clone));
+  await new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => { ctx.drawImage(img, 0, 0, canvas.width, vb.height * SCALE); resolve(); };
+    img.onerror = reject;
+    img.src = svgData;
+  }).catch(() => { toast("Export failed — try again"); });
+
+  // footer: hairline, the circle-and-square mark, system name + URL
+  const fy = vb.height * SCALE;
+  ctx.strokeStyle = ink; ctx.globalAlpha = 0.25; ctx.lineWidth = SCALE;
+  ctx.beginPath(); ctx.moveTo(0, fy); ctx.lineTo(canvas.width, fy); ctx.stroke();
+  ctx.globalAlpha = 1;
+  const mS = 13 * SCALE, mX = 10 * SCALE, mY = fy + (FOOT - mS) / 2;
+  ctx.lineWidth = 1.6 * SCALE; ctx.strokeStyle = "#0e7a63";
+  ctx.strokeRect(mX, mY, mS, mS);
+  ctx.strokeStyle = ink;
+  ctx.beginPath(); ctx.arc(mX + mS / 2, mY + mS / 2, mS * 0.62, -0.6 * Math.PI, 1.15 * Math.PI); ctx.stroke();
+  ctx.fillStyle = ink;
+  ctx.font = `${10 * SCALE}px ui-monospace, Menlo, Consolas, monospace`;
+  ctx.textBaseline = "middle";
+  ctx.fillText(rec.system.toUpperCase() + " · VITRUVIAN — " + CONFIG.siteUrl.replace(/^https:\/\//, "").replace(/\/$/, ""), mX + mS + 8 * SCALE, fy + FOOT / 2);
+
+  const a = document.createElement("a");
+  a.href = canvas.toDataURL("image/png");
+  a.download = rec.system.replace(/\W+/g, "-").toLowerCase() + "-diagram.png";
+  a.click();
+  toast("Diagram exported");
+}
+
 function buildReaderMenu(rec, challengeOn) {
   const pop = $("menuPop");
   pop.textContent = "";
@@ -636,6 +710,13 @@ function buildReaderMenu(rec, challengeOn) {
     openReader(rec.id);
   });
   pop.appendChild(h("div", "menu-sep"));
+  add(COPY.shareMenu, async () => {
+    if (rec.source !== "flagship") { toast(COPY.shareLocalNote); return; }
+    const url = CONFIG.siteUrl + "#/study/" + rec.id.replace("flagship-", "");
+    try { await navigator.clipboard.writeText(url); toast(COPY.shareCopied); }
+    catch (e) { prompt("Copy this link:", url); }
+  });
+  add(COPY.exportPngMenu, () => exportDiagramPNG(rec));
   add("Export Deconstruct .json", () => {
     download(rec.system.replace(/\W+/g, "-").toLowerCase() + ".json", JSON.stringify(rec.doc, null, 2));
   });

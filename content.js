@@ -24,8 +24,11 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.11.2",
-  flagshipVersion: 2                     // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
+  appVersion: "1.12.0",
+  flagshipVersion: 2,                    // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
+  flagshipNames: ["railway", "whatsapp", "youtube"],   // library slugs: seeding, #/study/<slug> deep links, share pages
+  siteUrl: "https://bate-epey93.github.io/vitruvian/",
+  repoUrl: "https://github.com/Bate-Epey93/vitruvian"
 };
 
 /* ---------- ENSO_ICONS — brush marks for the landing cards ----------
@@ -169,6 +172,11 @@ var COPY = {
   privacyNote: "Everything lives on this device. Deconstructs, attempts, and your key are never sent anywhere except your own calls to Anthropic.",
   offlineGenNote: "Generation needs a connection. Reading never does.",
   bridgeToast: "Reference notes copied — paste into UX-First Studio's Structure It station.",
+  shareMenu: "Share link",
+  shareCopied: "Link copied — anyone can open this Deconstruct",
+  shareLocalNote: "This Deconstruct lives on this device — export the .json to share it.",
+  exportPngMenu: "Export diagram (.png)",
+  requestLink: "Request a system →",
   studioUrl: "https://bate-epey93.github.io/uxfirst-studio/",
   /* ---------- LANDING (first-run explainer) ---------- */
   landing: {
