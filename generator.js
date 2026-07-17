@@ -50,7 +50,7 @@ var Generator = (() => {
     return FABLE.test(modelId) ? { fallbacks: [{ model: "claude-opus-4-8" }] } : {};
   }
 
-  function fail(kind, message, raw) { const e = new Error(message); e.kind = kind; e.raw = raw; return e; }
+  function fail(kind, message, raw, errors) { const e = new Error(message); e.kind = kind; e.raw = raw; e.errors = errors; return e; }
 
   async function httpError(res) {
     let detail = "";
@@ -165,7 +165,7 @@ var Generator = (() => {
 
     const doc2 = parseDoc(text2);                          // throws kind:"invalid" with raw attached
     const res2 = Schema.validate(doc2, { strict: true });
-    if (!res2.ok) throw fail("invalid", `Still invalid after one repair (${res2.errors.length} errors). Your tokens aren't lost — download the raw output below.`, text2);
+    if (!res2.ok) throw fail("invalid", `Still invalid after one repair (${res2.errors.length} errors). Your tokens aren't lost — download the raw output below.`, text2, res2.errors);
     return { doc: doc2, repaired: true };
   }
 

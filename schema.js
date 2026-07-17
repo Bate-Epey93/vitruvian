@@ -189,13 +189,18 @@ var Schema = (() => {
         if (!liveNodes.has(h) && !liveEdges.has(h)) err(`${w}.diff.highlight: "${h}" does not exist before this layer`);
       });
       if (!isArr(diff.remove)) err(`${w}.diff.remove must be an array`);
-      else diff.remove.forEach(r => {
-        if (liveNodes.has(r)) {
-          liveNodes.delete(r);
-          [...liveEdges.values()].forEach(e => { if (e.from === r || e.to === r) liveEdges.delete(e.id); });
-        } else if (liveEdges.has(r)) liveEdges.delete(r);
-        else err(`${w}.diff.remove: "${r}" does not exist before this layer`);
-      });
+      else {
+        // removing a node cascade-removes its edges; a model that ALSO lists
+        // those edges explicitly is being thorough, not wrong — tolerate it
+        const cascaded = new Set();
+        diff.remove.forEach(r => {
+          if (liveNodes.has(r)) {
+            liveNodes.delete(r);
+            [...liveEdges.values()].forEach(e => { if (e.from === r || e.to === r) { liveEdges.delete(e.id); cascaded.add(e.id); } });
+          } else if (liveEdges.has(r)) liveEdges.delete(r);
+          else if (!cascaded.has(r)) err(`${w}.diff.remove: "${r}" does not exist before this layer`);
+        });
+      }
       if (isArr(diff.add_nodes)) diff.add_nodes.forEach(n => checkNode(n, `${w}.diff.add_nodes`));
       if (isArr(diff.add_edges)) diff.add_edges.forEach(e => checkEdge(e, `${w}.diff.add_edges`));
       checkCells(`${w} view`);           // this state is rendered — check its cells

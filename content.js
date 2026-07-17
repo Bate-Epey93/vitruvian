@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.11.1",
+  appVersion: "1.11.2",
   flagshipVersion: 2                     // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
 };
 

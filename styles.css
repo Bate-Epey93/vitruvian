@@ -1039,6 +1039,11 @@ html,body{overscroll-behavior:none;}
    v1.8 — DECONSTRUCT YOUR OWN DESIGN
    ═══════════════════════════════════════════════════════════════ */
 
+.gen-error-list{
+  margin:2px 0 10px;padding-left:20px;font-family:var(--mono);font-size:11.5px;
+  line-height:1.7;color:var(--ink-soft);
+}
+
 .own-design-btn{
   margin:-14px 0 30px;color:var(--accent);border-color:var(--accent);
 }

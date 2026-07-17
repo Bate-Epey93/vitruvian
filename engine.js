@@ -893,6 +893,12 @@ function renderGenerate(systemName, mode) {
       };
       box.appendChild(h("h3", null, titles[e.kind] || "Generation failed"));
       box.appendChild(h("p", null, e.message));
+      if (Array.isArray(e.errors) && e.errors.length) {
+        const ul = h("ul", "gen-error-list");
+        e.errors.slice(0, 4).forEach(msg => ul.appendChild(h("li", null, msg)));
+        if (e.errors.length > 4) ul.appendChild(h("li", null, `…and ${e.errors.length - 4} more`));
+        box.appendChild(ul);
+      }
       const row = h("div", "gate-actions");
       if (e.kind === "key") {
         const b = h("button", "gbtn", "Open Settings");

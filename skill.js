@@ -85,7 +85,7 @@ var SKILL = (() => {
         add_nodes: ["0-5 node objects, same shape as visual.nodes"],
         add_edges: ["0-6 edge objects, same shape as visual.edges"],
         highlight: ["0-6 existing node/edge ids — what is BROKEN before this layer fixes it"],
-        remove: ["existing node/edge ids this layer retires, usually []"]
+        remove: ["existing node/edge ids this layer retires, usually []. Removing a node removes its edges automatically — do NOT also list those edges"]
       }
     }],
     stress_tests: [{ id: "st1…", title: "string", scenario: "string — push the system somewhere nasty", reveal: "string — how the finished system handles it, or honestly fails" }],
