@@ -530,11 +530,13 @@ async function renderLibrary() {
   const about = h("button", "gbtn", "About Vitruvian");
   about.onclick = () => { renderLanding(); show("landing"); };
   importRow.appendChild(about);
+  /* Request-a-system link hidden for now — restore by re-appending req.
   const req = h("a", "gbtn", COPY.requestLink);   // demand signal, no backend: a GitHub issue
   req.href = CONFIG.repoUrl + "/issues/new?template=request-a-system.md&title=Deconstruct%3A+";
   req.target = "_blank";
   req.rel = "noopener";
   importRow.appendChild(req);
+  */
   root.appendChild(importRow);
 }
 
