@@ -267,6 +267,9 @@ var Diagram = (() => {
       if (!g || !svg.contains(g) || !lastState) return;
       const id = g.getAttribute("data-id");
       if (!id) return;
+      // mid-sim, a node tap KILLS the node — chaos engineering: watch tokens
+      // pile up behind it and everything downstream starve
+      if (sim.running) { sim.toggleFault(id); return; }
       if (traced === id) { traced = null; spotlight(null); return; }
       const ids = [id];
       lastState.edges.forEach(e => { if (e.from === id || e.to === id) ids.push(e.id); });
@@ -525,8 +528,19 @@ var Diagram = (() => {
     const sim = (() => {
       let running = false, load = false, mode = "free", raf = null, last = 0, spawnAcc = 0;
       let tokens = [], onStopCb = null, onCrashCb = null, replayCrashed = 0;
+      let onStatsCb = null, crashed = 0, delivered = 0, deliveredTimes = [], faulted = new Set();
       const SPAWN_MS = () => (load ? 240 : 1050);
       const SPEED = () => (load ? 125 : 85);          // px/s along the path
+      function emitStats(now) {
+        if (!onStatsCb) return;
+        while (deliveredTimes.length && now - deliveredTimes[0] > 6000) deliveredTimes.shift();
+        const perMin = deliveredTimes.length ? Math.round(deliveredTimes.length * 60000 / Math.max(1500, now - deliveredTimes[0])) : 0;
+        onStatsCb({ perMin, inFlight: tokens.filter(t => !t.dead).length, crashed, faults: faulted.size });
+      }
+      function faultNode(id, on) {
+        const g = nodesG.querySelector(`[data-id="${CSS.escape(id)}"]`);
+        if (g) g.classList.toggle("dg-faulted", on);
+      }
 
       function payloadGraph() {
         const out = {};
@@ -586,6 +600,7 @@ var Diagram = (() => {
         tok.el.classList.add(cls);
         if (tok.trail) tok.trail.remove();
         if (cls === "dg-token-crash") {
+          crashed++;
           const m = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(tok.el.getAttribute("transform") || "");
           if (m) splatter(+m[1], +m[2], "#c22f2f");
           if (mode === "replay") {
@@ -594,6 +609,7 @@ var Diagram = (() => {
           }
         }
         if (cls === "dg-token-exit") {
+          delivered++; deliveredTimes.push(last);
           // delivery: the receiving node breathes once as it absorbs
           const ng = nodesG.querySelector(`[data-id="${CSS.escape(tok.e.to)}"]`);
           if (ng) { ng.classList.add("dg-absorb"); setTimeout(() => ng.classList.remove("dg-absorb"), 500); }
@@ -607,7 +623,7 @@ var Diagram = (() => {
         tok.permitted = false;
       }
       function hop(tok, graph) {
-        if (lastHl.has(tok.e.to)) { kill(tok, "dg-token-crash", 400); return; }   // arrived at the broken node
+        if (lastHl.has(tok.e.to) || faulted.has(tok.e.to)) { kill(tok, "dg-token-crash", 400); return; }   // broken or killed node
         if (tok.chain) {                                 // replay tokens follow the scripted chain
           const e = tok.chain[++tok.ci];
           if (!e) { kill(tok, "dg-token-crash", 400); return; }   // chain ends at the failure
@@ -670,6 +686,7 @@ var Diagram = (() => {
           }
         });
         tokens = tokens.filter(t => t.el.isConnected);
+        emitStats(now);
         if (mode === "replay" && !tokens.some(t => !t.dead)) { stopInternal(); return; }
         raf = requestAnimationFrame(frame);
       }
@@ -679,6 +696,8 @@ var Diagram = (() => {
         if (raf) cancelAnimationFrame(raf);
         tokens.forEach(t => { t.el.remove(); if (t.trail) t.trail.remove(); });
         tokens = [];
+        faulted.forEach(id => faultNode(id, false));
+        faulted.clear();
         edgesG.querySelectorAll(".dg-congested").forEach(p => p.classList.remove("dg-congested"));
         if (was && onStopCb) onStopCb();
       }
@@ -700,6 +719,7 @@ var Diagram = (() => {
         }
         return null;
       }
+      function resetStats() { crashed = 0; delivered = 0; deliveredTimes = []; if (onStatsCb) onStatsCb({ perMin: 0, inFlight: 0, crashed: 0, faults: 0 }); }
       return {
         get available() { return !RM; },
         get running() { return running; },
@@ -707,9 +727,16 @@ var Diagram = (() => {
         get replaying() { return running && mode === "replay"; },
         onStop(fn) { onStopCb = fn; },
         onReplayCrash(fn) { onCrashCb = fn; },
+        onStats(fn) { onStatsCb = fn; },
+        // chaos: kill/revive a node by id (nodes crash arriving tokens while dead)
+        toggleFault(id) {
+          if (faulted.has(id)) { faulted.delete(id); faultNode(id, false); }
+          else { faulted.add(id); faultNode(id, true); }
+          return faulted.has(id);
+        },
         start() {
           if (RM || running || !lastState) return false;
-          running = true; mode = "free";
+          running = true; mode = "free"; resetStats();
           last = performance.now();
           spawnAcc = SPAWN_MS();                       // first token on the very first frame
           raf = requestAnimationFrame(frame);
@@ -719,7 +746,7 @@ var Diagram = (() => {
           if (RM || running || !lastState || !lastHl.size) return false;
           const chain = failureChain(payloadGraph());
           if (!chain) return false;
-          running = true; mode = "replay"; replayCrashed = 0;
+          running = true; mode = "replay"; replayCrashed = 0; resetStats();
           last = performance.now();
           const a = makeToken(chain[0]), b = makeToken(chain[0]);
           if (!a || !b) { stopInternal(); return false; }

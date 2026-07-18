@@ -600,7 +600,12 @@ async function openReader(id, layerIndex) {
   const scrubEl = h("div", "scrub-wrap");
   const caption = h("div", "dg-caption");
   caption.hidden = true;
-  dpane.append(dscroll, caption, Diagram.legend(), scrubEl, dcap);   // legend: the tutorial's grammar, always in view
+  // live HUD: throughput / in-flight / crashed while the sim runs
+  const hud = h("div", "dg-hud");
+  hud.hidden = true;
+  const hudRate = h("span", "hud-stat"), hudFlight = h("span", "hud-stat"), hudCrash = h("span", "hud-stat crash"), hudHint = h("span", "hud-hint", "tap any node to kill it");
+  hud.append(hudRate, hudFlight, hudCrash, hudHint);
+  dpane.append(dscroll, hud, caption, Diagram.legend(), scrubEl, dcap);   // legend: the tutorial's grammar, always in view
   const docPane = h("div", "doc-pane");
   wrap.append(dpane, docPane);
   pane.appendChild(wrap);
@@ -614,14 +619,22 @@ async function openReader(id, layerIndex) {
     playBtn.textContent = "▶ pulse";
     loadBtn.hidden = true;
     loadBtn.classList.remove("on");
+    hud.hidden = true;
   };
   diagram.sim.onStop(resetSimUI);
+  diagram.sim.onStats(s => {
+    hudRate.textContent = "▸ " + s.perMin + "/min";
+    hudFlight.textContent = "◦ " + s.inFlight + " in flight";
+    hudCrash.textContent = "✕ " + s.crashed + (s.faults ? " · ☠ " + s.faults + " down" : "");
+    hudCrash.classList.toggle("lit", s.crashed > 0);
+  });
   if (!diagram.sim.available) { playBtn.hidden = true; replayBtn.hidden = true; }   // prefers-reduced-motion
   playBtn.onclick = () => {
     if (diagram.sim.running) { diagram.sim.stop(); }
     else if (diagram.sim.start()) {
       playBtn.textContent = "⏸ rest";
       loadBtn.hidden = false;
+      hud.hidden = false;
     }
   };
   loadBtn.onclick = () => {
@@ -655,7 +668,7 @@ async function openReader(id, layerIndex) {
     if (!diagram.sim.replay()) {
       currentView.goToLayer(p);
       toast("No payload path reaches this failure");
-    } else playBtn.textContent = "⏸ rest";
+    } else { playBtn.textContent = "⏸ rest"; hud.hidden = false; }
   };
 
   // gates are opt-in: on only if this breakdown enabled them, or the user set the default on

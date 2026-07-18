@@ -449,7 +449,25 @@ var DocView = (() => {
 
       const def = h("div", "defends-row");
       def.appendChild(h("span", "mono-label", "Defends"));
-      L.defends.forEach(d => def.appendChild(h("span", "inv-badge", "INV " + invNumber[d])));
+      // each invariant chip is tappable: light the mechanism THIS layer added —
+      // the structure that enforces the invariant — so the promise is traceable
+      // to the parts that keep it (argument grounded in the diagram)
+      const defended = diffAddedIds(L);
+      L.defends.forEach(d => {
+        const chip = h("button", "inv-badge inv-tap", "INV " + invNumber[d]);
+        if (defended.length) {
+          chip.title = "Tap to highlight what defends this invariant";
+          chip.addEventListener("click", () => {
+            if (activeSpotCard === chip) { diagram.spotlight(null); chip.classList.remove("spot-on"); activeSpotCard = null; return; }
+            if (activeSpotCard) activeSpotCard.classList.remove("spot-on");
+            diagram.spotlight(defended, "solution");
+            diagram.focus(defended);
+            chip.classList.add("spot-on");
+            activeSpotCard = chip;
+          });
+        }
+        def.appendChild(chip);
+      });
       const invTexts = L.defends.map(d => {
         const iv = doc.strip_down.invariants.find(x => x.id === d);
         return iv ? iv.text : d;
