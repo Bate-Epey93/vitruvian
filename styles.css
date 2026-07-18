@@ -970,6 +970,24 @@ html,body{overscroll-behavior:none;}
 @keyframes tok-exit{to{r:1;opacity:0;}}
 .dg-congested{stroke:var(--money)!important;stroke-width:3.2!important;
   filter:drop-shadow(0 0 3px color-mix(in srgb, var(--money) 65%, transparent));}
+/* ink streak behind each token */
+.dg-trail{stroke-width:2.6;stroke-linecap:round;opacity:.3;}
+/* crash burst: six droplets fly out and dry */
+.dg-splat{animation:dg-splat .6s ease-out forwards;}
+@keyframes dg-splat{to{translate:var(--dx) var(--dy);opacity:0;}}
+/* control edge grants passage: a bright pulse along the permission line */
+.dg-permit{stroke-width:2.6!important;opacity:1!important;
+  filter:drop-shadow(0 0 3.5px color-mix(in srgb, var(--diagram-ink) 60%, transparent));}
+/* delivery: the receiving node breathes once */
+.dg-absorb .dg-shape{animation:dg-absorb .5s ease-out;}
+@keyframes dg-absorb{35%{stroke-width:3.4;}100%{stroke-width:inherit;}}
+/* replay caption: what history you just watched */
+.dg-caption{
+  font-family:var(--mono);font-size:11.5px;line-height:1.55;color:var(--ink);
+  background:color-mix(in srgb, var(--failure) 9%, var(--panel));
+  border-left:3px solid var(--failure);border-radius:0 8px 8px 0;
+  padding:8px 12px;margin:8px 10px 0;
+}
 
 /* ── sim controls in the diagram cap ── */
 .sim-btn{padding:2px 9px;flex-shrink:0;}
@@ -1070,14 +1088,19 @@ html,body{overscroll-behavior:none;}
 
 /* proposed elements: dashed blueprint ghosts in the proposal ink */
 .dg-ghost .dg-shape,.dg-ghost .dg-open{stroke:var(--proposal)!important;stroke-dasharray:5 3;stroke-width:1.8;}
-.dg-ghost .dg-epath{stroke:var(--proposal)!important;stroke-dasharray:5 3;}
+.dg-ghost .dg-epath{stroke:var(--proposal)!important;stroke-dasharray:5 3;animation:ghost-march 7s linear infinite;}
 .dg-ghost .dg-label{fill:var(--proposal);}
 .dg-ghost .dg-fill{opacity:.35;}
-.dg-ghost{opacity:.92;}
+.dg-ghost{opacity:.92;animation:ghost-in .7s ease-out;}
 .dg-elabel.dg-ghost{fill:var(--proposal)!important;}
+/* blueprint alive: ink settles in, dashes drift like a pen still drawing */
+@keyframes ghost-in{from{opacity:0;}to{opacity:.92;}}
+@keyframes ghost-march{to{stroke-dashoffset:-56;}}
 /* existing elements the change stresses: red dashed emphasis */
 .dg-stress .dg-shape,.dg-stress .dg-open{stroke:var(--failure)!important;stroke-dasharray:4 2.5;stroke-width:2.4;}
 .dg-stress .dg-epath{stroke:var(--failure)!important;stroke-width:2.4;}
+.dg-stress{animation:dg-tremor .16s linear infinite alternate;}   /* strain, visible */
+@keyframes dg-tremor{from{translate:0 0;}to{translate:.7px .4px;}}
 
 /* compose row */
 .whatif-compose{display:flex;gap:9px;align-items:flex-start;margin:8px 0 4px;}
@@ -1103,6 +1126,14 @@ html,body{overscroll-behavior:none;}
 .verdict-mixed .vf-badge{color:#6e4d12;background:var(--money-wash);}
 .verdict-harmful .vf-badge{color:var(--failure);background:var(--failure-wash);}
 .vf-stamp{width:38px;height:38px;opacity:.8;}
+.vf-stamp-in{animation:stamp-in .55s cubic-bezier(.2,1.4,.4,1);}   /* the seal presses in */
+@keyframes stamp-in{0%{opacity:0;transform:scale(1.6) rotate(-8deg);}60%{opacity:.9;transform:scale(.94);}100%{opacity:.8;transform:scale(1);}}
+.whatif-sim-row{display:flex;gap:7px;align-items:center;padding:7px 10px;border-top:1px solid var(--line-soft);}
+.alt-tap{display:block;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--line-soft);cursor:pointer;font-family:var(--sans);}
+.alt-tap:hover .alt-name{color:var(--accent-deep);}
+.alt-go{font-family:var(--mono);font-size:10.5px;letter-spacing:.4px;color:var(--accent);margin-top:3px;}
+.inv-tap{cursor:pointer;border:none;font-family:var(--mono);}
+.inv-tap:hover{filter:brightness(.9);}
 .vf-name{font-family:var(--display);font-weight:800;font-size:20px;letter-spacing:-.01em;margin:10px 0 6px;}
 .vf-assessment{font-size:15.5px;line-height:1.65;color:var(--ink);margin:8px 0 12px;}
 .vf-line{font-size:14px;color:var(--ink-soft);margin:6px 0;}
@@ -1157,4 +1188,5 @@ html,body{overscroll-behavior:none;}
   .splash-seal{animation:none;opacity:1;transform:scale(1) rotate(2deg);}
   .splash-name{animation:none;opacity:1;letter-spacing:.02em;}
   .splash-sub{animation:none;opacity:.9;}
+  .dg-stress,.dg-ghost,.dg-ghost .dg-epath,.vf-stamp-in,.dg-absorb .dg-shape{animation:none;}
 }

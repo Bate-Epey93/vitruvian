@@ -523,7 +523,8 @@ var Diagram = (() => {
        prefers-reduced-motion by refusing to start. ── */
     const RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const sim = (() => {
-      let running = false, load = false, raf = null, last = 0, spawnAcc = 0, tokens = [], onStopCb = null;
+      let running = false, load = false, mode = "free", raf = null, last = 0, spawnAcc = 0;
+      let tokens = [], onStopCb = null, onCrashCb = null, replayCrashed = 0;
       const SPAWN_MS = () => (load ? 240 : 1050);
       const SPEED = () => (load ? 125 : 85);          // px/s along the path
 
@@ -539,45 +540,96 @@ var Diagram = (() => {
         // cyclic payload graphs have no sources — fall back to any payload origin
         return { out, sources: sources.length ? sources : Object.keys(out) };
       }
+      // nodes with an incoming CONTROL edge: tokens pause at their door until
+      // the permission edge flashes — coordination made visible
+      function controlGate(nodeId) {
+        if (!lastState) return null;
+        for (const e of lastState.edges.values())
+          if (e.kind === "control" && e.to === nodeId && lastState.nodes.has(e.from)) return e;
+        return null;
+      }
       function pathFor(edgeId) {
         return edgesG.querySelector(`[data-id="${CSS.escape(edgeId)}"] .dg-epath`);
+      }
+      function makeToken(e) {
+        const p = pathFor(e.id);
+        const from = lastState.nodes.get(e.from);
+        if (!p || !from) return null;
+        const color = laneColor(from.lane);
+        const c = el("circle", { r: 3.4, class: "dg-token" }, simG);
+        c.style.fill = color;
+        const trail = el("line", { class: "dg-trail" }, simG);
+        trail.style.stroke = color;
+        const tok = { e, p, len: Math.max(1, p.getTotalLength()), t: 0, el: c, trail, prev: null };
+        tokens.push(tok);
+        return tok;
       }
       function spawn(graph) {
         const src = graph.sources[Math.floor(Math.random() * graph.sources.length)];
         const edges = src && graph.out[src];
         if (!edges || !edges.length) return;
-        const e = edges[Math.floor(Math.random() * edges.length)];
-        const p = pathFor(e.id);
-        const from = lastState.nodes.get(e.from);
-        if (!p || !from) return;
-        const c = el("circle", { r: 3.4, class: "dg-token" }, simG);
-        c.style.fill = laneColor(from.lane);
-        tokens.push({ e, p, len: Math.max(1, p.getTotalLength()), t: 0, el: c });
+        makeToken(edges[Math.floor(Math.random() * edges.length)]);
+      }
+      function splatter(x, y, color) {
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 + Math.random() * 0.7;
+          const d = 9 + Math.random() * 13;
+          const s = el("circle", { r: 1.3 + Math.random() * 1.6, class: "dg-splat", transform: `translate(${x} ${y})` }, simG);
+          s.style.fill = color || "#c22f2f";
+          s.style.setProperty("--dx", (Math.cos(a) * d).toFixed(1) + "px");
+          s.style.setProperty("--dy", (Math.sin(a) * d).toFixed(1) + "px");
+          setTimeout(() => s.remove(), 650);
+        }
       }
       function kill(tok, cls, ms) {
         tok.dead = true;
         tok.el.classList.add(cls);
+        if (tok.trail) tok.trail.remove();
+        if (cls === "dg-token-crash") {
+          const m = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(tok.el.getAttribute("transform") || "");
+          if (m) splatter(+m[1], +m[2], "#c22f2f");
+          if (mode === "replay") {
+            replayCrashed++;
+            if (onCrashCb && replayCrashed === 2) onCrashCb();   // the collision, complete
+          }
+        }
+        if (cls === "dg-token-exit") {
+          // delivery: the receiving node breathes once as it absorbs
+          const ng = nodesG.querySelector(`[data-id="${CSS.escape(tok.e.to)}"]`);
+          if (ng) { ng.classList.add("dg-absorb"); setTimeout(() => ng.classList.remove("dg-absorb"), 500); }
+        }
         setTimeout(() => tok.el.remove(), ms);
       }
-      function hop(tok, graph) {
-        if (lastHl.has(tok.e.to)) { kill(tok, "dg-token-crash", 400); return; }   // arrived at the broken node
-        const next = graph.out[tok.e.to];
-        if (!next || !next.length) { kill(tok, "dg-token-exit", 300); return; }   // journey complete
-        const e = next[Math.floor(Math.random() * next.length)];
+      function advance(tok, e) {
         const p = pathFor(e.id);
         if (!p) { kill(tok, "dg-token-exit", 300); return; }
         tok.e = e; tok.p = p; tok.len = Math.max(1, p.getTotalLength()); tok.t = 0;
+        tok.permitted = false;
+      }
+      function hop(tok, graph) {
+        if (lastHl.has(tok.e.to)) { kill(tok, "dg-token-crash", 400); return; }   // arrived at the broken node
+        if (tok.chain) {                                 // replay tokens follow the scripted chain
+          const e = tok.chain[++tok.ci];
+          if (!e) { kill(tok, "dg-token-crash", 400); return; }   // chain ends at the failure
+          advance(tok, e);
+          return;
+        }
+        const next = graph.out[tok.e.to];
+        if (!next || !next.length) { kill(tok, "dg-token-exit", 300); return; }   // journey complete
+        advance(tok, next[Math.floor(Math.random() * next.length)]);
       }
       function frame(now) {
         if (!running) return;
         const dt = Math.min(50, now - last) / 1000;
         last = now;
         const graph = payloadGraph();
-        spawnAcc += dt * 1000;
-        const cap = load ? 44 : 14;
-        while (spawnAcc >= SPAWN_MS()) {
-          spawnAcc -= SPAWN_MS();
-          if (tokens.filter(t => !t.dead).length < cap) spawn(graph);
+        if (mode === "free") {
+          spawnAcc += dt * 1000;
+          const cap = load ? 44 : 14;
+          while (spawnAcc >= SPAWN_MS()) {
+            spawnAcc -= SPAWN_MS();
+            if (tokens.filter(t => !t.dead).length < cap) spawn(graph);
+          }
         }
         const perEdge = {};
         tokens.forEach(t => { if (!t.dead) perEdge[t.e.id] = (perEdge[t.e.id] || 0) + 1; });
@@ -587,6 +639,19 @@ var Diagram = (() => {
         });
         tokens.forEach(tok => {
           if (tok.dead) return;
+          if (tok.delay > 0) { tok.delay -= dt; tok.el.style.opacity = 0; return; }
+          tok.el.style.opacity = "";
+          // pause at a gated node's door until its control edge grants passage
+          if (!tok.permitted && tok.t >= 0.8) {
+            const gate = controlGate(tok.e.to);
+            tok.permitted = true;
+            if (gate && !lastHl.has(tok.e.to)) {
+              tok.wait = 0.32;
+              const gp = pathFor(gate.id);
+              if (gp) { gp.classList.add("dg-permit"); setTimeout(() => gp.classList.remove("dg-permit"), 500); }
+            }
+          }
+          if (tok.wait > 0) { tok.wait -= dt; return; }
           const crowd = perEdge[tok.e.id] || 1;
           tok.t += (SPEED() * (crowd >= 3 ? 0.4 : 1) * dt) / tok.len;   // congestion = continuous resistance
           if (lastHl.has(tok.e.id) && tok.t > 0.55) { kill(tok, "dg-token-crash", 400); return; }
@@ -595,32 +660,75 @@ var Diagram = (() => {
           try { pt = tok.p.getPointAtLength(Math.min(1, tok.t) * tok.len); }
           catch (err) { kill(tok, "dg-token-exit", 200); return; }
           tok.el.setAttribute("transform", `translate(${pt.x} ${pt.y})`);
+          if (tok.trail) {
+            if (tok.prev && Math.hypot(pt.x - tok.prev.x, pt.y - tok.prev.y) < 40) {
+              tok.trail.setAttribute("x1", tok.prev.x); tok.trail.setAttribute("y1", tok.prev.y);
+              tok.trail.setAttribute("x2", pt.x); tok.trail.setAttribute("y2", pt.y);
+            } else { tok.trail.removeAttribute("x1"); }   // teleport (hop) — no streak across the diagram
+            const lag = 0.12;
+            tok.prev = tok.prev ? { x: tok.prev.x + (pt.x - tok.prev.x) * lag * (dt * 60), y: tok.prev.y + (pt.y - tok.prev.y) * lag * (dt * 60) } : { x: pt.x, y: pt.y };
+          }
         });
         tokens = tokens.filter(t => t.el.isConnected);
+        if (mode === "replay" && !tokens.some(t => !t.dead)) { stopInternal(); return; }
         raf = requestAnimationFrame(frame);
+      }
+      function stopInternal() {
+        const was = running;
+        running = false; load = false; mode = "free";
+        if (raf) cancelAnimationFrame(raf);
+        tokens.forEach(t => { t.el.remove(); if (t.trail) t.trail.remove(); });
+        tokens = [];
+        edgesG.querySelectorAll(".dg-congested").forEach(p => p.classList.remove("dg-congested"));
+        if (was && onStopCb) onStopCb();
+      }
+      /* scripted incident: two tokens run the payload chain into the highlighted
+         failure, seconds apart — the second arrives where the first already is.
+         BFS the payload graph for the shortest chain that ends in a highlight. */
+      function failureChain(graph) {
+        const seen = new Set();
+        const queue = graph.sources.map(s => ({ id: s, chain: [] }));
+        while (queue.length) {
+          const cur = queue.shift();
+          if (seen.has(cur.id)) continue;
+          seen.add(cur.id);
+          for (const e of graph.out[cur.id] || []) {
+            const chain = [...cur.chain, e];
+            if (lastHl.has(e.id) || lastHl.has(e.to)) return chain;
+            queue.push({ id: e.to, chain });
+          }
+        }
+        return null;
       }
       return {
         get available() { return !RM; },
         get running() { return running; },
         get load() { return load; },
+        get replaying() { return running && mode === "replay"; },
         onStop(fn) { onStopCb = fn; },
+        onReplayCrash(fn) { onCrashCb = fn; },
         start() {
           if (RM || running || !lastState) return false;
-          running = true;
+          running = true; mode = "free";
           last = performance.now();
           spawnAcc = SPAWN_MS();                       // first token on the very first frame
           raf = requestAnimationFrame(frame);
           return true;
         },
-        stop() {
-          const was = running;
-          running = false; load = false;
-          if (raf) cancelAnimationFrame(raf);
-          tokens.forEach(t => t.el.remove());
-          tokens = [];
-          edgesG.querySelectorAll(".dg-congested").forEach(p => p.classList.remove("dg-congested"));
-          if (was && onStopCb) onStopCb();
+        replay() {
+          if (RM || running || !lastState || !lastHl.size) return false;
+          const chain = failureChain(payloadGraph());
+          if (!chain) return false;
+          running = true; mode = "replay"; replayCrashed = 0;
+          last = performance.now();
+          const a = makeToken(chain[0]), b = makeToken(chain[0]);
+          if (!a || !b) { stopInternal(); return false; }
+          a.chain = chain; a.ci = 0; a.delay = 0;
+          b.chain = chain; b.ci = 0; b.delay = 0.75;   // history's second train
+          raf = requestAnimationFrame(frame);
+          return true;
         },
+        stop: stopInternal,
         toggleLoad() { load = !load; return load; }
       };
     })();

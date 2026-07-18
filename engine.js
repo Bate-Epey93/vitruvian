@@ -594,10 +594,13 @@ async function openReader(id, layerIndex) {
   };
   const playBtn = h("button", "gbtn sim-btn", "▶ pulse");
   const loadBtn = h("button", "gbtn sim-btn", "◉ load");
+  const replayBtn = h("button", "gbtn sim-btn", "⟲ replay");
   loadBtn.hidden = true;
-  dcap.append(capState, playBtn, loadBtn, capToggle);
+  dcap.append(capState, playBtn, loadBtn, replayBtn, capToggle);
   const scrubEl = h("div", "scrub-wrap");
-  dpane.append(dscroll, Diagram.legend(), scrubEl, dcap);   // legend: the tutorial's grammar, always in view
+  const caption = h("div", "dg-caption");
+  caption.hidden = true;
+  dpane.append(dscroll, caption, Diagram.legend(), scrubEl, dcap);   // legend: the tutorial's grammar, always in view
   const docPane = h("div", "doc-pane");
   wrap.append(dpane, docPane);
   pane.appendChild(wrap);
@@ -606,13 +609,14 @@ async function openReader(id, layerIndex) {
 
   /* flow simulation controls — instant response on press; any state change
      stops the sim (via diagram.show) and this resets the buttons */
+  let captionTimer = null;
   const resetSimUI = () => {
     playBtn.textContent = "▶ pulse";
     loadBtn.hidden = true;
     loadBtn.classList.remove("on");
   };
   diagram.sim.onStop(resetSimUI);
-  if (!diagram.sim.available) playBtn.hidden = true;   // prefers-reduced-motion
+  if (!diagram.sim.available) { playBtn.hidden = true; replayBtn.hidden = true; }   // prefers-reduced-motion
   playBtn.onclick = () => {
     if (diagram.sim.running) { diagram.sim.stop(); }
     else if (diagram.sim.start()) {
@@ -622,6 +626,36 @@ async function openReader(id, layerIndex) {
   };
   loadBtn.onclick = () => {
     loadBtn.classList.toggle("on", diagram.sim.toggleLoad());
+  };
+  // scripted incident: two tokens run into the gate's failure, seconds apart.
+  // The caption tells the reader what history they just watched.
+  diagram.sim.onReplayCrash(() => {
+    const p = currentView ? currentView.position : 0;
+    const L = rec.doc.layers[p - 1];
+    let text = "The failure, replayed — the second arrival meets the first.";
+    if (L && L.problem && L.problem.statement) {
+      const s = L.problem.statement.split(". ")[0];
+      text = (s.length > 150 ? s.slice(0, 147) + "…" : s) + (s.endsWith(".") ? "" : ".");
+    }
+    caption.textContent = text;
+    caption.hidden = false;
+    clearTimeout(captionTimer);
+    captionTimer = setTimeout(() => { caption.hidden = true; }, 7000);
+  });
+  replayBtn.onclick = () => {
+    if (diagram.sim.running) diagram.sim.stop();
+    caption.hidden = true;
+    // rewind to the moment before this layer's fix: pre-state + its failure
+    // lit red — then send history's two payloads into it
+    const p = currentView ? currentView.position : 0;
+    const L = rec.doc.layers[p - 1];
+    if (!L || !L.diff.highlight.length) { toast("No failure at this position — step into a rebuild layer"); return; }
+    diagram.show(p - 1, { highlight: L.diff.highlight });
+    capState.textContent = `Before layer ${p} · the failure, replayed`;
+    if (!diagram.sim.replay()) {
+      currentView.goToLayer(p);
+      toast("No payload path reaches this failure");
+    } else playBtn.textContent = "⏸ rest";
   };
 
   // gates are opt-in: on only if this breakdown enabled them, or the user set the default on
@@ -809,9 +843,46 @@ function renderWhatif(rec, opts = {}) {
     resultEl.appendChild(dpane);
     const dg = Diagram.mount(dscroll, tempDoc);
     const ghostIds = [...w.diff.add_nodes.map(n => n.id), ...w.diff.add_edges.map(e => e.id)];
-    dg.show(tempDoc.layers.length, { ghost: ghostIds, stress: w.diff.highlight });
+    const showGraft = on => {
+      if (on) dg.show(tempDoc.layers.length, { ghost: ghostIds, stress: w.diff.highlight });
+      else dg.show(rec.doc.layers.length);
+    };
+    showGraft(true);
     setTimeout(() => dg.focus(ghostIds.length ? ghostIds : w.diff.highlight), 60);
-    resultEl.appendChild(verdictCard(w, rec.doc));
+
+    // live graft: A/B the proposal on and off; pulse tokens THROUGH it —
+    // proposed payload edges are part of the shown state, so they carry flow
+    const ctl = h("div", "whatif-sim-row");
+    const abBtn = h("button", "gbtn sim-btn on", "graft: on");
+    let graftOn = true;
+    abBtn.onclick = () => {
+      graftOn = !graftOn;
+      abBtn.textContent = "graft: " + (graftOn ? "on" : "off");
+      abBtn.classList.toggle("on", graftOn);
+      showGraft(graftOn);
+    };
+    ctl.appendChild(abBtn);
+    if (dg.sim.available) {
+      const wp = h("button", "gbtn sim-btn", "▶ pulse");
+      const wl = h("button", "gbtn sim-btn", "◉ load");
+      wl.hidden = true;
+      dg.sim.onStop(() => { wp.textContent = "▶ pulse"; wl.hidden = true; wl.classList.remove("on"); });
+      wp.onclick = () => {
+        if (dg.sim.running) dg.sim.stop();
+        else if (dg.sim.start()) { wp.textContent = "⏸ rest"; wl.hidden = false; }
+      };
+      wl.onclick = () => wl.classList.toggle("on", dg.sim.toggleLoad());
+      ctl.append(wp, wl);
+    }
+    dpane.appendChild(ctl);
+
+    resultEl.appendChild(verdictCard(w, rec.doc, {
+      onAlt: a => {
+        ta.value = a.name + " — " + a.note;
+        ta.focus();
+        compose.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }));
   }
 
   renderSaved();
@@ -846,13 +917,13 @@ function renderWhatif(rec, opts = {}) {
   };
 }
 
-function verdictCard(w, doc) {
+function verdictCard(w, doc, opts = {}) {
   const invById = {};
   doc.strip_down.invariants.forEach((iv, i) => { invById[iv.id] = { n: i + 1, text: iv.text }; });
   const card = h("div", "verdict-full verdict-" + w.verdict);
   const head = h("div", "vf-head");
   head.appendChild(h("span", "vf-badge", COPY.whatifVerdicts[w.verdict] || w.verdict));
-  const stamp = h("img", "enso-stamp vf-stamp");
+  const stamp = h("img", "enso-stamp vf-stamp vf-stamp-in");   // presses in on reveal
   stamp.src = "assets/enso-gate.svg";
   stamp.alt = "";
   head.appendChild(stamp);
@@ -871,7 +942,15 @@ function verdictCard(w, doc) {
   if (w.defends && w.defends.length) {
     const r = h("div", "defends-row");
     r.appendChild(h("span", "mono-label", "Strengthens"));
-    w.defends.forEach(id => r.appendChild(h("span", "inv-badge", "INV " + (invById[id] ? invById[id].n : "?"))));
+    w.defends.forEach(id => {
+      const chip = h("button", "inv-badge inv-tap", "INV " + (invById[id] ? invById[id].n : "?"));
+      chip.onclick = () => {                     // tap: reveal the invariant being defended
+        const open = chip._line;
+        if (open) { open.remove(); chip._line = null; return; }
+        if (invById[id]) { chip._line = h("div", "vf-inv", invById[id].text); r.after(chip._line); }
+      };
+      r.appendChild(chip);
+    });
     card.appendChild(r);
   }
   if (w.tradeoff) card.appendChild(h("div", "tradeoff-band", w.tradeoff));
@@ -884,9 +963,13 @@ function verdictCard(w, doc) {
   if (w.alternatives && w.alternatives.length) {
     card.appendChild(h("h2", "section-head", "Cleaner ways to get there"));
     w.alternatives.forEach(a => {
-      const row = h("div", "alt-row");
+      const row = h(opts.onAlt ? "button" : "div", "alt-row" + (opts.onAlt ? " alt-tap" : ""));
       row.appendChild(h("div", "alt-name", a.name));
       row.appendChild(h("div", "alt-note", a.note));
+      if (opts.onAlt) {
+        row.appendChild(h("div", "alt-go", "graft this instead →"));
+        row.onclick = () => opts.onAlt(a);
+      }
       card.appendChild(row);
     });
   }
