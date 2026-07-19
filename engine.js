@@ -70,6 +70,9 @@ function show(screen) {
   document.body.classList.toggle("reading", screen === "reader");   // frees topbar room for the audience switch
   $("audSwitch").hidden = screen !== "reader";
   $("readerMenuBtn").hidden = screen !== "reader";
+  // reading-only context tools live in the topbar's right zone; hidden elsewhere
+  // so global chrome never shows dead buttons (see placement note in commit)
+  ["ctxDiv", "seqBtn", "graftBtn"].forEach(id => { $(id).hidden = screen !== "reader"; });
   $("backBtn").hidden = screen === "library" || screen === "landing";
   $("menuPop").hidden = true;
   if (screen !== "reader") {
@@ -170,6 +173,8 @@ function wireTopbar() {
   $("drillBtn").onclick = () => { renderDrill(); show("drill"); };
   $("settingsBtn").onclick = () => { renderSettings(); show("settings"); };
   $("themeBtn").onclick = () => toggleTheme();
+  $("seqBtn").onclick = () => { if (currentRec) openSequence(currentRec); };
+  $("graftBtn").onclick = () => { if (currentRec) { renderWhatif(currentRec); show("whatif"); } };
   $("readerMenuBtn").onclick = e => { e.stopPropagation(); $("menuPop").hidden = !$("menuPop").hidden; };
   document.addEventListener("click", () => { $("menuPop").hidden = true; });
 }
@@ -703,6 +708,7 @@ async function openReader(id, layerIndex) {
     audience: meta.audienceMode || "enthusiast",
     challenge: challengeOn,
     onSave(r) { Store.saveBreakdownLight(r); },
+    onChallenge(v) { rec.challengeMode = v; Store.saveBreakdownLight(rec); },
     canCompare() {
       if (!navigator.onLine) return { ok: false, reason: "You're offline. " + COPY.gateCompareOffline };
       if (!meta.apiKey) return { ok: false, reason: "No API key set. " + COPY.gateCompareOffline };
@@ -803,7 +809,9 @@ function openSequence(rec) {
   bar.append(titleWrap, close);
   const scroll = h("div", "seq-scroll");
   scroll.appendChild(Diagram.sequence(rec.doc, upto));
-  ov.append(bar, scroll);
+  const card = h("div", "seq-card");
+  card.append(bar, scroll);
+  ov.append(card);
   document.body.appendChild(ov);
 
   const dismiss = () => { ov.remove(); document.removeEventListener("keydown", onKey); };
@@ -821,14 +829,9 @@ function buildReaderMenu(rec, challengeOn) {
     b.onclick = e => { e.stopPropagation(); pop.hidden = true; fn(); };
     pop.appendChild(b);
   };
-  add(COPY.whatifMenu, () => { renderWhatif(rec); show("whatif"); });
-  add("Sequence view (interaction order)", () => openSequence(rec));
+  // Graft + Sequence now live in the topbar's context zone; challenge mode is a
+  // toggle at the layer head. The ⋯ menu keeps the rarer / one-shot actions.
   add("How to read a Deconstruct", () => { renderTutorial("reader"); show("tutorial"); });
-  add((challengeOn ? "✓ " : "") + "Challenge mode (gates)", async () => {
-    rec.challengeMode = !challengeOn;
-    await Store.saveBreakdownLight(rec);
-    openReader(rec.id);
-  });
   pop.appendChild(h("div", "menu-sep"));
   add(COPY.shareMenu, async () => {
     if (rec.source !== "flagship") { toast(COPY.shareLocalNote); return; }

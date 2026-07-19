@@ -249,6 +249,21 @@ var DocView = (() => {
 
       const head = h("div", "layer-head");
       head.appendChild(h("span", "layer-num", "LAYER " + String(L.index).padStart(2, "0") + " / " + String(N).padStart(2, "0")));
+      // challenge toggle, right at the layer label: this is where the gate it
+      // controls actually appears, so the control sits with its effect
+      const ct = h("label", "chal-toggle" + (challenge ? " on" : ""));
+      const cb = h("input"); cb.type = "checkbox"; cb.checked = challenge;
+      cb.setAttribute("aria-label", "Challenge mode: hide each solution behind a design-it-first gate");
+      cb.onchange = () => {
+        challenge = cb.checked;
+        rec.challengeMode = challenge;
+        if (opts.onChallenge) opts.onChallenge(challenge);
+        render._keepScroll = true;                 // toggling shouldn't jump you to the top
+        render();
+      };
+      ct.append(cb, h("span", "chal-track"), h("span", "chal-txt", "Challenge"));
+      ct.title = "Hide each solution behind a design-it-first gate";
+      head.appendChild(ct);
       if (a.revealed) {
         const stamp = h("img", "enso-stamp");
         stamp.src = "assets/enso-gate.svg";

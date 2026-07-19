@@ -103,6 +103,12 @@ body.reading .brand-sub{display:none;}   /* the tagline is redundant while readi
 .brand-name span{color:var(--accent);}
 .brand-sub{font-family:var(--mono);font-size:9.5px;letter-spacing:2px;text-transform:uppercase;color:#6b6960;margin-top:-2px;white-space:nowrap;}
 .topbar-spacer{flex:1;}
+/* context-zone divider + buttons — reading-only tools (Sequence, Graft), set
+   off from the global Models/Drill/Settings cluster so scope stays legible */
+.tb-div{width:1px;height:22px;background:#3a3a42;flex-shrink:0;margin:0 2px;}
+.ctx-btn{border-color:var(--accent)!important;color:var(--accent)!important;background:color-mix(in srgb, var(--accent) 12%, transparent)!important;}
+.ctx-btn:hover{background:color-mix(in srgb, var(--accent) 22%, transparent)!important;}
+:root[data-theme="dark"] .ctx-btn{color:#7fd3bd!important;border-color:#2f6f5e!important;}
 .tbtn{
   font-family:var(--mono);font-size:10.5px;letter-spacing:.5px;
   background:transparent;color:var(--paper);
@@ -201,7 +207,10 @@ h1.title{font-family:var(--display);font-weight:800;font-size:clamp(28px,4vw,40p
    diagram-scroll actually clips and pans, instead of overflowing the page */
 /* vertical-center, horizontal-start: a wide diagram scrolls from its left
    edge (centering an overflowing child hides its start in some browsers) */
-.diagram-scroll{flex:1;overflow:auto;padding:16px;display:grid;place-items:center start;min-width:0;overscroll-behavior-x:contain;}
+/* align-items:safe center — centres the diagram when it fits, but falls back to
+   top-align the instant it's taller than the pane (e.g. zoomed in), so the top
+   lane can never be pushed up under the topbar where scroll can't reach it. */
+.diagram-scroll{flex:1;overflow:auto;padding:16px;display:grid;align-items:safe center;justify-items:start;min-width:0;overscroll-behavior-x:contain;}
 /* always-visible slim scrollbar so the pan affordance is discoverable */
 .diagram-scroll::-webkit-scrollbar{width:9px;height:9px;}
 .diagram-scroll::-webkit-scrollbar-thumb{background:var(--faint);border-radius:5px;border:2px solid var(--canvas);}
@@ -271,8 +280,24 @@ h1.title{font-family:var(--display);font-weight:800;font-size:clamp(28px,4vw,40p
 .step-dot.gated{border-style:dashed;}
 
 /* layer body */
-.layer-head{margin:8px 0 16px;}
+.layer-head{margin:8px 0 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 .layer-num{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-wash);padding:3px 9px;border-radius:3px;letter-spacing:1px;}
+/* challenge toggle — sits with the layer label because that's where its gate appears */
+.chal-toggle{display:inline-flex;align-items:center;gap:7px;cursor:pointer;-webkit-user-select:none;user-select:none;}
+.chal-toggle input{position:absolute;opacity:0;width:0;height:0;}
+.chal-track{
+  position:relative;width:30px;height:17px;border-radius:999px;flex-shrink:0;
+  background:var(--faint);border:1px solid var(--line);transition:background .18s, border-color .18s;
+}
+.chal-track::after{
+  content:'';position:absolute;top:1.5px;left:1.5px;width:12px;height:12px;border-radius:50%;
+  background:var(--paper);box-shadow:0 1px 2px rgba(0,0,0,.3);transition:transform .2s cubic-bezier(.3,.9,.3,1.2);
+}
+.chal-toggle input:checked + .chal-track{background:var(--accent);border-color:var(--accent);}
+.chal-toggle input:checked + .chal-track::after{transform:translateX(13px);}
+.chal-toggle input:focus-visible + .chal-track{outline:2px solid var(--accent);outline-offset:2px;}
+.chal-txt{font-family:var(--mono);font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);transition:color .18s;}
+.chal-toggle.on .chal-txt{color:var(--accent);}
 .layer-name{font-family:var(--display);font-weight:800;font-size:clamp(22px,3vw,30px);letter-spacing:-.02em;line-height:1.1;margin-top:9px;}
 .problem-card{
   background:var(--failure-wash);border:1px solid #e6c4c4;border-left:3px solid var(--failure);
@@ -1022,14 +1047,29 @@ html,body{overscroll-behavior:none;}
 .sim-btn.race-on{color:#c77f16;border-color:#c77f16;}
 
 /* ── sequence view: derived interaction timeline (behavioural) ── */
+/* Sequence view: a floating liquid-glass card over a dimmed, blurred scrim —
+   reads as a distinct panel, not an edge-to-edge sheet. */
 .seq-overlay{
   position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;
-  background:var(--glass-heavy);
-  -webkit-backdrop-filter:blur(16px) saturate(150%);backdrop-filter:blur(16px) saturate(150%);
+  padding:clamp(12px,4vh,54px) clamp(12px,4vw,60px);
+  background:rgba(20,20,24,.30);
+  -webkit-backdrop-filter:blur(6px) saturate(120%);backdrop-filter:blur(6px) saturate(120%);
+  animation:seq-scrim-in .32s ease both;
 }
-@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.seq-overlay{background:var(--paper);}}
-@media(prefers-reduced-transparency:reduce){.seq-overlay{background:var(--paper);}}
-.seq-bar{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);}
+@keyframes seq-scrim-in{from{opacity:0;}to{opacity:1;}}
+.seq-card{
+  flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;
+  border-radius:18px;border:1px solid var(--glass-edge);
+  background:var(--glass-heavy);
+  -webkit-backdrop-filter:blur(26px) saturate(165%);backdrop-filter:blur(26px) saturate(165%);
+  box-shadow:inset 0 1px 0 var(--glass-edge), 0 30px 70px -24px rgba(15,15,20,.55);
+  animation:seq-card-in .34s cubic-bezier(.22,.9,.3,1) both;
+}
+@keyframes seq-card-in{from{opacity:0;transform:translateY(14px) scale(.985);}to{opacity:1;transform:none;}}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.seq-overlay{background:rgba(20,20,24,.5);}.seq-card{background:var(--paper);}}
+@media(prefers-reduced-transparency:reduce){.seq-overlay{background:rgba(20,20,24,.55);-webkit-backdrop-filter:none;backdrop-filter:none;}.seq-card{background:var(--paper);-webkit-backdrop-filter:none;backdrop-filter:none;}}
+@media(prefers-reduced-motion:reduce){.seq-overlay,.seq-card{animation:none;}}
+.seq-bar{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--glass-edge);box-shadow:inset 0 1px 0 var(--glass-edge);}
 .seq-bar h2{font-family:var(--display);font-size:17px;font-weight:700;margin:0;}
 .seq-bar .seq-sub{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.3px;}
 .seq-bar .seq-close{margin-left:auto;}
