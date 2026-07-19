@@ -595,8 +595,10 @@ async function openReader(id, layerIndex) {
   const playBtn = h("button", "gbtn sim-btn", "▶ pulse");
   const loadBtn = h("button", "gbtn sim-btn", "◉ load");
   const replayBtn = h("button", "gbtn sim-btn", "⟲ replay");
+  const raceBtn = h("button", "gbtn sim-btn", "⇉ races");
+  raceBtn.title = "Highlight nodes with two or more concurrent writers — where races can happen";
   loadBtn.hidden = true;
-  dcap.append(capState, playBtn, loadBtn, replayBtn, capToggle);
+  dcap.append(capState, playBtn, loadBtn, replayBtn, raceBtn, capToggle);
   const scrubEl = h("div", "scrub-wrap");
   const caption = h("div", "dg-caption");
   caption.hidden = true;
@@ -639,6 +641,16 @@ async function openReader(id, layerIndex) {
   };
   loadBtn.onclick = () => {
     loadBtn.classList.toggle("on", diagram.sim.toggleLoad());
+  };
+  // race spotlight: ring nodes with ≥2 concurrent payload writers (contention
+  // points). Structural — works standing still; under ◉ load you watch tokens
+  // actually collide there. Toggle off clears the rings.
+  let raceOn = false;
+  raceBtn.onclick = () => {
+    raceOn = !raceOn;
+    const n = diagram.raceSpotlight(raceOn);
+    raceBtn.classList.toggle("race-on", raceOn);
+    if (raceOn) toast(n ? `${n} contention point${n > 1 ? "s" : ""} — ≥2 concurrent writers` : "No contention at this state — one writer per node");
   };
   // scripted incident: two tokens run into the gate's failure, seconds apart.
   // The caption tells the reader what history they just watched.
@@ -759,6 +771,36 @@ async function exportDiagramPNG(rec) {
   toast("Diagram exported");
 }
 
+/* ═══ Sequence view: the diagram's behavioural companion — the current state's
+   interactions ordered top-to-bottom (who sends what, in what order). Opens as
+   a dismissible overlay so it never disturbs the structural diagram. ═══ */
+function openSequence(rec) {
+  const N = rec.doc.layers.length;
+  // mirror EXACTLY what the diagram is showing — shownUpto is gate-aware
+  // (pos-1 for an un-revealed challenge layer), so the sequence can't spoil a gate
+  const shown = currentView && currentView.shownUpto != null ? currentView.shownUpto : (currentView ? currentView.position : 0);
+  const upto = Math.max(0, Math.min(shown, N));
+  const label = upto === 0 ? "Baseline — the naive system" : upto >= N ? "Final system · after every layer" : `After layer ${upto} of ${N}`;
+
+  const ov = h("div", "seq-overlay");
+  const bar = h("div", "seq-bar");
+  const titleWrap = h("div");
+  titleWrap.appendChild(h("h2", null, "Sequence — " + rec.system));
+  titleWrap.appendChild(h("div", "seq-sub", label + " · order flows top to bottom"));
+  const close = h("button", "gbtn seq-close", "✕ close");
+  bar.append(titleWrap, close);
+  const scroll = h("div", "seq-scroll");
+  scroll.appendChild(Diagram.sequence(rec.doc, upto));
+  ov.append(bar, scroll);
+  document.body.appendChild(ov);
+
+  const dismiss = () => { ov.remove(); document.removeEventListener("keydown", onKey); };
+  const onKey = e => { if (e.key === "Escape") dismiss(); };
+  close.onclick = dismiss;
+  ov.addEventListener("click", e => { if (e.target === ov) dismiss(); });
+  document.addEventListener("keydown", onKey);
+}
+
 function buildReaderMenu(rec, challengeOn) {
   const pop = $("menuPop");
   pop.textContent = "";
@@ -768,6 +810,7 @@ function buildReaderMenu(rec, challengeOn) {
     pop.appendChild(b);
   };
   add(COPY.whatifMenu, () => { renderWhatif(rec); show("whatif"); });
+  add("Sequence view (interaction order)", () => openSequence(rec));
   add("How to read a Deconstruct", () => { renderTutorial("reader"); show("tutorial"); });
   add((challengeOn ? "✓ " : "") + "Challenge mode (gates)", async () => {
     rec.challengeMode = !challengeOn;

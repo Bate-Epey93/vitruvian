@@ -258,7 +258,7 @@ var Diagram = (() => {
     layout.lanes.forEach(l => { laneLabelById[l.id] = l.label; });
     let shownIds = new Set();
     let lastState = null, lastHl = new Set();         // the sim reads the shown state
-    let traced = null, freshTimer = null;
+    let traced = null, freshTimer = null, raceOn = false;
 
     /* trace: tap a node to light it + every edge touching it and dim the
        rest — follow one part's responsibilities. Tap again to clear. */
@@ -315,6 +315,7 @@ var Diagram = (() => {
       // edges (paths only — colored by the SOURCE lane, the input's origin)
       const routeCtx = { nodes: st.nodes, channels: {}, laneY: layout.laneY };
       const labelJobs = [];
+      const ghostPaths = [];        // proposal edges that will sketch themselves in
       st.edges.forEach(e => {
         if (!st.nodes.has(e.from) || !st.nodes.has(e.to)) return;
         const from = st.nodes.get(e.from);
@@ -325,7 +326,7 @@ var Diagram = (() => {
         const path = el("path", { d: p.d, fill: "none", class: "dg-epath", "marker-end": `url(#${broken ? "arr-broken" : "arr-lane" + li})` }, g);
         path.style.stroke = broken ? "#c22f2f" : LANE_COLORS[li % LANE_COLORS.length];
         if (broken) g.classList.add("dg-broken");
-        if (ghostSet.has(e.id)) g.classList.add("dg-ghost");
+        if (ghostSet.has(e.id)) { g.classList.add("dg-ghost"); ghostPaths.push(path); }
         if (stressSet.has(e.id)) g.classList.add("dg-stress");
         if (animate && !prev.has(e.id)) g.classList.add("dg-enter");
         else if (animate) g.classList.add("dg-prior");
@@ -379,6 +380,28 @@ var Diagram = (() => {
         txt(t, job.e.label);
       });
 
+      // aesthetic 7: proposal edges sketch themselves — a blueprint being drawn —
+      // then hand back to the CSS dashed-march look. Staggered so it reads as
+      // ink laid down in sequence. Reduced-motion keeps the static dashed style.
+      if (ghostPaths.length && !RM) {
+        ghostPaths.forEach((path, i) => {
+          let len;
+          try { len = path.getTotalLength(); } catch (err) { return; }
+          if (!len) return;
+          path.style.animation = "none";                 // suspend ghost-march during the draw
+          path.style.strokeDasharray = len + " " + len;
+          path.style.strokeDashoffset = len;
+          path.getBoundingClientRect();                  // force reflow so the transition takes
+          path.style.transition = "stroke-dashoffset .55s ease " + (i * 0.11).toFixed(2) + "s";
+          path.style.strokeDashoffset = "0";
+          path.addEventListener("transitionend", function done() {
+            // release inline overrides → CSS .dg-ghost .dg-epath (dashed + march) resumes
+            path.style.transition = ""; path.style.strokeDasharray = "";
+            path.style.strokeDashoffset = ""; path.style.animation = "";
+          }, { once: true });
+        });
+      }
+
       svg.classList.remove("dg-has-spot");   // a fresh render clears any spotlight
       traced = null;
       // delta emphasis: for a beat, what carried over recedes so what's new reads first
@@ -390,6 +413,7 @@ var Diagram = (() => {
       shownIds = new Set([...st.nodes.keys(), ...st.edges.keys()]);
       lastState = st;
       lastHl = hl;
+      if (raceOn) raceSpotlight(true);   // re-ring contention points on the new state
     }
 
     /* spotlight: dim everything, then light the given ids (nodes/edges + their
@@ -405,6 +429,33 @@ var Diagram = (() => {
       svg.querySelectorAll("[data-id]").forEach(e => {
         if (set.has(e.getAttribute("data-id"))) e.classList.add("dg-spot", "dg-spot-" + kind);
       });
+    }
+
+    /* ── Race spotlight: a node with ≥2 incoming PAYLOAD edges has concurrent
+       writers — two flows can land at once, and unless it serializes them the
+       result is a race (lost update, interleaving). Purely structural, so it's
+       computable on any state; the ring makes contention points visible and
+       the sim (under load) shows tokens actually colliding there. ── */
+    function contendedIds() {
+      if (!lastState) return [];
+      const writers = {};                                  // node id → set of DISTINCT source nodes
+      lastState.edges.forEach(e => {
+        if (e.kind !== "payload" || e.from === e.to) return;   // a self-loop isn't a second writer
+        if (!lastState.nodes.has(e.from) || !lastState.nodes.has(e.to)) return;
+        (writers[e.to] = writers[e.to] || new Set()).add(e.from);   // parallel edges from one source count once
+      });
+      return Object.keys(writers).filter(id => writers[id].size >= 2);
+    }
+    function raceSpotlight(on) {
+      raceOn = on;
+      svg.querySelectorAll(".dg-contended").forEach(e => e.classList.remove("dg-contended"));
+      if (!on) return 0;
+      const ids = contendedIds();
+      ids.forEach(id => {
+        const g = nodesG.querySelector(`[data-id="${CSS.escape(id)}"]`);
+        if (g) g.classList.add("dg-contended");
+      });
+      return ids.length;
     }
 
     /* ── Follow-the-story auto-pan: center the given element ids in the
@@ -760,7 +811,7 @@ var Diagram = (() => {
       };
     })();
 
-    return { show, spotlight, focus, layout, laneColor, sim, zoom: zoomCtl };
+    return { show, spotlight, focus, layout, laneColor, sim, zoom: zoomCtl, raceSpotlight, contendedIds, stateAt: u => stateAt(doc, u), doc };
   }
 
   /* ── Legend: a compact always-visible key under the diagram (brings the
@@ -807,5 +858,84 @@ var Diagram = (() => {
     return wrap;
   }
 
-  return { mount, stateAt, computeLayout, legend };
+  /* ── Sequence view (behavioural): the structural diagram says who CONNECTS to
+     whom; this says in what ORDER things happen. For the given state we derive
+     an interaction timeline — lifelines as columns (same left-to-right order as
+     the diagram), messages as top-to-bottom arrows. Order comes from a
+     longest-path layering over the directed edges (Bellman-Ford relaxation, so
+     feedback cycles just stop deepening instead of looping forever). Edge kind
+     keeps its dash; colour keeps its source lane. Returns a standalone SVG. ── */
+  function sequence(doc, upto) {
+    const layout = computeLayout(doc);
+    const laneColor = id => LANE_COLORS[(layout.laneIndex[id] || 0) % LANE_COLORS.length];
+    const laneLabel = {}; layout.lanes.forEach(l => { laneLabel[l.id] = l.label; });
+    const st = stateAt(doc, upto);
+    const nodes = [...st.nodes.values()].sort((a, b) =>
+      (layout.laneIndex[a.lane] - layout.laneIndex[b.lane]) || (a.order - b.order) || (a.id < b.id ? -1 : 1));
+    const edges = [...st.edges.values()].filter(e => st.nodes.has(e.from) && st.nodes.has(e.to) && e.from !== e.to);
+
+    const COLW = 132, ROWH = 34, MARGIN = 96, HEADER = 62, PADB = 24, LABEL_MAX = 22;
+    const width = MARGIN * 2 + Math.max(0, nodes.length - 1) * COLW;
+    const colX = {}; nodes.forEach((n, i) => colX[n.id] = MARGIN + i * COLW);
+
+    // longest-path rank so a message never sits above its own cause
+    const rank = {}; nodes.forEach(n => rank[n.id] = 0);
+    for (let pass = 0; pass < nodes.length; pass++) {
+      let changed = false;
+      edges.forEach(e => { if (rank[e.from] + 1 > rank[e.to]) { rank[e.to] = rank[e.from] + 1; changed = true; } });
+      if (!changed) break;
+    }
+    const ordered = edges.slice().sort((a, b) => (rank[a.from] - rank[b.from]) || (colX[a.from] - colX[b.from]) || (a.id < b.id ? -1 : 1));
+
+    const height = HEADER + Math.max(1, ordered.length) * ROWH + PADB;
+    const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, class: "seq-svg", role: "img", "aria-label": `Sequence of interactions for ${doc.meta.system}` });
+    svg.style.minWidth = width + "px";
+
+    // one arrowhead marker per lane colour
+    const defs = el("defs", {}, svg);
+    layout.lanes.forEach((l, i) => {
+      const m = el("marker", { id: "seqarr" + i, viewBox: "0 0 10 10", refX: 8, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, defs);
+      el("path", { d: "M 0 1 L 9 5 L 0 9 z", fill: LANE_COLORS[i % LANE_COLORS.length] }, m);
+    });
+
+    // lifelines: header chip + dashed life-line down the page
+    const linesG = el("g", {}, svg);
+    nodes.forEach(n => {
+      const x = colX[n.id], color = laneColor(n.lane);
+      el("line", { x1: x, y1: HEADER, x2: x, y2: height - PADB, class: "seq-life" }, linesG);
+      const g = el("g", { transform: `translate(${x} 0)` }, linesG);
+      const w = Math.min(COLW - 12, Math.max(52, n.label.length * 6 + 16));
+      el("rect", { x: -w / 2, y: 12, width: w, height: 30, rx: 6, class: "seq-head" }, g).style.stroke = color;
+      const lines = n.label.length > 15 ? [n.label.slice(0, 14) + "…"] : [n.label];
+      const t = el("text", { x: 0, y: 31, "text-anchor": "middle", class: "seq-head-label" }, g);
+      lines.forEach(ln => txt(t, ln));
+      const rl = el("text", { x: 0, y: 54, "text-anchor": "middle", class: "seq-lane-label" }, g);
+      rl.style.fill = color; txt(rl, (laneLabel[n.lane] || n.lane).toUpperCase());
+    });
+
+    // messages, top to bottom in causal order
+    const msgG = el("g", {}, svg);
+    ordered.forEach((e, i) => {
+      const y = HEADER + i * ROWH + ROWH / 2;
+      const x1 = colX[e.from], x2 = colX[e.to];
+      const li = layout.laneIndex[st.nodes.get(e.from).lane] || 0;
+      const g = el("g", { class: `seq-msg seq-kind-${e.kind}`, "data-id": e.id }, msgG);
+      const line = el("line", { x1, y1: y, x2, y2: y, class: "seq-line", "marker-end": `url(#seqarr${li})` }, g);
+      line.style.stroke = LANE_COLORS[li % LANE_COLORS.length];
+      if (e.label) {
+        const mid = (x1 + x2) / 2;
+        const lab = e.label.length > LABEL_MAX ? e.label.slice(0, LABEL_MAX - 1) + "…" : e.label;
+        const t = el("text", { x: mid, y: y - 6, "text-anchor": "middle", class: "seq-msg-label" }, g);
+        t.style.fill = LANE_COLORS[li % LANE_COLORS.length]; txt(t, lab);
+      }
+      el("text", { x: 12, y: y + 3, class: "seq-step" }, g).appendChild(document.createTextNode(String(i + 1).padStart(2, "0")));
+    });
+    if (!ordered.length) {
+      const t = el("text", { x: width / 2, y: HEADER + 24, "text-anchor": "middle", class: "seq-msg-label" }, svg);
+      txt(t, "No interactions at this layer yet.");
+    }
+    return svg;
+  }
+
+  return { mount, stateAt, computeLayout, legend, sequence };
 })();

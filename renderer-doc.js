@@ -620,6 +620,10 @@ var DocView = (() => {
       setChallenge(c) { challenge = c; render(); },
       goToLayer(idx) { goTo(idx); },
       get position() { return pos; },
+      // the state the diagram is ACTUALLY showing (gate-aware: pos-1 for an
+      // un-revealed gated layer). Anything mirroring the diagram must use this,
+      // not position, or it spoils the gate.
+      get shownUpto() { return lastShown; },
       // cancel the pending debounce so a late timer can't overwrite a fresher
       // record after this view is torn down / the breakdown is re-opened
       destroy() { clearTimeout(saveTimer); }

@@ -1015,6 +1015,38 @@ html,body{overscroll-behavior:none;}
 .dg-faulted .dg-shape,.dg-faulted .dg-open{stroke:var(--failure)!important;stroke-dasharray:3 2.5;}
 .dg-faulted .dg-label{fill:var(--failure);}
 
+/* ── race spotlight: node with ≥2 concurrent payload writers — amber, pulsing ── */
+.dg-contended .dg-shape,.dg-contended .dg-open{stroke:#c77f16!important;stroke-width:3.2;}
+.dg-contended{animation:dg-race 1.15s ease-in-out infinite;}
+@keyframes dg-race{0%,100%{opacity:1;}50%{opacity:.5;}}
+.sim-btn.race-on{color:#c77f16;border-color:#c77f16;}
+
+/* ── sequence view: derived interaction timeline (behavioural) ── */
+.seq-overlay{
+  position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;
+  background:var(--glass-heavy);
+  -webkit-backdrop-filter:blur(16px) saturate(150%);backdrop-filter:blur(16px) saturate(150%);
+}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.seq-overlay{background:var(--paper);}}
+@media(prefers-reduced-transparency:reduce){.seq-overlay{background:var(--paper);}}
+.seq-bar{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);}
+.seq-bar h2{font-family:var(--display);font-size:17px;font-weight:700;margin:0;}
+.seq-bar .seq-sub{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.3px;}
+.seq-bar .seq-close{margin-left:auto;}
+.seq-scroll{flex:1;overflow:auto;padding:8px 18px 24px;}
+.seq-svg{display:block;height:auto;}
+.seq-life{stroke:var(--line);stroke-width:1;stroke-dasharray:2 4;}
+.seq-head{fill:var(--node-fill);stroke-width:1.6;}
+.seq-head-label{font-family:var(--mono);font-size:10.5px;fill:var(--ink);letter-spacing:.2px;}
+.seq-lane-label{font-family:var(--mono);font-size:8px;letter-spacing:.8px;opacity:.75;}
+.seq-line{stroke-width:2;}
+.seq-kind-control .seq-line{stroke-dasharray:5 4;stroke-width:1.6;}
+.seq-kind-money .seq-line{stroke-dasharray:1.5 3;stroke-width:1.6;}
+.seq-msg-label{font-family:var(--sans);font-size:11px;}
+.seq-step{font-family:var(--mono);font-size:9px;fill:var(--muted);}
+@media(prefers-reduced-motion:reduce){.dg-contended{animation:none;}}
+@media(prefers-reduced-transparency:reduce){.dg-hud{background:var(--paper);backdrop-filter:none;-webkit-backdrop-filter:none;}}
+
 /* ── ask-this-layer ── */
 .qa-block{
   background-color:var(--glass);
@@ -1073,6 +1105,13 @@ html,body{overscroll-behavior:none;}
   .dg-legend:not(.open) .dgl-item,.dg-legend:not(.open) .dgl-note{display:none;}
   .dg-legend.open{padding:7px 10px;gap:4px 10px;border:1px solid var(--line-soft);}
   .diagram-cap{padding:5px 10px;}
+}
+/* narrow phones: the sim-button row (pulse/load/replay/races/hide) can exceed
+   the cap width — let it wrap onto a second line instead of clipping a button
+   under the pane's overflow:hidden */
+@media(max-width:560px){
+  .diagram-cap{flex-wrap:wrap;row-gap:6px;}
+  .diagram-cap-state{flex:1 1 100%;}
 }
 
 /* ═══════════════════════════════════════════════════════════════
