@@ -231,13 +231,15 @@ var Diagram = (() => {
 
     // one arrowhead marker per lane color + the failure marker
     const defs = el("defs", {}, svg);
-    const ARR = "M 0 1.2 L 8.5 5 L 0 8.8 L 2.4 5 z";      // slim chevron, notched tail
-    layout.lanes.forEach((l, i) => {
-      const m = el("marker", { id: "arr-lane" + i, viewBox: "0 0 10 10", refX: 8, refY: 5, markerWidth: 6.5, markerHeight: 6.5, orient: "auto-start-reverse" }, defs);
-      el("path", { d: ARR, fill: LANE_COLORS[i % LANE_COLORS.length] }, m);
-    });
-    const mb = el("marker", { id: "arr-broken", viewBox: "0 0 10 10", refX: 8, refY: 5, markerWidth: 6.5, markerHeight: 6.5, orient: "auto-start-reverse" }, defs);
-    el("path", { d: ARR, fill: "#c22f2f" }, mb);
+    // solid triangle (no concave tail): the thin edge line tucks into the base
+    // with generous overlap, so the head never reads as detached at the node.
+    const ARR = "M 0.4 1.5 L 8.6 5 L 0.4 8.5 Z";
+    const mk = (id, fill) => {
+      const m = el("marker", { id, viewBox: "0 0 10 10", refX: 7.3, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, defs);
+      el("path", { d: ARR, fill, "stroke-linejoin": "round" }, m);
+    };
+    layout.lanes.forEach((l, i) => mk("arr-lane" + i, LANE_COLORS[i % LANE_COLORS.length]));
+    mk("arr-broken", "#c22f2f");
 
     // lane bands (tinted by lane color = built-in legend) + labels
     const bandsG = el("g", {}, svg);
@@ -365,11 +367,13 @@ var Diagram = (() => {
       labelJobs.forEach(job => {
         const w = job.e.label.length * 5.3 + 6, hh = 6.5;
         let fy = job.cy, bestScore = Infinity;
-        for (let off = -66; off <= 66; off += 6) {
+        // search a TIGHT window so a label stays pinned to the edge it names —
+        // it may nudge aside to clear a box, but never drift off into space
+        for (let off = -30; off <= 30; off += 5) {
           const y = job.cy + off;
           if (y < 8 || y > layout.height - 6) continue;
           const box = { x0: job.cx - w / 2, y0: y - hh, x1: job.cx + w / 2, y1: y + hh };
-          let score = Math.abs(off) * 0.02;                          // gentle pull toward the edge
+          let score = Math.abs(off) * 0.14;                          // firm pull toward the edge
           nodeRects.forEach(r => { score += olArea(box, r, 2) * 4; });  // hiding behind a box is worst
           placed.forEach(r => { score += olArea(box, r, 1); });
           if (score < bestScore) { bestScore = score; fy = y; }
@@ -621,11 +625,16 @@ var Diagram = (() => {
         const from = lastState.nodes.get(e.from);
         if (!p || !from) return null;
         const color = laneColor(from.lane);
-        const c = el("circle", { r: 3.4, class: "dg-token" }, simG);
-        c.style.fill = color;
+        // token = a payload dot + a small arrowhead that points where it's going
+        // (extra directional cue). A <g> so it can rotate to the path tangent;
+        // the crash/exit burst animates the inner dot's radius, not the group.
+        const g = el("g", { class: "dg-token" }, simG);
+        g.style.fill = color;
+        el("circle", { r: 3.2, class: "dg-token-body" }, g);
+        el("path", { d: "M 2 -2.4 L 6.8 0 L 2 2.4 Z", class: "dg-token-arrow" }, g);
         const trail = el("line", { class: "dg-trail" }, simG);
         trail.style.stroke = color;
-        const tok = { e, p, len: Math.max(1, p.getTotalLength()), t: 0, el: c, trail, prev: null };
+        const tok = { e, p, len: Math.max(1, p.getTotalLength()), t: 0, el: g, trail, prev: null, ang: 0 };
         tokens.push(tok);
         return tok;
       }
@@ -724,14 +733,25 @@ var Diagram = (() => {
           if (lastHl.has(tok.e.id) && tok.t > 0.55) { kill(tok, "dg-token-crash", 400); return; }
           if (tok.t >= 1) { hop(tok, graph); if (tok.dead) return; }
           let pt;
-          try { pt = tok.p.getPointAtLength(Math.min(1, tok.t) * tok.len); }
+          const at = Math.min(1, tok.t) * tok.len;
+          try { pt = tok.p.getPointAtLength(at); }
           catch (err) { kill(tok, "dg-token-exit", 200); return; }
-          tok.el.setAttribute("transform", `translate(${pt.x} ${pt.y})`);
+          // heading from the path tangent (a hair ahead), so the arrow points
+          // the way the payload travels; hold the last angle at the very end
+          try {
+            const ah = tok.p.getPointAtLength(Math.min(tok.len, at + 4));
+            if (Math.hypot(ah.x - pt.x, ah.y - pt.y) > 0.5) tok.ang = Math.atan2(ah.y - pt.y, ah.x - pt.x) * 180 / Math.PI;
+          } catch (err) { /* keep last angle */ }
+          tok.el.setAttribute("transform", `translate(${pt.x} ${pt.y}) rotate(${tok.ang})`);
           if (tok.trail) {
+            // draw the ink streak only between two CLOSE consecutive points;
+            // on a hop/teleport (or first frame) hide the whole line, else a
+            // stray segment from the origin streaks across the diagram
             if (tok.prev && Math.hypot(pt.x - tok.prev.x, pt.y - tok.prev.y) < 40) {
               tok.trail.setAttribute("x1", tok.prev.x); tok.trail.setAttribute("y1", tok.prev.y);
               tok.trail.setAttribute("x2", pt.x); tok.trail.setAttribute("y2", pt.y);
-            } else { tok.trail.removeAttribute("x1"); }   // teleport (hop) — no streak across the diagram
+              tok.trail.style.display = "";
+            } else { tok.trail.style.display = "none"; }
             const lag = 0.12;
             tok.prev = tok.prev ? { x: tok.prev.x + (pt.x - tok.prev.x) * lag * (dt * 60), y: tok.prev.y + (pt.y - tok.prev.y) * lag * (dt * 60) } : { x: pt.x, y: pt.y };
           }

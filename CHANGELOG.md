@@ -6,6 +6,16 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 
 ---
 
+## [1.19.0] — 2026-07-19 · Simulation & diagram polish
+### Added
+- Payload tokens now carry a small **directional arrowhead** that rotates to the path tangent — extra at-a-glance cue for which way flow moves.
+### Fixed
+- **Stray "shadowy line"** during a pulse — the ink-trail's teleport branch only cleared one coordinate, leaving a segment that streaked from the origin across the diagram. The whole trail now hides on a hop/first frame.
+- **Arrowheads detaching at node entries** — the chevron's concave notched tail left a gap where the thin edge line met it; replaced with a solid triangle that overlaps the line.
+### Changed
+- Edge labels search a tighter vertical window with a firmer pull toward their edge, so a label stays pinned to what it names instead of drifting into space.
+- Crash/exit burst re-homed onto the token's inner dot so it still animates cleanly with the new arrow group.
+
 ## [1.18.1] — 2026-07-19 · Dark-mode legibility
 ### Fixed
 - **For Engineers box** used `color: var(--paper)` (and the software-concept column too); `--paper` flips near-black in dark theme, so that text was invisible. Pinned the always-dark dev box to fixed light text.
