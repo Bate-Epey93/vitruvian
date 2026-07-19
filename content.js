@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.16.0",
+  appVersion: "1.16.1",
   flagshipVersion: 3,                    // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   flagshipNames: ["railway", "whatsapp", "youtube"],   // library slugs: seeding, #/study/<slug> deep links, share pages
   siteUrl: "https://bate-epey93.github.io/vitruvian/",
@@ -222,7 +222,7 @@ var COPY = {
         ["lens", "For the people · Under the hood", "Two lenses side by side: what users gain and what they pay, versus how it works and the transferable principle."],
         ["tradeoff", "The tradeoff", "What this layer sacrifices. Safety costs capacity; caching costs freshness."],
         ["scale", "Under load", "How the mechanism holds as load grows: its scaling property, its ceiling, or the sharding it forces. Tap to trace the load path in gold."],
-        ["defends", "Defends", "Which invariants from the strip-down this layer protects, by number."],
+        ["defends", "Defends", "Which invariants from the strip-down this layer protects, by number. Tap a chip to light the mechanism on the diagram that defends it."],
         ["dev", "For engineers", "Maps each mechanism to its software concept, plus interview probes. In Developer mode this reads as spec material."],
         ["analogy", "In everyday terms", "One plain analogy, for when an idea needs grounding."]
       ]
@@ -245,6 +245,7 @@ var COPY = {
         ["Lanes & colour", "Horizontal bands are semantic roles (People, Service, Control, Money), each with its own colour. An arrow wears the colour of the lane it comes from, so you can see who drives what."],
         ["The red pulse", "At a gate, or when you tap the problem card, the parts about to break pulse red. You see the failure before the fix."],
         ["Spotlight", "Tap a card to light its parts and dim the rest: the problem card lights what breaks (red), the solution card lights what's added (teal), and Under load traces the path load travels (gold)."],
+        ["Trace a part", "Tap any node to light it and every edge touching it; the rest dims, so you can follow one part's whole reach. Tap it again to clear."],
         ["Pan & scrub", "Dense diagrams pan sideways. Drag the scrubber (0…N) under the diagram to sweep it from the naive baseline to the finished system."]
       ]
     },
@@ -253,8 +254,20 @@ var COPY = {
       items: [
         ["Audience: B / E / D", "Three registers of the same Deconstruct: Beginner (plain language, everyday analogies), Enthusiast (the default), and Developer (adds the engineer mappings and interview probes). Switch anytime; your place is kept."],
         ["Step & scrub", "Move layer by layer with Prev / Next, or drag the scrubber to sweep the diagram across every state."],
-        ["Pulse ▶", "Send traffic through the diagram's current state: payloads travel, crash into what's broken, and congest under ◉ load."],
         ["Challenge mode", "Off by default. Turn it on from the ⋯ menu to hide each solution behind a design-it-first gate: you predict the fix, then compare."]
+      ]
+    },
+    explore: {
+      title: "Go deeper: simulate & interrogate",
+      note: "Buttons under the diagram, plus more in the ⋯ menu. This is where a Deconstruct stops being a picture and starts behaving like the system.",
+      items: [
+        ["Pulse ▶ / ⟲ replay", "Send live traffic through the current state. Payloads travel the flow path, crash red into whatever's broken, and (under ◉ load) congest where the system saturates. ⟲ replay re-enacts the exact historical failure, arrival by arrival."],
+        ["Fault injection", "While a pulse is running, tap any node to kill it. Traffic piles up behind the dead node and everything downstream starves — chaos engineering as a toy. Tap it again to revive it."],
+        ["Live HUD", "While traffic flows, a small readout shows throughput (delivered/min), how many payloads are in flight, and crashes. Under load, watch delivered plateau while in-flight climbs: saturation you can count, not just see."],
+        ["Race spotlight ⇉", "Rings every node with two or more concurrent writers — the places two flows can arrive at once and race. The count tells you how many contention points the design carries."],
+        ["Sequence view", "In the ⋯ menu: the same state as an interaction timeline — who sends what to whom, top to bottom, in the order it happens. The diagram shows structure; this shows behaviour."],
+        ["Probe a layer", "Ask one bounded question of any layer; the answer is grounded in that layer's own mechanism. Needs your Anthropic API key (Settings)."],
+        ["Graft a change", "In the ⋯ menu: propose a change and see it ghosted onto the architecture — dashed blueprint ink — with an honest verdict (improves · mixed · harmful) argued from the system's own invariants. Pulse runs through the graft too."]
       ]
     },
     forDev: {

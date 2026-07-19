@@ -391,6 +391,18 @@ function renderTutorial(from) {
     root.appendChild(row);
   });
 
+  // Go deeper: the interactive simulate/interrogate tools
+  if (T.explore) {
+    root.appendChild(h("h2", "section-head", T.explore.title));
+    if (T.explore.note) root.appendChild(h("p", "lib-note", T.explore.note));
+    T.explore.items.forEach(([name, desc]) => {
+      const row = h("div", "tut-row");
+      const tx = h("div"); tx.appendChild(h("div", "tut-row-title", name)); tx.appendChild(h("p", "tut-row-desc", desc));
+      row.appendChild(tx);
+      root.appendChild(row);
+    });
+  }
+
   // For developers
   const dev = h("div", "dev-box");
   dev.style.marginTop = "26px";
