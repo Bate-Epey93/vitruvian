@@ -374,13 +374,15 @@ h1.title{font-family:var(--display);font-weight:800;font-size:clamp(28px,4vw,40p
 .analogy-box .ab-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--money);font-weight:700;margin-bottom:4px;}
 details.analogy-fold{margin:12px 0;}
 details.analogy-fold summary{font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);cursor:pointer;}
-.dev-box{background:linear-gradient(135deg,var(--ink),#23232b);color:var(--paper);border-radius:9px;padding:16px 20px;margin:14px 0;}
+/* the dev box is ALWAYS dark in both themes, so its text must be fixed light,
+   never var(--paper)/var(--ink) which flip and vanish in dark theme */
+.dev-box{background:linear-gradient(135deg,#1b1b22,#23232b);color:#ece9e0;border-radius:9px;padding:16px 20px;margin:14px 0;}
 .dev-box .db-label{font-family:var(--mono);font-size:9.5px;letter-spacing:2px;text-transform:uppercase;color:#5ec6ad;margin-bottom:9px;}
 .dev-map{display:grid;grid-template-columns:auto auto 1fr;gap:8px;font-size:13px;padding:6px 0;border-bottom:1px solid #33333b;align-items:baseline;}
 .dev-map:last-of-type{border-bottom:none;}
 .dev-map .dm-mech{font-family:var(--mono);font-size:11.5px;color:#c9c6bd;}
 .dev-map .dm-arrow{color:#5ec6ad;}
-.dev-map .dm-sw{color:var(--paper);}
+.dev-map .dm-sw{color:#ece9e0;}
 .probe{font-size:13px;color:#c9c6bd;font-style:italic;padding:7px 0 0;display:grid;grid-template-columns:auto 1fr;gap:8px;}
 .probe::before{content:'?';font-family:var(--mono);color:#5ec6ad;font-weight:700;font-style:normal;}
 /* dev 'Start here' — the concrete coding approach, set apart at the top of the box */
@@ -750,10 +752,10 @@ html,body{overscroll-behavior:none;}
   --paper:#0f0f12;
   --canvas:#151519;
   --panel:#1d1d24;
-  --ink:#ece9e1;
-  --ink-soft:#c4c2b9;
-  --muted:#8f8c82;
-  --faint:#54514a;
+  --ink:#efece4;
+  --ink-soft:#c8c6bd;
+  --muted:#9d9a8f;
+  --faint:#56534c;
   --line:#33333c;
   --line-soft:#2a2a31;
   --accent:#3fae90;
@@ -795,10 +797,26 @@ html,body{overscroll-behavior:none;}
 :root[data-theme="dark"] .layer-name.dark,
 :root[data-theme="dark"] .modal{background:var(--panel);}
 :root[data-theme="dark"] .dev-box{background-image:linear-gradient(168deg,rgba(255,255,255,.04),rgba(255,255,255,0) 40%),linear-gradient(135deg,#0c0c10,#191920);}
-:root[data-theme="dark"] .problem-card p{color:#e8b3b0;}
-:root[data-theme="dark"] .gen-error p{color:#e8b3b0;}
-:root[data-theme="dark"] .analogy-box{color:#d9b877;}
-:root[data-theme="dark"] .gate-hint{color:#d9b877;}
+:root[data-theme="dark"] .problem-card p{color:#eab6b2;}
+:root[data-theme="dark"] .gen-error p{color:#eab6b2;}
+:root[data-theme="dark"] .analogy-box{color:#e2c184;}
+:root[data-theme="dark"] .gate-hint{color:#e2c184;}
+:root[data-theme="dark"] .scale-band p{color:#e2c184;}
+/* --faint is a border tone; as text it's illegible on dark paper. Lift the
+   faint-text elements to --muted, and give the teal invariant badge dark text
+   (white-on-mid-teal fails contrast in dark). */
+:root[data-theme="dark"] .mono-label,
+:root[data-theme="dark"] .bd-last,
+:root[data-theme="dark"] .fine,
+:root[data-theme="dark"] .dgl-note{color:var(--muted);}
+:root[data-theme="dark"] .inv-badge{background:var(--accent-deep);color:#06130e;}
+/* audience switch: white-on-mid-teal fails in dark; hover used var(--paper)
+   which is dark-on-dark. Dark text on the active teal, light text on hover. */
+:root[data-theme="dark"] .aud-switch button.on{color:#06130e;}
+:root[data-theme="dark"] .aud-switch button:not(.on):hover{color:var(--ink);}
+/* segmented toggles: .on bg is var(--ink) — light in dark theme, so white text
+   on it vanishes. Match the other dark toggles: dark pill, light text. */
+:root[data-theme="dark"] .seg button.on{background:var(--chrome-soft);color:#fff;}
 :root[data-theme="dark"] .lib-note,
 :root[data-theme="dark"] .diagram-cap{color:var(--muted);}
 /* the failure-red diagram pulse needs a lighter red on dark paper */
@@ -821,8 +839,6 @@ html,body{overscroll-behavior:none;}
 .scale-band .sb-label{font-family:var(--mono);font-size:9.5px;letter-spacing:1.6px;text-transform:uppercase;color:var(--money);font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:7px;}
 .scale-band .sb-label::before{content:'▚';}
 .scale-band p{font-size:14px;color:#6e4d12;margin:0;line-height:1.6;}
-:root[data-theme="dark"] .scale-band{border-color:#4a3a1a;}
-:root[data-theme="dark"] .scale-band p{color:#d9b877;}
 
 /* ── Spotlightable cards: a small locator affordance + active ring ── */
 .spot-card{cursor:pointer;position:relative;transition:box-shadow .15s, border-color .15s;}
