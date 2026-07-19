@@ -300,8 +300,10 @@ h1.title{font-family:var(--display);font-weight:800;font-size:clamp(28px,4vw,40p
 .chal-toggle.on .chal-txt{color:var(--accent);}
 .layer-name{font-family:var(--display);font-weight:800;font-size:clamp(22px,3vw,30px);letter-spacing:-.02em;line-height:1.1;margin-top:9px;}
 .problem-card{
-  background:var(--failure-wash);border:1px solid #e6c4c4;border-left:3px solid var(--failure);
-  border-radius:0 8px 8px 0;padding:16px 20px;margin:14px 0;
+  --tint:var(--failure);
+  background:color-mix(in srgb, var(--tint) 15%, var(--glass));
+  border:1px solid color-mix(in srgb, var(--tint) 32%, transparent);
+  border-radius:12px;padding:16px 20px;margin:14px 0;
 }
 .problem-card .pc-label{font-family:var(--mono);font-size:9.5px;letter-spacing:2px;text-transform:uppercase;color:var(--failure);font-weight:700;margin-bottom:7px;}
 .problem-card p{font-size:14.5px;color:#5e2626;margin:0;}
@@ -335,20 +337,28 @@ h1.title{font-family:var(--display);font-weight:800;font-size:clamp(28px,4vw,40p
 .gbtn:hover{border-color:var(--accent);color:var(--accent);}
 .gbtn.primary{background:var(--ink);border-color:var(--ink);color:#fff;}
 .gbtn.primary:hover{background:var(--accent);border-color:var(--accent);}
-.gate-hint{background:var(--money-wash);border-left:3px solid var(--money);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13.5px;color:#6e4d12;margin-top:10px;}
+.gate-hint{--tint:var(--money);background:color-mix(in srgb, var(--tint) 16%, var(--glass));border:1px solid color-mix(in srgb, var(--tint) 30%, transparent);border-radius:9px;padding:10px 14px;font-size:13.5px;color:#6e4d12;margin-top:10px;}
 
 /* reveal */
-.your-answer{background:var(--canvas);border:1px dashed var(--line);border-radius:8px;padding:13px 16px;margin:14px 0;}
+.your-answer{--tint:transparent;background:color-mix(in srgb, var(--tint) 16%, var(--glass));border:1px solid color-mix(in srgb, var(--tint) 40%, var(--line-soft));border-radius:11px;padding:13px 16px;margin:14px 0;}
 .your-answer .ya-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:5px;}
 .your-answer p{font-size:14px;color:var(--ink-soft);white-space:pre-wrap;margin:0;}
-.solution-card{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:16px 20px;margin:14px 0;}
+.solution-card{--tint:var(--accent);background:color-mix(in srgb, var(--tint) 13%, var(--glass));border:1px solid color-mix(in srgb, var(--tint) 30%, transparent);border-radius:12px;padding:16px 20px;margin:14px 0;}
 .solution-card .sc-label{font-family:var(--mono);font-size:9.5px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:7px;}
 .solution-card p{font-size:15px;color:var(--ink);margin:0;}
-.verdict-card{background:var(--accent-wash);border:1px solid #bcd8d0;border-radius:8px;padding:13px 16px;margin:10px 0;font-size:13.5px;color:var(--accent-deep);white-space:pre-wrap;}
+.verdict-card{--tint:var(--accent);background:color-mix(in srgb, var(--tint) 14%, var(--glass));border:1px solid color-mix(in srgb, var(--tint) 30%, transparent);border-radius:11px;padding:13px 16px;margin:10px 0;font-size:13.5px;color:var(--ink);white-space:pre-wrap;}
+/* challenge grade: colour the Your-design + verdict cards by how the answer scored */
+.grade-pass{--gc:#2f8f5e;} .grade-close{--gc:#c58a12;} .grade-miss{--gc:#c22f2f;}
+.your-answer.grade-pass,.your-answer.grade-close,.your-answer.grade-miss,
+.verdict-card.grade-pass,.verdict-card.grade-close,.verdict-card.grade-miss{
+  background:color-mix(in srgb, var(--gc) 15%, var(--glass));
+  border-color:color-mix(in srgb, var(--gc) 46%, transparent);
+}
+.grade-badge{display:inline-block;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:3px 9px;border-radius:999px;color:#fff;background:var(--gc);margin-bottom:7px;}
 
 .lens-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0;}
 @media(max-width:640px){.lens-grid{grid-template-columns:1fr;}}
-.lens-box{background:var(--panel);border:1px solid var(--line-soft);border-radius:8px;padding:13px 16px;}
+.lens-box{background:var(--glass);border:1px solid var(--glass-edge);border-radius:11px;padding:13px 16px;}
 .lens-box .lb-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
 .lens-box p{font-size:13.5px;color:var(--ink-soft);margin:0 0 6px;}
 .lens-box p:last-child{margin:0;}
@@ -360,7 +370,7 @@ h1.title{font-family:var(--display);font-weight:800;font-size:clamp(28px,4vw,40p
 }
 .tradeoff-band::before{content:'⇄';color:var(--money);font-weight:700;margin-top:1px;}
 .defends-row{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;align-items:center;}
-.analogy-box{background:var(--money-wash);border:1px solid #e7d4ab;border-radius:8px;padding:12px 16px;margin:12px 0;font-size:14px;color:#6e4d12;}
+.analogy-box{--tint:var(--money);background:color-mix(in srgb, var(--tint) 15%, var(--glass));border:1px solid color-mix(in srgb, var(--tint) 30%, transparent);border-radius:11px;padding:12px 16px;margin:12px 0;font-size:14px;color:#6e4d12;}
 .analogy-box .ab-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--money);font-weight:700;margin-bottom:4px;}
 details.analogy-fold{margin:12px 0;}
 details.analogy-fold summary{font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);cursor:pointer;}
@@ -373,6 +383,14 @@ details.analogy-fold summary{font-family:var(--mono);font-size:10px;letter-spaci
 .dev-map .dm-sw{color:var(--paper);}
 .probe{font-size:13px;color:#c9c6bd;font-style:italic;padding:7px 0 0;display:grid;grid-template-columns:auto 1fr;gap:8px;}
 .probe::before{content:'?';font-family:var(--mono);color:#5ec6ad;font-weight:700;font-style:normal;}
+/* dev 'Start here' — the concrete coding approach, set apart at the top of the box */
+.dev-approach{
+  display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;
+  background:rgba(94,198,173,.1);border:1px solid rgba(94,198,173,.28);border-radius:7px;
+  padding:9px 12px;margin-bottom:11px;
+}
+.dev-approach .da-tag{font-family:var(--mono);font-size:8.5px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#0c0c10;background:#5ec6ad;border-radius:4px;padding:2px 7px;flex-shrink:0;}
+.dev-approach .da-text{font-family:var(--mono);font-size:12.5px;line-height:1.55;color:#e8f5f0;}
 
 /* stress & transfer */
 .stress-card{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:16px 19px;margin:12px 0;}
@@ -644,11 +662,21 @@ html,body{overscroll-behavior:none;}
 /* ── Wet-ink gloss: a specular skim on raised surfaces; paper stays matte ── */
 .bd-card,.ml-card,.set-block,.gate-card,.stress-card,.lens-box,.solution-card,
 .model-card,.your-answer,.sd-purpose,.sd-item,.ml-use,.analogy-box,.verdict-card,
-.narrowing-note,.predict-box,.gen-error,.landing-card{
+.narrowing-note,.predict-box,.gen-error,.landing-card,.scale-band,.gate-hint{
   background-image:linear-gradient(172deg,var(--gloss),rgba(255,255,255,0) 36%);
   box-shadow:inset 0 1px 0 var(--gloss-edge),
              0 1px 2px rgba(20,20,22,.05),
              0 10px 26px -18px rgba(20,20,22,.28);
+}
+/* liquid glass: the translucent-tinted layer cards blur what's behind them */
+.problem-card,.solution-card,.scale-band,.analogy-box,.gate-hint,.lens-box,
+.your-answer,.verdict-card{
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(150%);
+  backdrop-filter:blur(var(--glass-blur)) saturate(150%);
+}
+@media(prefers-reduced-transparency:reduce){
+  .problem-card,.solution-card,.scale-band,.analogy-box,.gate-hint,.lens-box,
+  .your-answer,.verdict-card{-webkit-backdrop-filter:none;backdrop-filter:none;}
 }
 .problem-card{
   background-image:linear-gradient(172deg,var(--gloss-soft),rgba(255,255,255,0) 36%);
@@ -767,10 +795,10 @@ html,body{overscroll-behavior:none;}
 :root[data-theme="dark"] .layer-name.dark,
 :root[data-theme="dark"] .modal{background:var(--panel);}
 :root[data-theme="dark"] .dev-box{background-image:linear-gradient(168deg,rgba(255,255,255,.04),rgba(255,255,255,0) 40%),linear-gradient(135deg,#0c0c10,#191920);}
-:root[data-theme="dark"] .problem-card{border-color:#4a2a2a;}
 :root[data-theme="dark"] .problem-card p{color:#e8b3b0;}
 :root[data-theme="dark"] .gen-error p{color:#e8b3b0;}
-:root[data-theme="dark"] .analogy-box{border-color:#4a3a1a;color:#d9b877;}
+:root[data-theme="dark"] .analogy-box{color:#d9b877;}
+:root[data-theme="dark"] .gate-hint{color:#d9b877;}
 :root[data-theme="dark"] .lib-note,
 :root[data-theme="dark"] .diagram-cap{color:var(--muted);}
 /* the failure-red diagram pulse needs a lighter red on dark paper */
@@ -786,8 +814,9 @@ html,body{overscroll-behavior:none;}
 
 /* ── 'Under load' scaling band ── */
 .scale-band{
-  background:var(--money-wash);border:1px solid #e7d4ab;border-left:3px solid var(--money);
-  border-radius:0 8px 8px 0;padding:13px 17px;margin:14px 0;
+  --tint:var(--money);background:color-mix(in srgb, var(--tint) 16%, var(--glass));
+  border:1px solid color-mix(in srgb, var(--tint) 30%, transparent);
+  border-radius:12px;padding:13px 17px;margin:14px 0;
 }
 .scale-band .sb-label{font-family:var(--mono);font-size:9.5px;letter-spacing:1.6px;text-transform:uppercase;color:var(--money);font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:7px;}
 .scale-band .sb-label::before{content:'▚';}

@@ -20,6 +20,16 @@ var DocView = (() => {
   function frag(...children) { const f = document.createDocumentFragment(); children.forEach(c => c && f.appendChild(c)); return f; }
   function modelById(id) { return MODEL_LIBRARY.find(m => m.id === id); }
 
+  // challenge grade: pull the "GRADE: pass|close|miss" first line out of the AI
+  // verdict, return the grade + the feedback body with that line stripped.
+  const GRADE_TXT = { pass: "Nailed it", close: "Close", miss: "Not quite" };
+  function parseGrade(verdict) {
+    if (!verdict || typeof verdict !== "string") return null;
+    const m = /^\s*GRADE:\s*(pass|close|miss)\b/i.exec(verdict);
+    if (!m) return null;
+    return { grade: m[1].toLowerCase(), body: verdict.replace(/^\s*GRADE:\s*(pass|close|miss)\b[^\n]*\n?/i, "").trim() };
+  }
+
   function mount(opts) {
     const { docPane, diagram, rec, onSave, onCompare, onAsk, canCompare, scrubEl } = opts;
     const doc = rec.doc;
@@ -389,9 +399,15 @@ var DocView = (() => {
       }
       root.appendChild(modelCard(L, false));
 
+      // parse the AI grade (pass|close|miss) out of the compared verdict, so the
+      // reader can see at a glance whether their design landed. GRADE line is
+      // stripped from the shown feedback text.
+      const g = parseGrade(a.verdict);
       if (a.answer && a.answer.trim()) {
-        const ya = h("div", "your-answer");
-        ya.appendChild(h("div", "ya-label", "Your design"));
+        const ya = h("div", "your-answer" + (g ? " grade-" + g.grade : ""));
+        const lbl = h("div", "ya-label", "Your design");
+        if (g) lbl.appendChild(h("span", "grade-badge", GRADE_TXT[g.grade]));
+        ya.appendChild(lbl);
         ya.appendChild(h("p", null, a.answer));
         root.appendChild(ya);
       }
@@ -403,8 +419,12 @@ var DocView = (() => {
       wireSpot(sol, diffAddedIds(L), "solution");
 
       if (a.answer && a.answer.trim()) {
-        if (a.verdict) root.appendChild(h("div", "verdict-card", a.verdict));
-        else {
+        if (a.verdict) {
+          const vc = h("div", "verdict-card" + (g ? " grade-" + g.grade : ""));
+          if (g) vc.appendChild(h("span", "grade-badge", GRADE_TXT[g.grade]));
+          vc.appendChild(document.createTextNode(g ? g.body : a.verdict));
+          root.appendChild(vc);
+        } else {
           const row = h("div", "gate-actions");
           const cmp = h("button", "gbtn", COPY.gateCompare);
           const avail = canCompare();
@@ -507,6 +527,15 @@ var DocView = (() => {
       if (audience !== "beginner") {
         const dev = h("div", "dev-box");
         dev.appendChild(h("div", "db-label", "For engineers"));
+        // a concrete coding starting point for this layer's problem — the data
+        // structure / algorithm / pattern to actually begin with (guarded: older
+        // docs predate this field)
+        if (L.developer.approach) {
+          const ap = h("div", "dev-approach");
+          ap.appendChild(h("span", "da-tag", "Start here"));
+          ap.appendChild(h("span", "da-text", L.developer.approach));
+          dev.appendChild(ap);
+        }
         L.developer.mappings.forEach(m => {
           const row = h("div", "dev-map");
           row.appendChild(h("span", "dm-mech", m.mechanism));

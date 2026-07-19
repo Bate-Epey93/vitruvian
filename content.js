@@ -24,8 +24,8 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.17.0",
-  flagshipVersion: 3,                    // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
+  appVersion: "1.18.0",
+  flagshipVersion: 4,                    // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   flagshipNames: ["railway", "whatsapp", "youtube"],   // library slugs: seeding, #/study/<slug> deep links, share pages
   siteUrl: "https://bate-epey93.github.io/vitruvian/",
   repoUrl: "https://github.com/Bate-Epey93/vitruvian"
@@ -153,7 +153,7 @@ var COPY = {
   gateHint1: "Show the thinking model",
   gateHint2: "One more hint",
   gateReveal: "Reveal the solution",
-  gateCompare: "Compare my answer (AI)",
+  gateCompare: "Check my answer (AI)",
   askTitle: "Probe this layer",
   askPlaceholder: "One question, e.g. \"why not just use timestamps?\"",
   askBtn: "Probe",
@@ -223,7 +223,7 @@ var COPY = {
         ["tradeoff", "The tradeoff", "What this layer sacrifices. Safety costs capacity; caching costs freshness."],
         ["scale", "Under load", "How the mechanism holds as load grows: its scaling property, its ceiling, or the sharding it forces. Tap to trace the load path in gold."],
         ["defends", "Defends", "Which invariants from the strip-down this layer protects, by number. Tap a chip to light the mechanism on the diagram that defends it."],
-        ["dev", "For engineers", "Maps each mechanism to its software concept, plus interview probes. In Developer mode this reads as spec material."],
+        ["dev", "For engineers", "Opens with 'Start here' — a concrete coding approach (the data structure, algorithm, or pattern) to begin solving the layer's problem. Then maps each mechanism to its software concept, plus interview probes. In Developer mode this reads as spec material."],
         ["analogy", "In everyday terms", "One plain analogy, for when an idea needs grounding."]
       ]
     },

@@ -78,7 +78,8 @@ var SKILL = (() => {
       defends: ["invariant ids this layer protects - at least one"],
       developer: {
         mappings: [{ mechanism: "string - the concrete mechanism", software_concept: "string - its software twin" }],
-        interview_probes: ["strings - questions that transfer the insight to an interview"]
+        interview_probes: ["strings - questions that transfer the insight to an interview"],
+        approach: "string - a CONCRETE coding approach an engineer could start from to solve THIS layer's problem: name the data structure, algorithm, or pattern and how it applies in one sentence (e.g. 'Keep a hash set of processed message-ids and drop any id you've already seen - an idempotency key', or 'A priority queue keyed by deadline pops the next item in O(log n)'). Practical enough to open an editor and begin; never abstract."
       },
       beginner_analogy: "string - one everyday analogy",
       diff: {
@@ -121,6 +122,8 @@ ${models}
 SCOPING. If the system is broad (a whole company, "the internet"), choose ONE tractable slice - the most load-bearing path - and declare it in meta.narrowing. A sharp slice deconstructed fully beats a blur covered thinly.
 
 THREE REGISTERS, ONE DOCUMENT. essence.beginner and problem.beginner say the same thing as their siblings with zero jargon. beginner_analogy is one everyday image. developer.mappings and interview_probes speak to engineers. Never dumb down the enthusiast register; never jargon up the beginner one.
+
+DEVELOPER APPROACH. Every layer's developer.approach names a CONCRETE coding starting point for that layer's problem: the data structure, algorithm, or pattern an engineer would reach for, and how it applies, in one or two sentences. It must be practical enough to open an editor and begin (e.g. "a hash set of seen ids for dedup", "a priority queue keyed by deadline", "compare-and-swap on a version field", "a write-ahead log replayed on restart"). Never abstract, never a restatement of the mechanism.
 
 THE DIAGRAM. You are drawing on a fixed grid, not a canvas:
 - Lanes are horizontal bands: SEMANTIC ROLES (people, service, control, data, money) - never physical places. ${BOUNDS.lanes.min}-${BOUNDS.lanes.max} lanes, labels ≤${BOUNDS.laneLabelMax} chars.
@@ -190,7 +193,7 @@ If you receive a message listing validation errors, return the corrected COMPLET
         tradeoff: "The plan is blind: it describes where trains SHOULD be, and a broken-down train is exactly where it shouldn't be.",
         at_scale: "Adding trains means adding timetable rows and safety gaps, not new coordination; one plan scales to a whole network for free. But it scales in a brittle way: one late train ripples delays down every dependent path, so heavy traffic amplifies small disturbances instead of absorbing them.",
         defends: ["inv1"],
-        developer: { mappings: [{ mechanism: "the timetable", software_concept: "static scheduling: coordination compiled ahead of time" }], interview_probes: ["Where in your system do you coordinate by plan instead of by signal, and what happens when reality diverges from the plan?"] },
+        developer: { mappings: [{ mechanism: "the timetable", software_concept: "static scheduling: coordination compiled ahead of time" }], interview_probes: ["Where in your system do you coordinate by plan instead of by signal, and what happens when reality diverges from the plan?"], approach: "Precompute a fixed schedule: a sorted array of (time, resource) slots you assign ahead of time, then look up by slot instead of negotiating at runtime - like a cron table or a static timetable." },
         beginner_analogy: "Like a family sharing one bathroom by agreeing on a morning schedule. It works until someone takes too long, because the schedule can't see.",
         diff: { add_nodes: [{ id: "timetable", label: "Timetable", kind: "store", lane: "control", order: 0 }], add_edges: [{ id: "e_plan1", from: "timetable", to: "train1", kind: "control", label: "departs 09:00" }], highlight: ["train1", "train2", "track_main"], remove: [] } },
       { index: 2, name: "The Block System: Space, Not Time",
@@ -202,7 +205,7 @@ If you receive a message listing validation errors, return the corrected COMPLET
         tradeoff: "Capacity is quantized: one train per block-traversal-time, a hard ceiling. Safety purchased with headroom.",
         at_scale: "This is the line's throughput ceiling: capacity ≈ one train per block-traversal-time, so you scale a busy route by cutting blocks SHORTER (more, smaller sections), at the cost of more signal boxes and telegraph traffic. It's horizontal scaling by sharding the track.",
         defends: ["inv1"],
-        developer: { mappings: [{ mechanism: "the brass token", software_concept: "distributed mutex / lease: possession is permission" }], interview_probes: ["Your rate limiter infers capacity from elapsed time. What's your Clayton Tunnel?"] },
+        developer: { mappings: [{ mechanism: "the brass token", software_concept: "distributed mutex / lease: possession is permission" }], interview_probes: ["Your rate limiter infers capacity from elapsed time. What's your Clayton Tunnel?"], approach: "Guard the shared section with a single-holder lock: acquire a mutex (or a lease/token in a distributed setting) before entering, release on exit; if you can't acquire it, you wait - possession IS permission." },
         beginner_analogy: "Like a single bathroom key at a gas station: whoever holds the key can go in; two people can't hold one key.",
         diff: { add_nodes: [{ id: "signalbox_a", label: "Signal box A", kind: "process", lane: "control", order: 1 }, { id: "signalbox_b", label: "Signal box B", kind: "process", lane: "control", order: 3 }], add_edges: [{ id: "e_confirm", from: "signalbox_b", to: "signalbox_a", kind: "control", label: "block clear" }, { id: "e_permit", from: "signalbox_a", to: "train1", kind: "control", label: "may enter" }], highlight: ["track_main", "train1", "train2"], remove: [] } }
     ],
@@ -213,11 +216,21 @@ If you receive a message listing validation errors, return the corrected COMPLET
   /* ── AI-compare: the small second-type call (§7) ── */
   function comparePrompt(layer, attempt) {
     return {
-      system: `You are comparing a learner's design attempt against the canonical solution of a system-deconstruction layer. Verdict in under 150 words, exactly three parts, plain text:
+      system: `You are grading a learner's design attempt against the canonical solution of a system-deconstruction layer.
+
+Your FIRST line must be exactly one of these three, nothing else on the line:
+GRADE: pass
+GRADE: close
+GRADE: miss
+  - pass: they landed on the core mechanism, OR a genuinely DIFFERENT VALID solution that solves the stated problem. Reward this generously.
+  - close: the right instinct, but a load-bearing piece is missing or wrong.
+  - miss: does not solve the stated problem, or misreads it.
+
+Then a blank line, then under 150 words in exactly three parts, plain text:
 RIGHT: what their attempt got right.
 MISSED: what it missed that the canonical solution handles.
-VERDICT: whether they found a DIFFERENT VALID solution; this is explicitly allowed and should be celebrated when true.
-Be specific and generous; judge the design, not the prose. Never use em dashes.`,
+VERDICT: whether they found a different valid path; celebrate it when true.
+Be specific and generous; grade the design, not the prose. Never use em dashes.`,
       user: `THE PROBLEM: ${layer.problem.statement}\n\nTHE THINKING MODEL: ${layer.problem.model.id}: ${layer.problem.model.application}\n\nCANONICAL SOLUTION: ${layer.solution}\n\nLEARNER'S ATTEMPT: ${attempt}`
     };
   }

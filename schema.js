@@ -177,6 +177,10 @@ var Schema = (() => {
         if (!isArr(dev.interview_probes) || dev.interview_probes.length < B.interviewProbes.min || dev.interview_probes.length > B.interviewProbes.max)
           err(`${w}.developer.interview_probes must have ${B.interviewProbes.min}-${B.interviewProbes.max} entries`);
         else dev.interview_probes.forEach((s, j) => { if (!isFullStr(s)) err(`${w}.developer.interview_probes[${j}] must be a non-empty string`); });
+        // approach: a concrete coding starting point — required for freshly
+        // generated docs (strict), optional for pre-existing ones (lenient)
+        if (opts.strict ? !isFullStr(dev.approach) : (dev.approach != null && !isFullStr(dev.approach)))
+          err(`${w}.developer.approach must be a non-empty string — a practical coding approach an engineer could start from`);
       }
       if (!isFullStr(L.beginner_analogy)) err(`${w}.beginner_analogy must be a non-empty string`);
 
