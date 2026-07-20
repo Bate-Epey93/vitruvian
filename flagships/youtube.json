@@ -4,7 +4,8 @@
   "system": "YouTube",
   "narrowing": "The upload-to-playback path (one video's journey from a creator's phone to a viewer's screen), plus the two loops that keep that path alive: the recommendation loop that feeds it viewers and the ad-revenue loop that pays for it. Live streaming, Shorts, comments, and the creator studio are out of scope.",
   "ordering_note": "Layers follow the order the pressures arrive as a video platform grows: first the file won't play, then the machine melts under its own success, then distance melts the origin, then discovery drowns, then the bandwidth bill comes due, then the lawyers and the advertisers arrive. Where a specific incident is well known (the pre-acquisition bandwidth crisis, Content ID's origin in copyright litigation pressure), it is named without invented dates; where it is not, the failure is stated generically as the inevitable consequence.",
-  "history_confidence": "medium"
+  "history_confidence": "medium",
+  "domain": "software"
  },
  "essence": {
   "text": "YouTube takes a video from one phone and makes it playable, findable, and profitable for two billion people: a broadcast tower anyone can climb. The genius is not the player. It is three interlocking answers to three brutal questions: how do you serve a planet's worth of video without going bankrupt, how does anyone find anything in an unbrowsable ocean, and how do you let everyone publish without becoming a landfill?",

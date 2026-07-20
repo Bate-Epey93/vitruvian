@@ -329,6 +329,29 @@ var DocView = (() => {
       if (m) card.appendChild(h("p", null, m.one_liner));
       card.appendChild(h("p", null, L.problem.model.application));
       if (expanded && m && audience === "beginner") card.appendChild(h("p", null, m.description));
+      // Rosetta: the same force, in each profession's words. Lives on the model
+      // card (not the dev box) so every register sees it — a marketer reading a
+      // campaign never opens Developer mode. "Called here" comes first; the rest
+      // is the transfer, made literal.
+      const names = typeof rosettaFor === "function" ? rosettaFor(L.problem.model.id, doc.meta.domain) : [];
+      if (names.length) {
+        const ros = h("details", "rosetta");
+        const here = names.find(n => n.here);
+        const sum = h("summary");
+        sum.appendChild(h("span", "ro-kick", "Also called"));
+        sum.appendChild(h("span", "ro-here", here ? here.term : names[0].term));
+        if (here) sum.appendChild(h("span", "ro-dom", "in " + here.label.toLowerCase()));
+        ros.appendChild(sum);
+        const grid = h("div", "ro-grid");
+        names.filter(n => !n.here).forEach(n => {
+          const row = h("div", "ro-row");
+          row.appendChild(h("span", "ro-row-dom", n.label));
+          row.appendChild(h("span", "ro-row-term", n.term));
+          grid.appendChild(row);
+        });
+        ros.appendChild(grid);
+        card.appendChild(ros);
+      }
       return card;
     }
 

@@ -24,8 +24,8 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.20.0",
-  flagshipVersion: 5,                    // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
+  appVersion: "1.21.0",
+  flagshipVersion: 6,                    // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   flagshipNames: ["railway", "whatsapp", "youtube"],   // library slugs: seeding, #/study/<slug> deep links, share pages
   siteUrl: "https://bate-epey93.github.io/vitruvian/",
   repoUrl: "https://github.com/Bate-Epey93/vitruvian"
@@ -363,8 +363,126 @@ var VOCAB_LIBRARY = [
     models: ["locality-and-caching"] }
 ];
 
+/* ---------- ROSETTA · the same force, in each profession's words ----------
+   The 14 thinking models are universal; only the NAMES change by domain.
+   Rather than build a parallel taxonomy per field (unbounded to curate, and
+   it ages badly outside software), we translate the spine we already have.
+
+   This costs the generator nothing: a layer already names its thinking model,
+   and meta.domain names the system's field, so "called here" and "called
+   elsewhere" are both derivable with no extra generated field.
+
+   Entries are deliberately SPARSE. A model with no honest term in a domain is
+   omitted rather than given an invented one. */
+var DOMAINS = [
+  { id: "software",   label: "Software" },
+  { id: "marketing",  label: "Marketing" },
+  { id: "operations", label: "Operations" },
+  { id: "biology",    label: "Living systems" },
+  { id: "economics",  label: "Markets & money" },
+  { id: "mechanical", label: "Machines" },
+  { id: "social",     label: "Institutions" }
+];
+
+var ROSETTA = {
+  "first-principles": {
+    software: "clean-room rewrite", marketing: "incrementality / holdout test",
+    operations: "zero-based design", biology: "knockout experiment",
+    economics: "counterfactual / opportunity cost", mechanical: "clean-sheet design",
+    social: "constitutional design"
+  },
+  "inversion": {
+    software: "making invalid states unrepresentable", marketing: "pre-mortem",
+    operations: "FMEA / poka-yoke", biology: "negative selection",
+    economics: "stress testing", mechanical: "fail-safe interlock",
+    social: "checks and balances"
+  },
+  "bottleneck": {
+    software: "hot partition / critical path", marketing: "funnel drop-off",
+    operations: "the constraint (Theory of Constraints)", biology: "rate-limiting step",
+    economics: "the scarce factor", mechanical: "choke point",
+    social: "approval chokepoint"
+  },
+  "feedback-loop": {
+    software: "telemetry / control loop", marketing: "multi-touch attribution",
+    operations: "statistical process control", biology: "homeostasis",
+    economics: "the price signal", mechanical: "governor / closed-loop control",
+    social: "accountability loop"
+  },
+  "single-source-of-truth": {
+    software: "system of record", marketing: "single customer view",
+    operations: "the master schedule", biology: "the germline genome",
+    economics: "the ledger", mechanical: "the datum reference",
+    social: "the official register"
+  },
+  "mutual-exclusion": {
+    software: "mutex / lock / lease", marketing: "exclusivity / roadblock buy",
+    operations: "machine allocation", biology: "competitive inhibition",
+    economics: "exclusive rights", mechanical: "interlock / block token",
+    social: "right of way"
+  },
+  "queue-and-buffer": {
+    software: "message queue / backpressure", marketing: "nurture sequence",
+    operations: "WIP buffer / safety stock", biology: "glycogen reserve",
+    economics: "inventory / float", mechanical: "accumulator / surge tank",
+    social: "the waiting list"
+  },
+  "redundancy": {
+    software: "replication / failover", marketing: "channel diversification",
+    operations: "dual sourcing", biology: "paired organs / gene duplication",
+    economics: "diversification / hedging", mechanical: "backup system",
+    social: "succession planning"
+  },
+  "separation-of-concerns": {
+    software: "modularity / microservices", marketing: "segmentation",
+    operations: "cellular manufacturing", biology: "cell compartments",
+    economics: "division of labour", mechanical: "modular subsystems",
+    social: "separation of powers"
+  },
+  "trust-boundary": {
+    software: "zero trust / end-to-end encryption", marketing: "consent & first-party data",
+    operations: "incoming quality gate", biology: "the cell membrane",
+    economics: "escrow / counterparty risk", mechanical: "containment",
+    social: "jurisdiction / chain of custody"
+  },
+  "incentive-alignment": {
+    software: "quota and pricing design", marketing: "commission & affiliate design",
+    operations: "piece rates", biology: "symbiosis / mutualism",
+    economics: "mechanism design / principal-agent", social: "law and enforcement"
+  },
+  "graceful-degradation": {
+    software: "circuit breaker / load shedding", marketing: "always-on fallback",
+    operations: "reduced-rate running", biology: "dormancy / triage",
+    economics: "the trading halt", mechanical: "limp-home mode",
+    social: "continuity of government"
+  },
+  "locality-and-caching": {
+    software: "cache / CDN / replica", marketing: "geo-targeting",
+    operations: "forward stocking", biology: "local energy stores",
+    economics: "warehousing", mechanical: "reservoir near the load",
+    social: "the local branch"
+  },
+  "idempotency": {
+    software: "idempotency key", marketing: "conversion dedup / suppression list",
+    operations: "duplicate-order guard", biology: "the refractory period",
+    economics: "double-entry reconciliation", mechanical: "ratchet / detent",
+    social: "one person, one vote"
+  }
+};
+
 /* id lookups — the vocabulary and models are referenced by id from saved
    documents, so every consumer resolves through these */
+function domainLabel(id) { for (const d of DOMAINS) if (d.id === id) return d.label; return null; }
+/* every domain name for a model: [{domain,label,term}], the doc's own domain first */
+function rosettaFor(modelId, here) {
+  const map = ROSETTA[modelId];
+  if (!map) return [];
+  const out = [];
+  DOMAINS.forEach(d => { if (map[d.id]) out.push({ domain: d.id, label: d.label, term: map[d.id], here: d.id === here }); });
+  out.sort((a, b) => (b.here ? 1 : 0) - (a.here ? 1 : 0));
+  return out;
+}
+
 function vocabById(id) { for (const v of VOCAB_LIBRARY) if (v.id === id) return v; return null; }
 function modelById(id) { for (const m of MODEL_LIBRARY) if (m.id === id) return m; return null; }
 
@@ -534,6 +652,7 @@ var COPY = {
         ["Probe a layer", "Ask one bounded question of any layer; the answer is grounded in that layer's own mechanism. Needs your Anthropic API key (Settings)."],
         ["Graft a change", "In the ⋯ menu: propose a change and see it ghosted onto the architecture — dashed blueprint ink — with an honest verdict (improves · mixed · harmful) argued from the system's own invariants. Pulse runs through the graft too."],
         ["Known as… (the engineering vocabulary)", "In Developer mode, each layer names what the profession calls what it does: patterns (problem shapes), concepts (mechanisms), technologies (things you deploy). Tap a chip to climb the ladder — from the timeless thinking model that forces the layer, down to the component you'd actually deploy — and to see where the same force recurs across your other Deconstructs. Browse them all from Models → The engineering vocabulary."],
+        ["Also called…", "Every thinking model has a different name in every field. A layer's model card shows what this system's own profession calls it — and, folded underneath, what marketers, engineers, biologists, economists and institutions call the same force. Frequency capping is rate limiting; attribution is telemetry. That recurrence is the whole point of taking systems apart."],
         ["Not yet addressed", "When you Dissect your own design, the overview names the concerns your description hasn't answered yet — contention, scaling reads, idempotency — each with a sentence on why it will bite and roughly when. A to-do list, not a scolding."]
       ]
     },

@@ -6,6 +6,16 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 
 ---
 
+## [1.21.0] — 2026-07-19 · The Rosetta spine
+### Added
+- **"Also called"** on every layer's thinking-model card: the same force in each profession's words. 97 translations across 7 domains (software, marketing, operations, living systems, markets & money, machines, institutions) hung off the 14 thinking models.
+- `meta.domain` — the system's field, which decides whose word is shown first. Optional: documents without it show every domain, none marked "here".
+### Changed
+- Deliberately **not** a vocabulary per domain. Building parallel pattern/concept/technology libraries for six fields would be unbounded to curate, would age badly outside software, and would force a domain label onto hybrid systems. Translating the spine we already have is bounded (14 × 7), cannot mislabel, and makes transfer bidirectional — a marketer learns that frequency capping *is* rate limiting; an engineer learns that attribution *is* telemetry.
+- Costs the generator nothing: a layer already names its model, so both "called here" and "called elsewhere" derive from existing fields.
+- The Rosetta sits on the model card, visible in **all three registers** — the software vocabulary stays in the Developer-only For Engineers box, since a marketer reading a campaign never opens Developer mode.
+- Translations are sparse by design: a model with no honest term in a domain is omitted rather than invented.
+
 ## [1.20.0] — 2026-07-19 · The engineering vocabulary
 ### Added
 - **`VOCAB_LIBRARY`** — 52 curated entries in three tiers: **patterns** (problem shapes), **concepts** (mechanisms), **technologies** (things you deploy). Deliberately a *separate altitude* from the 14 thinking models: a model is why a layer is forced, the vocabulary is what the profession calls it.

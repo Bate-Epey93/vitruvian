@@ -4,7 +4,8 @@
   "system": "WhatsApp",
   "narrowing": "The message-delivery path: everything between one person tapping send and another person's devices showing the message. Not calls, media storage, Status, or business tooling; just how a message reliably and privately crosses the gap.",
   "ordering_note": "The layers follow the order in which the problems bite, which is also roughly the order WhatsApp built them: store-and-forward and delivery receipts were core from the early days, Signal-protocol encryption arrived across the whole user base in 2016, and sender keys and true multi-device came after, each new layer required to preserve every guarantee beneath it. Where no public incident anchors a failure, the failure is reconstructed as the inevitable consequence of the previous state, not asserted as history.",
-  "history_confidence": "medium"
+  "history_confidence": "medium",
+  "domain": "software"
  },
  "essence": {
   "text": "WhatsApp moves on the order of a hundred billion messages a day between phones that are asleep most of the time, across networks that lose things constantly, through servers that cannot read a single word they carry. The marvel is not speed. It is that a system assembled from unreliable parts feels like certainty: two grey ticks, and you know.",

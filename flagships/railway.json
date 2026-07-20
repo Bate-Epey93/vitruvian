@@ -4,7 +4,8 @@
   "system": "The railway network",
   "narrowing": "",
   "ordering_note": "Layers follow the historical order, because history did the design work: each mechanism was forced into existence by a documented failure of the previous state.",
-  "history_confidence": "high"
+  "history_confidence": "high",
+  "domain": "mechanical"
  },
  "essence": {
   "text": "A railway is a machine the size of a country that lets thousands of trains share a few threads of steel without touching. Its genius is not the locomotive but the invisible discipline of separation: a 200-year accumulation of answers to one question, 'how do you share a track you cannot see the far end of?'",

@@ -42,6 +42,10 @@ var Schema = (() => {
       if (!isStr(meta.narrowing)) err("meta.narrowing must be a string ('' allowed)");
       if (!isFullStr(meta.ordering_note)) err("meta.ordering_note must be a non-empty string");
       if (!["high", "medium", "low"].includes(meta.history_confidence)) err("meta.history_confidence must be high|medium|low");
+      // domain: optional (pre-existing docs have none — they simply show every
+      // profession's word without one marked "here"), but must be real if given
+      if (meta.domain != null && !(typeof DOMAINS !== "undefined" && DOMAINS.some(d => d.id === meta.domain)))
+        err(`meta.domain: "${meta.domain}" is not a known domain`);
     }
 
     /* ── essence ── */

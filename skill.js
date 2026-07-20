@@ -48,7 +48,7 @@ var SKILL = (() => {
      kinds: node = actor|store|process|channel · edge = payload|control|money */
   const SCHEMA_DOC = {
     schemaVersion: 1,
-    meta: { system: "string", narrowing: "string - the tractable slice you chose, '' if none needed", ordering_note: "string - why the layers come in this order", history_confidence: "high|medium|low - how sure you are the failure story is historically accurate" },
+    meta: { system: "string", narrowing: "string - the tractable slice you chose, '' if none needed", ordering_note: "string - why the layers come in this order", history_confidence: "high|medium|low - how sure you are the failure story is historically accurate", domain: "the system's field, one of: software|marketing|operations|biology|economics|mechanical|social - pick the SINGLE closest; it only selects which profession's vocabulary is shown first" },
     essence: { text: "string - the system in one breath, enthusiast register", beginner: "string - same idea, no jargon", deep_facts: ["3-6 strings - surprising, checkable facts"] },
     strip_down: {
       purpose: "string - what the system is FOR, one sentence",
@@ -129,6 +129,8 @@ ${models}
 SCOPING. If the system is broad (a whole company, "the internet"), choose ONE tractable slice - the most load-bearing path - and declare it in meta.narrowing. A sharp slice deconstructed fully beats a blur covered thinly.
 
 THREE REGISTERS, ONE DOCUMENT. essence.beginner and problem.beginner say the same thing as their siblings with zero jargon. beginner_analogy is one everyday image. developer.mappings and interview_probes speak to engineers. Never dumb down the enthusiast register; never jargon up the beginner one.
+
+DOMAIN. Set meta.domain to the ONE field this system most belongs to: software, marketing, operations (manufacturing, logistics, supply chain), biology (living systems, medicine), economics (markets, money), mechanical (machines, physical infrastructure), or social (institutions, law, organisations). Many systems touch several - pick the primary one. It does not change the content; it only decides which profession's word for each thinking model is shown first to the reader.
 
 ENGINEERING VOCABULARY. Every layer's developer.vocab lists 0-3 ids naming what the profession calls what this layer does. These are a SEPARATE altitude from the thinking model: the model is WHY the layer is forced, the vocabulary is what engineers CALL it. Rules:
 - Use ids from the lists below, exactly. Never invent an id. Omit the field (or use []) rather than force a bad match - a wrong label is worse than none.
