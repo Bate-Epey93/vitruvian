@@ -6,6 +6,12 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 
 ---
 
+## [1.21.1] — 2026-07-19
+### Fixed
+- The browser tab still carried the retired tagline (`<title>Vitruvian · Rebuild it to understand it</title>`); now matches the current one. Caught by the backlog audit.
+### Added
+- `POSSIBLE-UPGRADES.md` — deferred ideas, known limitations, and explicitly declined directions, compiled by mining the build session and verifying each candidate against the code.
+
 ## [1.21.0] — 2026-07-19 · The Rosetta spine
 ### Added
 - **"Also called"** on every layer's thinking-model card: the same force in each profession's words. 97 translations across 7 domains (software, marketing, operations, living systems, markets & money, machines, institutions) hung off the 14 thinking models.
