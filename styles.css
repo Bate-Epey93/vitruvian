@@ -1138,6 +1138,99 @@ html,body{overscroll-behavior:none;}
 @media(prefers-reduced-motion:reduce){.dg-contended{animation:none;}}
 @media(prefers-reduced-transparency:reduce){.dg-hud{background:var(--paper);backdrop-filter:none;-webkit-backdrop-filter:none;}}
 
+/* gaps — unaddressed concerns on a reviewed design */
+.gaps-box{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+  padding:17px 20px;margin:20px 0;position:relative;overflow:hidden;}
+.gaps-box::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(to bottom,rgba(255,255,255,.1),rgba(255,255,255,0) 40%);}
+.gaps-label{font-family:var(--mono);font-size:9.5px;letter-spacing:2px;text-transform:uppercase;
+  color:var(--money);font-weight:700;margin-bottom:6px;}
+.gaps-lede{font-size:13px;color:var(--muted);margin:0 0 13px;}
+.gap-row{display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line-soft);}
+.gap-chip-wrap{flex:0 0 auto;padding-top:1px;}
+.gap-note{font-size:13.5px;line-height:1.6;color:var(--ink);margin:0;}
+@media(max-width:620px){.gap-row{flex-direction:column;gap:6px;}}
+
+/* vocabulary index screen */
+.vocab-seg{margin-bottom:16px;}
+.vocab-grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));}
+.vocab-card{display:flex;flex-direction:column;gap:7px;cursor:default;text-align:left;}
+.vocab-card.focused{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash);}
+.vc-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.vc-one{font-size:13.5px;color:var(--ink);margin:0;font-weight:600;}
+.vc-appears{font-size:12.5px;line-height:1.55;color:var(--ink-soft);margin:0;}
+.vc-foot{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:auto;padding-top:8px;}
+.vc-model{font-family:var(--mono);font-size:9.5px;letter-spacing:.4px;cursor:pointer;
+  background:var(--accent-wash);color:var(--accent-deep);border:none;border-radius:3px;padding:3px 8px;}
+.vc-model:hover{filter:brightness(1.08);}
+.vc-hit{display:block;width:100%;text-align:left;font-family:var(--mono);font-size:10.5px;
+  color:var(--muted);background:none;border:none;border-top:1px solid var(--line-soft);
+  padding:6px 0 0;cursor:pointer;}
+.vc-hit:hover{color:var(--accent);}
+/* the vocabulary chips live on light panels here, not the dark dev box */
+.vocab-card .vocab-chip.tier-pattern{background:var(--accent-wash);color:var(--accent-deep);border-color:transparent;}
+.vocab-card .vocab-chip.tier-concept{background:color-mix(in srgb,#7b8ba6 16%,transparent);color:#4a5a75;border-color:transparent;}
+.vocab-card .vocab-chip.tier-technology{background:var(--money-wash);color:#8a6516;border-color:transparent;}
+:root[data-theme="dark"] .vocab-card .vocab-chip.tier-concept{color:#aebfd6;}
+:root[data-theme="dark"] .vocab-card .vocab-chip.tier-technology{color:#e0b673;}
+
+/* numbers to reason with — folded inside the Under load band */
+.numbers-fold{margin-top:11px;border-top:1px solid rgba(110,77,18,.22);padding-top:9px;}
+.numbers-fold summary{font-family:var(--mono);font-size:9.5px;letter-spacing:1.4px;
+  text-transform:uppercase;color:var(--money);cursor:pointer;}
+.numbers-fold .nf-group{font-family:var(--mono);font-size:9px;letter-spacing:1.6px;text-transform:uppercase;
+  color:var(--muted);margin:10px 0 4px;}
+.nf-row{display:flex;justify-content:space-between;gap:14px;font-size:12.5px;padding:2.5px 0;}
+.nf-k{color:var(--ink-soft);}
+.nf-v{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--ink);white-space:nowrap;}
+:root[data-theme="dark"] .numbers-fold{border-top-color:rgba(226,193,132,.2);}
+
+/* ── engineering vocabulary: chips, ladder, overlay ──
+   Three tiers get three hues so the altitude reads at a glance:
+   pattern = teal (problem shape) · concept = slate (mechanism) ·
+   technology = amber (a thing you deploy). Chips live in the always-dark
+   dev box, so their colours are fixed, not theme-flipping. */
+.vocab-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:12px;
+  padding-top:11px;border-top:1px solid rgba(255,255,255,.08);}
+.vr-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#8d8a80;margin-right:2px;}
+.vocab-chip{
+  font-family:var(--mono);font-size:10px;letter-spacing:.4px;
+  padding:4px 9px;border-radius:4px;cursor:pointer;
+  border:1px solid transparent;transition:filter .15s,border-color .15s;
+}
+.vocab-chip:hover{filter:brightness(1.14);}
+.vocab-chip:focus-visible{outline:2px solid #5ec6ad;outline-offset:2px;}
+.vocab-chip.static{cursor:default;}
+.vocab-chip.tier-pattern{background:rgba(94,198,173,.16);color:#7fdcc2;border-color:rgba(94,198,173,.4);}
+.vocab-chip.tier-concept{background:rgba(150,170,200,.14);color:#aebfd6;border-color:rgba(150,170,200,.34);}
+.vocab-chip.tier-technology{background:rgba(214,160,74,.15);color:#e0b673;border-color:rgba(214,160,74,.38);}
+
+.vocab-overlay .vo-title{display:flex;align-items:center;gap:9px;}
+.vo-tier{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);}
+.vo-body{max-width:720px;}
+.vo-appears{font-size:14.5px;line-height:1.65;color:var(--ink-soft);margin:0 0 20px;}
+.vo-ladder{margin-bottom:20px;}
+.vo-rung{display:flex;gap:11px;align-items:baseline;padding:8px 12px;margin-top:6px;
+  border-left:2px solid var(--line);border-radius:0 6px 6px 0;background:var(--panel);}
+.vo-rung-label{font-family:var(--mono);font-size:8.5px;letter-spacing:1.4px;text-transform:uppercase;
+  color:var(--muted);flex:0 0 108px;}
+.vo-rung-text{font-size:13.5px;color:var(--ink);}
+.vo-rung.rung-model{border-left-color:var(--ink);}
+.vo-rung.rung-pattern{border-left-color:var(--accent);}
+.vo-rung.rung-concept{border-left-color:#7b8ba6;}
+.vo-rung.rung-technology{border-left-color:var(--money);}
+.vo-rung.rung-here{background:var(--accent-wash);}
+.vo-models{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-bottom:20px;}
+.vo-models .mono-label{flex:0 0 100%;margin-bottom:2px;}
+.vo-model-btn{font-size:11px;padding:5px 11px;}
+.vo-recur .mono-label{margin-bottom:8px;}
+.vo-hit{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;cursor:pointer;
+  background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 13px;margin-bottom:6px;}
+.vo-hit:hover{border-color:var(--accent);}
+.vo-hit-sys{font-family:var(--display);font-weight:600;font-size:14px;color:var(--ink);}
+.vo-hit-layer{font-family:var(--mono);font-size:10.5px;color:var(--muted);}
+.vo-none{font-size:13.5px;color:var(--muted);margin:0;}
+
 /* ── ask-this-layer ── */
 .qa-block{
   background-color:var(--glass);

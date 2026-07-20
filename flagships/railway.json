@@ -236,7 +236,10 @@
     "interview_probes": [
      "Where in your system do you coordinate by plan instead of by signal, and what happens when reality diverges from the plan?"
     ],
-    "approach": "Precompute a fixed schedule: a sorted array of (time, track-segment) slots assigned ahead of time, then look the slot up instead of negotiating at runtime, the way a cron table fires jobs."
+    "approach": "Precompute a fixed schedule: a sorted array of (time, track-segment) slots assigned ahead of time, then look the slot up instead of negotiating at runtime, the way a cron table fires jobs.",
+    "vocab": [
+     "contention"
+    ]
    },
    "beginner_analogy": "Like a family sharing one bathroom by agreeing on a morning schedule. It works until the day someone takes too long; the schedule can't see who's actually inside.",
    "diff": {
@@ -317,7 +320,12 @@
      "Your rate limiter infers capacity from elapsed time. What's your Clayton Tunnel?",
      "Where does your system assume 'enough time has passed' instead of confirming state?"
     ],
-    "approach": "Model each track section as a mutex: acquire the lock (the physical token) before entering, release on exit; no holder, no entry. In code, one lock per block id."
+    "approach": "Model each track section as a mutex: acquire the lock (the physical token) before entering, release on exit; no holder, no entry. In code, one lock per block id.",
+    "vocab": [
+     "contention",
+     "pessimistic-locking",
+     "sharding"
+    ]
    },
    "beginner_analogy": "Like a single bathroom key at a gas station: whoever holds the key can go in; two people can't hold one key.",
    "diff": {
@@ -408,7 +416,10 @@
     "interview_probes": [
      "Which invalid states does your API merely document as forbidden, rather than make unrepresentable?"
     ],
-    "approach": "Encode routes as a state machine whose illegal transitions simply do not exist: a transition table where conflicting routes share no valid next-state, so the wrong move cannot be represented, not merely rejected."
+    "approach": "Encode routes as a state machine whose illegal transitions simply do not exist: a transition table where conflicting routes share no valid next-state, so the wrong move cannot be represented, not merely rejected.",
+    "vocab": [
+     "contention"
+    ]
    },
    "beginner_analogy": "Like a car that won't let you shift into reverse while driving forward: the gearbox doesn't trust your memory of the rule; it removes the option.",
    "diff": {
@@ -496,7 +507,8 @@
     "interview_probes": [
      "Which facts does your system remember in a 'ledger' that it could instead measure from the resource itself?"
     ],
-    "approach": "Derive liveness from the resource itself: a health-check where the track closes a circuit to report 'occupied', and silence (an open circuit) is treated as occupied, never as clear."
+    "approach": "Derive liveness from the resource itself: a health-check where the track closes a circuit to report 'occupied', and silence (an open circuit) is treated as occupied, never as clear.",
+    "vocab": []
    },
    "beginner_analogy": "Like a fridge door that beeps because a circuit knows it's open: nobody has to remember; the door itself tells on you.",
    "diff": {
@@ -576,7 +588,10 @@
     "interview_probes": [
      "For each critical component you own: if it lost power mid-operation, does the system land in the safe state or the live one, and did you choose that or inherit it?"
     ],
-    "approach": "Deny by default: make 'safe' the state a component falls into on power loss (a dead-man switch), so an absent or failed signal reads as STOP and every failure resolves to the safe side."
+    "approach": "Deny by default: make 'safe' the state a component falls into on power loss (a dead-man switch), so an absent or failed signal reads as STOP and every failure resolves to the safe side.",
+    "vocab": [
+     "circuit-breaker"
+    ]
    },
    "beginner_analogy": "Like a dead-man's switch on a lawnmower: you must hold the lever to keep the blade spinning. Let go, on purpose, by accident, or because you fainted, and the machine stops itself.",
    "diff": {

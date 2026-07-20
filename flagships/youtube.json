@@ -236,7 +236,12 @@
      "Where does your system do expensive work on the read path that could be done once at write time instead?",
      "Your queue absorbed the burst; who notices the job that silently died inside it?"
     ],
-    "approach": "Drop each upload onto a job queue and run a worker pool that transcodes it into multiple renditions; the queue absorbs bursts and you scale by adding consumers (the SQS/Kafka worker pattern)."
+    "approach": "Drop each upload onto a job queue and run a worker pool that transcodes it into multiple renditions; the queue absorbs bursts and you scale by adding consumers (the SQS/Kafka worker pattern).",
+    "vocab": [
+     "long-running-tasks",
+     "queue",
+     "large-blobs"
+    ]
    },
    "beginner_analogy": "Like a restaurant prepping ingredients all morning so dinner service is just fast plating: nobody chops onions after the order arrives, and the same prep serves every table all night.",
    "diff": {
@@ -345,7 +350,12 @@
     "interview_probes": [
      "Which of your services would take down an unrelated feature if it got popular tonight, and what contract would you cut between them?"
     ],
-    "approach": "Separate the write path from the read path (CQRS): an ingest service handles uploads, a separate playback service reads from replicas, so a spike on one path cannot starve the other."
+    "approach": "Separate the write path from the read path (CQRS): an ingest service handles uploads, a separate playback service reads from replicas, so a spike on one path cannot starve the other.",
+    "vocab": [
+     "cqrs",
+     "scaling-reads",
+     "data-modeling"
+    ]
    },
    "beginner_analogy": "Like a bakery separating the kitchen from the counter: bakers bake at dawn, the shelf in between holds finished loaves, and a long line of customers never slows the ovens.",
    "diff": {
@@ -456,7 +466,12 @@
     "interview_probes": [
      "What is your cache invalidation story when 'delete' must become true worldwide, on thousands of independent copies?"
     ],
-    "approach": "Add a cache hierarchy: serve hot renditions from edge caches near the viewer and fall back to origin on a miss, keyed by (video, rendition). It is CPU L1/L2/L3 thinking applied to bytes."
+    "approach": "Add a cache hierarchy: serve hot renditions from edge caches near the viewer and fall back to origin on a miss, keyed by (video, rendition). It is CPU L1/L2/L3 thinking applied to bytes.",
+    "vocab": [
+     "cdn",
+     "caching",
+     "geo-distribution"
+    ]
    },
    "beginner_analogy": "Like supermarkets and regional warehouses: milk doesn't ship from one national dairy to each shopper's door. It gets staged in bulk near the neighborhoods that drink it, and your corner store just restocks the local favorites.",
    "diff": {
@@ -538,7 +553,8 @@
      "What does your system's core metric silently optimize for that nobody on the team would defend out loud?",
      "Your model trains on data produced by its own recommendations. Where does that loop drift, and what would you measure to notice?"
     ],
-    "approach": "Frame next-video as explore/exploit: a multi-armed bandit (or a ranking model) scores candidates by predicted engagement and samples to keep exploring, updated from watch feedback."
+    "approach": "Frame next-video as explore/exploit: a multi-armed bandit (or a ranking model) scores candidates by predicted engagement and samples to keep exploring, updated from watch feedback.",
+    "vocab": []
    },
    "beginner_analogy": "Like a street performer who keeps adjusting the act toward whatever makes the crowd stay: over months the show becomes whatever stops feet, which is not necessarily the show anyone would have chosen to make, or to watch.",
    "diff": {
@@ -631,7 +647,10 @@
     "interview_probes": [
      "When you pay people by a metric, how do you detect the ones serving the metric instead of the purpose it was a proxy for?"
     ],
-    "approach": "Run an auction per impression: a marketplace that takes a cut, matching each ad slot to the highest eligible bid in real time (a second-price auction), paying the supply side from the proceeds."
+    "approach": "Run an auction per impression: a marketplace that takes a cut, matching each ad slot to the highest eligible bid in real time (a second-price auction), paying the supply side from the proceeds.",
+    "vocab": [
+     "contention"
+    ]
    },
    "beginner_analogy": "Like a shopping mall: entry is free, the stores keep most of what they sell, and the mall pays its bills by renting out the one thing it truly owns, the crowd walking past.",
    "diff": {
@@ -740,7 +759,10 @@
     "interview_probes": [
      "Where in your system does data change trust levels, and what actually inspects it at that line, versus what you assume was inspected earlier?"
     ],
-    "approach": "Match uploads against a banned-content set with perceptual hashing: compute a fingerprint robust to re-encoding, then compare by Hamming distance to known-bad hashes at publish time (Content-ID style)."
+    "approach": "Match uploads against a banned-content set with perceptual hashing: compute a fingerprint robust to re-encoding, then compare by Hamming distance to known-bad hashes at publish time (Content-ID style).",
+    "vocab": [
+     "long-running-tasks"
+    ]
    },
    "beginner_analogy": "Like customs at an airport: nearly all luggage flows through the scanners in seconds, the machines flag a small fraction for hand inspection, and a suspicious bag does not get on the plane while people argue about it.",
    "diff": {

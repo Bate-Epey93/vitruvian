@@ -246,6 +246,31 @@ var DocView = (() => {
         b.appendChild(list);
       });
 
+      // Gaps — design reviews only. The concerns their described design has not
+      // addressed yet, named in the profession's vocabulary. This is the most
+      // actionable thing in the document: a to-do list a reference site can't
+      // give you, because it requires reading THEIR design.
+      if (Array.isArray(doc.design_gaps) && doc.design_gaps.length) {
+        const gb = h("div", "gaps-box");
+        gb.appendChild(h("div", "gaps-label", "Not yet addressed"));
+        gb.appendChild(h("p", "gaps-lede", "Concerns your description doesn't answer yet. Each is a real decision waiting, not a criticism."));
+        doc.design_gaps.forEach(g => {
+          const v = vocabById(g.vocab);
+          const row = h("div", "gap-row");
+          const chipWrap = h("div", "gap-chip-wrap");
+          if (v) {
+            const chip = h("button", "vocab-chip tier-" + v.tier, v.name);
+            chip.title = v.one_liner;
+            chip.onclick = () => openVocab(v, null);
+            chipWrap.appendChild(chip);
+          }
+          row.appendChild(chipWrap);
+          row.appendChild(h("p", "gap-note", g.note));
+          gb.appendChild(row);
+        });
+        root.appendChild(gb);
+      }
+
       root.appendChild(h("p", "lib-note", doc.meta.ordering_note));
       const go = h("button", "big-btn", "Begin the rebuild ›");
       go.onclick = () => goTo(1);
@@ -478,6 +503,22 @@ var DocView = (() => {
         const loadIds = [];
         st.edges.forEach(e => { if (e.kind === "payload") loadIds.push(e.id, e.from, e.to); });
         if (loadIds.length) sb.appendChild(h("span", "sb-hint", "◎ trace the load path"));
+        // orders of magnitude, folded away — right where the reader is already
+        // asking the scaling question, so an estimate can be made defensible
+        if (audience === "developer" && typeof NUMBERS_LIBRARY !== "undefined") {
+          const nf = h("details", "numbers-fold");
+          nf.appendChild(h("summary", null, "numbers to reason with"));
+          NUMBERS_LIBRARY.forEach(grp => {
+            nf.appendChild(h("div", "nf-group", grp.group));
+            grp.rows.forEach(([k, val]) => {
+              const r = h("div", "nf-row");
+              r.appendChild(h("span", "nf-k", k));
+              r.appendChild(h("span", "nf-v", val));
+              nf.appendChild(r);
+            });
+          });
+          scale.appendChild(nf);
+        }
         wireSpot(scale, loadIds, "load");
         root.appendChild(scale);
       }
@@ -543,6 +584,21 @@ var DocView = (() => {
           row.appendChild(h("span", "dm-sw", m.software_concept));
           dev.appendChild(row);
         });
+        // engineering vocabulary: what the profession calls what this layer does.
+        // Tap a chip for the ladder — thinking model (why it's forced) down to the
+        // component you'd deploy. Guarded: older docs predate the field.
+        const vocab = (L.developer.vocab || []).map(vocabById).filter(Boolean);
+        if (vocab.length) {
+          const vr = h("div", "vocab-row");
+          vr.appendChild(h("span", "vr-label", "Known as"));
+          vocab.forEach(v => {
+            const chip = h("button", "vocab-chip tier-" + v.tier, v.name);
+            chip.title = v.one_liner;
+            chip.onclick = () => openVocab(v, L);
+            vr.appendChild(chip);
+          });
+          dev.appendChild(vr);
+        }
         if (audience === "developer") {
           L.developer.interview_probes.forEach(p => dev.appendChild(h("div", "probe", p)));
         }

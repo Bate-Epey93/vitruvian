@@ -39,7 +39,9 @@ var SKILL = (() => {
     principles:       { min: 3, max: 6 },
     transferMappings: { min: 2, max: 5 },
     devMappings:      { min: 1, max: 3 },
-    interviewProbes:  { min: 1, max: 2 }
+    interviewProbes:  { min: 1, max: 2 },
+    vocabPerLayerMax: 3,      // engineering-vocabulary tags per layer
+    designGapsMax:    5       // unaddressed concerns named on a reviewed design
   };
 
   /* ── The schema, as the prompt and the validator understand it ──
@@ -79,7 +81,8 @@ var SKILL = (() => {
       developer: {
         mappings: [{ mechanism: "string - the concrete mechanism", software_concept: "string - its software twin" }],
         interview_probes: ["strings - questions that transfer the insight to an interview"],
-        approach: "string - a CONCRETE coding approach an engineer could start from to solve THIS layer's problem: name the data structure, algorithm, or pattern and how it applies in one sentence (e.g. 'Keep a hash set of processed message-ids and drop any id you've already seen - an idempotency key', or 'A priority queue keyed by deadline pops the next item in O(log n)'). Practical enough to open an editor and begin; never abstract."
+        approach: "string - a CONCRETE coding approach an engineer could start from to solve THIS layer's problem: name the data structure, algorithm, or pattern and how it applies in one sentence (e.g. 'Keep a hash set of processed message-ids and drop any id you've already seen - an idempotency key', or 'A priority queue keyed by deadline pops the next item in O(log n)'). Practical enough to open an editor and begin; never abstract.",
+        vocab: ["0-3 ids from the ENGINEERING VOCABULARY list - the profession's names for what this layer does"]
       },
       beginner_analogy: "string - one everyday analogy",
       diff: {
@@ -93,19 +96,23 @@ var SKILL = (() => {
     transfer: {
       principles: ["3-6 strings - the rules this system teaches, stated system-neutrally"],
       mappings: [{ mechanism: "string - a mechanism from this system", elsewhere: "string - where the same shape appears in other systems" }]
-    }
+    },
+    design_gaps: ["DESIGN-REVIEW MODE ONLY - omit entirely for known systems. 2-5 objects { vocab: '<engineering vocabulary id>', note: 'why this unaddressed concern will bite THIS design, and roughly when' }"]
   };
 
   /* ── The generation skill ── mode "system" (default) deconstructs a known
      system; mode "design" reviews the reader's OWN proposed design. ── */
   function text(mode) {
     const models = MODEL_LIBRARY.map(m => `- ${m.id} (${m.name}): ${m.one_liner}`).join("\n");
+    const vocabFor = tier => VOCAB_LIBRARY.filter(v => v.tier === tier)
+      .map(v => `- ${v.id}: ${v.name} — ${v.one_liner}`).join("\n");
     const designMode = mode === "design" ? `
 DESIGN-REVIEW MODE. The reader is DESIGNING this system themselves and has described their proposed design. You are their rigorous, generous design reviewer - never a cheerleader.
 - meta.system: name the system they're building. Set history_confidence to "low" and NEVER invent historical incidents or dates - the failures here are the inevitable ones THEIR described design will hit as it grows, not documented history. Say so in ordering_note.
 - strip_down: surface the invariants they did NOT state but their system must hold, the actors/entities/flows implied by their description, and the hard constraints they're up against. Naming an unstated invariant is often the most valuable thing you do.
 - Each rebuild layer is forced by the failure THEIR current design would hit next - what breaks first, then next, especially under load. Where their description already handles a failure well, credit it plainly in that layer's solution; where it doesn't, the layer IS the fix they're missing. Stay specific to what they actually described - never swap in a generic textbook system.
 - If the description is too thin to deconstruct, choose the most load-bearing interpretation and state it in meta.narrowing.
+- GAPS. Also fill the top-level "design_gaps" array (2-5 entries): the engineering concerns their described design has NOT yet addressed. Each entry is { "vocab": "<an id from the ENGINEERING VOCABULARY below>", "note": "one sentence, specific to THEIR system, on why it will matter and roughly when" }. Name only genuine gaps in what they described - never something a rebuild layer already solves, and never padding. If their design is genuinely thorough, return fewer entries or an empty array. This is the most actionable thing in the document: be concrete ("two customers can select the same slot the moment a popular vendor opens their calendar"), never generic.
 ` : "";
     return `You are the System Deconstructor. Given a named system, you produce ONE JSON document that teaches how the system works by rebuilding it from nothing, failure by failure. Your reader should finish able to re-derive the system, not just describe it.
 ${designMode}
@@ -122,6 +129,22 @@ ${models}
 SCOPING. If the system is broad (a whole company, "the internet"), choose ONE tractable slice - the most load-bearing path - and declare it in meta.narrowing. A sharp slice deconstructed fully beats a blur covered thinly.
 
 THREE REGISTERS, ONE DOCUMENT. essence.beginner and problem.beginner say the same thing as their siblings with zero jargon. beginner_analogy is one everyday image. developer.mappings and interview_probes speak to engineers. Never dumb down the enthusiast register; never jargon up the beginner one.
+
+ENGINEERING VOCABULARY. Every layer's developer.vocab lists 0-3 ids naming what the profession calls what this layer does. These are a SEPARATE altitude from the thinking model: the model is WHY the layer is forced, the vocabulary is what engineers CALL it. Rules:
+- Use ids from the lists below, exactly. Never invent an id. Omit the field (or use []) rather than force a bad match - a wrong label is worse than none.
+- Order by how load-bearing each is for THIS layer. At most 3. Most layers need 1-2.
+- PATTERNS name the problem shape the layer solves; CONCEPTS name the mechanism or property; TECHNOLOGIES name a component you would deploy.
+- TECHNOLOGY ids are ONLY for systems that are actually software. A railway, an engine, a postal service, a body: patterns and concepts may be named as honest analogies, but NEVER attach a technology id to a non-software system.
+- Name what the layer genuinely does, not what a bigger system might do later.
+
+PATTERNS:
+${vocabFor("pattern")}
+
+CONCEPTS:
+${vocabFor("concept")}
+
+TECHNOLOGIES (software systems only):
+${vocabFor("technology")}
 
 DEVELOPER APPROACH. Every layer's developer.approach names a CONCRETE coding starting point for that layer's problem: the data structure, algorithm, or pattern an engineer would reach for, and how it applies, in one or two sentences. It must be practical enough to open an editor and begin (e.g. "a hash set of seen ids for dedup", "a priority queue keyed by deadline", "compare-and-swap on a version field", "a write-ahead log replayed on restart"). Never abstract, never a restatement of the mechanism.
 

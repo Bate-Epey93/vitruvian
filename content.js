@@ -24,8 +24,8 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.19.0",
-  flagshipVersion: 4,                    // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
+  appVersion: "1.20.0",
+  flagshipVersion: 5,                    // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   flagshipNames: ["railway", "whatsapp", "youtube"],   // library slugs: seeding, #/study/<slug> deep links, share pages
   siteUrl: "https://bate-epey93.github.io/vitruvian/",
   repoUrl: "https://github.com/Bate-Epey93/vitruvian"
@@ -127,6 +127,271 @@ var MODEL_LIBRARY = [
     one_liner: "Safe retries: doing it twice equals doing it once.",
     description: "Unreliable channels force a choice: retry and risk duplicates, or don't and risk loss. Idempotent operations dissolve the dilemma. Design the action so repeating it changes nothing, and retries become free. Message ids, payment ids, and 'set' instead of 'increment' are all the same move."
   }
+];
+
+/* ---------- VOCAB_LIBRARY · the engineering vocabulary ----------
+   A SEPARATE altitude from MODEL_LIBRARY. Thinking models are timeless
+   reasoning patterns (mutual exclusion governs a railway block in 1861
+   and a Redis lock today). These are the software profession's names for
+   the same forces:
+
+     tier "pattern"    a recurring problem→solution shape
+     tier "concept"    a mechanism or property engineers reason about
+     tier "technology" a concrete component you can actually deploy
+
+   Together they form a ladder the reader can climb per layer:
+     thinking model (why it's forced) → concept → technology → pattern.
+
+   `models` links each entry back to MODEL_LIBRARY ids, which is what
+   makes the ladder renderable. `software_only: true` marks entries that
+   must NEVER be attached to a physical system (a gearbox has contention,
+   but it does not have Kafka). Ids are a forever contract: saved
+   Deconstructs reference them. */
+var VOCAB_LIBRARY = [
+  /* ── patterns: recurring problem shapes ── */
+  { id: "realtime-updates", tier: "pattern", name: "Pushing realtime updates",
+    one_liner: "Get events to users the moment they happen.",
+    appears: "Chat, notifications, live dashboards, collaborative editing. Choose polling, SSE, or WebSockets, then decide where connection state lives.",
+    models: ["queue-and-buffer", "feedback-loop"] },
+  { id: "long-running-tasks", tier: "pattern", name: "Managing long-running tasks",
+    one_liner: "Work that outlives the request gets a queue and a worker.",
+    appears: "Video encoding, report generation, bulk imports. Needs job status, retries, and a dead-letter path for the ones that never succeed.",
+    models: ["queue-and-buffer", "separation-of-concerns"] },
+  { id: "contention", tier: "pattern", name: "Dealing with contention",
+    one_liner: "Many claimants, one resource, no double-booking.",
+    appears: "Seat and ticket booking, auctions, inventory, ride matching. Pick pessimistic locks, optimistic checks, or serialize through a queue.",
+    models: ["mutual-exclusion"] },
+  { id: "scaling-reads", tier: "pattern", name: "Scaling reads",
+    one_liner: "Reads outnumber writes 100:1; serve them from copies.",
+    appears: "Feeds, catalogues, profiles, anything popular. Indexes, denormalization, replicas, then caches and CDNs — each trading freshness for speed.",
+    models: ["locality-and-caching", "bottleneck"] },
+  { id: "scaling-writes", tier: "pattern", name: "Scaling writes",
+    one_liner: "One writer node becomes the ceiling; split the work.",
+    appears: "Ingestion, telemetry, messaging. Shard on a key, partition by type, buffer bursts in a queue, shed load when it still won't fit.",
+    models: ["bottleneck", "separation-of-concerns"] },
+  { id: "large-blobs", tier: "pattern", name: "Handling large blobs",
+    one_liner: "Never push big files through your own servers.",
+    appears: "Photo, video, and document upload. Presigned URLs send bytes client-to-storage directly; the app only records that it happened.",
+    models: ["separation-of-concerns", "locality-and-caching"] },
+  { id: "multi-step-processes", tier: "pattern", name: "Multi-step processes",
+    one_liner: "A workflow that must survive a crash halfway through.",
+    appears: "Checkout, order fulfilment, onboarding, payouts. Durable state per step so a restart resumes instead of restarting.",
+    models: ["single-source-of-truth", "idempotency"] },
+  { id: "proximity-services", tier: "pattern", name: "Proximity-based services",
+    one_liner: "Find the nearby things, fast.",
+    appears: "Ride hailing, delivery, store locators, matchmaking. Needs a geospatial index — a plain latitude/longitude scan does not scale.",
+    models: ["locality-and-caching"] },
+  { id: "saga", tier: "pattern", name: "Saga",
+    one_liner: "No distributed transaction; a chain of undoable steps.",
+    appears: "Booking a flight plus a hotel plus a car. Each step has a compensating action, because you cannot hold a lock across three vendors.",
+    models: ["idempotency", "graceful-degradation"] },
+  { id: "outbox", tier: "pattern", name: "Transactional outbox",
+    one_liner: "Write the event in the same transaction as the data.",
+    appears: "Anywhere a database write must reliably produce a message. Removes the 'saved but never published' gap between two systems.",
+    models: ["single-source-of-truth", "idempotency"] },
+  { id: "cqrs", tier: "pattern", name: "CQRS",
+    one_liner: "Separate the write model from the read model.",
+    appears: "When reads and writes want opposite shapes — normalized for correctness, denormalized for speed. Two models, kept in sync.",
+    models: ["separation-of-concerns"] },
+  { id: "event-sourcing", tier: "pattern", name: "Event sourcing",
+    one_liner: "Store the events, derive the state.",
+    appears: "Ledgers, audit trails, anything needing history or replay. State becomes a fold over an immutable log rather than a mutable row.",
+    models: ["single-source-of-truth"] },
+  { id: "load-shedding", tier: "pattern", name: "Load shedding",
+    one_liner: "Refuse the least valuable work to save the rest.",
+    appears: "Overload. Drop or defer low-priority requests deliberately so the system degrades on purpose instead of collapsing by accident.",
+    models: ["graceful-degradation", "bottleneck"] },
+  { id: "fanout", tier: "pattern", name: "Fan-out on write vs read",
+    one_liner: "Pay at publish time, or pay at view time.",
+    appears: "Feeds and timelines. Push into every follower's inbox (fast reads, brutal for celebrities) or assemble on request (cheap writes, slow reads).",
+    models: ["locality-and-caching", "bottleneck"] },
+
+  /* ── concepts: mechanisms and properties ── */
+  { id: "cap-theorem", tier: "concept", name: "CAP theorem",
+    one_liner: "Under a partition you choose consistency or availability.",
+    appears: "Every replicated store. Most internet systems pick availability and accept eventual consistency; banks and bookings often do not.",
+    models: ["redundancy", "graceful-degradation"] },
+  { id: "sharding", tier: "concept", name: "Sharding",
+    one_liner: "Split one dataset across independent servers by key.",
+    appears: "When a single database cannot hold or serve the data. The shard key decides everything: bad keys create hotspots and cross-shard queries.",
+    models: ["bottleneck", "separation-of-concerns"] },
+  { id: "consistent-hashing", tier: "concept", name: "Consistent hashing",
+    one_liner: "A ring of servers, so adding one moves almost nothing.",
+    appears: "Caches, shard routing, connection assignment. Plain modulo hashing reshuffles the whole dataset the moment the server count changes.",
+    models: ["locality-and-caching", "redundancy"] },
+  { id: "caching", tier: "concept", name: "Caching",
+    one_liner: "Keep the answer near whoever keeps asking.",
+    appears: "Any expensive repeated read. Cache-aside is the default; the hard parts are invalidation, stampedes, and what happens when the cache dies.",
+    models: ["locality-and-caching"] },
+  { id: "indexing", tier: "concept", name: "Database indexing",
+    one_liner: "Trade write cost and storage for fast lookups.",
+    appears: "Every query you run twice. B-tree by default; hash for exact match, inverted for text, R-tree or geohash for space.",
+    models: ["locality-and-caching", "bottleneck"] },
+  { id: "data-modeling", tier: "concept", name: "Data modeling",
+    one_liner: "Relational or NoSQL; normalized or denormalized.",
+    appears: "The first real decision. Normalize for correctness and one source of truth; denormalize to buy read speed with duplication.",
+    models: ["separation-of-concerns", "single-source-of-truth"] },
+  { id: "load-balancing", tier: "concept", name: "Load balancing",
+    one_liner: "Spread traffic so no single machine is the ceiling.",
+    appears: "Any horizontally scaled tier. Layer 4 routes packets and is fast; layer 7 reads the request and can route by path, header, or tenant.",
+    models: ["redundancy", "bottleneck"] },
+  { id: "api-design", tier: "concept", name: "API design",
+    one_liner: "The contract: resources, verbs, paging, limits.",
+    appears: "Every client boundary. Cursor pagination beats offset at scale; rate limits and auth belong at the edge, not in each service.",
+    models: ["separation-of-concerns", "trust-boundary"] },
+  { id: "communication-protocols", tier: "concept", name: "Communication protocols",
+    one_liner: "HTTP, WebSockets, SSE, or gRPC — pick by direction.",
+    appears: "Request/response is HTTP. Server-push one way is SSE; both ways is WebSockets; internal service-to-service is often gRPC.",
+    models: ["queue-and-buffer", "separation-of-concerns"] },
+  { id: "idempotency-keys", tier: "concept", name: "Idempotency keys",
+    one_liner: "A client-supplied id that makes a retry harmless.",
+    appears: "Payments, orders, any write over an unreliable network. The server remembers the key and returns the original result instead of acting twice.",
+    models: ["idempotency"] },
+  { id: "consensus", tier: "concept", name: "Consensus",
+    one_liner: "Getting replicas to agree on one value, despite failures.",
+    appears: "Leader election, configuration, distributed locks. Raft and Paxos are the standard answers; almost nobody should implement them from scratch.",
+    models: ["single-source-of-truth", "mutual-exclusion"] },
+  { id: "quorum", tier: "concept", name: "Quorum reads and writes",
+    one_liner: "If readers and writers overlap, you read fresh data.",
+    appears: "Tunable-consistency stores. When reads plus writes exceed the replica count, every read sees the latest committed write.",
+    models: ["redundancy", "single-source-of-truth"] },
+  { id: "wal", tier: "concept", name: "Write-ahead log",
+    one_liner: "Record the intent before changing the data.",
+    appears: "Databases, filesystems, replication. Durability and crash recovery both fall out of writing the log first and applying it second.",
+    models: ["single-source-of-truth", "idempotency"] },
+  { id: "leader-election", tier: "concept", name: "Leader election",
+    one_liner: "Exactly one node holds the right to decide.",
+    appears: "Primary databases, schedulers, cron that must not run twice. The hard case is a leader that thinks it still leads after the network healed.",
+    models: ["mutual-exclusion", "single-source-of-truth"] },
+  { id: "backpressure", tier: "concept", name: "Backpressure",
+    one_liner: "Let a slow consumer tell the producer to slow down.",
+    appears: "Any pipeline. Without it, a queue absorbs the mismatch until memory or disk runs out, and the failure lands far from its cause.",
+    models: ["queue-and-buffer", "feedback-loop"] },
+  { id: "circuit-breaker", tier: "concept", name: "Circuit breaker",
+    one_liner: "Stop calling a service that is already failing.",
+    appears: "Service-to-service calls. Trips open after repeated failures, fails fast for a cooldown, then probes — stops one outage cascading.",
+    models: ["graceful-degradation", "feedback-loop"] },
+  { id: "bulkhead", tier: "concept", name: "Bulkhead isolation",
+    one_liner: "Separate pools so one flood cannot sink the ship.",
+    appears: "Shared thread pools, connections, tenants. Partition the resource so a runaway workload starves only its own compartment.",
+    models: ["separation-of-concerns", "graceful-degradation"] },
+  { id: "rate-limiting", tier: "concept", name: "Rate limiting",
+    one_liner: "Cap how fast a caller may consume you.",
+    appears: "Public APIs, abuse control, fairness between tenants. Token bucket allows bursts; leaky bucket smooths them to a constant rate.",
+    models: ["queue-and-buffer", "incentive-alignment"] },
+  { id: "hot-key", tier: "concept", name: "Hot key mitigation",
+    one_liner: "One popular key overwhelms the shard that owns it.",
+    appears: "Celebrity accounts, viral posts, flash sales. Fixes are replication of the key, request coalescing, or a local cache in front.",
+    models: ["bottleneck", "locality-and-caching"] },
+  { id: "optimistic-concurrency", tier: "concept", name: "Optimistic concurrency control",
+    one_liner: "Assume no conflict; check a version at commit.",
+    appears: "Low-contention writes. Cheap when conflicts are rare, wasteful when they are common — then you want a real lock.",
+    models: ["mutual-exclusion"] },
+  { id: "pessimistic-locking", tier: "concept", name: "Pessimistic locking",
+    one_liner: "Take the lock first; nobody else may touch it.",
+    appears: "High-contention resources like a specific seat or balance. Correct and simple, but it serializes work and can deadlock.",
+    models: ["mutual-exclusion"] },
+  { id: "crdt", tier: "concept", name: "CRDTs and vector clocks",
+    one_liner: "Structures that merge concurrent edits without a referee.",
+    appears: "Offline-first apps and collaborative editing. Causality is tracked per replica so concurrent updates converge instead of clobbering.",
+    models: ["single-source-of-truth", "graceful-degradation"] },
+  { id: "eventual-consistency", tier: "concept", name: "Eventual consistency",
+    one_liner: "Replicas converge, given a pause in writes.",
+    appears: "Most large read-heavy systems. The engineering question is not 'is it stale' but 'how stale, and who notices'.",
+    models: ["graceful-degradation", "feedback-loop"] },
+  { id: "tiered-storage", tier: "concept", name: "Tiered storage",
+    one_liner: "Hot data on fast media, cold data on cheap media.",
+    appears: "Logs, media archives, backups. Age or access frequency moves objects down the tiers automatically.",
+    models: ["locality-and-caching", "separation-of-concerns"] },
+  { id: "geo-distribution", tier: "concept", name: "Geographic distribution",
+    one_liner: "The speed of light is a hard latency floor.",
+    appears: "Global products. A cross-continent round trip costs well over 100 ms no matter how good your code is; move the data, not the packets.",
+    models: ["locality-and-caching", "bottleneck"] },
+
+  /* ── technologies: things you actually deploy (software systems only) ── */
+  { id: "relational-db", tier: "technology", name: "Relational database", software_only: true,
+    one_liner: "Postgres, MySQL — tables, joins, transactions.",
+    appears: "The correct default. ACID transactions and constraints make whole classes of bug impossible; reach elsewhere only with a reason.",
+    models: ["single-source-of-truth", "mutual-exclusion"] },
+  { id: "nosql-db", tier: "technology", name: "NoSQL database", software_only: true,
+    one_liner: "DynamoDB, Cassandra — flexible schema, horizontal scale.",
+    appears: "Huge volume, known access patterns, no need for cross-entity transactions. You design the table around the query, not the entity.",
+    models: ["separation-of-concerns", "redundancy"] },
+  { id: "blob-storage", tier: "technology", name: "Blob storage", software_only: true,
+    one_liner: "S3, GCS — put bytes in, get a URL back.",
+    appears: "Images, video, documents, backups. Cheap, durable, and the only sane home for anything measured in megabytes.",
+    models: ["separation-of-concerns"] },
+  { id: "search-db", tier: "technology", name: "Search-optimized database", software_only: true,
+    one_liner: "Elasticsearch — an inverted index over your text.",
+    appears: "Full-text search, faceting, fuzzy matching. Kept in sync with the source of truth rather than replacing it.",
+    models: ["locality-and-caching", "separation-of-concerns"] },
+  { id: "api-gateway", tier: "technology", name: "API gateway", software_only: true,
+    one_liner: "One front door: routing, auth, limits, logging.",
+    appears: "In front of microservices, so cross-cutting concerns live in one place instead of being reimplemented per service.",
+    models: ["trust-boundary", "separation-of-concerns"] },
+  { id: "load-balancer", tier: "technology", name: "Load balancer", software_only: true,
+    one_liner: "NGINX, ALB — spread requests across machines.",
+    appears: "Any time more than one server answers the same request. Also where health checks pull dead instances out of rotation.",
+    models: ["redundancy", "bottleneck"] },
+  { id: "queue", tier: "technology", name: "Queue", software_only: true,
+    one_liner: "SQS, RabbitMQ — buffer work, consume once.",
+    appears: "Bursty or slow work that can happen later. Poor fit under about 500 ms of required latency, where the hop costs more than it saves.",
+    models: ["queue-and-buffer", "separation-of-concerns"] },
+  { id: "stream", tier: "technology", name: "Stream", software_only: true,
+    one_liner: "Kafka, Kinesis, Flink — a retained, replayable log.",
+    appears: "Many independent consumers of the same events, replay after a bug, or real-time processing. A queue forgets; a stream remembers.",
+    models: ["queue-and-buffer", "single-source-of-truth"] },
+  { id: "distributed-lock", tier: "technology", name: "Distributed lock", software_only: true,
+    one_liner: "Redis, ZooKeeper, etcd — one holder at a time.",
+    appears: "Seat holds, scheduled jobs, auctions. Always take a lease with a timeout; a lock held by a crashed process is a stuck system.",
+    models: ["mutual-exclusion"] },
+  { id: "distributed-cache", tier: "technology", name: "Distributed cache", software_only: true,
+    one_liner: "Redis, Memcached — shared memory across your fleet.",
+    appears: "Hot query results, sessions, computed aggregates, rate-limit counters. Fast, and deliberately allowed to lose data.",
+    models: ["locality-and-caching"] },
+  { id: "cdn", tier: "technology", name: "CDN", software_only: true,
+    one_liner: "CloudFront, Cloudflare — copies near the user.",
+    appears: "Static assets, media, and any cacheable response. Turns a cross-continent request into a same-city one.",
+    models: ["locality-and-caching", "bottleneck"] },
+  { id: "workflow-engine", tier: "technology", name: "Durable workflow engine", software_only: true,
+    one_liner: "Temporal, Step Functions — code that survives crashes.",
+    appears: "Multi-step business processes. The engine persists progress, so a restart resumes at the failed step rather than the beginning.",
+    models: ["single-source-of-truth", "idempotency"] },
+  { id: "geospatial-index", tier: "technology", name: "Geospatial index", software_only: true,
+    one_liner: "PostGIS, Redis GEO, S2 — space you can query.",
+    appears: "Nearest-N and radius searches. Divides the world into cells so a query touches a neighbourhood rather than every row.",
+    models: ["locality-and-caching"] }
+];
+
+/* id lookups — the vocabulary and models are referenced by id from saved
+   documents, so every consumer resolves through these */
+function vocabById(id) { for (const v of VOCAB_LIBRARY) if (v.id === id) return v; return null; }
+function modelById(id) { for (const m of MODEL_LIBRARY) if (m.id === id) return m; return null; }
+
+/* ---------- NUMBERS · latency, throughput, capacity ----------
+   Surfaced in the Under load band, where the reader is already asking the
+   scaling question. Orders of magnitude, not benchmarks: the point is to
+   make an estimate defensible, not exact. */
+var NUMBERS_LIBRARY = [
+  { group: "Latency", rows: [
+    ["Memory read", "~100 ns"],
+    ["SSD random read", "~100 µs"],
+    ["Round trip, same datacenter", "~0.5 ms"],
+    ["Round trip, cross-country", "~40 ms"],
+    ["Round trip, cross-continent", "~150 ms"]
+  ]},
+  { group: "Throughput (single node)", rows: [
+    ["Relational database, simple queries", "~10–20k / sec"],
+    ["Redis / in-memory cache", "~100k+ ops / sec"],
+    ["Kafka partition", "~100k msgs / sec"],
+    ["Web server, open connections", "~100k with tuning"]
+  ]},
+  { group: "Size", rows: [
+    ["1M rows × 1 KB", "1 GB"],
+    ["Typical photo", "~1–5 MB"],
+    ["1080p video", "~5 Mbps · ~2.5 GB / hour"],
+    ["A day of logs, mid-size service", "~10–100 GB"]
+  ]}
 ];
 
 /* ---------- UI COPY ---------- */
@@ -267,7 +532,9 @@ var COPY = {
         ["Race spotlight ⇉", "Rings every node with two or more concurrent writers — the places two flows can arrive at once and race. The count tells you how many contention points the design carries."],
         ["Sequence view", "In the ⋯ menu: the same state as an interaction timeline — who sends what to whom, top to bottom, in the order it happens. The diagram shows structure; this shows behaviour."],
         ["Probe a layer", "Ask one bounded question of any layer; the answer is grounded in that layer's own mechanism. Needs your Anthropic API key (Settings)."],
-        ["Graft a change", "In the ⋯ menu: propose a change and see it ghosted onto the architecture — dashed blueprint ink — with an honest verdict (improves · mixed · harmful) argued from the system's own invariants. Pulse runs through the graft too."]
+        ["Graft a change", "In the ⋯ menu: propose a change and see it ghosted onto the architecture — dashed blueprint ink — with an honest verdict (improves · mixed · harmful) argued from the system's own invariants. Pulse runs through the graft too."],
+        ["Known as… (the engineering vocabulary)", "In Developer mode, each layer names what the profession calls what it does: patterns (problem shapes), concepts (mechanisms), technologies (things you deploy). Tap a chip to climb the ladder — from the timeless thinking model that forces the layer, down to the component you'd actually deploy — and to see where the same force recurs across your other Deconstructs. Browse them all from Models → The engineering vocabulary."],
+        ["Not yet addressed", "When you Dissect your own design, the overview names the concerns your description hasn't answered yet — contention, scaling reads, idempotency — each with a sentence on why it will bite and roughly when. A to-do list, not a scolding."]
       ]
     },
     forDev: {

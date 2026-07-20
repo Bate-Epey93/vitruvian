@@ -53,6 +53,9 @@ var Schema = (() => {
       checkStrArray(es.deep_facts, "essence.deep_facts", B.deepFacts, err);
     }
 
+    // engineering-vocabulary ids, for layer tags and design gaps
+    const vocabIds = new Set((typeof VOCAB_LIBRARY !== "undefined" ? VOCAB_LIBRARY : []).map(v => v.id));
+
     /* ── strip_down ── */
     const invariantIds = new Set();
     const sd = doc.strip_down;
@@ -181,6 +184,14 @@ var Schema = (() => {
         // generated docs (strict), optional for pre-existing ones (lenient)
         if (opts.strict ? !isFullStr(dev.approach) : (dev.approach != null && !isFullStr(dev.approach)))
           err(`${w}.developer.approach must be a non-empty string — a practical coding approach an engineer could start from`);
+        // vocab: optional in BOTH modes (a layer may honestly match nothing),
+        // but any id present must exist in the library — an invented label is
+        // worse than none, and the index/ladder resolve ids to entries
+        if (dev.vocab != null) {
+          if (!isArr(dev.vocab) || dev.vocab.length > B.vocabPerLayerMax)
+            err(`${w}.developer.vocab must be an array of at most ${B.vocabPerLayerMax} vocabulary ids`);
+          else dev.vocab.forEach(v => { if (!vocabIds.has(v)) err(`${w}.developer.vocab: "${v}" is not an engineering-vocabulary id`); });
+        }
       }
       if (!isFullStr(L.beginner_analogy)) err(`${w}.beginner_analogy must be a non-empty string`);
 
@@ -231,6 +242,17 @@ var Schema = (() => {
       if (!isArr(tr.mappings) || tr.mappings.length < B.transferMappings.min || tr.mappings.length > B.transferMappings.max)
         err(`transfer.mappings must have ${B.transferMappings.min}-${B.transferMappings.max} entries`);
       else tr.mappings.forEach((m, i) => { if (!isObj(m) || !isFullStr(m.mechanism) || !isFullStr(m.elsewhere)) err(`transfer.mappings[${i}] needs mechanism and elsewhere`); });
+    }
+
+    /* ── design_gaps ── design-review mode only; always optional, since a
+       known-system Deconstruct has none and a thorough design may have none */
+    if (doc.design_gaps != null) {
+      if (!isArr(doc.design_gaps) || doc.design_gaps.length > B.designGapsMax)
+        err(`design_gaps must be an array of at most ${B.designGapsMax} entries`);
+      else doc.design_gaps.forEach((g, i) => {
+        if (!isObj(g) || !isFullStr(g.note)) err(`design_gaps[${i}] needs a non-empty note`);
+        else if (!vocabIds.has(g.vocab)) err(`design_gaps[${i}].vocab: "${g.vocab}" is not an engineering-vocabulary id`);
+      });
     }
 
     return errors.length ? { ok: false, errors } : { ok: true };

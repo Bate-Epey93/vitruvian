@@ -64,7 +64,7 @@ async function toggleTheme() {
 }
 
 /* ═══ Screen switching ═══ */
-const SCREENS = ["landing", "library", "reader", "generate", "models", "drill", "tutorial", "whatif", "settings"];
+const SCREENS = ["landing", "library", "reader", "generate", "models", "vocab", "drill", "tutorial", "whatif", "settings"];
 function show(screen) {
   SCREENS.forEach(s => { $("screen-" + s).hidden = s !== screen; });
   document.body.classList.toggle("reading", screen === "reader");   // frees topbar room for the audience switch
@@ -821,6 +821,166 @@ function openSequence(rec) {
   document.addEventListener("keydown", onKey);
 }
 
+/* ═══ Vocabulary index — the engineering names, and where each one showed up
+   in the systems you've taken apart. Sibling to the Models index: models are
+   WHY a layer is forced, this is what the profession CALLS it. ═══ */
+let vocabFilter = "all";
+async function renderVocab(focusId) {
+  const root = $("screen-vocab").firstElementChild;
+  root.textContent = "";
+  root.appendChild(h("div", "kicker", "The engineering vocabulary"));
+  root.appendChild(h("h1", "title", "What engineers call it"));
+  root.appendChild(h("p", "subtitle", "Patterns are problem shapes, concepts are mechanisms, technologies are things you deploy. Every entry links back to the timeless thinking model underneath it — and to the layers where you watched it become necessary."));
+
+  // where each id appears across the reader's library
+  const uses = {};
+  try {
+    (await Store.getBreakdowns()).forEach(b => {
+      if (!b.doc || !b.doc.layers) return;
+      b.doc.layers.forEach(L => ((L.developer && L.developer.vocab) || []).forEach(id => {
+        (uses[id] = uses[id] || []).push({ system: b.system, id: b.id, index: L.index, name: L.name });
+      }));
+    });
+  } catch (e) { /* library unreadable — the index still lists the vocabulary */ }
+
+  const toModels = h("button", "gbtn", "‹ The 14 thinking models");
+  toModels.onclick = () => { renderModels(); show("models"); };
+  root.appendChild(toModels);
+
+  const seg = h("div", "seg vocab-seg");
+  [["all", "All"], ["pattern", "Patterns"], ["concept", "Concepts"], ["technology", "Technologies"]].forEach(([id, label]) => {
+    const b = h("button", vocabFilter === id ? "on" : "", label);
+    b.onclick = () => { vocabFilter = id; renderVocab(); };
+    seg.appendChild(b);
+  });
+  root.appendChild(seg);
+
+  const grid = h("div", "card-grid vocab-grid");
+  VOCAB_LIBRARY.filter(v => vocabFilter === "all" || v.tier === vocabFilter).forEach(v => {
+    const card = h("div", "ml-card vocab-card" + (focusId === v.id ? " focused" : ""));
+    const head = h("div", "vc-head");
+    head.appendChild(h("span", "vocab-chip tier-" + v.tier + " static", v.name));
+    head.appendChild(h("span", "vo-tier", v.tier));
+    card.appendChild(head);
+    card.appendChild(h("p", "vc-one", v.one_liner));
+    card.appendChild(h("p", "vc-appears", v.appears));
+    const hits = uses[v.id] || [];
+    const foot = h("div", "vc-foot");
+    foot.appendChild(h("span", "ml-count", hits.length
+      ? hits.length + " layer" + (hits.length > 1 ? "s" : "") + " · " + new Set(hits.map(x => x.id)).size + " system(s)"
+      : "not yet seen"));
+    (v.models || []).map(modelById).filter(Boolean).forEach(m => {
+      const mb = h("button", "vc-model", m.name);
+      mb.title = m.one_liner;
+      mb.onclick = () => { renderModels(m.id); show("models"); };
+      foot.appendChild(mb);
+    });
+    card.appendChild(foot);
+    hits.slice(0, 3).forEach(hit => {
+      const b = h("button", "vc-hit");
+      b.textContent = hit.system + " · layer " + hit.index;
+      b.onclick = () => openReader(hit.id, hit.index);
+      card.appendChild(b);
+    });
+    grid.appendChild(card);
+  });
+  root.appendChild(grid);
+  if (focusId) {
+    const el = grid.querySelector(".focused");
+    if (el) el.scrollIntoView({ block: "center", behavior: RM_PREF() ? "auto" : "smooth" });
+  }
+}
+function RM_PREF() { return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
+
+/* ═══ Vocabulary ladder: tap a "Known as" chip to climb from the timeless
+   thinking model (WHY this layer is forced) down through the concept and the
+   component you'd actually deploy. The ladder is what neither a reference site
+   nor a bare diagram gives you: the name AND the reason it exists. ═══ */
+async function openVocab(v, layer) {
+  const ov = h("div", "seq-overlay vocab-overlay");
+  const bar = h("div", "seq-bar");
+  const titleWrap = h("div");
+  const tRow = h("div", "vo-title");
+  tRow.appendChild(h("span", "vocab-chip tier-" + v.tier + " static", v.name));
+  tRow.appendChild(h("span", "vo-tier", v.tier));
+  titleWrap.appendChild(tRow);
+  titleWrap.appendChild(h("div", "seq-sub", v.one_liner));
+  const close = h("button", "gbtn seq-close", "✕ close");
+  bar.append(titleWrap, close);
+
+  const body = h("div", "seq-scroll vo-body");
+  body.appendChild(h("p", "vo-appears", v.appears));
+
+  // the ladder for THIS layer, when opened from one
+  if (layer) {
+    const lad = h("div", "vo-ladder");
+    lad.appendChild(h("div", "mono-label", "In this layer"));
+    const rung = (label, text, cls) => {
+      const r = h("div", "vo-rung " + (cls || ""));
+      r.appendChild(h("span", "vo-rung-label", label));
+      r.appendChild(h("span", "vo-rung-text", text));
+      lad.appendChild(r);
+    };
+    const m = layer.problem && layer.problem.model ? modelById(layer.problem.model.id) : null;
+    if (m) rung("why it's forced", m.name + " — " + m.one_liner, "rung-model");
+    const sibs = (layer.developer.vocab || []).map(vocabById).filter(Boolean);
+    ["pattern", "concept", "technology"].forEach(tier => {
+      sibs.filter(s => s.tier === tier).forEach(s => {
+        rung(tier === "pattern" ? "the problem shape" : tier === "concept" ? "the mechanism" : "what you'd deploy",
+             s.name + (s.id === v.id ? "" : ""), "rung-" + tier + (s.id === v.id ? " rung-here" : ""));
+      });
+    });
+    body.appendChild(lad);
+  }
+
+  // the timeless models this vocabulary expresses
+  const rel = (v.models || []).map(modelById).filter(Boolean);
+  if (rel.length) {
+    const rw = h("div", "vo-models");
+    rw.appendChild(h("div", "mono-label", "Thinking models behind it"));
+    rel.forEach(m => {
+      const b = h("button", "gbtn vo-model-btn", m.name);
+      b.title = m.one_liner;
+      b.onclick = () => { dismiss(); renderModels(m.id); show("models"); };
+      rw.appendChild(b);
+    });
+    body.appendChild(rw);
+  }
+
+  // recurrence: the same force showing up across the reader's own library
+  const recur = h("div", "vo-recur");
+  recur.appendChild(h("div", "mono-label", "Where else it appears"));
+  body.appendChild(recur);
+  ov.append(bar, body);
+  document.body.appendChild(ov);
+
+  const dismiss = () => { ov.remove(); document.removeEventListener("keydown", onKey); };
+  const onKey = e => { if (e.key === "Escape") dismiss(); };
+  close.onclick = dismiss;
+  ov.addEventListener("click", e => { if (e.target === ov) dismiss(); });
+  document.addEventListener("keydown", onKey);
+
+  try {
+    const all = await Store.getBreakdowns();
+    const hits = [];
+    all.forEach(b => {
+      if (!b.doc || !b.doc.layers) return;
+      b.doc.layers.forEach(L => {
+        if ((L.developer && L.developer.vocab || []).indexOf(v.id) !== -1)
+          hits.push({ system: b.system, id: b.id, index: L.index, name: L.name });
+      });
+    });
+    if (!hits.length) { recur.appendChild(h("p", "vo-none", "Not yet — it hasn't shown up in another Deconstruct you've opened.")); return; }
+    hits.slice(0, 8).forEach(hit => {
+      const row = h("button", "vo-hit");
+      row.appendChild(h("span", "vo-hit-sys", hit.system));
+      row.appendChild(h("span", "vo-hit-layer", "Layer " + hit.index + " · " + hit.name));
+      row.onclick = () => { dismiss(); openReader(hit.id, hit.index); };
+      recur.appendChild(row);
+    });
+  } catch (e) { recur.appendChild(h("p", "vo-none", "Couldn't read your library.")); }
+}
+
 function buildReaderMenu(rec, challengeOn) {
   const pop = $("menuPop");
   pop.textContent = "";
@@ -1220,6 +1380,11 @@ async function renderModels(detailId) {
   root.appendChild(h("div", "kicker", "Cross-system pattern recognition"));
   root.appendChild(h("h1", "title", "The 14 thinking models"));
   root.appendChild(h("p", "subtitle", "Every layer names the model that cracks its problem. Tap one to see it recur across systems."));
+  // sibling index, one altitude down: what engineers call these forces
+  const toVocab = h("button", "gbtn", "The engineering vocabulary →");
+  toVocab.style.marginBottom = "18px";
+  toVocab.onclick = () => { renderVocab(); show("vocab"); };
+  root.appendChild(toVocab);
   const grid = h("div", "model-grid");
   MODEL_LIBRARY.forEach(m => {
     const uses = byId[m.id] || [];

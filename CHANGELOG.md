@@ -6,6 +6,18 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 
 ---
 
+## [1.20.0] — 2026-07-19 · The engineering vocabulary
+### Added
+- **`VOCAB_LIBRARY`** — 52 curated entries in three tiers: **patterns** (problem shapes), **concepts** (mechanisms), **technologies** (things you deploy). Deliberately a *separate altitude* from the 14 thinking models: a model is why a layer is forced, the vocabulary is what the profession calls it.
+- **"Known as" chips** in the For Engineers box (Developer mode), tagged per layer by the generator from a fixed id list — never free text.
+- **The ladder** — tap a chip to climb from the timeless thinking model that forces the layer, down through concept and technology to the component you'd deploy, plus **where the same force recurs across your other Deconstructs**.
+- **Vocabulary index screen**, sibling to Models, with tier filters and per-entry recurrence counts.
+- **"Not yet addressed"** — Dissect (own-design) reviews now name the concerns your description hasn't answered, each with a specific consequence and rough timing (`design_gaps`).
+- **Numbers to reason with** — latency/throughput/size orders of magnitude, folded into the Under load band where the scaling question is already being asked.
+### Changed
+- Technology tags are gated to systems that are actually software — a railway may be described with patterns and concepts as honest analogies, but never with a technology. Layers with no honest match are left untagged rather than mislabeled.
+- All three flagships retrofitted with vocabulary tags (`flagshipVersion` 5 re-seeds existing installs, attempts preserved).
+
 ## [1.19.0] — 2026-07-19 · Simulation & diagram polish
 ### Added
 - Payload tokens now carry a small **directional arrowhead** that rotates to the path tangent — extra at-a-glance cue for which way flow moves.

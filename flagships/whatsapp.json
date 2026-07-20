@@ -257,7 +257,12 @@
     "interview_probes": [
      "Your consumer goes away for a week. Who holds the backlog, how large may it grow, and what is deliberately allowed to happen when it grows past that?"
     ],
-    "approach": "Put a durable queue between sender and recipient: enqueue to a per-user mailbox (a broker like SQS/Kafka, or an actor mailbox), ack once persisted, deliver when the recipient reconnects."
+    "approach": "Put a durable queue between sender and recipient: enqueue to a per-user mailbox (a broker like SQS/Kafka, or an actor mailbox), ack once persisted, deliver when the recipient reconnects.",
+    "vocab": [
+     "realtime-updates",
+     "queue",
+     "communication-protocols"
+    ]
    },
    "beginner_analogy": "An apartment mailbox. The mail carrier doesn't stand at your door until you come home; they drop the letter in the box, and you empty it whenever you get back. The box is the whole trick: it waits so that neither of you has to.",
    "diff": {
@@ -346,7 +351,10 @@
      "Your client POSTs a payment and the connection times out. Walk me through making the retry safe: who generates the id, who remembers it, and for how long?",
      "Where in your system does a lost acknowledgment currently masquerade as a lost operation?"
     ],
-    "approach": "Attach an idempotency key (a unique message-id) to every send; the server keeps a set of processed ids and drops duplicates, so a retried message is harmless. This is Stripe's Idempotency-Key."
+    "approach": "Attach an idempotency key (a unique message-id) to every send; the server keeps a set of processed ids and drops duplicates, so a retried message is harmless. This is Stripe's Idempotency-Key.",
+    "vocab": [
+     "idempotency-keys"
+    ]
    },
    "beginner_analogy": "Registered mail with a tracking number. Post the same numbered letter twice and the post office knows it's one letter: the recipient gets a single copy, and the signed return receipt tells you it truly arrived.",
    "diff": {
@@ -440,7 +448,10 @@
     "interview_probes": [
      "Where in your architecture does plaintext cross a machine that doesn't strictly need to read it, and what would it cost to blind that machine?"
     ],
-    "approach": "Do a key exchange through the untrusted server (X3DH / Diffie-Hellman): clients derive a shared secret the server never sees, then encrypt payloads client-side. Same shape as a TLS handshake, server as courier."
+    "approach": "Do a key exchange through the untrusted server (X3DH / Diffie-Hellman): clients derive a shared secret the server never sees, then encrypt payloads client-side. Same shape as a TLS handshake, server as courier.",
+    "vocab": [
+     "communication-protocols"
+    ]
    },
    "beginner_analogy": "You mail someone your opened padlock and keep the only key. Anyone, including the postal service, can snap that padlock shut on a box addressed to you, but nobody except you can open it. The carrier still carries everything; it just carries boxes it can never look inside.",
    "diff": {
@@ -542,7 +553,12 @@
     "interview_probes": [
      "Your mobile client notifies 200 followers by sending 200 requests. Where should that fan-out actually live, and what changes if the fan-out node isn't allowed to read the payload?"
     ],
-    "approach": "Encrypt the message once with a per-group sender key, then distribute that key pairwise; fan-out becomes one ciphertext plus N small key-copies instead of N full re-encryptions, a pub/sub upload-once."
+    "approach": "Encrypt the message once with a per-group sender key, then distribute that key pairwise; fan-out becomes one ciphertext plus N small key-copies instead of N full re-encryptions, a pub/sub upload-once.",
+    "vocab": [
+     "fanout",
+     "hot-key",
+     "cdn"
+    ]
    },
    "beginner_analogy": "A club newsletter written in the club's private code. You write it once and hand one page to the copy shop; the shop prints 255 copies of text it can't read, and every member decodes their copy with the codebook they were handed when they joined.",
    "diff": {
@@ -658,7 +674,11 @@
     "interview_probes": [
      "Your server keeps the list of a user's authorized clients. Walk me through how a peer detects an entry the user never added, and what breaks if only the server can answer that question."
     ],
-    "approach": "Model devices as a certificate chain: the primary device signs each companion's key (it is the CA), so a peer is trusted by verifying the primary's signature, and revocation just drops that signature."
+    "approach": "Model devices as a certificate chain: the primary device signs each companion's key (it is the CA), so a peer is trusted by verifying the primary's signature, and revocation just drops that signature.",
+    "vocab": [
+     "leader-election",
+     "crdt"
+    ]
    },
    "beginner_analogy": "Membership cards for a club where only the founder's signature counts. The doorman keeps the card file, which is convenient, but he can't sneak his friends in, because everyone at the door checks for the founder's ink, not the doorman's word.",
    "diff": {
