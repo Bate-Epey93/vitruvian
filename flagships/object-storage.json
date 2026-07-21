@@ -1,0 +1,835 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "Object storage",
+  "narrowing": "The object write and read path: storing bytes under a key with extreme durability and serving them back by URL. Bucket policies, IAM depth, versioning history, and the finer points of multipart upload are set aside; the durability, access, consistency, and cost spine is the whole focus.",
+  "ordering_note": "This is not one company's dated outage log but the inevitable path a blob store walks as it grows. Each layer is forced by the concrete failure the previous state hits next: a single disk loses data (durability), replication's triple cost becomes unaffordable (erasure coding), scattered bytes cannot be found (the metadata index), the app chokes proxying every byte (presigned URLs), the replicated index disagrees with itself (strong read-after-write, the guarantee S3 actually shipped in December 2020), and one storage class overpays for cold data (tiering). Durability comes first because losing an acknowledged byte is a storage system's one unforgivable failure. history_confidence is medium: the mechanisms and their failure modes are canonical and checkable, with the 2020 consistency switch as a real dated marker, not a single retold incident.",
+  "history_confidence": "medium",
+  "domain": "software"
+ },
+ "essence": {
+  "text": "Object storage is the internet's warehouse for bytes: hand it a blob and a key, it hands back a URL, and it promises those exact bytes will still be there years later, after every disk that held them has died. It looks like a hash map from key to bytes, and it is, right up until you need eleven nines of durability without paying for three whole copies, browsers uploading gigabytes your servers never touch, and a namespace that never lies about what it holds. The whole discipline hides inside the word 'still'.",
+  "beginner": "Object storage is a giant online drive you use over the web. You upload a file with a name and get back a link. Its real job is never losing that file, even as the machines storing it break, and letting huge files move in and out without ever choking the website in the middle.",
+  "deep_facts": [
+   "S3 is designed for 99.999999999% (eleven nines) of object durability: store ten million objects and you would expect to lose one about once every ten thousand years.",
+   "Three-way replication is a 200% storage overhead, three bytes stored per byte uploaded; a 10+4 Reed-Solomon erasure code survives four simultaneous failures at only 40% overhead.",
+   "A presigned URL lets a browser upload a multi-gigabyte object straight to storage without a single byte passing through the application server; the app only signs the URL.",
+   "Object storage has no real folders. The namespace is flat, and the 'directories' you see are an illusion made by treating the '/' in a key as a delimiter.",
+   "For years S3 offered only eventual consistency; in December 2020 it switched to strong read-after-write consistency for every operation, at no extra cost or performance penalty."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Store arbitrary bytes under a key with extreme durability, and serve them back by URL, cheaply and at any scale, without ever losing or corrupting an object.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Uploader",
+    "want": "To hand over a blob and a key and trust it is stored durably forever, without ever managing disks, replication, or capacity"
+   },
+   {
+    "id": "a2",
+    "name": "Reader",
+    "want": "To fetch the exact bytes for a key by URL, fast, from anywhere, and only if allowed"
+   },
+   {
+    "id": "a3",
+    "name": "Operator",
+    "want": "Eleven nines of durability at the lowest cost per byte, with the app never bottlenecked on data and capacity that grows by adding nodes"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "A GET for a key returns exactly the bytes stored under it, uncorrupted and complete, or an honest 404: never a wrong, partial, or silently altered object."
+   },
+   {
+    "id": "inv2",
+    "text": "Once a PUT is acknowledged, the object survives the loss of any single disk, node, or failure domain; acknowledged bytes are never silently lost."
+   },
+   {
+    "id": "inv3",
+    "text": "Object bytes are reachable only by a party the owner authorized; an unsigned, expired, or out-of-scope request retrieves nothing."
+   },
+   {
+    "id": "inv4",
+    "text": "After a PUT is acknowledged, any later GET or LIST of that key reflects the new object; the namespace never denies or contradicts a write it already accepted."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Object",
+    "note": "The stored blob plus its metadata (size, content-type, checksum, storage class, version); immutable once written, named by a key"
+   },
+   {
+    "id": "en2",
+    "name": "Key",
+    "note": "The full name of an object within a bucket, the flat-namespace lookup handle. '/' is just a character, not a directory"
+   },
+   {
+    "id": "en3",
+    "name": "Metadata index",
+    "note": "The authoritative record mapping each key to its object's physical layout (which nodes, replicated or erasure-coded) and its properties"
+   },
+   {
+    "id": "en4",
+    "name": "Storage node",
+    "note": "A machine full of disks holding object bytes as replicas or fragments; an independent failure domain"
+   },
+   {
+    "id": "en5",
+    "name": "Storage class",
+    "note": "The tier an object lives in (hot standard versus cold archive), trading retrieval latency and cost"
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Bytes flow from the uploader into the data plane and are laid across independent nodes as replicas or erasure-coded fragments."
+   },
+   {
+    "id": "f2",
+    "text": "On read, a key flows to the index, resolves to a layout, and the bytes flow from storage back to the reader."
+   },
+   {
+    "id": "f3",
+    "text": "Durability signals flow continuously: nodes are scrubbed, failures are detected, and lost redundancy is rebuilt from survivors."
+   }
+  ],
+  "constraints": [
+   "Disks and nodes fail constantly at fleet scale: with millions of drives some are always dying, so durability must be engineered, never assumed.",
+   "Storage sells near cost, so every byte of overhead (extra copies, parity) is money, and 3x replication at exabyte scale is a ruinous bill.",
+   "App bandwidth is finite and metered, so bytes should not detour through application servers; large objects must move client-to-storage.",
+   "A single blob can reach terabytes, so writes and reads must stream and resume, never buffer the whole object in memory."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "clients",
+    "label": "Clients"
+   },
+   {
+    "id": "service",
+    "label": "Service"
+   },
+   {
+    "id": "metadata",
+    "label": "Metadata"
+   },
+   {
+    "id": "storage",
+    "label": "Storage"
+   },
+   {
+    "id": "control",
+    "label": "Control"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "uploader",
+    "label": "Uploader",
+    "kind": "actor",
+    "lane": "clients",
+    "order": 0
+   },
+   {
+    "id": "reader",
+    "label": "Reader",
+    "kind": "actor",
+    "lane": "clients",
+    "order": 1
+   },
+   {
+    "id": "api",
+    "label": "API server",
+    "kind": "process",
+    "lane": "service",
+    "order": 1
+   },
+   {
+    "id": "store_a",
+    "label": "Storage node A",
+    "kind": "store",
+    "lane": "storage",
+    "order": 3
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_put",
+    "from": "uploader",
+    "to": "api",
+    "kind": "payload",
+    "label": "PUT bytes"
+   },
+   {
+    "id": "e_get",
+    "from": "reader",
+    "to": "api",
+    "kind": "payload",
+    "label": "GET key"
+   },
+   {
+    "id": "e_wr",
+    "from": "api",
+    "to": "store_a",
+    "kind": "payload",
+    "label": "write"
+   },
+   {
+    "id": "e_rd",
+    "from": "store_a",
+    "to": "api",
+    "kind": "payload",
+    "label": "read"
+   },
+   {
+    "id": "e_serve",
+    "from": "api",
+    "to": "reader",
+    "kind": "payload",
+    "label": "bytes"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "Replication: Never Lose the Bytes",
+   "problem": {
+    "statement": "The naive store is one server writing each blob to one local disk and handing back a URL to itself. It works until the disk dies, and disks die: at fleet scale a drive fails somewhere every few minutes, and each failure takes every object on it to the grave. A storage service that can lose an acknowledged byte has failed at its one job. The single disk is also a hard capacity and bandwidth ceiling, because one machine can neither hold nor serve the world's blobs.",
+    "beginner": "At first there is one computer saving your file to one hard drive. Hard drives break. When it breaks, your file is gone for good. A service whose whole promise is 'we keep your file' cannot lose files when a drive dies, and one drive cannot hold everything anyway.",
+    "model": {
+     "id": "redundancy",
+     "application": "One copy on one disk means one failure loses the data, so keep several independent copies on independent hardware where no single death can take the object."
+    }
+   },
+   "gate": {
+    "question": "You must promise a customer their bytes survive a disk failure, and disks fail all the time. You have many machines. How do you store one object so that losing any single disk, or a whole machine, never loses it, and how many copies is enough?",
+    "hint": "Do not store the object in one place. And decide the write is 'done' only when enough independent copies exist that losing one still leaves the data recoverable."
+   },
+   "solution": "Write each object as N replicas on N independent nodes in different failure domains (different disks, racks, and availability zones), and acknowledge the PUT only after at least W copies are durably on disk, a write quorum. Reads come from any live replica. A background process scrubs replicas against their checksums and, when a node dies, re-replicates its objects from surviving copies to restore the replica count. Durability is engineered from independent failures, not hoped for.",
+   "user_lens": {
+    "gives": "A blob you can trust to still be there years later: any single disk, machine, or rack can die and your object is served, uninterrupted, from a surviving copy.",
+    "costs": "You pay for every copy. Three-way replication means storing, and being billed for, three bytes for every one you uploaded, and a write is not done until several machines confirm, which is slower than touching one disk."
+   },
+   "tech_lens": {
+    "mechanism": "N-way replication across failure domains with a W-of-N write quorum for acknowledgement; checksummed scrubbing detects silent corruption; automatic re-replication rebuilds lost copies from survivors to hold the target replica count.",
+    "principle": "Durability is redundancy across independent failure domains: make the data survive the loss of any one part by ensuring no one part holds the only copy."
+   },
+   "tradeoff": "You buy survival with duplication: N-way replication multiplies both storage cost and write latency by roughly N, and that N-times storage bill is exactly what becomes unaffordable at scale.",
+   "at_scale": "Durability compounds: with truly independent failure domains, each added replica multiplies the odds against loss, which is how eleven nines is reached. Capacity and read throughput scale by adding nodes. But storage cost scales at N times the raw bytes, and when a node dies the re-replication traffic to rebuild its copies is a real network spike, so the fleet must always keep headroom for repair. The N-times bill is the ceiling the next layer attacks.",
+   "defends": [
+    "inv2",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "N-way replication + write quorum",
+      "software_concept": "quorum-replicated durable writes: acknowledge only after W of N replicas persist"
+     },
+     {
+      "mechanism": "scrub and re-replicate on node loss",
+      "software_concept": "anti-entropy / read-repair that keeps the replica count at target"
+     }
+    ],
+    "interview_probes": [
+     "How many copies, on what independent failure domains, and after how many acks do you call a write durable, and what re-creates a lost copy?"
+    ],
+    "approach": "Start here: on PUT, fan the bytes out to N storage nodes chosen from distinct racks or AZs and return success once W of them fsync and ack (a write quorum). Store a per-object checksum; run a background scrubber that re-reads and compares, and a repair job that copies an object to a fresh node whenever its live replica count drops below N.",
+    "vocab": [
+     "quorum",
+     "consistent-hashing"
+    ]
+   },
+   "beginner_analogy": "Like keeping the same important photo in three friends' houses in three different towns. Any one house can burn down and you still have the photo, and you only relax once at least a couple of them confirm they have it.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "store_b",
+      "label": "Storage node B",
+      "kind": "store",
+      "lane": "storage",
+      "order": 4
+     },
+     {
+      "id": "store_c",
+      "label": "Storage node C",
+      "kind": "store",
+      "lane": "storage",
+      "order": 5
+     },
+     {
+      "id": "replicator",
+      "label": "Replicator",
+      "kind": "process",
+      "lane": "control",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_dur",
+      "from": "api",
+      "to": "replicator",
+      "kind": "payload",
+      "label": "durable put"
+     },
+     {
+      "id": "e_ra",
+      "from": "replicator",
+      "to": "store_a",
+      "kind": "payload",
+      "label": "replica"
+     },
+     {
+      "id": "e_rb",
+      "from": "replicator",
+      "to": "store_b",
+      "kind": "payload",
+      "label": "replica"
+     },
+     {
+      "id": "e_rc",
+      "from": "replicator",
+      "to": "store_c",
+      "kind": "payload",
+      "label": "replica"
+     },
+     {
+      "id": "e_heal",
+      "from": "replicator",
+      "to": "store_b",
+      "kind": "control",
+      "label": "re-replicate"
+     }
+    ],
+    "highlight": [
+     "store_a",
+     "e_wr"
+    ],
+    "remove": [
+     "e_wr"
+    ]
+   }
+  },
+  {
+   "index": 2,
+   "name": "Erasure Coding: Durability Without Paying 3x",
+   "problem": {
+    "statement": "Three-way replication is simple and safe, and at exabyte scale it is a catastrophe of cost: to survive two failures you store three full copies, a 200% overhead, on hardware sold at razor margins. Most objects are large, cold, and read rarely, yet each one pays triple rent for durability. Storing two extra whole copies is paying for far more redundancy than durability actually requires.",
+    "beginner": "Keeping three full copies of everything is safe but hugely expensive: you buy three drives' worth of space for every one file. Most files are big and almost never read again, so paying triple to keep them is wasteful. There should be a cheaper way to survive failures.",
+    "model": {
+     "id": "first-principles",
+     "application": "Ask what durability actually requires: not N whole copies, only enough redundant information to reconstruct any lost piece. Rebuild storage from that fact instead of inheriting 'just make more copies'."
+    }
+   },
+   "gate": {
+    "question": "You want to survive several simultaneous disk failures, but three full copies costs 200% extra. What if you could survive four failures while storing only 40% extra? What kind of math lets you rebuild a lost piece of a file from the other pieces?",
+    "hint": "Split the object into pieces and add a few computed 'parity' pieces, so that any sufficient subset of pieces reconstructs the whole. Think of solving for a missing unknown."
+   },
+   "solution": "Erasure coding with Reed-Solomon. Split each object into k data fragments, compute m parity fragments, and store all k+m on independent nodes. Any k of the k+m fragments mathematically reconstruct the object, so it survives m simultaneous failures at only (k+m)/k overhead. A 10+4 scheme survives four failures at 1.4x storage, versus 3x for replication surviving two. Hot, small objects stay replicated (cheap to read, low latency); large and cold objects are erasure-coded for cost. Durability becomes a math parameter you dial.",
+   "user_lens": {
+    "gives": "The same or better durability at a fraction of the storage bill: survive four failures for 40% overhead instead of 200%, which is what makes storing everything forever affordable.",
+    "costs": "Reads and writes now touch many nodes and burn CPU encoding and decoding fragments; reconstructing an object means fetching k fragments and computing, so small or hot objects pay latency and compute they would not under a plain replica."
+   },
+   "tech_lens": {
+    "mechanism": "Reed-Solomon k+m coding: the object splits into k data and m parity fragments over a finite field, spread across k+m independent nodes; any k reconstruct the whole. Overhead is (k+m)/k, failure tolerance is m. Policy routes small or hot objects to replication, large or cold ones to erasure coding.",
+    "principle": "Redundancy is information, not duplication: store just enough parity to reconstruct any lost fragment, and durability decouples from the cost of whole copies."
+   },
+   "tradeoff": "You trade CPU and read complexity for storage cost: erasure coding slashes the bill but makes every read a gather-and-compute across many nodes, and a single lost fragment costs k fragment-reads to rebuild, so wide codes save disk while spending network and CPU on failure.",
+   "at_scale": "Erasure coding is what makes exabyte durability economically possible: overhead drops from 200% toward 40% or less as k grows. But repair cost grows with k, since reading one lost fragment requires reading k others, so very wide codes save storage while amplifying repair traffic. The design tension at scale is code width: wider is cheaper to store, dearer to repair and read.",
+   "defends": [
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "Reed-Solomon k+m fragments",
+      "software_concept": "erasure coding: any k of n fragments reconstruct the object"
+     },
+     {
+      "mechanism": "replicate hot, erasure-code cold",
+      "software_concept": "durability policy chosen by object size and access temperature"
+     }
+    ],
+    "interview_probes": [
+     "When do you replicate versus erasure-code, and what does a 10+4 scheme cost in storage, failure tolerance, and repair traffic against 3x replication?"
+    ],
+    "approach": "Start here: use a Reed-Solomon library to split each large object into k data plus m parity shards (say 10+4), write the 14 shards to 14 distinct nodes, and record the shard placement in the object's metadata. On read, fetch any 10 shards and decode; on a lost shard, regenerate it by decoding from the survivors.",
+    "vocab": []
+   },
+   "beginner_analogy": "Like splitting a document into ten pages plus four clever 'summary' pages, where any ten of the fourteen let you rebuild the whole thing. You can lose any four pages and still recover everything, without keeping three full photocopies.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "coder",
+      "label": "Erasure coder",
+      "kind": "process",
+      "lane": "control",
+      "order": 2
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_code",
+      "from": "api",
+      "to": "coder",
+      "kind": "payload",
+      "label": "big/cold obj"
+     },
+     {
+      "id": "e_fa",
+      "from": "coder",
+      "to": "store_a",
+      "kind": "payload",
+      "label": "data frag"
+     },
+     {
+      "id": "e_fc",
+      "from": "coder",
+      "to": "store_c",
+      "kind": "payload",
+      "label": "parity frag"
+     }
+    ],
+    "highlight": [
+     "e_ra",
+     "e_rb",
+     "e_rc"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 3,
+   "name": "The Index: A Flat Namespace Over Scattered Bytes",
+   "problem": {
+    "statement": "Bytes are now shattered across the fleet: an object is three replicas here or fourteen fragments there, on nodes chosen for space and failure independence, and that placement shifts as nodes fill, fail, and get added. There is no longer any way to find an object from its key alone, and objects carry metadata (size, content-type, checksum, storage class, version) that no hash of the key can hold. And customers need to list keys. The system needs one authoritative record of what exists and precisely where each object's bytes live.",
+    "beginner": "Now each file is broken into pieces spread across many machines, and the pieces can move around. Given just the file's name, how do you find all its pieces? Where do you keep facts about the file, like its type and size, and how do you list what is in a bucket? You need a reliable directory of names to locations.",
+    "model": {
+     "id": "separation-of-concerns",
+     "application": "Split the system into a control plane that knows names, metadata, and placement, and a data plane that only holds bytes, so naming and storage can each change, fail, and scale on their own."
+    }
+   },
+   "gate": {
+    "question": "An object's bytes are scattered as fragments across dozens of nodes, and placement keeps changing. You must resolve a key to its exact byte layout, store rich metadata, and list keys, all without scanning the fleet. Where does that knowledge live, and how is it kept separate from the bytes themselves?",
+    "hint": "Separate what an object is and where it lives (small, structured, queryable) from the bytes (huge, opaque). One is a database problem; the other is a disk problem."
+   },
+   "solution": "Introduce a metadata index: the authoritative control-plane record mapping each key to its object's layout (replicated on these nodes, or erasure-coded as these fragments) plus its metadata and storage class. Writes record placement in the index; reads consult the index to locate bytes, then fetch from the data plane. The index is a database (a partitioned, replicated key-value store); the data plane is dumb, huge, and only holds bytes. Listing and metadata queries hit the index, never the disks. This is the control-plane and data-plane split that defines object storage.",
+   "user_lens": {
+    "gives": "A stable flat namespace: a key always resolves to the right bytes no matter how placement shifts underneath, rich metadata and listing come back instantly, and storage and naming scale independently.",
+    "costs": "A second system to keep consistent with the bytes: the index can disagree with the data plane (a key pointing at fragments that were never fully written, or bytes with no index entry), and the index now sits on the critical path of every read and write."
+   },
+   "tech_lens": {
+    "mechanism": "A partitioned, replicated metadata database keyed by (bucket, key), storing object layout, checksums, size, class, and version; a data plane of storage nodes addressed only by internal fragment and replica ids. Reads do an index lookup then a data-plane fetch. Lists and HEADs are pure index queries.",
+    "principle": "Separate naming from storage: keep a small, queryable source of truth for what exists and where, and let the bytes be a dumb, independently scalable layer beneath it."
+   },
+   "tradeoff": "You gain a clean flat namespace and independent scaling, and take on the hardest ongoing problem in the system: keeping the index and the data plane agreeing, since either can be updated or fail without the other.",
+   "at_scale": "The split lets the two halves scale on totally different curves: the data plane grows to exabytes by adding dumb nodes, while the index grows by partitioning (bucket, key) across a database fleet. The index becomes the throughput-critical component, one lookup per request, so it must be sharded and cached; a hot bucket or a giant LIST is an index problem, not a byte problem. The data plane never feels list traffic at all.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "metadata index (key to layout)",
+      "software_concept": "control-plane catalog / system of record kept separate from bulk storage"
+     },
+     {
+      "mechanism": "control plane versus data plane",
+      "software_concept": "splitting a small queryable metadata store from a dumb byte store"
+     }
+    ],
+    "interview_probes": [
+     "Where does the key-to-bytes mapping and object metadata live, and why is it a different datastore from the bytes, and how does a LIST avoid touching the storage nodes?"
+    ],
+    "approach": "Start here: put a partitioned key-value or relational store keyed by (bucket, key) whose value is the object's placement (replica node ids or EC shard ids), checksum, size, content-type, and storage class. PUT writes bytes to the data plane, then commits the metadata row; GET reads the row, then fetches the bytes; LIST is a range scan over keys in the index.",
+    "vocab": [
+     "data-modeling",
+     "sharding"
+    ]
+   },
+   "beginner_analogy": "Like a library's catalogue versus its shelves: the small card catalogue tells you exactly which shelf and slot holds a book, so you never wander the stacks, and the shelves can be rearranged as long as the catalogue is updated.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "index",
+      "label": "Metadata index",
+      "kind": "store",
+      "lane": "metadata",
+      "order": 2,
+      "expands_to": "Distributed key-value store"
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_metaw",
+      "from": "api",
+      "to": "index",
+      "kind": "control",
+      "label": "record layout"
+     },
+     {
+      "id": "e_locate",
+      "from": "index",
+      "to": "api",
+      "kind": "control",
+      "label": "key → nodes"
+     }
+    ],
+    "highlight": [
+     "store_a",
+     "store_b",
+     "store_c"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 4,
+   "name": "Presigned URLs: Get the Bytes Off the App's Back",
+   "problem": {
+    "statement": "Every byte still flows through the application: the client uploads to the app, which writes to storage; the client downloads from the app, which reads from storage. For a service whose objects run to gigabytes and terabytes, this is fatal. The app becomes a bandwidth bottleneck and a cost, proxying petabytes it has no reason to see, and it would have to hold long-lived storage credentials that a compromised app would leak. The app has no business touching the bytes at all.",
+    "beginner": "Right now every big upload and download passes through the website's servers, which is slow and expensive when files are huge. The website also has to hold the master keys to the storage, which is dangerous. The website should get out of the way and let the browser talk to storage directly, but safely.",
+    "model": {
+     "id": "trust-boundary",
+     "application": "The client is untrusted, so instead of proxying bytes or handing out master credentials, give the client a single-use, scoped, expiring capability it can present directly at the storage edge, which verifies it."
+    }
+   },
+   "gate": {
+    "question": "You want a browser to upload a 5 GB file straight to storage without a byte touching your app, and without giving the browser any lasting credential or access to anyone else's objects. What do you hand the client, and who checks it?",
+    "hint": "Give them a URL that carries its own proof: signed by you, valid only for this exact object and operation, and only for a few minutes. The storage edge verifies the signature."
+   },
+   "solution": "Presigned URLs. The app, holding the real credentials, computes a URL for one specific object and operation (PUT or GET), signs it with a secret key and an expiry, and hands it to the client. The client uploads or downloads directly against the data plane; the storage edge recomputes the signature, checks the scope and expiry, and serves only if it matches. The app issues capabilities and records metadata; it never carries the bytes. Multipart upload splits a huge object into independently presigned parts.",
+   "user_lens": {
+    "gives": "Gigabyte uploads and downloads that go straight from client to storage at full speed, an app that never bottlenecks on data, and time-boxed access that grants exactly one object, one operation, for a few minutes.",
+    "costs": "A signed URL is a bearer token: anyone who gets the link can use it until it expires, so leaked URLs are a real exposure, and the client now handles retries, checksums, and multipart assembly the app used to hide."
+   },
+   "tech_lens": {
+    "mechanism": "A signature over the method, object key, expiry, and headers, keyed by a server secret; the storage frontend recomputes and compares it, enforcing scope and time. No lasting credential leaves the server, and the capability is the URL itself. Multipart upload presigns each part separately.",
+    "principle": "Grant capability, not credentials: hand out a narrowly scoped, self-verifying, expiring token so an untrusted party can act directly against a resource without ever holding standing access."
+   },
+   "tradeoff": "You remove the app from the data path and gain direct, scalable transfer, but give up central control of each byte: access is now a token anyone holding the URL can replay until it expires, so scoping tight and expiring fast is the whole game.",
+   "at_scale": "This is what lets the service move petabytes while the app barely scales: byte throughput becomes the data plane's problem, and the control plane's load is just cheap signature issuance, which is stateless and trivially horizontal. The app's bandwidth stops being a ceiling entirely; the only per-request work it keeps is issuing a token and, later, recording that the object landed.",
+   "defends": [
+    "inv3"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "presigned URL",
+      "software_concept": "capability token / signed URL: a scoped, expiring, self-verifying grant"
+     },
+     {
+      "mechanism": "direct client-to-storage transfer",
+      "software_concept": "offloading bulk data off the app path (the large-blob pattern)"
+     }
+    ],
+    "interview_probes": [
+     "How does a browser upload a multi-gigabyte file without it passing through your servers, and how do you keep that upload scoped to one object and unusable after a few minutes?"
+    ],
+    "approach": "Start here: on an upload request, have the app sign a URL (an HMAC over method, key, and an expiry timestamp) using a server-held secret and return it; the client PUTs bytes directly to that URL. The storage frontend recomputes the HMAC and rejects anything expired or out of scope. For huge objects, issue one presigned URL per part and complete the multipart upload.",
+    "vocab": [
+     "large-blobs",
+     "api-design"
+    ]
+   },
+   "beginner_analogy": "Like a museum cloakroom handing you a ticket that opens exactly your locker, and only for today. You retrieve your own coat directly, the attendant never carries it, and the ticket is useless for any other locker or any other day.",
+   "diff": {
+    "add_nodes": [],
+    "add_edges": [
+     {
+      "id": "e_req",
+      "from": "uploader",
+      "to": "api",
+      "kind": "control",
+      "label": "ask PUT URL"
+     },
+     {
+      "id": "e_presign",
+      "from": "api",
+      "to": "uploader",
+      "kind": "control",
+      "label": "presigned URL"
+     },
+     {
+      "id": "e_presign_r",
+      "from": "api",
+      "to": "reader",
+      "kind": "control",
+      "label": "presigned URL"
+     },
+     {
+      "id": "e_direct_put",
+      "from": "uploader",
+      "to": "store_a",
+      "kind": "payload",
+      "label": "signed PUT"
+     },
+     {
+      "id": "e_direct_get",
+      "from": "store_c",
+      "to": "reader",
+      "kind": "payload",
+      "label": "signed GET"
+     }
+    ],
+    "highlight": [
+     "e_put",
+     "e_serve",
+     "api"
+    ],
+    "remove": [
+     "e_put",
+     "e_serve",
+     "e_rd"
+    ]
+   }
+  },
+  {
+   "index": 5,
+   "name": "Strong Read-After-Write: The Index Must Not Lie",
+   "problem": {
+    "statement": "The index was replicated for availability and scale, and replicated records disagree. Write an object, then immediately read it, and your GET might hit a replica that has not seen the write yet and return 404 for a key you just created. LIST might omit a fresh key, or still show a deleted one. For years S3 offered only eventual consistency for exactly this reason, and it broke every workflow that writes then immediately reads (data pipelines, analytics). In December 2020 S3 switched to strong read-after-write consistency for all operations. A namespace that denies a write it accepted is lying.",
+    "beginner": "The directory of file locations is copied across several machines so it stays fast and available. But right after you upload, one copy might not know about your file yet, so reading it back can say 'not found', or a listing can miss it. That is confusing and breaks programs that upload a file and immediately use it.",
+    "model": {
+     "id": "single-source-of-truth",
+     "application": "Among the disagreeing index replicas, make one answer authoritative for each key so a read is guaranteed to see the latest committed write, never a lagging copy."
+    }
+   },
+   "gate": {
+    "question": "Your metadata index is replicated across machines for availability, and a read can land on a replica that has not caught up, returning a stale or missing answer for a key just written. How do you guarantee a GET right after a PUT always sees the new object, without giving up the replication that keeps you available?",
+    "hint": "Either always read where the latest write is guaranteed to be, or make readers and writers overlap so a read cannot miss a committed write. Consensus on a per-key owner, or quorum, both work."
+   },
+   "solution": "Make index reads and writes go through a mechanism that guarantees seeing the latest committed write: route each key to a leader replica (consensus-elected) that serializes its writes, or use overlapping read and write quorums (R + W > N) so any read intersects the newest write. A write is acknowledged only once it is committed to the authoritative set, and a subsequent read is guaranteed to observe it. This buys strong read-after-write and list-after-write consistency, the guarantee S3 shipped in December 2020, at the cost of coordination on the index.",
+   "user_lens": {
+    "gives": "Write then read just works: an object is immediately gettable and listable the instant its PUT is acknowledged, so pipelines that upload and immediately consume never see a phantom 404 or a missing key.",
+    "costs": "Consistency costs coordination: every index write pays a consensus round or a quorum of acknowledgements, adding latency, and under a network partition the authoritative side must sometimes refuse rather than serve a possibly stale answer."
+   },
+   "tech_lens": {
+    "mechanism": "Per-key leadership via consensus (Raft or Paxos) that serializes writes, or quorum reads and writes with R + W > N so the read and write sets overlap; acknowledge only on commit to the authoritative set, so reads are guaranteed to observe committed writes.",
+    "principle": "When copies can disagree, make one truth authoritative per key: commit before acknowledging, and read where the latest commit is guaranteed to be seen."
+   },
+   "tradeoff": "You trade a little write latency and some availability under partition for a namespace that never lies: strong consistency means the authoritative side may reject during a partition instead of serving a stale read, the classic consistency-over-availability choice on the metadata path.",
+   "at_scale": "Consistency lives entirely in the metadata plane, so it scales by partitioning: each key range has its own leader or quorum group, coordination is per-shard and never global, so throughput grows by adding groups. The bytes never participate, since an object's fragments are immutable once written, so the only thing needing consensus is the small index record, which is why strong consistency stays affordable at exabyte scale.",
+   "defends": [
+    "inv4",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "per-key leader or R+W>N quorum",
+      "software_concept": "linearizable metadata via consensus or overlapping quorums"
+     },
+     {
+      "mechanism": "commit before ack",
+      "software_concept": "read-after-write consistency: acknowledge only committed writes"
+     }
+    ],
+    "interview_probes": [
+     "A client PUTs then immediately GETs the same key. What guarantees the GET sees the write, and what does that guarantee cost you under a network partition?"
+    ],
+    "approach": "Start here: put each (bucket, key) range under a consensus group (Raft) with a leader that orders writes, or use a quorum store configured so reads plus writes exceed the replica count (R + W > N). Acknowledge a PUT only after the write commits to the quorum or leader; route the subsequent read through the same group so it cannot miss the commit.",
+    "vocab": [
+     "consensus",
+     "quorum",
+     "eventual-consistency"
+    ]
+   },
+   "beginner_analogy": "Like a ticket counter where one clerk owns the ledger for each row of seats. You are told your booking is confirmed only once it is written in the official ledger, so the next person who asks that same clerk always sees your seat is taken.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "index_b",
+      "label": "Index replica",
+      "kind": "store",
+      "lane": "metadata",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_metaw2",
+      "from": "api",
+      "to": "index_b",
+      "kind": "control",
+      "label": "quorum write"
+     },
+     {
+      "id": "e_idx_sync",
+      "from": "index",
+      "to": "index_b",
+      "kind": "control",
+      "label": "replicate"
+     },
+     {
+      "id": "e_quorum_r",
+      "from": "index_b",
+      "to": "api",
+      "kind": "control",
+      "label": "quorum read"
+     }
+    ],
+    "highlight": [
+     "index",
+     "e_metaw"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 6,
+   "name": "Hot and Cold Tiering: Stop Paying Hot Prices for Cold Bytes",
+   "problem": {
+    "statement": "Everything sits on fast, always-online storage, and most of it does not deserve to. The access pattern of stored objects is brutally skewed: a small fraction is read constantly (hot), and the vast majority is written once and almost never read again (cold backups, logs, old media). Keeping decade-old backups on the same fast media as today's thumbnails means paying premium prices for bytes nobody touches. A single storage class wastes the largest cost in the system.",
+    "beginner": "All files sit on fast, expensive storage, but most files are old and hardly ever opened. Paying top price to keep years-old backups instantly ready is wasteful. Rarely-used files should move to cheaper, slower storage, and you should only pay the fast price for the files people actually use.",
+    "model": {
+     "id": "locality-and-caching",
+     "application": "Keep the hot, frequently-read objects on fast, costly media near demand, and push the cold, rarely-read majority down to cheap, slow media, paying for speed only where it is actually used."
+    }
+   },
+   "gate": {
+    "question": "Ninety percent of your bytes are read almost never, yet they sit on the same expensive fast storage as the hottest objects. How do you cut the cost of the cold majority without deleting anything, and without making a rare read of a cold object simply fail?",
+    "hint": "Not all storage costs the same per byte. Move data down a ladder of cheaper, slower tiers as it goes cold, and accept that waking a cold object back up may take time."
+   },
+   "solution": "Storage classes and lifecycle tiering. Objects live in a class trading retrieval latency against cost: hot standard on fast disks, cold archive on cheap, slow, or even offline media. A lifecycle policy (or an access-frequency monitor) migrates objects down the tiers as they age or go untouched, rewriting the index entry to point at the new tier, while durability holds at every tier. A read of an archived object may require a restore that takes minutes to hours; a hot object is instant. You pay fast-storage prices only for the working set.",
+   "user_lens": {
+    "gives": "A far smaller bill: the cold majority costs a fraction to store, the hot working set stays instant, and objects move between tiers automatically by age or access pattern with no data ever deleted.",
+    "costs": "Cold and archived objects are no longer instantly available: retrieving one can take minutes to hours and carries a retrieval fee, so a mis-tiered object (cold data that suddenly gets popular) is slow and pricey to read until it is promoted back."
+   },
+   "tech_lens": {
+    "mechanism": "Per-object storage classes over media tiers (fast SSD or HDD, cheap cold, offline archive); lifecycle rules and access-frequency monitoring migrate objects down, and sometimes back up, updating the index's layout pointer; retrieval from archive is an explicit, latency-bound restore. Durability policy (replication or EC) is maintained within each tier.",
+    "principle": "Match the storage cost to the access pattern: keep hot data on fast media and demote the cold majority to cheap media, buying speed only where demand actually is."
+   },
+   "tradeoff": "You trade the instant availability of cold data for a large cut in storage cost, and take on tiering machinery plus the risk of mis-tiering: guess an object's temperature wrong and a read is slow and costly until it is promoted.",
+   "at_scale": "Tiering is what keeps total cost sub-linear as stored data grows without bound: the hot working set stays roughly constant while the cold archive grows forever, so most new bytes land on the cheapest media and the average cost per stored byte falls over time. The scaling pressure moves to the tiering decision itself, monitoring access across trillions of objects to place each in the right class, which the index and monitors absorb, not the byte layer.",
+   "defends": [
+    "inv2",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "storage classes + lifecycle migration",
+      "software_concept": "tiered storage: hot data on fast media, cold on cheap, moved by policy"
+     },
+     {
+      "mechanism": "archive restore",
+      "software_concept": "latency-tiered retrieval: a cold object needs an explicit rehydrate"
+     }
+    ],
+    "interview_probes": [
+     "Your access pattern is 90% cold. How do you cut its storage cost without deleting it, and what does a read of an archived object cost in latency and money?"
+    ],
+    "approach": "Start here: tag each object with a storage class and store a created or last-accessed timestamp; run a lifecycle job that moves objects past an age or idle threshold to a cheaper tier and rewrites the index's layout pointer to the new location. Keep each tier's durability (replication or EC) intact, and gate archive reads behind an async restore that rehydrates to a readable tier.",
+    "vocab": [
+     "tiered-storage"
+    ]
+   },
+   "beginner_analogy": "Like a home that keeps this week's papers on the desk, last year's in a filing cabinet, and decade-old records in a rented off-site vault. Nothing is thrown away, most of it costs almost nothing to keep, and only the vault takes a day's notice to retrieve.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "cold",
+      "label": "Cold tier",
+      "kind": "store",
+      "lane": "storage",
+      "order": 6
+     },
+     {
+      "id": "lifecycle",
+      "label": "Lifecycle",
+      "kind": "process",
+      "lane": "control",
+      "order": 5
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_scan",
+      "from": "lifecycle",
+      "to": "index",
+      "kind": "control",
+      "label": "age scan"
+     },
+     {
+      "id": "e_migrate",
+      "from": "store_a",
+      "to": "cold",
+      "kind": "payload",
+      "label": "demote cold"
+     },
+     {
+      "id": "e_restore",
+      "from": "cold",
+      "to": "reader",
+      "kind": "payload",
+      "label": "restore"
+     }
+    ],
+    "highlight": [
+     "store_a",
+     "store_b"
+    ],
+    "remove": []
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "A whole rack loses power mid-write",
+   "scenario": "During a PUT, an entire rack, holding several of the object's replicas or fragments, loses power at once. The write is in flight and part of the redundancy just vanished.",
+   "reveal": "Placement across independent failure domains is what saves it: replicas and fragments are spread across racks and AZs, so the surviving domains still hold enough to serve. The write quorum means the PUT is acknowledged only once enough copies landed in domains that are still up, and for an erasure-coded object any k surviving fragments reconstruct the whole. The repair job then rebuilds the lost redundancy from survivors onto fresh nodes. inv2 holds; the cost is a burst of re-replication traffic and briefly thinner redundancy until repair catches up."
+  },
+  {
+   "id": "st2",
+   "title": "Write then immediately read across a partition",
+   "scenario": "A client PUTs an object and instantly GETs it, at the moment a network partition splits the metadata replicas into two groups that cannot talk.",
+   "reveal": "Strong read-after-write routes the read through the authoritative set (the key's leader, or an R + W > N quorum), so it either sees the just-committed write or the authoritative side refuses to answer rather than serve a stale one. The bytes are never in question, since fragments are immutable; only the small index record needs coordination. inv4 holds, and the honest cost is availability: on the minority side of the partition, that key's writes and strongly-consistent reads pause until the partition heals, the consistency-over-availability choice made on purpose."
+  },
+  {
+   "id": "st3",
+   "title": "A cold object goes viral behind a media system",
+   "scenario": "An old video, long since demoted to the cold tier, is suddenly linked everywhere and hammered with read requests, the classic hot-key surge on a blob store sitting behind a media platform.",
+   "reveal": "The first reads are slow and pricey: an archived object must be restored before it can be served, so early requests hit restore latency and retrieval fees. The access monitor sees the spike and promotes the object to a hot class, and the media system's CDN and cache tier in front absorb the repeated reads so most traffic never reaches the data plane again. inv1 and inv2 hold throughout (the bytes are always correct and durable); the confessed weak spot is the warm-up window, where a mis-tiered object is slow until promotion and caching catch up. This is exactly why a media system layers a CDN over object storage rather than reading blobs raw."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "Durability is redundancy across independent failure domains: ensure no single part holds the only copy, and losing any one part loses nothing.",
+   "Redundancy is information, not duplication: enough parity to reconstruct a lost piece beats storing whole extra copies, and lets you dial durability against cost.",
+   "Separate naming from storage: keep a small, queryable source of truth for what exists and where, and a dumb, independently scalable layer for the bytes.",
+   "Grant capability, not credentials: hand untrusted parties a scoped, expiring, self-verifying token so they act directly on a resource without standing access.",
+   "When copies can disagree, make one truth authoritative and commit before you acknowledge, so the system never denies a write it already accepted.",
+   "Match cost to access pattern: keep the hot working set on fast media and demote the cold majority to cheap media, paying for speed only where demand is."
+  ],
+  "mappings": [
+   {
+    "mechanism": "replication + erasure coding",
+    "elsewhere": "RAID arrays, database read replicas, and Reed-Solomon in QR codes and deep-space transmission all survive lost pieces by storing redundant information, not just whole copies."
+   },
+   {
+    "mechanism": "control plane / data plane split",
+    "elsewhere": "Filesystems separate inodes from data blocks, CDNs separate the metadata index from cached bytes, and Kubernetes separates its control plane from worker nodes."
+   },
+   {
+    "mechanism": "presigned URL (capability token)",
+    "elsewhere": "OAuth bearer tokens, signed cookies, and time-limited download links all grant scoped, expiring access without ever sharing a standing credential."
+   },
+   {
+    "mechanism": "strong read-after-write via quorum or leader",
+    "elsewhere": "Distributed databases, config stores like etcd, and consensus logs all commit to an authoritative set before acknowledging, so a read never misses a committed write."
+   },
+   {
+    "mechanism": "hot and cold tiering",
+    "elsewhere": "CPU cache hierarchies, memory-then-disk paging, and warehouse forward-stocking all keep the hot working set fast and push the cold bulk to cheaper, slower storage."
+   }
+  ]
+ }
+}

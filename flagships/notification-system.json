@@ -1,0 +1,895 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "Notification system",
+  "narrowing": "The delivery pipeline behind a feed: turning one event into the notifications that reach a user's devices and channels. It stops at the provider boundary (APNs, FCM, an email or SMS gateway) and leaves out what generates the events, feed ranking, and in-app inbox rendering.",
+  "ordering_note": "This is not one dated outage but the canonical path a notification system walks as it grows: decouple the send from the triggering action, fan out to every device, split delivery per channel, gate on user consent, throttle the volume, dedup the redeliveries, then survive provider failure. Each layer is forced by the concrete failure the previous state hits next. history_confidence is medium because the mechanisms and their failure modes are standard and checkable, not because a specific company incident is being retold.",
+  "history_confidence": "medium",
+  "domain": "software"
+ },
+ "essence": {
+  "text": "A notification system is the delivery layer behind every feed: it takes one thing that happened and makes sure the right people find out, on the devices they carry and the channels they chose, without ever becoming the thing they mute. It looks like 'call the push API,' and it is, right until one event must reach twenty million phones, the same alert must never buzz twice, and half the providers you depend on are having a bad day.",
+  "beginner": "A notification system is what sends you the alert, email, or text when something happens in an app: a reply, a login code, a delivery update. Its real job is getting the right message to the right person on the right device, exactly once, without burying them under so many that they turn notifications off.",
+  "deep_facts": [
+   "Fan-out is the load, not the event: one post by a large account can generate notifications for tens of millions of followers, so the pipeline's write amplification, not the original event, is what has to scale.",
+   "'Sent' is not 'seen': APNs and FCM accept a push and return success, but the device may be offline, the token stale, or the OS may drop it silently, and the sender never learns the difference.",
+   "Message queues are at-least-once by design, so a worker that crashes after sending but before acking will send the same notification twice unless an idempotency key makes the repeat a no-op.",
+   "The real scarce resource is attention, not compute: send too many and users disable notifications entirely, which is why rate limiting and digests exist to protect deliverability, not the servers.",
+   "Push tokens rotate constantly (new phone, reinstalled app), so a notification system spends much of its life pruning dead tokens from bounce feedback, or it slowly rots into sending alerts into the void."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Turn events into notifications and deliver each to the recipient's chosen devices and channels: reliably, at most once per channel, honoring their preferences, without overwhelming them or melting on a provider outage.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Recipient",
+    "want": "To be told about what matters to them, on the channels they chose, exactly once, and never to be spammed into muting everything"
+   },
+   {
+    "id": "a2",
+    "name": "Producer service",
+    "want": "To say 'notify user U of event E' and move on, without knowing about devices, channels, providers, or preferences"
+   },
+   {
+    "id": "a3",
+    "name": "Channel provider",
+    "want": "(APNs, FCM, an email or SMS gateway.) To be called within its own protocol, auth, and rate limits, and to accept or reject each message on its own terms"
+   },
+   {
+    "id": "a4",
+    "name": "Operator",
+    "want": "High deliverability at bounded cost, no notification storms, and no single provider outage taking the pipeline down"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "Every notification a user is eligible for is delivered at least once to at least one of their chosen channels; an accepted event is never silently dropped."
+   },
+   {
+    "id": "inv2",
+    "text": "A user never receives the same notification twice on the same channel; retries and redeliveries do not become duplicate alerts."
+   },
+   {
+    "id": "inv3",
+    "text": "The system never delivers on a channel or category a user has disabled, and never exceeds their frequency limits or quiet hours."
+   },
+   {
+    "id": "inv4",
+    "text": "A slow or failed provider, or one flooded channel, never blocks the triggering action or the delivery of other users' notifications."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Notification event",
+    "note": "The triggering fact ('Alex replied to your post'), addressed to one recipient or many, emitted by a producer"
+   },
+   {
+    "id": "en2",
+    "name": "Message",
+    "note": "The rendered, per-channel payload actually sent: a push envelope, an email, an SMS segment"
+   },
+   {
+    "id": "en3",
+    "name": "Endpoint registry",
+    "note": "The user's live addresses: device push tokens, email, phone; rotates constantly as devices come and go"
+   },
+   {
+    "id": "en4",
+    "name": "Preferences",
+    "note": "Per-category, per-channel opt-in, frequency, and quiet-hours settings; the authority on what may be sent"
+   },
+   {
+    "id": "en5",
+    "name": "Delivery record",
+    "note": "Per-send status and dedup key; drives duplicate suppression, retries, and dead-token pruning"
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Events flow in from producers, fan out to recipients and their channels, and go out as per-channel messages to providers."
+   },
+   {
+    "id": "f2",
+    "text": "Delivery status flows back from providers (accepted, bounced, failed) to drive retries, dedup, and token cleanup."
+   },
+   {
+    "id": "f3",
+    "text": "Registration and preference changes flow in from users and gate every send."
+   }
+  ],
+  "constraints": [
+   "Channel providers are third parties with their own protocols, rate limits, latencies, and outages; you can work around them but not make them faster or more reliable.",
+   "Delivery is best-effort over unreliable networks: a send can be accepted and never arrive, or arrive twice if you retry, and 'sent' is not 'seen.'",
+   "One event can fan out to millions of recipients, and one recipient can hold many devices, so write amplification, not the event, is the load.",
+   "Attention is scarce and a send is irreversible: an alert cannot be unsent, and too many trains the user to ignore all of them."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "sources",
+    "label": "Sources"
+   },
+   {
+    "id": "pipeline",
+    "label": "Pipeline"
+   },
+   {
+    "id": "control",
+    "label": "Control"
+   },
+   {
+    "id": "channels",
+    "label": "Channels"
+   },
+   {
+    "id": "recipients",
+    "label": "Recipients"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "producer",
+    "label": "Producer service",
+    "kind": "process",
+    "lane": "sources",
+    "order": 0
+   },
+   {
+    "id": "notifier",
+    "label": "Notifier",
+    "kind": "process",
+    "lane": "pipeline",
+    "order": 2
+   },
+   {
+    "id": "push_prov",
+    "label": "Push (APNs/FCM)",
+    "kind": "channel",
+    "lane": "channels",
+    "order": 5
+   },
+   {
+    "id": "device",
+    "label": "User devices",
+    "kind": "actor",
+    "lane": "recipients",
+    "order": 7
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_evt",
+    "from": "producer",
+    "to": "notifier",
+    "kind": "payload",
+    "label": "event"
+   },
+   {
+    "id": "e_send",
+    "from": "notifier",
+    "to": "push_prov",
+    "kind": "payload",
+    "label": "push"
+   },
+   {
+    "id": "e_deliver",
+    "from": "push_prov",
+    "to": "device",
+    "kind": "payload",
+    "label": "alert"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "The Async Pipeline: Get the Send Off the Critical Path",
+   "problem": {
+    "statement": "The send sits inside the producer's request. Posting a comment now waits on the push API, so when APNs is slow or down, the user's own action is slow or fails. A burst of events, a viral post, hammers the provider inline and backs up every producer behind it. A side effect, telling someone, is holding the primary action hostage.",
+    "beginner": "Right now the code that reacts to an event (a comment, a payment) also does the sending, in the same step, before it can finish. So if the notification service is slow, the app itself is slow, and a flood of events makes everything grind.",
+    "model": {
+     "id": "queue-and-buffer",
+     "application": "Put a buffer between 'something happened' and 'someone gets told,' so a slow or bursty delivery step turns into waiting in a queue instead of a failure of the thing that triggered it."
+    }
+   },
+   "gate": {
+    "question": "Your 'post comment' endpoint calls the push API inline, and p99 just tripled because APNs is having a bad day. How do you make notifying someone never slow down or fail the action that triggered it?",
+    "hint": "The notification does not need to happen before you reply to the user. What sits between the event and the send, and lets the producer walk away?"
+   },
+   "solution": "Emit the event to a durable queue and return immediately. A pool of delivery workers consumes asynchronously and does the sending. The producer's job shrinks to one cheap enqueue; everything slow or flaky (providers, retries, batching) lives behind the queue, where it can be scaled and retried without touching the request path.",
+   "user_lens": {
+    "gives": "The triggering action (posting, paying) stays fast and reliable even when a provider is melting behind the scenes.",
+    "costs": "Notifications become eventually-delivered, not instant. There is now a queue that can back up, and an emitted event is a promise to deliver, not a delivery."
+   },
+   "tech_lens": {
+    "mechanism": "A durable message queue between producers and a worker pool: producers enqueue and ack, workers dequeue and deliver on their own schedule.",
+    "principle": "Move slow, unreliable side effects off the critical path; decouple producers from consumers with a buffer so a rate or reliability mismatch becomes latency, not failure."
+   },
+   "tradeoff": "You trade instant, synchronous certainty for asynchrony and its whole tail: ordering, redelivery, and a backlog that can grow under sustained overload.",
+   "at_scale": "The queue absorbs bursts that would crush a provider inline: a million events in a spike become a backlog drained at the providers' safe rate, and workers scale horizontally to widen the drain. The ceiling moves to queue depth and worker throughput; a sustained arrival rate above drain rate grows the backlog without bound, which is exactly what rate limits and load-shedding later contain.",
+   "defends": [
+    "inv4",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "queue between producer and workers",
+      "software_concept": "work queue / task queue that decouples a fast producer from slow work"
+     },
+     {
+      "mechanism": "enqueue-and-ack, deliver later",
+      "software_concept": "fire-and-forget with a durable handoff instead of a blocking call"
+     }
+    ],
+    "interview_probes": [
+     "Your notification send is inline in the request that triggers it. What breaks when the push provider slows down, and where do you put the boundary?"
+    ],
+    "approach": "Publish each event to a durable queue (SQS, Kafka, RabbitMQ) inside the producer, then run a worker pool that consumes and delivers. In code the producer does queue.publish(event) and returns; the worker loop does for msg in queue: deliver(msg); ack(msg).",
+    "vocab": [
+     "long-running-tasks",
+     "queue"
+    ]
+   },
+   "beginner_analogy": "Like dropping a letter in a mailbox instead of driving it to the recipient yourself: you hand it off and get on with your day, and the postal system delivers on its own schedule.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "queue",
+      "label": "Event queue",
+      "kind": "store",
+      "lane": "pipeline",
+      "order": 1,
+      "expands_to": "Message queue"
+     },
+     {
+      "id": "worker",
+      "label": "Delivery worker",
+      "kind": "process",
+      "lane": "pipeline",
+      "order": 4
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_enq",
+      "from": "notifier",
+      "to": "queue",
+      "kind": "payload",
+      "label": "enqueue"
+     },
+     {
+      "id": "e_deq",
+      "from": "queue",
+      "to": "worker",
+      "kind": "payload",
+      "label": "dequeue"
+     },
+     {
+      "id": "e_wsend",
+      "from": "worker",
+      "to": "push_prov",
+      "kind": "payload",
+      "label": "push"
+     }
+    ],
+    "highlight": [
+     "e_send",
+     "notifier",
+     "push_prov"
+    ],
+    "remove": [
+     "e_send"
+    ]
+   }
+  },
+  {
+   "index": 2,
+   "name": "Fan-out: One Event, Every Device",
+   "problem": {
+    "statement": "The worker sends to one hardcoded token. But a user has several devices (phone, tablet, laptop), tokens rotate the moment they reinstall or upgrade, and some events target many users at once (a reply in a 500-person thread). The producer cannot carry anyone's current addresses; whatever token it once knew is already going stale. One event has to expand into the concrete set of live endpoints for everyone it concerns.",
+    "beginner": "People have more than one device, and their device 'addresses' keep changing. And some events need to reach a whole group, not one person. The sender does not know all those current addresses, so something has to look them up and turn one event into many sends.",
+    "model": {
+     "id": "single-source-of-truth",
+     "application": "Keep one authoritative registry of where each user is reachable right now (their live tokens and addresses) and resolve every send against it, so no producer ever acts on a stale copy of a token."
+    }
+   },
+   "gate": {
+    "question": "One 'someone replied' event may need to reach a user's three devices, or every member of a group. Producers do not know anyone's current push tokens. Where does 'where is this user reachable right now' live, and who expands one event into many sends?",
+    "hint": "The producer should name who and what, never how-to-reach. Something authoritative must own the mapping from a user to their live endpoints."
+   },
+   "solution": "Add an endpoint registry: the single source of truth for each user's active tokens, email, and phone. A fan-out step resolves an event's recipient(s) against the registry and expands it into one delivery job per live endpoint. Devices register and refresh tokens here; bounce and unregister feedback prunes the dead ones. The producer emits 'notify user U of event E'; fan-out turns that into the actual N sends.",
+   "user_lens": {
+    "gives": "Every one of a user's devices lights up, a new phone just works once it registers, and a single event can reach a whole audience.",
+    "costs": "A registry to keep current. A stale, unpruned token wastes sends and can even push an alert to a device the user no longer owns, until bounce feedback removes it."
+   },
+   "tech_lens": {
+    "mechanism": "A registry keyed by user id holding live endpoints; a fan-out worker that reads it and emits per-endpoint jobs; token lifecycle driven by device registration and provider bounce feedback.",
+    "principle": "Let producers name intent, not addresses. Resolve recipients against one authoritative directory at send time so nobody acts on a stale copy."
+   },
+   "tradeoff": "Write amplification: one event becomes many jobs, so a broadcast turns a single publish into a fan-out storm the rest of the pipeline must survive, and the registry becomes a hot dependency read on every send.",
+   "at_scale": "This is where load is manufactured: fan-out is O(recipients times devices), so a celebrity broadcast turns one event into tens of millions of jobs. It scales by fanning out in parallel across workers and by streaming a huge audience as a paged job rather than one giant in-memory expansion; the registry is read-heavy and is cached and replicated. The ceiling is the fan-out width of the hottest event, the notification twin of a hot key.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "endpoint registry as source of truth",
+      "software_concept": "system of record for a user's reachable endpoints"
+     },
+     {
+      "mechanism": "expand one event into N jobs",
+      "software_concept": "fan-out on write: one publish becomes many per-recipient sends"
+     }
+    ],
+    "interview_probes": [
+     "A user has three devices and just replaced one. How does a send reach all live devices and none of the dead ones, and who owns that list?"
+    ],
+    "approach": "Store endpoints in a table keyed by user_id (token, channel, last_seen). On an event, look up all live endpoints and enqueue one job per endpoint; drive token cleanup from provider bounce callbacks. For huge audiences, page the recipient set and fan out in batches.",
+    "vocab": [
+     "fanout",
+     "data-modeling"
+    ]
+   },
+   "beginner_analogy": "Like a school phone tree: the office keeps everyone's current numbers, and one announcement is expanded into a call to each family, not a single call to a number someone wrote down years ago.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "fanout",
+      "label": "Fan-out worker",
+      "kind": "process",
+      "lane": "pipeline",
+      "order": 3
+     },
+     {
+      "id": "registry",
+      "label": "Device registry",
+      "kind": "store",
+      "lane": "control",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_deq2",
+      "from": "queue",
+      "to": "fanout",
+      "kind": "payload",
+      "label": "dequeue"
+     },
+     {
+      "id": "e_fj",
+      "from": "fanout",
+      "to": "worker",
+      "kind": "payload",
+      "label": "per-device job"
+     },
+     {
+      "id": "e_reg",
+      "from": "fanout",
+      "to": "registry",
+      "kind": "control",
+      "label": "resolve"
+     }
+    ],
+    "highlight": [
+     "worker",
+     "e_wsend"
+    ],
+    "remove": [
+     "e_deq"
+    ]
+   }
+  },
+  {
+   "index": 3,
+   "name": "Per-Channel Delivery: Adapters for Push, Email, SMS",
+   "problem": {
+    "statement": "Not everything belongs on push. A password reset must be email, a login code is SMS, a like is push. Each channel is its own world: APNs and FCM speak their own protocols and auth, email needs MIME and SPF/DKIM and a sender reputation, SMS has 160-character segments and per-country carrier rules. Cramming all of that into one worker makes a brittle tangle where an email change risks the push path and one channel's quirks block the rest.",
+    "beginner": "Different messages suit different channels: codes by text, receipts by email, nudges by push. But each channel works completely differently under the hood, and if one big block of code tries to do all of them, a change to one keeps breaking the others.",
+    "model": {
+     "id": "separation-of-concerns",
+     "application": "Give each channel its own adapter behind a common send interface, so channel-specific formatting, auth, and provider quirks stay isolated and the pipeline speaks one language to many channels."
+    }
+   },
+   "gate": {
+    "question": "The same pipeline must deliver a push, an email, and an SMS, each with different formats, providers, and failure modes, and add a fourth channel next quarter. How do you support all of them without every channel's mess leaking into the others?",
+    "hint": "One interface, many implementations. What varies from channel to channel, and what stays identical for all of them?"
+   },
+   "solution": "A channel adapter per medium (push, email, SMS) behind a uniform interface: render(message) then call the provider. Fan-out tags each job with a channel; a router hands it to the matching adapter, which renders the channel-specific payload and talks to that channel's provider. Adding a channel (say WhatsApp) is a new adapter, not a pipeline rewrite.",
+   "user_lens": {
+    "gives": "The right message on the right medium: codes by SMS, receipts by email, nudges by push, each correctly formatted for its channel.",
+    "costs": "More moving parts and per-channel accounts, keys, and compliance (email reputation, SMS carrier rules) to maintain, and every message must now decide which channel it belongs on."
+   },
+   "tech_lens": {
+    "mechanism": "A common adapter interface with per-channel implementations; a router that dispatches a job to its channel's adapter; provider SDKs and credentials encapsulated inside each adapter.",
+    "principle": "Isolate what varies behind a stable boundary: one send contract, many channel implementations, so each channel can evolve and fail on its own."
+   },
+   "tradeoff": "The uniform interface is a lowest-common-denominator: rich channel-specific features (email open tracking, push action buttons) either leak through the abstraction or are lost, and each new channel is real operational surface to run.",
+   "at_scale": "Channels scale independently: email can batch thousands per API call while push is one call per device, so each adapter gets its own worker pool, rate budget, and provider sized to its volume. The slowest or most rate-limited channel no longer caps the others, and a channel is scaled by widening only its own pool.",
+   "defends": [
+    "inv1",
+    "inv4"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "channel adapter behind one interface",
+      "software_concept": "strategy pattern / provider abstraction: one contract, many implementations"
+     },
+     {
+      "mechanism": "route a job to its channel",
+      "software_concept": "dispatch by message type to the matching handler"
+     }
+    ],
+    "interview_probes": [
+     "Push, email, and SMS have nothing in common at the wire level. How do you structure delivery so adding a channel does not touch the existing ones?"
+    ],
+    "approach": "Define a Channel interface with send(message); implement PushAdapter, EmailAdapter, SmsAdapter, each wrapping its provider SDK. A router maps job.channel to the adapter. A new channel is a new class implementing the interface, registered in the router.",
+    "vocab": [
+     "communication-protocols"
+    ]
+   },
+   "beginner_analogy": "Like a shipping department with separate desks for letters, parcels, and couriers: one order slip comes in, and whichever desk fits the package handles its own paperwork and carrier.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "adapters",
+      "label": "Channel adapters",
+      "kind": "process",
+      "lane": "pipeline",
+      "order": 5
+     },
+     {
+      "id": "email_prov",
+      "label": "Email provider",
+      "kind": "channel",
+      "lane": "channels",
+      "order": 6
+     },
+     {
+      "id": "sms_prov",
+      "label": "SMS gateway",
+      "kind": "channel",
+      "lane": "channels",
+      "order": 7
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_adapt",
+      "from": "worker",
+      "to": "adapters",
+      "kind": "payload",
+      "label": "render"
+     },
+     {
+      "id": "e_ap",
+      "from": "adapters",
+      "to": "push_prov",
+      "kind": "payload",
+      "label": "push"
+     },
+     {
+      "id": "e_ae",
+      "from": "adapters",
+      "to": "email_prov",
+      "kind": "payload",
+      "label": "email"
+     },
+     {
+      "id": "e_as",
+      "from": "adapters",
+      "to": "sms_prov",
+      "kind": "payload",
+      "label": "sms"
+     },
+     {
+      "id": "e_de",
+      "from": "email_prov",
+      "to": "device",
+      "kind": "payload",
+      "label": "email"
+     },
+     {
+      "id": "e_ds",
+      "from": "sms_prov",
+      "to": "device",
+      "kind": "payload",
+      "label": "sms"
+     }
+    ],
+    "highlight": [
+     "e_wsend",
+     "push_prov"
+    ],
+    "remove": [
+     "e_wsend"
+    ]
+   }
+  },
+  {
+   "index": 4,
+   "name": "User Preferences: The Consent Gate",
+   "problem": {
+    "statement": "Now every event blasts every channel to everyone it touches. Users do not want a 2 a.m. SMS for a like, or any email from a category they muted, and some sends legally require opt-in. Without a gate, the system delivers whatever it can, and users answer by turning notifications off entirely, which is worse than silence. A send is a one-way door into someone's attention; once through, it cannot be recalled.",
+    "beginner": "If the system sends everything on every channel, people get spammed, so they switch notifications off completely. Users need to choose what reaches them and how, and the system has to check that choice before it sends anything.",
+    "model": {
+     "id": "trust-boundary",
+     "application": "Treat delivery into a user's attention as a boundary every send must be authorized to cross; check the recipient's preferences at that line and drop anything unconsented, per category and per channel."
+    }
+   },
+   "gate": {
+    "question": "A user muted 'likes' and disabled SMS, but the pipeline will happily send both. Where do you put the check that stops an unwanted send, and what does it check against, so nothing crosses into the user's attention without permission?",
+    "hint": "Every send crosses from your system into someone's life. What must it show at that checkpoint, and who is the authority on 'may I'?"
+   },
+   "solution": "A preference store, per user and per (category, channel), consulted during fan-out: for each candidate send, is this category enabled on this channel for this user, and does it respect quiet hours? Sends that fail the check are dropped before they reach an adapter. Defaults are conservative and reversible; regulated categories default off until explicit opt-in. Preferences are the authority; the pipeline obeys.",
+   "user_lens": {
+    "gives": "Control: users choose what reaches them and how, keep the notifications they value, and are not trained to mute everything.",
+    "costs": "Another authoritative store on the hot path, and a real product burden: sensible defaults, granular categories, and honoring an opt-out everywhere the instant it is set."
+   },
+   "tech_lens": {
+    "mechanism": "A preferences service keyed by (user, category, channel) plus quiet-hours, queried per candidate send; fan-out filters the endpoint set through it before dispatch.",
+    "principle": "Put a verification checkpoint at the boundary and never cross it unchecked: consent is authorization, and a send is denied by default when consent is not granted."
+   },
+   "tradeoff": "Preference checks add a read to every send and complexity to fan-out, and controls that are too granular bury users while controls that are too coarse feel spammy anyway. Getting the defaults right is most of the battle.",
+   "at_scale": "The check is a cheap keyed read, cacheable per user, so it scales with the fan-out ahead of it; the real pressure is correctness under change: an opt-out must take effect fast, so preferences are cached with short TTLs or invalidated on write, or a muted user keeps getting sends from a warm cache. It also sheds load early, since a dropped send never touches a provider.",
+   "defends": [
+    "inv3"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "per-category, per-channel consent check",
+      "software_concept": "authorization / policy gate on the send path"
+     },
+     {
+      "mechanism": "regulated categories default off",
+      "software_concept": "deny-by-default allowlist rather than opt-out"
+     }
+    ],
+    "interview_probes": [
+     "A user disables a whole category. Where is that enforced so no channel can still send it, and how fast does an opt-out propagate?"
+    ],
+    "approach": "Keep a preferences table keyed by (user_id, category, channel) with quiet-hours; during fan-out, filter each candidate (endpoint, category) through it and drop the misses before enqueueing the send. Cache per-user prefs with a short TTL and invalidate on change.",
+    "vocab": []
+   },
+   "beginner_analogy": "Like a bouncer with the guest list at the door of someone's attention: no name on tonight's list, no entry, and the list is the guest's own choice, not the venue's.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "prefs",
+      "label": "Preferences",
+      "kind": "store",
+      "lane": "control",
+      "order": 4
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_prefs",
+      "from": "fanout",
+      "to": "prefs",
+      "kind": "control",
+      "label": "allowed?"
+     }
+    ],
+    "highlight": [
+     "e_ap",
+     "e_ae",
+     "e_as",
+     "device"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 5,
+   "name": "Rate Limiting and Digests: Storm Control",
+   "problem": {
+    "statement": "Even wanted notifications can arrive in a flood. A busy thread you follow fires twenty 'new reply' pushes in a minute; a buggy or looping producer emits thousands. Each passes preferences, each is individually legitimate, but together they drain the battery, bury the one that mattered, and push the user to disable the category. The pipeline has no sense of how much it is already sending to one person.",
+    "beginner": "Sometimes you get flooded with notifications that are each fine on their own but overwhelming together, like forty buzzes from one busy conversation. The system needs to notice it is sending too much to one person and calm it down.",
+    "model": {
+     "id": "feedback-loop",
+     "application": "Measure the recent send rate to each user and let that signal throttle and bundle: as volume climbs, collapse many notifications into one digest, a negative feedback loop that holds the per-user rate under a ceiling."
+    }
+   },
+   "gate": {
+    "question": "A user follows a thread that just got popular, and your pipeline wants to send them forty pushes in five minutes, each one individually allowed. How do you keep every send valid yet stop the phone from buzzing forty times?",
+    "hint": "The problem is not any single send; it is their rate. What can you count per user, and what do you do when the count crosses a line?"
+   },
+   "solution": "A per-user rate limiter (a token bucket) on the send path, plus bundling: when sends for a user exceed a threshold in a window, collapse them into a digest ('Alex and 12 others replied') or defer low-priority ones to a scheduled summary. High-priority sends (a security code) bypass; low-value ones are merged or shed. The limiter senses the rate and the response damps it.",
+   "user_lens": {
+    "gives": "A humane volume: the important notification is not buried, the phone does not buzz all night, and the user keeps the category turned on.",
+    "costs": "Latency and loss of granularity for low-priority sends: some are delayed into a digest or merged away, so 'immediate and individual' is traded for 'calm and summarized.'"
+   },
+   "tech_lens": {
+    "mechanism": "A token-bucket rate limiter keyed by user (and category), with overflow routed to bundling / digest or a scheduled batch; priority classes decide bypass versus merge versus defer.",
+    "principle": "Regulate by feedback: watch the output rate and throttle the input, converting a burst into a bounded, bundled stream instead of a storm."
+   },
+   "tradeoff": "Bundling adds delay and per-user buffering state, and the priority and threshold tuning is delicate: too aggressive hides things people wanted now, too loose and the storm gets through.",
+   "at_scale": "This is the guardrail that makes fan-out survivable: it caps the per-user delivery rate no matter how wide the fan-out or how buggy a producer, so a runaway event degrades to a digest instead of a global buzzing storm. It is load-shedding aimed at a human target (attention); the counters are cheap per-user state in a fast store, and the ceiling is the memory for per-user buckets, sharded by user.",
+   "defends": [
+    "inv3"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "per-user token bucket",
+      "software_concept": "rate limiting on the send path, keyed by recipient"
+     },
+     {
+      "mechanism": "collapse a burst into one summary",
+      "software_concept": "digest / batching of low-priority notifications"
+     }
+    ],
+    "interview_probes": [
+     "Forty individually-valid notifications for one user in five minutes. What do you count, and what happens to sends 3 through 40?"
+    ],
+    "approach": "Keep a token bucket per user (and per category) in Redis; each send takes a token, and on empty, route the notification into a per-user digest buffer flushed on a timer or threshold. Tag sends with a priority so codes bypass and likes merge.",
+    "vocab": [
+     "rate-limiting",
+     "load-shedding"
+    ]
+   },
+   "beginner_analogy": "Like a considerate assistant who, instead of interrupting you twenty times an hour, holds the small stuff and hands you one summary, but still barges in immediately if the building is on fire.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "ratelimit",
+      "label": "Rate limiter",
+      "kind": "process",
+      "lane": "control",
+      "order": 5,
+      "expands_to": "Rate limiter"
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_rl",
+      "from": "worker",
+      "to": "ratelimit",
+      "kind": "control",
+      "label": "check rate"
+     },
+     {
+      "id": "e_rla",
+      "from": "ratelimit",
+      "to": "adapters",
+      "kind": "payload",
+      "label": "send / digest"
+     }
+    ],
+    "highlight": [
+     "worker",
+     "adapters",
+     "device"
+    ],
+    "remove": [
+     "e_adapt"
+    ]
+   }
+  },
+  {
+   "index": 6,
+   "name": "Deduplication: One Event, One Buzz",
+   "problem": {
+    "statement": "The queue is at-least-once by design: a worker that crashes after sending but before acking will see the message again and send twice; a producer retry or a double-emit does the same; fan-out can double-count an endpoint. The result is the same alert buzzing a user's wrist twice, which reads as broken. Delivery is over unreliable steps, and reliable steps retry, and retries duplicate.",
+    "beginner": "To be reliable, the system sometimes tries a send again, and the queue can hand the same job to two workers. Without care, that means you get the exact same notification twice. It needs a way to recognize 'I already sent this' and skip the repeat.",
+    "model": {
+     "id": "idempotency",
+     "application": "Give every notification a stable id and make sending it idempotent: record that (notification id, endpoint) was delivered and skip any repeat, so doing the send twice equals doing it once."
+    }
+   },
+   "gate": {
+    "question": "Your queue guarantees at-least-once, so it will occasionally hand a worker the same send twice, and you must not buzz the user twice. You cannot make the queue exactly-once cheaply. What makes a second attempt a no-op?",
+    "hint": "If you cannot stop the second attempt from happening, make it harmless. What do you remember so you can recognize a repeat?"
+   },
+   "solution": "Derive a deterministic dedup key per send (event id plus recipient plus channel, or a client-supplied idempotency key) and check-and-set it in a fast store before delivering: the first attempt claims the key and sends; any later attempt finds the key and drops. The window is bounded by a TTL sized to the retry horizon. Pair with a transactional outbox on the producer so the event is enqueued exactly once with its data. At-least-once plus idempotent delivery gives effectively-once.",
+   "user_lens": {
+    "gives": "One event, one buzz: retries and redeliveries stop turning into duplicate alerts, so the system reads as reliable rather than glitchy.",
+    "costs": "A dedup store and a key on every send, plus a bounded window: a redelivery after the TTL, or the same real-world fact emitted under two different event ids, can still slip through as a duplicate."
+   },
+   "tech_lens": {
+    "mechanism": "A deterministic idempotency key per (notification, endpoint); an atomic check-and-set (SETNX) in a fast store with a retry-horizon TTL; an optional transactional outbox to make the enqueue itself exactly-once.",
+    "principle": "Do not fight at-least-once; absorb it. Make the operation idempotent so unlimited retries collapse to a single visible effect."
+   },
+   "tradeoff": "You trade storage and a lookup per send for duplicate suppression, and you accept that 'exactly once' is really 'at least once plus dedup within a window,' never an absolute guarantee across all time.",
+   "at_scale": "Idempotency is what makes the aggressive retries of the next layer safe at any volume: dedup cost is one keyed check-and-set per send, and the store is sharded by key, so it scales with send volume. The residual duplicate risk is bounded by the TTL, so the store holds only the recent window, not all history; the hot case is a viral event whose dedup keys concentrate, handled by sharding on the key.",
+   "defends": [
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "dedup key plus check-and-set",
+      "software_concept": "idempotency key that makes a retry harmless"
+     },
+     {
+      "mechanism": "enqueue exactly once with the write",
+      "software_concept": "transactional outbox: no saved-but-never-published gap"
+     }
+    ],
+    "interview_probes": [
+     "Your queue is at-least-once. Walk through how a crash between send and ack causes a duplicate, and exactly what makes the redelivery a no-op."
+    ],
+    "approach": "Compute a dedup key like hash(event_id + endpoint + channel); before sending, SETNX the key with a TTL covering your retry window; if it already exists, skip. On the producer, write the event to an outbox row in the same transaction as the data and relay it once.",
+    "vocab": [
+     "idempotency-keys",
+     "outbox"
+    ]
+   },
+   "beginner_analogy": "Like checking a guest's hand for the ink stamp at a festival: a stamp already there means they have been let in, so they are waved past, not admitted a second time.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "dedup",
+      "label": "Dedup store",
+      "kind": "store",
+      "lane": "control",
+      "order": 6
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_dedup",
+      "from": "worker",
+      "to": "dedup",
+      "kind": "control",
+      "label": "seen id?"
+     }
+    ],
+    "highlight": [
+     "queue",
+     "e_deq2",
+     "worker"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 7,
+   "name": "Retries and Failure Isolation: Surviving a Dead Provider",
+   "problem": {
+    "statement": "Providers fail in every way: a transient 503 from FCM, a timeout to the SMS gateway, a full email-provider outage. A naive worker drops the notification on the first error (a lost send, breaking inv1) or retries in a tight loop against a dead provider, amplifying the outage and starving the healthy channels. And one sick provider must not take the others, or the whole pipeline, down with it.",
+    "beginner": "The outside services you send through go down or get slow. If the worker gives up on the first error, notifications are lost; if it keeps retrying instantly, it makes the outage worse and blocks the channels that still work. It needs to retry sensibly, leave dead services alone, and keep the working ones flowing.",
+    "model": {
+     "id": "graceful-degradation",
+     "application": "When a provider fails, do not drop and do not spin: retry with backoff, isolate the failing channel so it cannot drag down the rest, and fall back or defer so the system keeps delivering what it can."
+    }
+   },
+   "gate": {
+    "question": "FCM starts returning 503s and the SMS gateway is timing out, while email is fine. A naive worker either loses those sends or hammers the dead providers forever. How do you not lose the notification, not amplify the outage, and keep email flowing?",
+    "hint": "A failed send is not a lost send if you can try again later, and a dead provider should be left alone for a while. What structure holds the retries, and what stops you from calling a corpse?"
+   },
+   "solution": "Failed sends go to a retry queue with exponential backoff and jitter, capped by attempts and a deadline, then to a dead-letter queue for inspection. A circuit breaker per provider trips after repeated failures, fails fast (shedding or deferring that channel) and probes for recovery, so you stop hammering a dead provider. Bulkheads give each channel its own worker pool and rate budget, so SMS timing out cannot starve email. Where the notification allows, fall back (an SMS code failing over to email). Degrade, do not collapse.",
+   "user_lens": {
+    "gives": "Notifications survive provider hiccups, delivered late after a retry rather than lost, and an outage in one channel does not silence the others.",
+    "costs": "Delivery latency during failures (backoff means later), possible reordering, and a dead-letter queue someone must watch; a long enough outage still ends in undelivered sends parked in the DLQ."
+   },
+   "tech_lens": {
+    "mechanism": "Exponential backoff with jitter and attempt / deadline caps feeding a retry queue then a DLQ; a per-provider circuit breaker (closed, open, half-open); bulkhead isolation via separate pools per channel; optional cross-channel fallback.",
+    "principle": "Assume every dependency fails: retry the transient, isolate the persistent, and degrade to reduced service instead of collapsing."
+   },
+   "tradeoff": "Retries add load and latency exactly when a provider is already struggling, so caps and breakers are essential; fallbacks and DLQs are machinery whose only job is to make failure survivable, not to deliver the happy path.",
+   "at_scale": "This decouples the system's reliability from any single provider's: with breakers and bulkheads, one provider's outage degrades one channel while the rest run at full rate, and retries smeared over jittered backoff avoid a synchronized thundering retry when the provider recovers. The residual ceiling is a total, prolonged outage of a channel with no fallback, where sends accumulate in the retry queue and DLQ until it returns.",
+   "defends": [
+    "inv1",
+    "inv4"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "backoff plus retry queue plus DLQ",
+      "software_concept": "durable retry with a dead-letter path for the unrecoverable"
+     },
+     {
+      "mechanism": "per-provider circuit breaker plus bulkhead",
+      "software_concept": "failure isolation so one dependency cannot cascade"
+     }
+    ],
+    "interview_probes": [
+     "One provider is down, another is flaky, a third is fine. How do you avoid losing sends, avoid hammering the dead one, and keep the healthy channel at full speed?"
+    ],
+    "approach": "On a failed send, requeue with delay = base * 2^attempt + jitter, cap attempts, and route exhausted sends to a DLQ. Wrap each provider call in a circuit breaker that opens after N failures and half-opens to probe; run each channel on its own worker pool so one cannot starve another.",
+    "vocab": [
+     "circuit-breaker",
+     "bulkhead"
+    ]
+   },
+   "beginner_analogy": "Like a courier who, finding a road blocked, does not give up or keep ramming the barrier: they wait and try again later, take a different route if there is one, and flag the parcel for the depot if it truly cannot get through, all without holding up the other routes.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "retry",
+      "label": "Retry + DLQ",
+      "kind": "store",
+      "lane": "pipeline",
+      "order": 6
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_fail",
+      "from": "adapters",
+      "to": "retry",
+      "kind": "control",
+      "label": "provider error"
+     },
+     {
+      "id": "e_reinject",
+      "from": "retry",
+      "to": "adapters",
+      "kind": "payload",
+      "label": "retry"
+     }
+    ],
+    "highlight": [
+     "push_prov",
+     "email_prov",
+     "sms_prov",
+     "adapters"
+    ],
+    "remove": []
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "The viral broadcast",
+   "scenario": "An account with 20 million followers posts. One event fans out to tens of millions of per-device sends in seconds.",
+   "reveal": "Fan-out (L2) manufactures the load: O(recipients times devices). The queue (L1) absorbs the spike as backlog drained at each channel's safe rate; per-channel adapters (L3) with independent pools keep push, email, and SMS scaling separately; rate limiting (L5) caps what any single follower receives so nobody gets a storm; and preferences (L4) shed the sends followers never wanted before they cost a provider call. inv1 holds (everyone eligible is eventually reached) and inv3 holds (no one is flooded). The cost is latency: the tail of a 20-million fan-out lands minutes later, drained rather than dropped. The hot case is the event's fan-out width, the notification twin of a hot key, handled by streaming the recipient set and fanning out in parallel."
+  },
+  {
+   "id": "st2",
+   "title": "The duplicate storm from a crash",
+   "scenario": "A delivery worker sends a batch, then crashes before acking. The at-least-once queue redelivers the whole batch to another worker.",
+   "reveal": "Without dedup this is a batch of duplicate buzzes. The idempotency layer (L6) makes the redelivery a no-op: each send's dedup key was claimed on first delivery, so the second worker's check-and-set finds every key present and drops the lot. inv2 holds. The window is bounded by the key TTL; a redelivery after that window, or the same fact emitted under two different event ids, is the honest residual gap. This is why the queue stays at-least-once (cheap and reliable) and correctness is bought with idempotent delivery, not an expensive exactly-once queue."
+  },
+  {
+   "id": "st3",
+   "title": "A channel provider goes dark mid-peak",
+   "scenario": "FCM starts timing out at peak traffic while email and SMS stay healthy.",
+   "reveal": "The circuit breaker (L7) trips on FCM after repeated failures and fails fast, so workers stop hammering it; bulkheads keep FCM's failures inside the push pool, so email and SMS run at full rate (inv4). Failed push sends back off in the retry queue; if the notification permits, it falls back to another channel, otherwise it waits for FCM to recover or lands in the DLQ. inv1 is defended for everything with a fallback or a successful retry; the confessed weak spot is a push-only notification during a long FCM outage, which parks in the retry queue and DLQ until the provider returns. When FCM recovers, jittered backoff prevents a synchronized retry stampede."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "Move slow, unreliable side effects off the critical path: a buffer turns a rate or reliability mismatch into latency instead of failure.",
+   "Let callers name intent, not addresses; resolve recipients against one authoritative directory at send time so nobody acts on a stale copy.",
+   "Isolate what varies behind a stable boundary: one send contract, many channel implementations, each free to evolve and fail alone.",
+   "Guard the boundary into a user's attention with a consent checkpoint, and treat unrequested delivery as denied by default.",
+   "Do not fight at-least-once delivery; absorb it with idempotent operations so unlimited retries collapse to a single visible effect.",
+   "Assume every dependency fails: retry the transient, isolate the persistent, and degrade to reduced service instead of collapsing."
+  ],
+  "mappings": [
+   {
+    "mechanism": "async queue plus workers",
+    "elsewhere": "Task queues, job systems, and event pipelines everywhere decouple a fast producer from slow, failure-prone work."
+   },
+   {
+    "mechanism": "fan-out via a registry",
+    "elsewhere": "Feed delivery, pub/sub subscriber expansion, and mailing-list explosion all turn one event into many sends against a directory of recipients."
+   },
+   {
+    "mechanism": "idempotency key plus dedup",
+    "elsewhere": "Payment processing, webhook receivers, and message consumers all make retries safe by remembering a key and dropping repeats."
+   },
+   {
+    "mechanism": "circuit breaker, bulkhead, backoff",
+    "elsewhere": "Every resilient service-to-service call isolates a failing dependency and retries the transient without amplifying the outage."
+   },
+   {
+    "mechanism": "per-user rate limiting plus digest",
+    "elsewhere": "Email throttling, API quotas, and alert-fatigue suppression in monitoring all cap how much one recipient is hit and bundle the overflow."
+   }
+  ]
+ }
+}

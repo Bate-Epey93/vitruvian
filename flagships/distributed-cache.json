@@ -1,0 +1,741 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "Distributed cache",
+  "narrowing": "The read path of a look-aside cache: a fleet of app servers fronting a slow backing store with a shared in-memory cache tier. Cache-as-primary designs, write-consistency protocols, and the cache's own internal data structures are left aside; this is the tier between the fleet and the store.",
+  "ordering_note": "These are the standard, inevitable failures a distributed cache hits as it grows, not one company's dated outage, so confidence is medium. Each layer is forced by the concrete failure the previous state hits next: first the store buckles under repeated reads, then copies go stale, then a hot key's expiry stampedes the store, then one node's memory is the ceiling, then a node's death threatens the very store it shields.",
+  "history_confidence": "medium",
+  "domain": "software"
+ },
+ "essence": {
+  "text": "A distributed cache is one shared memory the whole fleet reads from, holding the answers to the questions asked most, so a slow store is touched only when the answer is genuinely new. It buys milliseconds by keeping copies, and spends the rest of its life paying the debt those copies owe: every copy can be wrong the instant the source changes, and every copy can vanish the instant a node dies.",
+  "beginner": "A distributed cache is a fast, shared memory that many servers use to remember answers they would otherwise have to look up in a slow database every single time. It makes apps fast, as long as the remembered answers are still correct and the memory stays up.",
+  "deep_facts": [
+   "Reading from RAM takes on the order of 100 nanoseconds; reading a random row from disk or another service is often hundreds of microseconds to milliseconds. The cache exists to close that thousandfold gap.",
+   "The old joke names two hard things in computer science: cache invalidation and naming things. It stays funny because keeping a copy correct when the original changes has no clean, general solution.",
+   "A cache stampede (thundering herd) is self-inflicted: the cache, not the users, fires thousands of identical requests at the backing store the instant one popular key expires.",
+   "Consistent hashing came from a 1997 MIT paper by Karger and colleagues. Adding one node to a ring of N moves only about 1/N of the keys, where plain modulo hashing would move nearly all of them.",
+   "A cache is designed to be lossy: because it is only a copy, a node can be wiped or replaced at any moment and the system stays correct, only slower, which is exactly what makes it safe to run in volatile memory."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Serve reads at memory speed by keeping copies of the most-asked answers in a shared, fast store, so the slow backing store is queried only on a miss and never overwhelmed.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "App server",
+    "want": "Reads answered in microseconds on a hit, values that match the database, and a cache it can lose without going down"
+   },
+   {
+    "id": "a2",
+    "name": "Cache operator",
+    "want": "A high hit ratio, even load across nodes, and no single key or dead node able to take down the tier or the store behind it"
+   },
+   {
+    "id": "a3",
+    "name": "Writer",
+    "want": "That once it writes a new value, no client keeps reading the old one for longer than a bounded window"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "A value served from the cache is one the backing store holds or recently held for that key: the cache never returns a fabricated, corrupted, or mismatched value."
+   },
+   {
+    "id": "inv2",
+    "text": "Once the backing store's value for a key changes, the cache stops serving the old value within a bounded window, and an explicit invalidation drops it at once."
+   },
+   {
+    "id": "inv3",
+    "text": "The backing store's load stays bounded no matter how many clients read or how many keys expire at once: the cache never stampedes it."
+   },
+   {
+    "id": "inv4",
+    "text": "The cache is an accelerator, not a dependency: any cache node, or the whole tier, failing degrades latency, never the correctness or availability of reads."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Key",
+    "note": "The lookup handle derived from the query (an id, a query hash); the unit of caching, hashing, and invalidation"
+   },
+   {
+    "id": "en2",
+    "name": "Cached value",
+    "note": "A copy of the backing store's answer for a key, held in volatile memory with a lifetime (TTL)"
+   },
+   {
+    "id": "en3",
+    "name": "Cache node",
+    "note": "One server holding a shard of the keyspace in RAM: fast, finite, and disposable"
+   },
+   {
+    "id": "en4",
+    "name": "Backing store",
+    "note": "The authoritative source of truth the cache fronts: a database or service, slow and expensive to query"
+   },
+   {
+    "id": "en5",
+    "name": "Membership",
+    "note": "The current set of live cache nodes and the map from key to owning node; it changes when a node joins or dies"
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Reads flow from app servers to the cache; on a miss, only as far as the backing store, then the answer flows back and is stored."
+   },
+   {
+    "id": "f2",
+    "text": "Writes flow to the backing store; invalidation signals flow to the cache to drop or refresh the stale key."
+   },
+   {
+    "id": "f3",
+    "text": "Membership changes flow through the hashing scheme, remapping a slice of keys to new owners."
+   }
+  ],
+  "constraints": [
+   "Memory is finite and expensive, so the cache holds only a working set; the rest must be evicted and re-fetched on demand.",
+   "A cache is a copy, and a copy can be wrong the instant the original changes.",
+   "Cache memory is volatile: a node restart or crash loses everything it held, so no data may live only in the cache.",
+   "Every added node is another thing that can fail and another remapping of keys; coordinating a shared view across nodes is not free."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "clients",
+    "label": "App fleet"
+   },
+   {
+    "id": "cache",
+    "label": "Cache tier"
+   },
+   {
+    "id": "control",
+    "label": "Control"
+   },
+   {
+    "id": "source",
+    "label": "Source"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "app_a",
+    "label": "App server A",
+    "kind": "process",
+    "lane": "clients",
+    "order": 0
+   },
+   {
+    "id": "app_b",
+    "label": "App server B",
+    "kind": "process",
+    "lane": "clients",
+    "order": 1
+   },
+   {
+    "id": "db",
+    "label": "Database",
+    "kind": "store",
+    "lane": "source",
+    "order": 5,
+    "expands_to": "Relational database"
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_read_a",
+    "from": "app_a",
+    "to": "db",
+    "kind": "control",
+    "label": "read"
+   },
+   {
+    "id": "e_read_b",
+    "from": "app_b",
+    "to": "db",
+    "kind": "control",
+    "label": "read"
+   },
+   {
+    "id": "e_rows_a",
+    "from": "db",
+    "to": "app_a",
+    "kind": "payload",
+    "label": "rows"
+   },
+   {
+    "id": "e_rows_b",
+    "from": "db",
+    "to": "app_b",
+    "kind": "payload",
+    "label": "rows"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "Cache-Aside: Put the Hot Answer in Memory",
+   "problem": {
+    "statement": "Every app server answers every read by querying the backing store, even for the same handful of rows requested thousands of times a second. The store's disk seeks and query planner are the ceiling: read traffic climbs, latency climbs with it, and a popular row becomes a hotspot that saturates the one database that owns it. You are paying a full database query to answer a question whose answer almost never changes.",
+    "beginner": "Every server asks the database directly for everything, every time. Even when a thousand people want the exact same row, the database looks it up a thousand times. It is slow, and the database drowns under repeated questions that all have the same answer.",
+    "model": {
+     "id": "locality-and-caching",
+     "application": "The same answers are read over and over and change rarely, the textbook cache candidate: keep them in fast shared memory next to the readers and turn a slow, repeated store query into a fast local lookup."
+    }
+   },
+   "gate": {
+    "question": "The same rows are read thousands of times a second and their values barely change, yet every read is a fresh database query. Where do you put the answer so a read almost never touches the database, and who checks there first?",
+    "hint": "If an answer is read a thousand times and changes once an hour, you should have to fetch it from the slow store at most once, then serve the rest from somewhere fast."
+   },
+   "solution": "A shared in-memory cache (Redis or Memcached) in front of the store, keyed by a key derived from the query. The read becomes cache-aside, also called look-aside: the app asks the cache first; on a hit it returns the value and never touches the store; on a miss it reads the store, writes the value back into the cache with a TTL, then returns it. Because the hot working set is tiny next to the whole dataset, hit ratios run well above 90 percent and store reads collapse to misses only.",
+   "user_lens": {
+    "gives": "Reads answered from memory in tens of microseconds instead of milliseconds, and a backing store that stops feeling read traffic at all once the working set is warm.",
+    "costs": "A second copy of every hot value that can drift from the truth: the first staleness enters the moment the cache keeps a value the store has since changed. And the app now carries the get-or-fill logic itself."
+   },
+   "tech_lens": {
+    "mechanism": "A key/value store in RAM, shared by the fleet. Miss: read the backing store, SET the value with a lifetime, return it. Hit: return from memory, store untouched. The cache holds only a working set; least-recently-used eviction drops cold keys when memory fills.",
+    "principle": "When reads dwarf writes and answers change rarely, move the answer next to the reader and pay the slow fetch at most once per value per lifetime."
+   },
+   "tradeoff": "Every cached value is a bet the original has not changed since you stored it. You trade guaranteed freshness for speed, and you take on eviction: a finite cache cannot hold everything, so the cold tail still pays full price.",
+   "at_scale": "Read capacity now scales with the cache tier, not the store: a hot key is served from memory at hundreds of thousands of reads a second while the store sees almost none. The ceiling moves from store throughput to cache memory and the hit ratio. A low hit ratio (a working set larger than memory, or a long uniform tail) pushes load straight back onto the store, and a single node's RAM caps how much you can keep warm, which later layers must break.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "cache-aside read path",
+      "software_concept": "look-aside cache with TTL in front of a slow store; the store is truth, the cache is a disposable accelerator"
+     },
+     {
+      "mechanism": "key derived from the query",
+      "software_concept": "content-addressed keying: the request parameters hash to the lookup key"
+     }
+    ],
+    "interview_probes": [
+     "With a read-heavy workload, where does the first bottleneck appear, and what hit ratio would you expect from caching the hot working set?"
+    ],
+    "approach": "Wrap reads in get-or-fill over a key/value client: v = cache.get(key); if miss, v = db.read(...); cache.set(key, v, ttl); return v. Derive the key deterministically from the query parameters so identical reads collide on one entry.",
+    "vocab": [
+     "caching",
+     "scaling-reads"
+    ]
+   },
+   "beginner_analogy": "Like keeping the answers to the most-asked questions on a sticky note by the phone, so you only dig through the filing cabinet when someone asks something new.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "cache_a",
+      "label": "Cache node",
+      "kind": "store",
+      "lane": "cache",
+      "order": 2
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_get_a",
+      "from": "app_a",
+      "to": "cache_a",
+      "kind": "control",
+      "label": "GET key"
+     },
+     {
+      "id": "e_get_b",
+      "from": "app_b",
+      "to": "cache_a",
+      "kind": "control",
+      "label": "GET key"
+     },
+     {
+      "id": "e_hit_a",
+      "from": "cache_a",
+      "to": "app_a",
+      "kind": "payload",
+      "label": "value (hit)"
+     },
+     {
+      "id": "e_hit_b",
+      "from": "cache_a",
+      "to": "app_b",
+      "kind": "payload",
+      "label": "value (hit)"
+     },
+     {
+      "id": "e_miss",
+      "from": "cache_a",
+      "to": "db",
+      "kind": "control",
+      "label": "miss → read"
+     },
+     {
+      "id": "e_fill",
+      "from": "db",
+      "to": "cache_a",
+      "kind": "payload",
+      "label": "fill"
+     }
+    ],
+    "highlight": [
+     "db",
+     "e_read_a",
+     "e_read_b"
+    ],
+    "remove": [
+     "e_read_a",
+     "e_read_b",
+     "e_rows_a",
+     "e_rows_b"
+    ]
+   }
+  },
+  {
+   "index": 2,
+   "name": "Invalidation: Keeping Copies From Lying",
+   "problem": {
+    "statement": "The cache is a copy and the store keeps changing under it. A writer updates a row (a price, a permission, a corrected record) and every cached copy of that key keeps serving the old value until its TTL runs out, so a change can take the full lifetime to appear and a revoked permission lingers dangerously. Long TTL and you are fast but wrong; no TTL and you have thrown the cache away. Worse, the naive fix hides a race: a reader that missed can write a stale value into the cache just after a writer cleared it.",
+    "beginner": "When the database changes, the cache still holds the old answer and hands it out until its timer runs out. Set the timer long and people see stale data; set it to zero and the cache is pointless. And a simple 'just delete the cached copy when you write' can still leave a stale copy behind if a read and a write cross at the wrong moment.",
+    "model": {
+     "id": "single-source-of-truth",
+     "application": "The backing store is the one authoritative value; every cached copy is subordinate and must carry an expiry and obey an invalidation, so when a copy and the store disagree, the store wins and the copy is dropped."
+    }
+   },
+   "gate": {
+    "question": "The store changes on its own schedule and the cache holds copies keyed by query. Design the rules that bound how long a stale copy may be served and let a writer force a specific key to drop immediately, without the store tracking every server that ever cached it.",
+    "hint": "Two mechanisms, not one: a default timer that expires copies on its own, and an explicit signal on write for 'this exact key, now.' And decide whether a write should update the cached value or simply delete it."
+   },
+   "solution": "Two layers of defense. Every value carries a TTL, so staleness is bounded by default even if nothing else fires. On a write, invalidate: delete the key from the cache rather than trying to update it in place, so the next reader misses and refills from the store. Deleting, not updating, avoids writing a value the store may already have changed again. To close the read-fill race, use a short TTL as a backstop or version the key (user:42:v7) so an update becomes a new key and the old copy is simply never asked for again.",
+   "user_lens": {
+    "gives": "Data that is fast and bounded-fresh: updates appear within the TTL on their own, and a critical change (a rotated credential, a corrected record) can be forced to drop everywhere at once.",
+    "costs": "A visible staleness window: for up to the TTL, a reader may get a value the store has already changed. And correctness now depends on every write path remembering to invalidate; one code path that updates the store but not the cache reintroduces silent staleness."
+   },
+   "tech_lens": {
+    "mechanism": "Per-key TTL for default expiry; delete-on-write invalidation issued by the writer after it commits to the store; key versioning to turn updates into new keys and sidestep invalidation. Write-through (update store and cache together) is an option but couples the two and does not by itself fix the concurrent read-fill race.",
+    "principle": "Keep one source of truth and make every copy subordinate: give copies an expiry so staleness is bounded by default, and an invalidation so it can be revoked on command. Prefer dropping a stale copy to rewriting it."
+   },
+   "tradeoff": "You choose per key between freshness and store load: short TTLs cut staleness but raise miss traffic, long TTLs cut miss traffic but widen the stale window. No single setting is both always-fresh and cheap, and the invalidation path is now a correctness-critical thing that can be forgotten or raced.",
+   "at_scale": "TTLs are what keep store load flat as the fleet grows: a one-minute TTL caps refills for a key at roughly one per node per minute no matter how many read it. Invalidation is the opposite pressure: a broadcast delete is O(number of cache nodes), and a mass invalidation briefly turns many keys cold at once, which is exactly the stampede the next layer must survive.",
+   "defends": [
+    "inv2",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "delete-on-write invalidation",
+      "software_concept": "cache invalidation: evict the key on write rather than update it in place"
+     },
+     {
+      "mechanism": "key versioning",
+      "software_concept": "immutable versioned keys to sidestep invalidation, making an update a new entry"
+     }
+    ],
+    "interview_probes": [
+     "Walk the cache-aside race: a reader misses and a writer updates at the same moment. How does a stale value get stuck in the cache, and what bounds or prevents it?"
+    ],
+    "approach": "On write, commit to the store, then delete the key (not update it). Give every entry a TTL as a backstop against a lost or raced invalidation. Where staleness is intolerable, encode a version in the key so writers publish new keys and readers never fetch the old one.",
+    "vocab": [
+     "caching",
+     "eventual-consistency"
+    ]
+   },
+   "beginner_analogy": "Like a printed price tag on a shelf: it carries a 'good until' date so it cannot mislead forever, and when the real price changes a clerk pulls that exact tag rather than trying to correct it in pen.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "invalidator",
+      "label": "Invalidate on write",
+      "kind": "process",
+      "lane": "control",
+      "order": 4
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_write",
+      "from": "app_b",
+      "to": "db",
+      "kind": "payload",
+      "label": "write"
+     },
+     {
+      "id": "e_inval_trig",
+      "from": "app_b",
+      "to": "invalidator",
+      "kind": "control",
+      "label": "after write"
+     },
+     {
+      "id": "e_inval",
+      "from": "invalidator",
+      "to": "cache_a",
+      "kind": "control",
+      "label": "delete key"
+     }
+    ],
+    "highlight": [
+     "cache_a",
+     "e_hit_a",
+     "e_hit_b"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 3,
+   "name": "The Stampede: One Hot Key, Ten Thousand Misses",
+   "problem": {
+    "statement": "A popular key expires, is invalidated, or is evicted, and in the same instant every server that wanted it misses at once. Naively, each miss independently queries the backing store, so one expiry becomes ten thousand identical reads landing on the store in the same millisecond. The store falls over, not because the value is expensive, but because everyone asked for it at the exact same moment. This is a cache stampede, and the cache caused it, not the users.",
+    "beginner": "Imagine the cached answer for something wildly popular expires at midnight. The instant it does, every server misses together and they all ask the database the same question in the same second. The database collapses, not because the question is hard, but because thousands asked it simultaneously.",
+    "model": {
+     "id": "mutual-exclusion",
+     "application": "On a miss for a key, let exactly one request hold the right to fetch it from the store while every other request for that same key waits for the result, so a flood of concurrent misses collapses into a single store read."
+    }
+   },
+   "gate": {
+    "question": "Ten thousand servers miss the same key in the same millisecond. You must refill it from the store, but you must not query the store ten thousand times. What do requests 2 through 10,000 do while the first fetch is in flight?",
+    "hint": "Only one fetch per key should be allowed to exist at a time. What can all the other requests wait on instead of starting their own?"
+   },
+   "solution": "Request coalescing, also called single-flight: a per-key lock in front of the store. The first miss for a key acquires the lock and does the one fetch; every concurrent miss for that same key blocks on that in-flight fetch and is served its result when it lands. Ten thousand misses become one store read and 9,999 waiters. Add TTL jitter so popular keys do not all expire on the same tick, and serve-stale-while-revalidate so the old value covers readers during the single refill.",
+   "user_lens": {
+    "gives": "Even a cold, wildly popular key stays available and the store survives its moment of fame: you wait on one fetch, not on an overloaded database.",
+    "costs": "A brief serialized wait on the first miss: requests behind the leader pause until its fetch returns, and if that one fetch is slow, all of them feel it. Serving stale during revalidation trades a little freshness for that protection."
+   },
+   "tech_lens": {
+    "mechanism": "A per-key mutex or shared promise: the winner fetches, the losers await the shared result; combined with randomized TTL jitter to desynchronize expiries and stale-while-revalidate so a refresh never leaves readers empty-handed. In a single-node cache the lock is local; across nodes it becomes a distributed lock on the key.",
+    "principle": "Deduplicate concurrent work on the same key: make the expensive fill single-flight, so N simultaneous demands cost one execution, not N."
+   },
+   "tradeoff": "You add per-key locking machinery and a little first-miss latency to buy protection from the store-melting herd. A distributed lock adds its own failure mode: if the lock holder dies mid-fetch, the others must time out and elect a new leader rather than wait forever.",
+   "at_scale": "This is what makes misses safe at scale: without it, store load scales with concurrent misses (unbounded); with it, store load per key is capped at one fetch per node per refill, however many millions miss at once. The residual load is O(number of nodes) simultaneous fetches for a key, the fan-in that sharding and hierarchy attack next.",
+   "defends": [
+    "inv3"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "single-flight in-flight lock",
+      "software_concept": "request coalescing / dogpile prevention with a per-key lock"
+     },
+     {
+      "mechanism": "TTL jitter and serve-stale",
+      "software_concept": "randomized expiry and stale-while-revalidate to avoid synchronized refills"
+     }
+    ],
+    "interview_probes": [
+     "A hot key expires and a thousand requests miss at once. How many times do you hit the backing store, and what makes it one instead of a thousand?"
+    ],
+    "approach": "Keep a map from key to in-flight Promise or Future. The first miss inserts the promise and does the fetch; concurrent misses find it and await it instead of fetching. Add random jitter to each TTL, and serve the last value while a background refill runs.",
+    "vocab": [
+     "hot-key",
+     "distributed-lock"
+    ]
+   },
+   "beginner_analogy": "Like one person volunteering to make the whole office coffee run: everyone writes down their order and waits, instead of ten people driving to the same cafe at once.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "coalescer",
+      "label": "Single-flight lock",
+      "kind": "process",
+      "lane": "control",
+      "order": 5
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_coal",
+      "from": "cache_a",
+      "to": "coalescer",
+      "kind": "control",
+      "label": "concurrent miss"
+     },
+     {
+      "id": "e_single",
+      "from": "coalescer",
+      "to": "db",
+      "kind": "control",
+      "label": "single fetch"
+     }
+    ],
+    "highlight": [
+     "e_miss",
+     "db"
+    ],
+    "remove": [
+     "e_miss"
+    ]
+   }
+  },
+  {
+   "index": 4,
+   "name": "Consistent Hashing: One Node Is Not Enough",
+   "problem": {
+    "statement": "One cache node has a hard ceiling: its RAM caps the working set it can hold, and its CPU and network cap the reads it can serve. Past that, the hit ratio falls because the set no longer fits, and a single hot key can saturate the one node that holds it. The obvious fix, more nodes, raises a harder question: which node owns which key? Plain modulo hashing (key mod N) spreads keys evenly, but the day you add or lose a node, N changes and almost every key remaps to a different owner, so the entire cache goes cold at once.",
+    "beginner": "One cache machine can only hold so much and answer so many requests. So you add more machines, but now you must decide which machine keeps which key. The simple math (number of the key, divided among the machines) breaks the moment you add or remove a machine: nearly every key suddenly belongs to a different machine, and the whole cache is empty at once.",
+    "model": {
+     "id": "bottleneck",
+     "application": "A single node's memory and throughput is the governing constraint; spread the keyspace across many nodes, but choose a mapping where adding or removing a node moves only a small slice of keys instead of remapping everything."
+    }
+   },
+   "gate": {
+    "question": "You need to spread keys across many cache nodes so no one node is the ceiling, but you also add and lose nodes routinely. How do you map keys to nodes so that changing the node count moves as few keys as possible, not nearly all of them?",
+    "hint": "The trouble with key mod N is that N is in the formula, so changing N changes every answer. What if nodes and keys sat on the same circle, and a key belonged to the next node clockwise?"
+   },
+   "solution": "Consistent hashing. Hash both keys and nodes onto the same ring (a 0 to 2^32 circle); a key is owned by the first node clockwise from it. Adding or removing a node only reassigns the keys between it and its neighbor, about 1/N of the keyspace, leaving the rest untouched. Give each physical node many virtual nodes (points on the ring) so load spreads evenly and no node inherits a huge arc. For a single hot key that still lands on one node, replicate it to a few nodes or let clients cache it locally for a second.",
+   "user_lens": {
+    "gives": "A cache tier that grows by adding nodes instead of hitting a wall, and that survives a node joining or leaving by remapping only a small slice of keys rather than going cold everywhere.",
+    "costs": "More moving parts: every client must agree on the ring and its membership, and a stale view of the ring sends requests to the wrong node (a miss, or worse, two copies of a key on two nodes). A single hot key still overloads its owner, because hashing spreads keys, not the load of one key."
+   },
+   "tech_lens": {
+    "mechanism": "A hash ring shared by all clients; key ownership is the first node clockwise; virtual nodes even out the arcs; a membership change remaps only the neighboring arc. Hot keys get replication across a few nodes or a short client-side cache.",
+    "principle": "Partition on a key you already hold, and choose a mapping whose answers barely change when the membership changes: put nodes and keys on one ring so a node change is a local event, not a global reshuffle."
+   },
+   "tradeoff": "You trade one simple node for a distributed tier with a shared membership view to keep consistent, and you accept that consistent hashing solves data placement but not a single hot key, which still needs its own replication or client-side defense.",
+   "at_scale": "This is the architecture that scales the cache itself without bound: capacity and read throughput grow linearly with nodes, and consistent hashing keeps a node addition from reshuffling more than about 1/N of keys, so the store sees a small localized miss burst instead of a full cold tier. The residual ceiling is the single hottest key, whose load lands on one owner no matter how many nodes you add, which is why hot keys are replicated rather than sharded.",
+   "defends": [
+    "inv3",
+    "inv4"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "hash ring with virtual nodes",
+      "software_concept": "consistent hashing: minimal remap on membership change, virtual nodes for balance"
+     },
+     {
+      "mechanism": "hot-key replication",
+      "software_concept": "replicate a hot key across nodes or cache it client-side to spread its load"
+     }
+    ],
+    "interview_probes": [
+     "Why does key mod N go cold when you add a node, and how does a hash ring change only about 1/N of the keys instead?"
+    ],
+    "approach": "Place nodes on a ring by hashing node ids (add 100 to 200 virtual points each). To find a key's owner, hash the key and binary-search for the next node clockwise in a sorted array of ring positions. Replicate or client-cache the keys you detect as hot.",
+    "vocab": [
+     "consistent-hashing",
+     "sharding",
+     "hot-key"
+    ]
+   },
+   "beginner_analogy": "Like seating guests around a round table by name and giving each to the next host clockwise: when one host leaves, only their stretch of guests shifts to the neighbor, not the whole table rearranged.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "cache_b",
+      "label": "Cache node B",
+      "kind": "store",
+      "lane": "cache",
+      "order": 3
+     },
+     {
+      "id": "cache_c",
+      "label": "Cache node C",
+      "kind": "store",
+      "lane": "cache",
+      "order": 4
+     },
+     {
+      "id": "ring",
+      "label": "Hash ring",
+      "kind": "process",
+      "lane": "control",
+      "order": 2
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_hash",
+      "from": "app_a",
+      "to": "ring",
+      "kind": "control",
+      "label": "hash(key)"
+     },
+     {
+      "id": "e_ring_a",
+      "from": "ring",
+      "to": "cache_a",
+      "kind": "control",
+      "label": "route"
+     },
+     {
+      "id": "e_ring_b",
+      "from": "ring",
+      "to": "cache_b",
+      "kind": "control",
+      "label": "route"
+     },
+     {
+      "id": "e_ring_c",
+      "from": "ring",
+      "to": "cache_c",
+      "kind": "control",
+      "label": "route"
+     },
+     {
+      "id": "e_fill_b",
+      "from": "db",
+      "to": "cache_b",
+      "kind": "payload",
+      "label": "fill"
+     },
+     {
+      "id": "e_fill_c",
+      "from": "db",
+      "to": "cache_c",
+      "kind": "payload",
+      "label": "fill"
+     }
+    ],
+    "highlight": [
+     "cache_a",
+     "e_get_a"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 5,
+   "name": "When the Cache Dies",
+   "problem": {
+    "statement": "Every layer so far leans on the cache being there. So what happens when a cache node crashes, or the whole tier is unreachable? The keys that node held vanish from memory in an instant, and every request for them misses at once, a correlated miss storm that hits the backing store all together. If the app treats the cache as a hard dependency and errors when it is down, a cache outage becomes a full outage. If it falls through to the store, a warm cache's traffic now lands on a store sized for a trickle, and the store melts. Losing the cache can take down the very thing it was protecting.",
+    "beginner": "The whole system now depends on the cache being up. If a cache machine crashes, everything it remembered is gone instantly, and all those requests hit the database at the same moment. If the app just gives up when the cache is missing, the site goes down; if it sends everything to the database, the database, which was only handling the leftovers, gets crushed. The cache dying can break the database it was shielding.",
+    "model": {
+     "id": "graceful-degradation",
+     "application": "When the cache is unavailable, choose to serve slower rather than fail: fall through to the backing store, but throttle that fall-through so the sudden flood does not melt a store sized for cache misses only."
+    }
+   },
+   "gate": {
+    "question": "A cache node dies and every key it held is suddenly a miss. The strict path sends all of them to a store that has not seen full read traffic in months. What does the app do so that neither the users get errors nor the store gets stampeded?",
+    "hint": "The cache is a copy, so losing it should cost speed, not correctness. But a cold store cannot take the full flood at once. What limits how much of that flood reaches it?"
+   },
+   "solution": "Fail open, and shield the store. When the cache is down or a node is unreachable, the app treats it as a miss and reads the store directly, so correctness and availability hold; the cache was never the source of truth. Consistent hashing already bounds a single node's death to its slice of keys, not the whole tier. A circuit breaker around the cache stops clients from hammering a dead node and lets it recover. And the same single-flight coalescing and load-shedding that protect the store on expiry now carry it through the miss storm: one refill per key, and shed or queue the excess so the store degrades in latency, not collapse. Replicating cache nodes or persisting hot data shrinks how cold the tier goes when one dies.",
+   "user_lens": {
+    "gives": "A cache outage that costs milliseconds, not uptime: reads keep returning correct values from the store, degraded in speed but never wrong, and a single node's death only chills its slice of keys.",
+    "costs": "During the outage, latency jumps to store speed for the affected keys, and if the store cannot take even the shed-and-coalesced load, some requests are throttled or slowed on purpose to keep it alive. You trade a fast tier for a slow-but-correct one exactly when you can least afford the surprise."
+   },
+   "tech_lens": {
+    "mechanism": "Fail-open reads that treat cache-down as a miss; a circuit breaker that trips after repeated cache errors, fails fast, then probes; consistent hashing to localize a node loss to its arc; single-flight and load-shedding to bound the store's miss-storm intake; optional replication or persistence to keep the tier warm through a loss.",
+    "principle": "Make the cache an accelerator, never a dependency: on its failure, degrade to the slow source of truth on purpose, and throttle the fall-through so a cache outage cannot cascade into a store outage."
+   },
+   "tradeoff": "You trade strict speed for availability during failure, and you accept that the store must be provisioned for more than a trickle (or protected by shedding) precisely so the cache's death is survivable, headroom you pay for even when nothing is failing.",
+   "at_scale": "This is what decouples user-facing availability from cache health: with fail-open plus coalescing, even a total tier outage degrades to store-speed reads rather than errors, and consistent hashing keeps a single node's loss to about 1/N of keys. The residual risk is a cold store that cannot absorb the miss storm, which is why the store is sized with headroom, protected by load-shedding, and kept warm by replication: the cache's job is to make its own death cost latency, not correctness or uptime.",
+   "defends": [
+    "inv4",
+    "inv3"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "fail-open on cache down",
+      "software_concept": "graceful degradation: treat cache failure as a miss and read the source of truth"
+     },
+     {
+      "mechanism": "circuit breaker on the cache",
+      "software_concept": "trip after repeated failures, fail fast, then probe for recovery"
+     }
+    ],
+    "interview_probes": [
+     "When the cache tier is down, does your app return errors or fall through to the database, and what stops that fall-through from melting the database?"
+    ],
+    "approach": "Wrap cache calls so a timeout or error returns a miss (fail-open) and reads the store; put a circuit breaker around the cache client to stop hammering a dead node. Guard the store fall-through with the same single-flight lock plus a concurrency limit or load-shedding so the miss storm is capped.",
+    "vocab": [
+     "circuit-breaker",
+     "load-shedding",
+     "cap-theorem"
+    ]
+   },
+   "beginner_analogy": "Like a shop whose barcode scanner dies: instead of closing, the clerk switches to the printed price list, slower but still correct, and waves customers through a few at a time so the one manual register does not get mobbed.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "breaker",
+      "label": "Circuit breaker",
+      "kind": "process",
+      "lane": "control",
+      "order": 6
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_probe",
+      "from": "breaker",
+      "to": "cache_b",
+      "kind": "control",
+      "label": "health probe"
+     },
+     {
+      "id": "e_bypass",
+      "from": "breaker",
+      "to": "db",
+      "kind": "control",
+      "label": "fail-open read"
+     }
+    ],
+    "highlight": [
+     "cache_b",
+     "e_fill_b",
+     "db"
+    ],
+    "remove": []
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "A mass invalidation goes cold everywhere at once",
+   "scenario": "An operator purges a whole namespace (a bad deploy rolled back, a schema change) so thousands of hot keys are invalidated across every cache node in the same second. The next request for each now misses everywhere simultaneously.",
+   "reveal": "This is the self-inflicted stampede at its worst: many hot keys go cold together. TTL jitter would have spread a timer-based expiry, but a purge is instantaneous, so single-flight and load-shedding carry the load: each key's flood collapses to one store fetch, so the store sees roughly one fetch per key per node, and the excess is shed or queued rather than dropped on the store. inv3 holds, at the cost of a latency spike while the tier refills. This is why versioned keys are preferred over mass purges: a new key warms up gradually and is never a synchronized global miss."
+  },
+  {
+   "id": "st2",
+   "title": "A single key goes viral",
+   "scenario": "One key (a celebrity's profile, a headline row) draws a million reads a second, all hashing to the one node that owns it under consistent hashing.",
+   "reveal": "Consistent hashing spread the keyspace evenly but cannot split one key: its whole load lands on a single node, which saturates while the rest of the tier idles. The fix is not more nodes but replication: copy the hot key to several nodes and let clients pick one, or cache it in each app's local memory for a second so most reads never reach the shared tier. inv4 (no single node is the ceiling) holds only because hot keys are treated as a problem separate from placement. It is the honest limit of sharding: averages hide the one key that breaks them."
+  },
+  {
+   "id": "st3",
+   "title": "A cache node dies at peak",
+   "scenario": "A cache node loses power mid-traffic at peak load. Every key it held vanishes from memory, and its share of requests misses at once.",
+   "reveal": "Consistent hashing limits the damage to that node's arc, about 1/N of keys, not the whole tier; the ring's neighbor becomes the new owner and warms up. Those keys miss and fall through, but fail-open keeps reads correct from the store, single-flight caps the refill to one fetch per key, and load-shedding protects the store from the burst. Latency rises for the affected slice for a few seconds until the neighbor warms; no errors, no store meltdown (inv3, inv4). Had the app treated the cache as a hard dependency, or sharded with plain modulo hashing, this same event would have been an outage."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "When reads dwarf writes and answers change rarely, move the answer next to the reader and pay for speed in bounded staleness, not correctness.",
+   "Every cache is a copy and every copy is a bet the original has not changed; bound the bet with an expiry and a way to revoke it, and prefer dropping a stale copy to rewriting it.",
+   "Deduplicate concurrent work on the same key: make the expensive fill single-flight so N simultaneous demands cost one execution.",
+   "When you must partition across a changing set of nodes, choose a mapping whose answers barely move when the membership changes.",
+   "Averages hide the one key that takes you down: spread keys evenly, then treat the single hottest key as its own separate problem.",
+   "Make the accelerator disposable: a cache must be losable without loss of correctness, so on its death degrade to the source of truth and throttle the fall-through."
+  ],
+  "mappings": [
+   {
+    "mechanism": "cache-aside",
+    "elsewhere": "CPU L1/L2 caches, the browser cache, DNS resolvers, and memoization all keep a copy of a costly read next to whoever keeps asking."
+   },
+   {
+    "mechanism": "delete-on-write invalidation",
+    "elsewhere": "HTTP cache purges, materialized-view refresh, and CDN invalidation all bound staleness with an expiry plus an explicit revoke."
+   },
+   {
+    "mechanism": "single-flight coalescing",
+    "elsewhere": "Dogpile locks in application caches, single-flight in RPC clients, and CDN origin shielding all collapse duplicate concurrent work into one execution."
+   },
+   {
+    "mechanism": "consistent hashing",
+    "elsewhere": "Dynamo and Cassandra partitioning, CDN request routing, and sharded load balancers all place data on a ring so a node change moves only a slice."
+   },
+   {
+    "mechanism": "fail-open accelerator",
+    "elsewhere": "Circuit breakers, serve-stale-on-error in CDNs, and last-known-good configuration all keep serving through a dependency's failure."
+   }
+  ]
+ }
+}

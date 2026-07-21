@@ -197,6 +197,28 @@ h1.title{font-family:var(--display);font-weight:800;font-size:clamp(28px,4vw,40p
   font-family:var(--mono);font-size:8.5px;color:var(--muted);}
 .ring span{background:var(--panel);border-radius:50%;width:22px;height:22px;display:grid;place-items:center;}
 
+/* ── Track / progress ── */
+.trk-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:22px 0 16px;}
+.trk-tile{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:16px 18px;}
+.trk-n{font-family:var(--display);font-weight:800;font-size:34px;line-height:1;letter-spacing:-.02em;color:var(--accent);font-variant-numeric:tabular-nums;}
+.trk-n .trk-of{font-size:20px;color:var(--muted);font-weight:700;}
+.trk-l{font-family:var(--mono);font-size:9.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);margin-top:7px;}
+.trk-bar{height:8px;background:var(--line-soft);border-radius:5px;overflow:hidden;margin:0 0 16px;}
+.trk-bar-fill{height:100%;background:var(--accent);border-radius:5px;transition:width .4s;}
+.trk-path{display:grid;gap:8px;}
+.trk-row{display:grid;grid-template-columns:34px minmax(0,1fr) 30px;gap:14px;align-items:center;
+  background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:13px 16px;cursor:pointer;
+  text-align:left;font:inherit;color:inherit;transition:border-color .15s,transform .06s;}
+.trk-row:hover{border-color:var(--accent);}
+.trk-row:active{transform:translateY(1px);}
+.trk-row.done{border-color:color-mix(in srgb,var(--accent) 40%,var(--line));}
+.trk-idx{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent);
+  width:28px;height:28px;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;}
+.trk-row.done .trk-idx{background:var(--accent);color:#fff;border-color:var(--accent);}
+.trk-name{font-family:var(--display);font-weight:700;font-size:16px;letter-spacing:-.01em;}
+.trk-sub{font-family:var(--mono);font-size:10px;letter-spacing:.3px;color:var(--muted);margin-top:2px;}
+.trk-ring{width:30px;height:30px;}
+
 /* ── Reader ── */
 /* diagram gets the lion's share; the text pane is capped so the growing
    system stays the protagonist on wide screens */

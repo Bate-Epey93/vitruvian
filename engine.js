@@ -64,7 +64,7 @@ async function toggleTheme() {
 }
 
 /* ═══ Screen switching ═══ */
-const SCREENS = ["landing", "library", "reader", "generate", "models", "vocab", "drill", "tutorial", "whatif", "settings"];
+const SCREENS = ["landing", "library", "reader", "generate", "models", "vocab", "track", "drill", "tutorial", "whatif", "settings"];
 function show(screen) {
   SCREENS.forEach(s => { $("screen-" + s).hidden = s !== screen; });
   document.body.classList.toggle("reading", screen === "reader");   // frees topbar room for the audience switch
@@ -170,6 +170,7 @@ function wireTopbar() {
   $("brand").onclick = async () => { await flushSaves(); await renderLibrary(); show("library"); };
   $("backBtn").onclick = async () => { await flushSaves(); await renderLibrary(); show("library"); };
   $("modelsBtn").onclick = () => { renderModels(); show("models"); };
+  $("trackBtn").onclick = () => { renderTrack(); show("track"); };
   $("drillBtn").onclick = () => { renderDrill(); show("drill"); };
   $("settingsBtn").onclick = () => { renderSettings(); show("settings"); };
   $("themeBtn").onclick = () => toggleTheme();
@@ -658,8 +659,10 @@ async function openReader(id, layerIndex, opts = {}) {
   const replayBtn = h("button", "gbtn sim-btn", "⟲ replay");
   const raceBtn = h("button", "gbtn sim-btn", "⇉ races");
   raceBtn.title = "Highlight nodes with two or more concurrent writers — where races can happen";
+  const gifBtn = h("button", "gbtn sim-btn", "⚏ gif");
+  gifBtn.title = "Record the running Pulse as a looping GIF to share";
   loadBtn.hidden = true;
-  dcap.append(capState, playBtn, loadBtn, replayBtn, raceBtn, capToggle);
+  dcap.append(capState, playBtn, loadBtn, replayBtn, raceBtn, gifBtn, capToggle);
   const scrubEl = h("div", "scrub-wrap");
   const caption = h("div", "dg-caption");
   caption.hidden = true;
@@ -705,6 +708,13 @@ async function openReader(id, layerIndex, opts = {}) {
   };
   loadBtn.onclick = () => {
     loadBtn.classList.toggle("on", diagram.sim.toggleLoad());
+  };
+  gifBtn.onclick = async () => {
+    if (gifBtn.disabled) return;
+    gifBtn.disabled = true;
+    const label = gifBtn.textContent;
+    try { await exportPulseGIF(diagram, pct => { gifBtn.textContent = "⚏ " + pct + "%"; }); }
+    finally { gifBtn.textContent = label; gifBtn.disabled = false; }
   };
   // race spotlight: ring nodes with ≥2 concurrent payload writers (contention
   // points). Structural — works standing still; under ◉ load you watch tokens
@@ -1450,6 +1460,284 @@ async function renderModels(detailId) {
    interview probes from revealed layers deal as a cross-library deck.
    Fully offline; grades write back to the attempt record. */
 let drillState = null;
+
+/* ═══ Track — the curated path through the library + your progress ═══ */
+async function computeProgress() {
+  const recs = await Store.getBreakdowns();
+  const byId = {}; recs.forEach(r => byId[r.id] = r);
+  // the path is the flagship set, in the shipped order
+  const path = CONFIG.flagshipNames.map(s => byId["flagship-" + s]).filter(Boolean);
+  const isDone = r => r.doc.layers.length > 0 && r.doc.layers.every(L => r.attempts[L.index] && r.attempts[L.index].revealed);
+  const pathDone = path.filter(isDone).length;
+  // models collected: distinct thinking models you've revealed at least once
+  const seenModels = new Set();
+  let gates = 0;
+  recs.forEach(r => r.doc.layers.forEach(L => {
+    const a = r.attempts[L.index];
+    if (a && a.revealed) { gates++; if (L.problem && L.problem.model) seenModels.add(L.problem.model.id); }
+  }));
+  return {
+    recs, path, byId, isDone,
+    pathDone, pathTotal: path.length,
+    models: seenModels.size, modelsTotal: MODEL_LIBRARY.length,
+    gates,
+    yours: recs.filter(r => r.source !== "flagship").length,
+    yoursDone: recs.filter(r => r.source !== "flagship" && isDone(r)).length
+  };
+}
+
+async function renderTrack() {
+  const root = $("screen-track").firstElementChild;
+  root.textContent = "";
+  const p = await computeProgress();
+
+  root.appendChild(h("div", "kicker", "Your path through the anatomy"));
+  root.appendChild(h("h1", "title", "The Track"));
+  root.appendChild(h("p", "subtitle", "Foundations first, then the systems built on them — until YouTube, the capstone that drills into nearly everything before it. Work through them in order, or jump to whatever you need."));
+
+  // progress tiles
+  const stats = h("div", "trk-stats");
+  const tile = (n, of, label) => {
+    const t = h("div", "trk-tile");
+    const big = h("div", "trk-n");
+    big.appendChild(document.createTextNode(String(n)));
+    if (of != null) big.appendChild(h("span", "trk-of", " / " + of));
+    t.appendChild(big);
+    t.appendChild(h("div", "trk-l", label));
+    stats.appendChild(t);
+  };
+  tile(p.pathDone, p.pathTotal, "systems on the path");
+  tile(p.models, p.modelsTotal, "thinking models collected");
+  tile(p.gates, null, "gates earned");
+  if (p.yours) tile(p.yoursDone, p.yours, "your own designs");
+  root.appendChild(stats);
+
+  // overall bar
+  const barWrap = h("div", "trk-bar");
+  const fill = h("div", "trk-bar-fill");
+  fill.style.width = Math.round(100 * p.pathDone / Math.max(1, p.pathTotal)) + "%";
+  barWrap.appendChild(fill);
+  root.appendChild(barWrap);
+
+  const exp = h("button", "gbtn", "◱ Export progress card");
+  exp.style.margin = "4px 0 26px";
+  exp.onclick = () => exportProgressCard(p);
+  root.appendChild(exp);
+
+  // the ordered path
+  root.appendChild(h("h2", "section-head", "The path"));
+  const list = h("div", "trk-path");
+  p.path.forEach((rec, i) => {
+    const done = p.isDone(rec);
+    const n = rec.doc.layers.length;
+    const revealed = rec.doc.layers.filter(L => rec.attempts[L.index] && rec.attempts[L.index].revealed).length;
+    const row = h("button", "trk-row" + (done ? " done" : ""));
+    row.appendChild(h("span", "trk-idx", done ? "✓" : String(i + 1)));
+    const mid = h("div", "trk-mid");
+    mid.appendChild(h("div", "trk-name", rec.system));
+    mid.appendChild(h("div", "trk-sub", done ? "complete · " + n + " layers" : revealed + " of " + n + " layers"));
+    row.appendChild(mid);
+    const ring = h("div", "ring trk-ring");
+    const pct = Math.round(100 * revealed / n);
+    ring.style.background = `conic-gradient(var(--accent) ${pct * 3.6}deg, var(--line-soft) 0deg)`;
+    ring.appendChild(h("span", null, pct + ""));
+    row.appendChild(ring);
+    row.onclick = () => openReader(rec.id);
+    list.appendChild(row);
+  });
+  root.appendChild(list);
+}
+
+/* branded, shareable progress card (light washi always — reads on any feed) */
+function exportProgressCard(p) {
+  const W = 1200, H = 630, S = 2, cv = document.createElement("canvas");
+  cv.width = W * S; cv.height = H * S;
+  const x = cv.getContext("2d"); x.scale(S, S);
+  const INK = "#211e19", PAPER = "#f5f2ea", TEAL = "#0e7a63", SEAL = "#d95b31", SOFT = "#7a766b";
+  x.fillStyle = PAPER; x.fillRect(0, 0, W, H);
+  // dot grid, faint
+  x.fillStyle = "rgba(14,122,99,0.06)";
+  for (let gy = 40; gy < H; gy += 26) for (let gx = 40; gx < W; gx += 26) { x.beginPath(); x.arc(gx, gy, 1.1, 0, 7); x.fill(); }
+  // mark: teal square + brush arc
+  const mx = 92, my = 90;
+  x.strokeStyle = TEAL; x.lineWidth = 5; x.strokeRect(mx, my, 46, 46);
+  x.strokeStyle = INK; x.lineCap = "round";
+  for (let i = 0; i < 60; i++) {
+    const t = i / 60, a1 = -1.1 + (Math.PI * 2 - 0.85) * t, a2 = -1.1 + (Math.PI * 2 - 0.85) * (i + 1) / 60;
+    const R = 26, cx = mx + 23, cy = my + 23;
+    x.lineWidth = Math.max(1, 7 * (0.3 + 0.7 * Math.pow(1 - t, 1.2)) * Math.min(1, 0.2 + t * 7));
+    x.beginPath(); x.moveTo(cx + Math.cos(a1) * R, cy + Math.sin(a1) * R); x.lineTo(cx + Math.cos(a2) * R, cy + Math.sin(a2) * R); x.stroke();
+  }
+  x.fillStyle = INK; x.font = "700 30px 'Bricolage Grotesque', system-ui, sans-serif";
+  x.fillText("Vitruvian", 158, 112);
+  x.fillStyle = SOFT; x.font = "600 12px 'JetBrains Mono', monospace";
+  x.fillText("MY PROGRESS · THE ANATOMY OF EVERYDAY SYSTEMS", 158, 132);
+  // three big stats
+  const cells = [[p.pathDone + " / " + p.pathTotal, "SYSTEMS ON THE PATH"], [p.models + " / " + p.modelsTotal, "THINKING MODELS"], [p.gates + "", "GATES EARNED"]];
+  cells.forEach((c, i) => {
+    const cx = 96 + i * 350;
+    x.fillStyle = TEAL; x.font = "700 92px 'Bricolage Grotesque', system-ui, sans-serif";
+    x.fillText(c[0], cx, 340);
+    x.fillStyle = SOFT; x.font = "600 15px 'JetBrains Mono', monospace";
+    x.fillText(c[1], cx, 372);
+  });
+  // path completion bar
+  const bx = 96, bw = W - 192, by = 430;
+  x.fillStyle = "#e6e0d5"; x.fillRect(bx, by, bw, 12);
+  x.fillStyle = TEAL; x.fillRect(bx, by, bw * (p.pathDone / Math.max(1, p.pathTotal)), 12);
+  x.fillStyle = INK; x.font = "600 18px 'Hanken Grotesk', system-ui, sans-serif";
+  const line = p.pathDone === p.pathTotal ? "The whole path, rebuilt from its failures." : "Rebuilding the systems that run the world, one failure at a time.";
+  x.fillText(line, bx, 495);
+  // seal + url
+  x.fillStyle = SEAL; x.beginPath(); x.arc(bx + 6, 560, 7, 0, 7); x.fill();
+  x.fillStyle = SOFT; x.font = "600 14px 'JetBrains Mono', monospace";
+  x.fillText("bate-epey93.github.io/vitruvian", bx + 24, 565);
+
+  const a = document.createElement("a");
+  a.href = cv.toDataURL("image/png");
+  a.download = "vitruvian-progress.png";
+  a.click();
+  toast("Progress card exported");
+}
+
+/* ═══ Pulse → GIF: record a few seconds of the running simulation as a
+   looping GIF for sharing. Self-contained GIF89a + LZW encoder (no deps, CSP
+   safe). Palette is a fixed 6·6·6 colour cube + a grey ramp, nearest-match —
+   the diagram is flat colour so uniform quantization reads clean. ═══ */
+var VGif = (() => {
+  // fixed palette: 216 web-cube + 40-step grey ramp = 256
+  const PAL = [];
+  const lv = [0, 51, 102, 153, 204, 255];
+  for (const r of lv) for (const g of lv) for (const b of lv) PAL.push([r, g, b]);
+  for (let i = 0; i < 40; i++) { const v = Math.round(i * 255 / 39); PAL.push([v, v, v]); }
+  // nearest-palette lookup, memoised on a coarse key
+  const cache = new Map();
+  function idx(r, g, b) {
+    const key = (r >> 2 << 12) | (g >> 2 << 6) | (b >> 2);
+    let v = cache.get(key); if (v !== undefined) return v;
+    let best = 0, bd = 1e9;
+    for (let i = 0; i < PAL.length; i++) {
+      const dr = PAL[i][0] - r, dg = PAL[i][1] - g, db = PAL[i][2] - b, d = dr * dr + dg * dg + db * db;
+      if (d < bd) { bd = d; best = i; }
+    }
+    cache.set(key, best); return best;
+  }
+  // LZW compress a frame of indices → GIF sub-blocks
+  function lzw(minCode, indices, out) {
+    const clear = 1 << minCode, eoi = clear + 1;
+    let dict, codeSize, next;
+    const init = () => { dict = new Map(); for (let i = 0; i < clear; i++) dict.set("" + i, i); codeSize = minCode + 1; next = eoi + 1; };
+    let acc = 0, nbits = 0;
+    const chunk = [];
+    const emit = code => {
+      acc |= code << nbits; nbits += codeSize;
+      while (nbits >= 8) { chunk.push(acc & 255); acc >>= 8; nbits -= 8; }
+    };
+    init(); emit(clear);
+    let prefix = "" + indices[0];
+    for (let i = 1; i < indices.length; i++) {
+      const k = indices[i], comb = prefix + "," + k;
+      if (dict.has(comb)) { prefix = comb; continue; }
+      emit(dict.get(prefix));
+      if (next < 4096) {
+        dict.set(comb, next++);
+        if (next === (1 << codeSize) && codeSize < 12) codeSize++;   // bump BEFORE the next code needs the wider width
+      } else {
+        emit(clear); init();                                         // dictionary full → reset
+      }
+      prefix = "" + k;
+    }
+    emit(dict.get(prefix)); emit(eoi);
+    if (nbits > 0) chunk.push(acc & 255);
+    // pack into ≤255-byte sub-blocks
+    for (let i = 0; i < chunk.length; i += 255) {
+      const slice = chunk.slice(i, i + 255);
+      out.push(slice.length, ...slice);
+    }
+    out.push(0);
+  }
+  function encode(frames, w, h, delayCs) {
+    const b = [];
+    const push = (...xs) => b.push(...xs);
+    const u16 = n => push(n & 255, (n >> 8) & 255);
+    push(0x47, 0x49, 0x46, 0x38, 0x39, 0x61);          // GIF89a
+    u16(w); u16(h);
+    push(0xF7, 0, 0);                                   // global palette, 256 colours
+    for (const c of PAL) push(c[0], c[1], c[2]);
+    push(0x21, 0xFF, 0x0B); "NETSCAPE2.0".split("").forEach(ch => push(ch.charCodeAt(0)));
+    push(0x03, 0x01, 0, 0, 0);                          // loop forever
+    for (const fr of frames) {
+      push(0x21, 0xF9, 0x04, 0x04); u16(delayCs); push(0, 0);   // graphic control, delay
+      push(0x2C); u16(0); u16(0); u16(w); u16(h); push(0);      // image descriptor
+      const minCode = 8; push(minCode);
+      lzw(minCode, fr, b);
+    }
+    push(0x3B);
+    return new Uint8Array(b);
+  }
+  return { idx, encode };
+})();
+
+/* record ~2.5s of the running Pulse as a looping GIF. Static structure is
+   style-inlined once; each frame only swaps in the live token layer (tokens
+   carry inline styles, so they serialise without re-inlining) — cheap enough
+   to grab ~20 frames. */
+async function exportPulseGIF(diagram, onProgress) {
+  const svgEl = document.querySelector("#screen-reader .dg-svg");
+  if (!svgEl) { toast("Open a diagram first"); return; }
+  if (!diagram.sim.available) { toast("Motion is off (reduced-motion)"); return; }
+  const started = !diagram.sim.running && diagram.sim.start();
+  if (!diagram.sim.running) { toast("Press pulse first"); return; }
+
+  const vb = svgEl.viewBox.baseVal;
+  const scale = Math.min(1, 460 / vb.width);
+  const W = Math.round(vb.width * scale), H = Math.round(vb.height * scale);
+  const paper = getComputedStyle(document.documentElement).getPropertyValue("--paper").trim() || "#f5f2ea";
+
+  // static clone with computed styles inlined once
+  const clone = svgEl.cloneNode(true);
+  const src = [svgEl, ...svgEl.querySelectorAll("*")], dst = [clone, ...clone.querySelectorAll("*")];
+  const PROPS = ["stroke", "stroke-width", "stroke-dasharray", "stroke-linecap", "fill", "fill-opacity", "opacity", "font-size", "font-weight", "letter-spacing", "paint-order"];
+  src.forEach((el, i) => {
+    const cs = getComputedStyle(el);
+    PROPS.forEach(p => { const v = cs.getPropertyValue(p); if (v) dst[i].style.setProperty(p, v); });
+    if (el.tagName === "text" || el.tagName === "tspan") dst[i].style.fontFamily = "ui-monospace, Menlo, monospace";
+  });
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  clone.style.width = W + "px"; clone.style.minWidth = "0"; clone.setAttribute("width", W); clone.setAttribute("height", H);
+  const cloneSim = clone.querySelector(".dg-sim");
+  const liveSim = svgEl.querySelector(".dg-sim");
+
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const cx = cv.getContext("2d");
+  const NFRAMES = 20, DELAY_CS = 12;                    // ~0.12s × 20 ≈ 2.4s loop
+  const frames = [];
+
+  async function grab() {
+    if (cloneSim && liveSim) { cloneSim.textContent = ""; [...liveSim.childNodes].forEach(n => cloneSim.appendChild(n.cloneNode(true))); }
+    const data = "data:image/svg+xml," + encodeURIComponent(new XMLSerializer().serializeToString(clone));
+    await new Promise((res, rej) => { const im = new Image(); im.onload = () => { cx.fillStyle = paper; cx.fillRect(0, 0, W, H); cx.drawImage(im, 0, 0, W, H); res(); }; im.onerror = rej; im.src = data; }).catch(() => {});
+    const px = cx.getImageData(0, 0, W, H).data, idxs = new Array(W * H);
+    for (let i = 0, j = 0; i < px.length; i += 4, j++) idxs[j] = VGif.idx(px[i], px[i + 1], px[i + 2]);
+    frames.push(idxs);
+  }
+
+  for (let f = 0; f < NFRAMES; f++) {
+    await grab();
+    if (onProgress) onProgress(Math.round(100 * (f + 1) / NFRAMES));
+    await new Promise(r => setTimeout(r, 110));
+  }
+  if (started) diagram.sim.stop();
+
+  const bytes = VGif.encode(frames, W, H, DELAY_CS);
+  const blob = new Blob([bytes], { type: "image/gif" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "vitruvian-pulse.gif";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast("Pulse GIF exported");
+}
 
 async function renderDrill(keep) {
   const root = $("screen-drill").firstElementChild;

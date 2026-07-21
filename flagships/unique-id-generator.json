@@ -1,0 +1,786 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "Unique ID generator",
+  "narrowing": "The mint path: making a unique, roughly time-sortable, fixed-width id at high rate across many machines. Storing the ids, looking them up, and the callers' own use of them are out of scope; the focus is how the number itself is produced without collisions and without a central bottleneck.",
+  "ordering_note": "The layers follow the order each failure forces the next, which is also the path the field walked: one authoritative counter, then blocks to amortize it, then embedding identity in the number to delete the coordinator (Twitter's Snowflake, 2010), then the one coordination that survives (unique machine ids), then the clock that cannot be trusted, then the per-millisecond ceiling. Snowflake and Flickr's ticket servers are real designs, but the ordering is the standard, inevitable progression rather than one company's dated outage log, so confidence is medium.",
+  "history_confidence": "medium",
+  "domain": "software"
+ },
+ "essence": {
+  "text": "A unique id generator is a machine whose whole job is to hand out numbers that are never the same twice, in order, forever, to thousands of callers at once, without any of them having to ask permission. The hard version deletes the one thing that makes uniqueness easy, a central authority, and manufactures it instead from a clock, a machine number, and a small counter, so every server mints billions of collision-free, roughly-sorted ids alone.",
+  "beginner": "A unique id generator hands out ID numbers, like deli ticket numbers, that are never repeated. The trick is doing it on many computers at once, very fast, so no two computers ever pick the same number even though they never talk to each other.",
+  "deep_facts": [
+   "A 64-bit Snowflake id spends its bits like a budget: about 41 for a millisecond timestamp, 10 for the machine, 12 for a per-millisecond counter. Those 12 bits cap one machine at 4096 ids per millisecond, near 4 million per second.",
+   "The 41-bit timestamp counts from a custom epoch, not 1970, which buys the layout roughly 69 years before the time field overflows.",
+   "The ids are only k-sorted, not exactly sorted: within one millisecond, order follows the machine number, so two ids minted the same millisecond on different machines can sort either way.",
+   "A UUIDv4 also needs no coordination and never collides in practice, but it is a 128-bit value with 122 random bits that carry no time, so it cannot be sorted and it scatters database indexes.",
+   "The scheme's real enemy is not scale but a clock moving backward: an NTP correction or a leap second that rewinds the wall clock can make a generator reuse a millisecond, so many implementations refuse to mint until the clock catches up."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Hand every caller a unique, fixed-width, roughly time-ordered id on demand, at high rate, across many machines, with no central authority in the request path and no id ever issued twice.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Application",
+    "want": "A unique id for every row, event, or message it creates, returned instantly, with no blocking call to a shared service"
+   },
+   {
+    "id": "a2",
+    "name": "Datastore",
+    "want": "Ids that are compact and climb over time, so inserts land at the end of the index instead of scattering random writes across it"
+   },
+   {
+    "id": "a3",
+    "name": "Operator",
+    "want": "A generator that scales by adding machines, survives any single node or coordinator failing, and never once hands out a duplicate"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "No id is ever issued twice, anywhere in the fleet, for the life of the system. Uniqueness holds across machines, restarts, and network partitions."
+   },
+   {
+    "id": "inv2",
+    "text": "Ids climb with time: an id minted later sorts after one minted earlier, strictly on a single machine and at least approximately across the fleet."
+   },
+   {
+    "id": "inv3",
+    "text": "An id can be minted with no round trip to any shared coordinator on the request path; generation keeps working when the central service is down."
+   },
+   {
+    "id": "inv4",
+    "text": "Every id fits a fixed, compact width (64 bits), so it is cheap to store, index, sort, and pass around as a single integer."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "ID",
+    "note": "The fixed-width integer handed to the caller; the entire product. Typically 64 bits."
+   },
+   {
+    "id": "en2",
+    "name": "Timestamp bits",
+    "note": "The high bits: milliseconds since a custom epoch. They give the id its rough ordering and most of its uniqueness."
+   },
+   {
+    "id": "en3",
+    "name": "Machine id",
+    "note": "The middle bits: a number unique to each generator, so two machines never mint into the same slice of the id space."
+   },
+   {
+    "id": "en4",
+    "name": "Sequence",
+    "note": "The low bits: a per-machine counter that resets every millisecond, separating ids minted in the same millisecond on one machine."
+   },
+   {
+    "id": "en5",
+    "name": "Coordinator",
+    "note": "The off-path service (a database sequence early on, later ZooKeeper or etcd) that hands out the scarce shared thing: first ids, later unique machine numbers."
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "A caller asks for an id; a fixed-width integer flows back, assembled on the spot from time, machine, and sequence."
+   },
+   {
+    "id": "f2",
+    "text": "Once at startup, a unique machine id flows from the coordinator to each generator; after that the request path touches nothing shared."
+   },
+   {
+    "id": "f3",
+    "text": "The local clock ticks; the sequence resets on each new millisecond and rolls the timestamp forward."
+   }
+  ],
+  "constraints": [
+   "The id has a fixed bit budget: timestamp, machine, and sequence are carved from the same 64 bits, so widening one field narrows another.",
+   "Wall clocks drift and can jump backward from NTP corrections, leap seconds, or VM migration; there is no perfect global clock to trust.",
+   "Coordination costs a network round trip, and at millions of ids per second any per-id coordination is unaffordable.",
+   "Uniqueness must hold forever and everywhere at once, including across restarts and partitions, when machines cannot reach each other."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "callers",
+    "label": "Callers"
+   },
+   {
+    "id": "generate",
+    "label": "Generation"
+   },
+   {
+    "id": "control",
+    "label": "Control"
+   },
+   {
+    "id": "storage",
+    "label": "Storage"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "caller_a",
+    "label": "App server A",
+    "kind": "actor",
+    "lane": "callers",
+    "order": 0
+   },
+   {
+    "id": "caller_b",
+    "label": "App server B",
+    "kind": "actor",
+    "lane": "callers",
+    "order": 1
+   },
+   {
+    "id": "gen_a",
+    "label": "ID worker A",
+    "kind": "process",
+    "lane": "generate",
+    "order": 2
+   },
+   {
+    "id": "store",
+    "label": "Data store",
+    "kind": "store",
+    "lane": "storage",
+    "order": 4
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_need_a",
+    "from": "caller_a",
+    "to": "gen_a",
+    "kind": "control",
+    "label": "need id"
+   },
+   {
+    "id": "e_need_b",
+    "from": "caller_b",
+    "to": "gen_a",
+    "kind": "control",
+    "label": "need id"
+   },
+   {
+    "id": "e_id_a",
+    "from": "gen_a",
+    "to": "caller_a",
+    "kind": "payload",
+    "label": "id"
+   },
+   {
+    "id": "e_id_b",
+    "from": "gen_a",
+    "to": "caller_b",
+    "kind": "payload",
+    "label": "id"
+   },
+   {
+    "id": "e_write",
+    "from": "caller_a",
+    "to": "store",
+    "kind": "payload",
+    "label": "write w/ id"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "The Central Counter: Uniqueness by Authority",
+   "problem": {
+    "statement": "The naive generator makes an id by grabbing something local and hoping it is unique: a random number, a timestamp, the two glued together. Random ids collide by the birthday bound long before the space is full; timestamps collide the instant two callers arrive in the same millisecond. Every collision is a silent catastrophe, one row overwriting another, two payments sharing an id. Hope is not a uniqueness strategy.",
+    "beginner": "The first idea is to let each computer make up its own ID number, maybe at random. But two computers can pick the same number by accident, and then two different things share one ID, which quietly corrupts data.",
+    "model": {
+     "id": "single-source-of-truth",
+     "application": "Stop deriving the id from local guesses and hoping it is unique. Put one authoritative counter in charge of what number comes next, so uniqueness is guaranteed by construction and never has to be checked."
+    }
+   },
+   "gate": {
+    "question": "You need an id that is never issued twice, and you cannot afford to read the whole database to check for a clash on every single insert. What produces a guaranteed-unique id with no lookup at all?",
+    "hint": "If nobody is allowed to invent a number, and there is exactly one place that says what comes next, two callers can never land on the same one."
+   },
+   "solution": "One monotonic counter is the authority. Every request takes the next integer from a single database sequence or an atomic INCR, and that integer is the id. Because the counter hands out each number only once, uniqueness is a property of construction, not a check. The count climbs with time, so the ids are sorted for free, and a 64-bit integer is as compact as an id gets.",
+   "user_lens": {
+    "gives": "Every id is unique by guarantee and naturally ordered, with no collision checks, no retries, and no wasted space.",
+    "costs": "Every id now requires a round trip to one shared counter, and that counter is a single point of failure: when it is slow, creation is slow; when it is down, nothing can be created at all."
+   },
+   "tech_lens": {
+    "mechanism": "A single incrementing integer (a database sequence, or an atomic counter in Redis) allocates ids; each caller reads the next value. Uniqueness is enforced by the counter, not verified per write.",
+    "principle": "When you need guaranteed uniqueness, generate from one authoritative source instead of generating-and-checking. Turn a collision problem into a counting problem."
+   },
+   "tradeoff": "You trade the freedom of local, coordination-free generation for a stateful counter that every writer must reach before it can make anything.",
+   "at_scale": "One counter handing out one id per request is a hard throughput ceiling and a single point of failure: at high creation rates every writer serializes through it, and its round-trip latency is taxed onto every insert. It holds for thousands of ids a second on one node; past that the counter, not the callers, is the bottleneck, which is exactly what the next layer must widen.",
+   "defends": [
+    "inv1",
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "monotonic counter as id",
+      "software_concept": "auto-increment primary key / database sequence: identity by allocation, not by hashing"
+     },
+     {
+      "mechanism": "atomic increment",
+      "software_concept": "a single INCR (Redis) or SEQUENCE (SQL) as the one serialization point"
+     }
+    ],
+    "interview_probes": [
+     "Counter versus random id for uniqueness: what does each cost, and at what volume does the random approach start colliding?"
+    ],
+    "approach": "Back the id with a database SEQUENCE or a Redis INCR and hand out its value directly. Uniqueness is the counter's invariant, so there is no read-check-retry loop; the whole generator is one atomic increment.",
+    "vocab": [
+     "relational-db"
+    ]
+   },
+   "beginner_analogy": "Like the ticket dispenser at a deli counter. You do not check whether your number is taken; you pull the next one off the roll, and the roll only ever prints each number once.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "counter",
+      "label": "Central counter",
+      "kind": "process",
+      "lane": "control",
+      "order": 2
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_g_c",
+      "from": "gen_a",
+      "to": "counter",
+      "kind": "control",
+      "label": "next?"
+     },
+     {
+      "id": "e_c_g",
+      "from": "counter",
+      "to": "gen_a",
+      "kind": "payload",
+      "label": "next int"
+     }
+    ],
+    "highlight": [
+     "gen_a",
+     "e_id_a",
+     "e_id_b"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 2,
+   "name": "Blocks: Amortizing the Counter",
+   "problem": {
+    "statement": "The single counter is correct but it is a wall. Every id is a network round trip to one node, so creation throughput is capped at what that counter can serve, and its latency is taxed onto every insert. Worse, it is a single point of failure: the moment it is unreachable, not one caller in the fleet can mint an id. A system that cannot create anything when one node hiccups is not a system you can grow.",
+    "beginner": "The one counter everyone shares becomes a traffic jam: every computer waits its turn to ask it for a number. And if that counter breaks, no one anywhere can get a new ID at all.",
+    "model": {
+     "id": "bottleneck",
+     "application": "The counter's request rate is the constraint that governs the whole system. Do not touch it per id; touch it rarely, by handing out ids in bulk, so its load drops by whatever factor you batch."
+    }
+   },
+   "gate": {
+    "question": "You must keep the counter as the source of uniqueness, but you cannot call it once per id at scale, and you cannot let its downtime stop creation. How do you make one counter serve a thousand times fewer requests?",
+    "hint": "What if a generator asked for a whole range of numbers at once, then handed them out locally until the range ran dry?"
+   },
+   "solution": "Each generator leases a block of ids from the counter in one call: give me 1000, and the counter advances by 1000. The generator then serves those 1000 ids from local memory with no coordination, and only returns to the counter when its block is nearly empty. The counter is now touched a thousand times less often, and a brief counter outage is invisible, because every generator is still draining a buffered block. This is the Flickr ticket-server pattern, also called segment or range allocation.",
+   "user_lens": {
+    "gives": "Creation throughput scales with the number of generators, not the counter, and a short counter outage no longer halts anything, because each generator has ids in hand.",
+    "costs": "Ids are no longer globally in order: each generator burns its block at its own pace, so a slow generator's block-1000 id can appear long after a fast one's block-3000 id. Crashes waste whole blocks, leaving permanent gaps."
+   },
+   "tech_lens": {
+    "mechanism": "Range allocation: one call reserves a contiguous block (advance the shared counter by N), served locally thereafter. The counter's load is divided by the block size; buffered blocks decouple creation from the counter's availability.",
+    "principle": "Break a coordination bottleneck by amortizing it: pay the shared cost once per batch instead of once per item, and hold a buffer so the dependency can blink without stopping you."
+   },
+   "tradeoff": "You buy throughput and fault-tolerance with the loss of strict global ordering and with wasted ids on every crash; the counter is amortized but still, ultimately, a shared dependency you must reach to refill.",
+   "at_scale": "This multiplies the counter's ceiling by the block size: a 1000-id block lets one counter support a thousand times the creation rate, and a counter outage is survivable for as long as the buffered blocks last. But the counter is still there. Push creation high enough, or keep the counter down long enough, and every generator drains its block and stalls at once. The dependency is thinner, not gone, which forces the next layer to delete it.",
+   "defends": [
+    "inv3",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "block/range lease",
+      "software_concept": "id blocks / ticket server (the Flickr pattern): amortize a central counter across many local allocations"
+     },
+     {
+      "mechanism": "buffered block",
+      "software_concept": "client-side batching to decouple from a shared dependency's availability"
+     }
+    ],
+    "interview_probes": [
+     "How do you keep minting unique ids when the central counter is the write bottleneck, and when it is briefly down?"
+    ],
+    "approach": "Have each generator call the counter once to reserve a range (UPDATE counter SET val = val + 1000 RETURNING val), then serve those ids from a local variable until it nears the end and refills. Refill asynchronously before the block empties so no request ever blocks on the counter.",
+    "vocab": [
+     "scaling-writes"
+    ]
+   },
+   "beginner_analogy": "Like a cashier taking a whole roll of raffle tickets from the office instead of walking back for each single ticket. She hands them out fast from the roll, and only returns when the roll is nearly gone.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "gen_b",
+      "label": "ID worker B",
+      "kind": "process",
+      "lane": "generate",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_needb2",
+      "from": "caller_b",
+      "to": "gen_b",
+      "kind": "control",
+      "label": "need id"
+     },
+     {
+      "id": "e_idb2",
+      "from": "gen_b",
+      "to": "caller_b",
+      "kind": "payload",
+      "label": "id"
+     },
+     {
+      "id": "e_gb_c",
+      "from": "gen_b",
+      "to": "counter",
+      "kind": "control",
+      "label": "grab block"
+     },
+     {
+      "id": "e_c_gb",
+      "from": "counter",
+      "to": "gen_b",
+      "kind": "payload",
+      "label": "block of N"
+     }
+    ],
+    "highlight": [
+     "counter",
+     "gen_a"
+    ],
+    "remove": [
+     "e_need_b",
+     "e_id_b"
+    ]
+   }
+  },
+  {
+   "index": 3,
+   "name": "Put Identity in the Number",
+   "problem": {
+    "statement": "Blocks made the counter cheaper, but they did not make it optional. Every generator must still reach the counter to refill, so a long counter outage still ends in a fleet-wide stall, and the ordering the counter gave for free is already gone. Step back to first principles: an id does not need to come from a shared authority. It only needs to be unique and roughly ordered, and both can be manufactured locally if every generator owns a slice of the id space no other generator can touch.",
+    "beginner": "Even with blocks, every computer still depends on the one counter to get more numbers. To remove that shared thing completely, each computer has to build a unique number entirely on its own.",
+    "model": {
+     "id": "first-principles",
+     "application": "Delete the assumption that uniqueness needs a shared counter. Uniqueness only needs disjoint slices, so compose the id from the current time, a per-machine number, and a local sequence, and no two machines can collide."
+    }
+   },
+   "gate": {
+    "question": "Delete the central counter entirely. Each generator must build an id alone, with no shared call, so that no two generators, and no two calls on one generator, ever produce the same number. What three things, combined, guarantee that?",
+    "hint": "Two ids differ if any part of them differs. What could you glue together so time separates most ids, the machine separates the rest, and a local counter separates the ones left inside a single instant?"
+   },
+   "solution": "Compose the id from three fields: a millisecond timestamp in the high bits, a per-machine id in the middle, and a per-millisecond sequence in the low bits. This is Snowflake. Two ids from different machines differ in the machine bits; two from the same machine in the same millisecond differ in the sequence; two from different milliseconds differ in the timestamp. Every generator mints alone, with zero coordination on the request path, and the high timestamp bits keep the ids roughly sorted by time.",
+   "user_lens": {
+    "gives": "Ids minted locally in nanoseconds with no shared call at all, at whatever rate the hardware allows, still unique and still roughly time-ordered.",
+    "costs": "Ordering is now only approximate: within a millisecond, two machines sort by machine number, not by the true instant, so the global order is k-sorted, not exact. And uniqueness now rests entirely on every machine having a different machine id, a new problem the next layer must solve."
+   },
+   "tech_lens": {
+    "mechanism": "A 64-bit layout, for example 41 timestamp bits, 10 machine bits, 12 sequence bits. The id is (timestamp << 22) | (machine << 12) | sequence. Disjoint machine slices plus a per-instant sequence make collisions impossible without any coordination.",
+    "principle": "Manufacture uniqueness locally by partitioning the namespace: if every producer owns a slice no one else can write, each can generate freely with no shared state."
+   },
+   "tradeoff": "You trade exact global ordering and a self-contained id for approximate ordering and a hard new dependency on unique machine numbers; the coordination you deleted from the hot path reappears, smaller, as the machine-id problem.",
+   "at_scale": "This is the move that removes the central bottleneck entirely: creation throughput now scales linearly with machines, because adding a generator adds capacity and touches nothing shared on the request path. There is no counter to melt and no coordinator to call per id. The only remaining shared act is assigning each machine its number, which happens once per process, not once per id.",
+   "defends": [
+    "inv3",
+    "inv2",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "timestamp + machine + sequence",
+      "software_concept": "Snowflake-style composite id; identity partitioned across bit-fields"
+     },
+     {
+      "mechanism": "disjoint machine slices",
+      "software_concept": "namespace partitioning so producers never overlap without coordinating"
+     }
+    ],
+    "interview_probes": [
+     "Design a 64-bit id that many machines can mint with zero coordination and that still sorts roughly by time. How do you spend the bits?"
+    ],
+    "approach": "Pack a 64-bit long: bits for milliseconds since a custom epoch, bits for a machine id, bits for a per-ms sequence. id = (ts - EPOCH) << 22 | machineId << 12 | seq. Keep last-timestamp and sequence in the generator's own state; no network call on the mint path.",
+    "vocab": [
+     "sharding"
+    ]
+   },
+   "beginner_analogy": "Like car number plates. Nobody phones a central office for each plate; the region code, the year, and a local serial together make every plate unique, and each office fills in only its own part.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "clock",
+      "label": "Clock (ms)",
+      "kind": "process",
+      "lane": "control",
+      "order": 5
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_clk_a",
+      "from": "clock",
+      "to": "gen_a",
+      "kind": "control",
+      "label": "ms now"
+     },
+     {
+      "id": "e_clk_b",
+      "from": "clock",
+      "to": "gen_b",
+      "kind": "control",
+      "label": "ms now"
+     }
+    ],
+    "highlight": [
+     "counter",
+     "e_g_c",
+     "e_gb_c"
+    ],
+    "remove": [
+     "counter"
+    ]
+   }
+  },
+  {
+   "index": 4,
+   "name": "Handing Out Machine Numbers",
+   "problem": {
+    "statement": "The whole scheme now rests on one assumption: every generator has a different machine id. Break it and the guarantee collapses instantly. Two machines that boot with the same machine id will, in the same millisecond, mint byte-for-byte identical ids, the exact collision the design promised was impossible. Hardcoding the number in config works until someone clones a VM image, autoscaling spins up a duplicate, or two teams pick the same value. You deleted the central counter; now you need a central authority again, but only for this.",
+    "beginner": "Every computer must have its own machine number, or the trick breaks. If two computers accidentally use the same machine number, they will produce the exact same IDs. So something has to make sure each computer gets a different number, once.",
+    "model": {
+     "id": "mutual-exclusion",
+     "application": "Each machine id is a slot that exactly one generator may hold at a time. Make holding it a lease, not a hope, so of two generators that want the same number, one gets it and the other is refused."
+    }
+   },
+   "gate": {
+    "question": "You removed the per-id coordinator, but two machines with the same machine id mint identical ids. How do you guarantee every live generator holds a different number, without calling a shared service on every id?",
+    "hint": "This coordination happens once, at startup, not per id. What kind of service hands out a number and remembers it is taken until you let go?"
+   },
+   "solution": "A coordination service (ZooKeeper, etcd, or a database with a unique constraint) leases each generator a unique machine id when it starts. The lease is held for the life of the process and released or expired on shutdown, so no two live generators can hold the same number. This is the one piece of coordination that survives, and it sits entirely off the request path: touched once per process, never once per id. If the coordinator is down, running generators keep minting; only a fresh boot has to wait for its number.",
+   "user_lens": {
+    "gives": "Machine ids assigned automatically and safely, so autoscaling and VM cloning cannot silently create a duplicate, and the mint path still never calls anything shared.",
+    "costs": "You reintroduce a coordination service to run and keep available, and a generator cannot start minting until it has leased its number, so a coordinator outage blocks new instances (though not existing ones)."
+   },
+   "tech_lens": {
+    "mechanism": "An ephemeral, exclusive lease over a small set of machine-id slots, granted by a consensus store; held for the process lifetime, reclaimed on expiry so a crashed generator's number can be reused.",
+    "principle": "Push unavoidable coordination off the hot path and do it as rarely as possible: coordinate once to divide the space, then let everyone run free inside their slice."
+   },
+   "tradeoff": "You accept an external dependency and a startup coordination step in exchange for making duplicate machine ids, and therefore duplicate global ids, impossible.",
+   "at_scale": "Because it fires once per process rather than once per id, the coordinator's load is trivial, proportional to how often machines start, not to id volume, so it never becomes a throughput bottleneck. The real ceiling is the machine-id field: 10 bits is 1024 concurrent generators, so the slice width, not the coordinator, caps fleet size, and reclaiming the ids of dead machines is what keeps the pool from exhausting.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "machine-id lease",
+      "software_concept": "distributed lock / lease from ZooKeeper or etcd, held for the process lifetime"
+     },
+     {
+      "mechanism": "slot reuse on expiry",
+      "software_concept": "ephemeral node / lease expiry so a dead worker's id returns to the pool"
+     }
+    ],
+    "interview_probes": [
+     "Two autoscaled instances boot with the same worker id. Walk through the collision and how you assign worker ids so it cannot happen."
+    ],
+    "approach": "On startup, acquire a unique worker id from ZooKeeper (create an ephemeral sequential node) or etcd (a lease over a key), and hold it for the process lifetime. On a unique-constraint or lock failure, retry for a different id; do not start minting until you hold one.",
+    "vocab": [
+     "distributed-lock",
+     "consensus"
+    ]
+   },
+   "beginner_analogy": "Like assigned jersey numbers on a team. The equipment manager hands each player a number once and writes it down, so two players are never on the field with the same number; after that nobody checks with the manager to play.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "coord",
+      "label": "Worker registry",
+      "kind": "process",
+      "lane": "control",
+      "order": 2,
+      "expands_to": "Distributed lock"
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_wid_a",
+      "from": "coord",
+      "to": "gen_a",
+      "kind": "control",
+      "label": "worker id 1"
+     },
+     {
+      "id": "e_wid_b",
+      "from": "coord",
+      "to": "gen_b",
+      "kind": "control",
+      "label": "worker id 2"
+     }
+    ],
+    "highlight": [
+     "gen_a",
+     "gen_b"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 5,
+   "name": "The Clock That Runs Backward",
+   "problem": {
+    "statement": "The timestamp bits quietly assume the clock only moves forward. It does not. NTP corrections nudge it, leap seconds repeat a second, a VM migration can jerk it, and any of these can make the wall clock read a millisecond it has already used. When that happens a generator can mint into a timestamp it already spent, colliding with ids it issued moments ago, and the ids stop climbing, breaking the ordering the whole scheme is sold on. The failure is not load; it is time itself being unreliable.",
+    "beginner": "The ID uses the computer's clock as its main ingredient. But clocks sometimes jump backward a little to correct themselves. If that happens, the computer might reuse a moment it already used and make a duplicate ID, or make IDs that go backward in time.",
+    "model": {
+     "id": "graceful-degradation",
+     "application": "When the clock cannot be trusted to move forward, do not mint a possibly-duplicate id. Choose the safe failure: hold and wait for the clock to catch up rather than emit an id that could collide or sort backward."
+    }
+   },
+   "gate": {
+    "question": "Your id's high bits are the wall clock, and the wall clock just jumped backward by three milliseconds. If you mint now, you may reissue an id you already gave out. What does the generator do at that instant?",
+    "hint": "You know the last timestamp you minted at. Compare the clock to it before you trust it. What is safer: emit an id you are not sure is new, or wait?"
+   },
+   "solution": "Track the last timestamp you minted at. On each request, if the clock reads later, mint normally. If it reads the same millisecond, advance the sequence. If it reads earlier, the clock has moved backward: refuse to mint and wait until the clock catches up to the last timestamp, or for tiny regressions block for the few milliseconds it takes. Prefer a monotonic clock source that cannot go backward. The rule is fail-safe: never emit an id you cannot prove is new.",
+   "user_lens": {
+    "gives": "Uniqueness and ordering that survive an unreliable clock: a backward jump costs a brief pause, never a duplicate and never an out-of-order id.",
+    "costs": "During a backward clock step the generator stalls: for the length of the regression it refuses to hand out ids, trading availability for correctness exactly when the clock misbehaves."
+   },
+   "tech_lens": {
+    "mechanism": "A stored last-timestamp watermark checked on every mint; equal means advance the sequence, greater means proceed, less means wait or reject. A monotonic clock source removes most regressions at the root.",
+    "principle": "When an input you depend on becomes untrustworthy, degrade to a safe stall rather than produce a wrong result. A late id is recoverable; a duplicate id is not."
+   },
+   "tradeoff": "You trade availability during clock regressions for an ironclad guarantee that ids never repeat or reverse; the generator would rather pause than lie.",
+   "at_scale": "The watermark check is a single comparison per id, so it costs nothing at any throughput. The scaling risk is correlated failure: an NTP push or a leap second hits many machines at once, so a whole fleet can pause together, briefly denting creation throughput across a region while every generator waits out the same backward step. That is why leap-second smearing and monotonic clocks are used to make the regression never happen.",
+   "defends": [
+    "inv2",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "last-timestamp watermark",
+      "software_concept": "monotonic guard: reject or wait when the clock reads before the last issued time"
+     },
+     {
+      "mechanism": "wait on regression",
+      "software_concept": "fail-safe stall: block minting rather than risk a duplicate"
+     }
+    ],
+    "interview_probes": [
+     "NTP steps the clock back 50 ms on a running generator. What are the two things that can go wrong with the ids, and how do you prevent both?"
+    ],
+    "approach": "Keep lastTs in the generator's state. On mint: if now < lastTs, either spin-wait until now >= lastTs or throw; if now == lastTs, increment seq (and wait for the next ms on overflow); if now > lastTs, reset seq to 0. Read time from a monotonic source where possible.",
+    "vocab": []
+   },
+   "beginner_analogy": "Like a notary who refuses to date a document earlier than the last one they stamped. If the office clock is reset backward, the notary simply waits rather than sign a paper with a time they may have already used.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "guard",
+      "label": "Clock guard",
+      "kind": "process",
+      "lane": "control",
+      "order": 4
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_c_guard",
+      "from": "clock",
+      "to": "guard",
+      "kind": "control",
+      "label": "raw ts"
+     },
+     {
+      "id": "e_guard_a",
+      "from": "guard",
+      "to": "gen_a",
+      "kind": "control",
+      "label": "safe ts"
+     },
+     {
+      "id": "e_guard_b",
+      "from": "guard",
+      "to": "gen_b",
+      "kind": "control",
+      "label": "safe ts"
+     }
+    ],
+    "highlight": [
+     "clock",
+     "e_clk_a",
+     "e_clk_b"
+    ],
+    "remove": [
+     "e_clk_a",
+     "e_clk_b"
+    ]
+   }
+  },
+  {
+   "index": 6,
+   "name": "The Millisecond Ceiling",
+   "problem": {
+    "statement": "One field is still bounded: the per-millisecond sequence. With 12 bits it holds 4096 values, so one machine can mint at most 4096 ids in a single millisecond. Ask for the 4097th before the millisecond ticks over and there is no unused sequence value left; the naive move is to wrap the sequence back to zero and reuse a number, minting a duplicate. A burst of demand inside one millisecond, not sustained load, is what walks the generator off the edge of its own id space.",
+    "beginner": "The last part of the ID is a small counter that only goes up to about 4000 and resets every millisecond. If one computer is asked for more than 4000 IDs in the same millisecond, it runs out of counter values and would have to repeat one.",
+    "model": {
+     "id": "queue-and-buffer",
+     "application": "The per-millisecond sequence is a bounded buffer of 4096 slots. When it fills, do not overflow into reuse; make the extra requests wait the fraction of a millisecond until the next tick refills the buffer, converting a burst into a tiny delay instead of a collision."
+    }
+   },
+   "gate": {
+    "question": "Your per-millisecond sequence has 4096 slots and the 4097th request arrives before the millisecond is over. You cannot reuse a slot without minting a duplicate. What do you do with that request?",
+    "hint": "The buffer refills on its own the instant the clock ticks to the next millisecond. How long is that wait, and what should the request do until then?"
+   },
+   "solution": "When the sequence for the current millisecond is exhausted, spin-wait until the clock advances to the next millisecond, then reset the sequence to zero and continue. The wait is at most a fraction of a millisecond, and it makes overflow impossible: a burst is absorbed as a sub-millisecond delay rather than a duplicate. The three field widths are a fixed 64-bit budget: sequence bits cap per-machine throughput, machine bits cap fleet size, timestamp bits cap lifespan, and you tune the split for the workload.",
+   "user_lens": {
+    "gives": "A hard guarantee against duplicates even under a burst that exceeds the per-millisecond limit, at the cost of at most a sub-millisecond pause on the requests that overflow.",
+    "costs": "Per-machine throughput is capped by the sequence width (4096 per millisecond, about 4 million per second), and a caller that exceeds it feels backpressure: it waits for the next tick instead of getting an instant id."
+   },
+   "tech_lens": {
+    "mechanism": "A per-millisecond counter checked against its maximum; on overflow, block until the monotonic clock reads a new millisecond, then reset to zero. Field widths are chosen to trade throughput, fleet size, and lifespan against one another.",
+    "principle": "A bounded resource under a burst should apply backpressure, not overflow: make the excess wait for the resource to replenish rather than corrupt the guarantee to keep up."
+   },
+   "tradeoff": "You cap a single machine's peak id rate and add a sub-millisecond wait under burst, in exchange for never reusing a sequence value; more sequence bits raise the ceiling but steal bits from machines or lifespan.",
+   "at_scale": "The ceiling is per machine, not global, so fleet throughput scales by adding generators: 4096 per millisecond times 1024 machines is over 4 billion ids per second, all coordination-free. When one machine's rate is the limit, you either widen the sequence field (at the cost of fewer machine bits or fewer years) or spread the load across more machines. The wait is self-clearing, so the system sheds a burst as latency, never as loss or collision.",
+   "defends": [
+    "inv1",
+    "inv2",
+    "inv4"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "sequence overflow wait",
+      "software_concept": "spin-wait to next tick: backpressure instead of buffer overflow"
+     },
+     {
+      "mechanism": "bit-field budget",
+      "software_concept": "fixed-width partitioning trading throughput, fleet size, and lifespan"
+     }
+    ],
+    "interview_probes": [
+     "The per-ms sequence overflows mid-burst. What do you do with the overflowing requests, and what caps a single node's id rate?"
+    ],
+    "approach": "On mint in the current ms, if seq++ exceeds the field max, loop calling the clock until it reads a new millisecond (tilNextMillis), then reset seq to 0. Size the fields (e.g. 41/10/12) for your throughput, machine count, and required lifespan.",
+    "vocab": [
+     "rate-limiting",
+     "backpressure"
+    ]
+   },
+   "beginner_analogy": "Like a stamp machine that prints up to 4000 tickets a minute. If a rush needs more, the extra customers wait a few seconds for the next minute to start, rather than the machine printing a ticket number twice.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "seq",
+      "label": "Seq + rollover",
+      "kind": "process",
+      "lane": "generate",
+      "order": 4
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_ga_seq",
+      "from": "gen_a",
+      "to": "seq",
+      "kind": "control",
+      "label": "take slot"
+     },
+     {
+      "id": "e_gb_seq",
+      "from": "gen_b",
+      "to": "seq",
+      "kind": "control",
+      "label": "take slot"
+     },
+     {
+      "id": "e_guard_seq",
+      "from": "guard",
+      "to": "seq",
+      "kind": "control",
+      "label": "ms reset"
+     }
+    ],
+    "highlight": [
+     "gen_a",
+     "gen_b"
+    ],
+    "remove": []
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "A leap second rewinds every clock at once",
+   "scenario": "A leap second (or a synchronized NTP push) steps the wall clock backward across the whole fleet in the same instant. Every generator's clock now reads a millisecond it has already minted into.",
+   "reveal": "The last-timestamp guard on every generator catches the regression: each refuses to mint until its clock passes the last timestamp it used, so no generator reissues a spent millisecond (inv1) and no id sorts backward (inv2). The cost is a correlated pause, creation throughput dips across the region for the length of the regression, because the guards all wait together. This is why operators smear leap seconds or read a monotonic clock, turning a synchronized stall into no event at all."
+  },
+  {
+   "id": "st2",
+   "title": "A VM image is cloned with its machine id baked in",
+   "scenario": "An autoscaler boots a new generator from a snapshot that still holds a previously-leased machine id, so two live generators now share the same number.",
+   "reveal": "If machine ids came from a hardcoded config in the image, both mint identical ids and inv1 breaks silently, the worst failure the system has. The lease-based assignment holds it off: a cloned instance must acquire its own machine id from the coordinator at startup and cannot begin minting until it holds a unique one, so the duplicate never reaches the id space. The lesson is that machine identity must be leased at runtime, never carried inside an image."
+  },
+  {
+   "id": "st3",
+   "title": "One endpoint is hammered past a machine's per-ms limit",
+   "scenario": "A single hot generator is asked for 20,000 ids inside one millisecond, five times its sequence capacity.",
+   "reveal": "The sequence fills at 4096, and instead of wrapping and reusing values the generator spin-waits to the next millisecond and resets, so the overflow becomes a sub-millisecond queue, not a collision (inv1 holds). Throughput on that one machine is pinned at its ceiling; the fix is not a bigger sequence on one node but spreading the load across more machines, since the per-machine cap is exactly what lets the fleet scale linearly. Callers feel a tiny pause, never a duplicate."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "When you need guaranteed uniqueness, generate from an authority instead of generating-and-checking: turn a collision problem into a counting problem.",
+   "Amortize a coordination bottleneck by batching: pay the shared cost once per block, not once per item, and buffer so the dependency can blink without stopping you.",
+   "Manufacture uniqueness locally by partitioning the namespace: give every producer a slice no one else can write, and it can generate freely with no shared state.",
+   "Push unavoidable coordination off the hot path and do it as rarely as possible: coordinate once to divide the space, then run free inside your slice.",
+   "When an input you depend on becomes untrustworthy, degrade to a safe stall rather than emit a wrong result: a late answer is recoverable, a duplicate is not.",
+   "A bounded resource under a burst should apply backpressure, not overflow: make the excess wait for it to replenish rather than corrupt the guarantee."
+  ],
+  "mappings": [
+   {
+    "mechanism": "composite time+machine+sequence id",
+    "elsewhere": "MongoDB ObjectIds, ULIDs, KSUIDs, and MAC addresses all pack time and a machine or random field into one value to get coordination-free uniqueness."
+   },
+   {
+    "mechanism": "block / range allocation",
+    "elsewhere": "HiLo id generators, cached database sequences, and Kafka producer-id blocks all reserve a range up front to avoid touching a shared counter per item."
+   },
+   {
+    "mechanism": "lease a slot from a consensus store",
+    "elsewhere": "Leader election, Kafka partition assignment, and distributed locks all use ZooKeeper or etcd to grant exactly one holder of a shared slot."
+   },
+   {
+    "mechanism": "monotonic-clock guard",
+    "elsewhere": "Lamport and hybrid logical clocks, TrueTime's commit-wait, and database log sequence numbers all defend ordering against an untrustworthy wall clock."
+   },
+   {
+    "mechanism": "backpressure on a bounded buffer",
+    "elsewhere": "Token-bucket rate limiters, TCP flow control, and reactive streams all make excess demand wait rather than overflow a fixed resource."
+   }
+  ]
+ }
+}

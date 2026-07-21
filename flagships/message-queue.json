@@ -1,0 +1,848 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "Message queue",
+  "narrowing": "The core broker: a durable point-to-point work queue that delivers each message to one consumer, with the partitioned-log variant introduced only where ordering and consumer groups demand it. Pub/sub fan-out to many independent subscribers, exactly-once transactional frameworks, and stream processing are left out; they build on this spine but do not change it.",
+  "ordering_note": "The layers follow the order each failure forces the next, which is also the order a real queue is built: first a buffer to decouple producer from consumer, then acknowledgement so a crash cannot lose work, then idempotency to survive the duplicates at-least-once creates, then parallel consumers to keep up with load, then partitioning to win back the ordering those parallel consumers destroyed, then a dead-letter queue for the poison message that would otherwise loop forever, and finally backpressure for when consumers simply cannot keep up. These are the standard, inevitable failures every message queue hits (visibility timeouts, consumer groups, and dead-letter queues are named the same across SQS, RabbitMQ, and Kafka), not one company's dated outage, so confidence is medium.",
+  "history_confidence": "medium",
+  "domain": "software"
+ },
+ "essence": {
+  "text": "A message queue is a shock absorber and a promise. It sits between whoever makes work and whoever does it, so a burst that would crush the worker becomes a line that waits, and a worker that dies mid-task does not take the work down with it. Its whole art is delivering each message at least once through crashes, retries, and duplicates, and letting you buy stronger guarantees only where you are willing to pay for them.",
+  "beginner": "A message queue is a waiting line for computer work. One program drops off tasks and another picks them up when it is ready, so a sudden flood of tasks does not overwhelm anyone, and nothing is lost if a worker crashes partway through.",
+  "deep_facts": [
+   "At-least-once delivery is the default almost everywhere, because guaranteeing exactly-once across a network and a crash is impossible without help from the consumer: the queue can only promise 'again if unsure', and the consumer must make a repeat harmless.",
+   "A visibility timeout is a bet on how long work takes. Too short and the queue redelivers a message that is still being processed, so it runs twice; too long and a crashed worker's message sits invisible and stuck until the timer finally expires.",
+   "Amazon SQS standard queues do not preserve order and can deliver a message more than once by design; FIFO queues restore order and once-only processing within a message group, and cap throughput far lower as the price.",
+   "Kafka gets ordering and parallelism at once by splitting a topic into partitions: order holds inside a partition, never across them, and a consumer group can have at most one active consumer per partition, so partition count is the ceiling on consumers.",
+   "A dead-letter queue exists because one message that always fails would otherwise be redelivered forever, burning workers and, in an ordered stream, blocking every message behind it: after N attempts the poison message is set aside so the line keeps moving."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Accept work from producers and deliver it to consumers reliably, decoupling the two in time so neither the rate nor the health of one can break the other.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Producer",
+    "want": "Hand off work and get an immediate, durable receipt, without waiting for it to be done or caring who does it"
+   },
+   {
+    "id": "a2",
+    "name": "Consumer",
+    "want": "Pull work at its own pace, take exclusive charge of a message while working, and confirm completion so it is never surprised by the same work"
+   },
+   {
+    "id": "a3",
+    "name": "Broker operator",
+    "want": "Keep every accepted message safe until it is done, spread load across consumers, and never let one slow consumer or one bad message stall the system"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "Every message a producer successfully enqueues is delivered to a consumer at least once and is never silently dropped, even across consumer crashes and broker restarts."
+   },
+   {
+    "id": "inv2",
+    "text": "A message is never permanently deleted from the queue until a consumer has explicitly confirmed it was fully processed."
+   },
+   {
+    "id": "inv3",
+    "text": "The effect of processing a message is applied at most once, no matter how many times the message is delivered."
+   },
+   {
+    "id": "inv4",
+    "text": "Messages that share an ordering key are processed in the order they were enqueued."
+   },
+   {
+    "id": "inv5",
+    "text": "No single slow consumer and no single poison message can stall the whole queue or take unrelated messages down with it."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Message",
+    "note": "The unit of work: an opaque payload plus metadata (id, ordering key, receive count). Written once, delivered one or more times."
+   },
+   {
+    "id": "en2",
+    "name": "Queue",
+    "note": "The durable buffer where messages wait between production and consumption; the shared line every consumer draws from."
+   },
+   {
+    "id": "en3",
+    "name": "Receipt",
+    "note": "The per-message handle a consumer holds while working: proof it has the message and the token it acks or lets expire."
+   },
+   {
+    "id": "en4",
+    "name": "Consumer group",
+    "note": "A set of consumers that share one queue's work, each message going to exactly one member of the group."
+   },
+   {
+    "id": "en5",
+    "name": "Dead-letter queue",
+    "note": "A side queue that catches messages which failed too many times, so they leave the main line without being lost."
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Work flows one way: producers enqueue messages, the queue holds them, consumers dequeue and process them."
+   },
+   {
+    "id": "f2",
+    "text": "Acknowledgements flow back: a consumer confirms completion, and only then is the message removed."
+   },
+   {
+    "id": "f3",
+    "text": "Control flows around the edges: redelivery on timeout, routing by key, poison messages to the dead-letter queue, and backpressure to producers."
+   }
+  ],
+  "constraints": [
+   "Networks and processes fail at the worst moment: a consumer can crash after doing the work but before acking, so the queue can never be certain a delivered message was finished.",
+   "Exactly-once delivery over a network is impossible in general; the best a queue offers alone is at-least-once, and the consumer must close the gap.",
+   "Ordering and parallelism pull against each other: strict global order forces serial processing, which caps throughput at one consumer.",
+   "The queue's storage is finite: if consumers fall behind producers for long enough, the backlog grows without bound and something must give."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "producers",
+    "label": "Producers"
+   },
+   {
+    "id": "broker",
+    "label": "Broker"
+   },
+   {
+    "id": "consumers",
+    "label": "Consumers"
+   },
+   {
+    "id": "control",
+    "label": "Control"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "prod_a",
+    "label": "Producer A",
+    "kind": "actor",
+    "lane": "producers",
+    "order": 0
+   },
+   {
+    "id": "prod_b",
+    "label": "Producer B",
+    "kind": "actor",
+    "lane": "producers",
+    "order": 0
+   },
+   {
+    "id": "worker",
+    "label": "Worker A",
+    "kind": "process",
+    "lane": "consumers",
+    "order": 4
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_call_a",
+    "from": "prod_a",
+    "to": "worker",
+    "kind": "payload",
+    "label": "calls"
+   },
+   {
+    "id": "e_call_b",
+    "from": "prod_b",
+    "to": "worker",
+    "kind": "payload",
+    "label": "calls"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "The Queue: Decouple Producer From Consumer",
+   "problem": {
+    "statement": "A producer calls a consumer directly and waits for it to finish. Two failures are baked in. When work arrives in a burst, a hundred requests a second against a consumer that handles ten, the extra ninety are dropped or the producer blocks until the consumer catches up. And when the consumer is slow, restarting, or down, the producer's call fails and the work is simply gone. The producer's fate is chained to the consumer's health and speed.",
+    "beginner": "One program hands work straight to another and waits. If a lot of work shows up at once, or the second program is busy or down, the work fails or gets thrown away. The two are stuck to each other.",
+    "model": {
+     "id": "queue-and-buffer",
+     "application": "Put a waiting room between producer and consumer so bursts pile up in the buffer instead of crushing the consumer, and the producer can drop off work and leave whether or not the consumer is ready."
+    }
+   },
+   "gate": {
+    "question": "Producers make work in unpredictable bursts and consumers can only handle a steady trickle. You cannot make the consumer infinitely fast, and you must not drop work or make the producer wait for it to finish. What goes between them?",
+    "hint": "If the two cannot run at the same speed, give the faster one somewhere to put its output and let the slower one take from there."
+   },
+   "solution": "Insert a durable queue between them. A producer appends its message to the queue and returns immediately with a receipt, its job done. Consumers pull messages from the queue at whatever rate they can sustain. A burst becomes a temporarily longer line, not dropped work, and a consumer that is down just means the line grows until it comes back. Producer and consumer are now decoupled in time: neither one's speed or health touches the other.",
+   "user_lens": {
+    "gives": "Producers get an instant, durable 'received' and never block on slow work. Consumers work at their own pace and a spike no longer overwhelms them; it just waits in line.",
+    "costs": "You trade immediacy for a delay: work is now done later, asynchronously, so the producer no longer learns the result inline and must find out some other way. And the queue itself is a new component that must be kept durable and available."
+   },
+   "tech_lens": {
+    "mechanism": "An append-only durable buffer. Enqueue writes the message to persistent storage and returns; dequeue reads the oldest unread message. The queue's depth absorbs the difference between production rate and consumption rate.",
+    "principle": "Decouple producers from consumers with a buffer: when two parties cannot match speeds, put a queue between them so bursts are absorbed as depth instead of loss."
+   },
+   "tradeoff": "The work becomes asynchronous, so the simple inline request and response is gone and results must be delivered through a separate channel. Latency per item can rise under backlog even as throughput and resilience improve.",
+   "at_scale": "The queue depth is the shock absorber: a burst of a million messages a second against consumers that drain a hundred thousand a second becomes a growing backlog, not dropped work, and the backlog drains once the burst passes. The ceiling is storage and drain rate: if producers outrun consumers on average, not just in bursts, depth grows without bound, which is the failure backpressure (Layer 7) must answer.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "durable queue between services",
+      "software_concept": "asynchronous message queue decoupling producer and consumer"
+     },
+     {
+      "mechanism": "enqueue-and-return",
+      "software_concept": "fire-and-forget with a durable buffer instead of a synchronous call"
+     }
+    ],
+    "interview_probes": [
+     "Where in your system does a producer block on a slow consumer, and what would a queue between them buy you and cost you?"
+    ],
+    "approach": "Start with a durable FIFO buffer: producers push onto a persisted list (a table, a log, or SQS/RabbitMQ), consumers loop pulling the oldest entry. In code it is producer.send(msg) returning immediately, and a worker running while(true) { msg = queue.poll(); handle(msg); }.",
+    "vocab": [
+     "long-running-tasks",
+     "queue"
+    ]
+   },
+   "beginner_analogy": "Like a restaurant kitchen's order rail. Waiters clip tickets on as fast as tables order; cooks take the next ticket when they finish the last. A rush becomes a longer rail, not a waiter standing at the pass waiting for a plate.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "queue",
+      "label": "Message queue",
+      "kind": "store",
+      "lane": "broker",
+      "order": 2,
+      "expands_to": "Write-ahead log"
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_enq_a",
+      "from": "prod_a",
+      "to": "queue",
+      "kind": "payload",
+      "label": "enqueue"
+     },
+     {
+      "id": "e_enq_b",
+      "from": "prod_b",
+      "to": "queue",
+      "kind": "payload",
+      "label": "enqueue"
+     },
+     {
+      "id": "e_deliver",
+      "from": "queue",
+      "to": "worker",
+      "kind": "payload",
+      "label": "deliver"
+     },
+     {
+      "id": "e_poll",
+      "from": "worker",
+      "to": "queue",
+      "kind": "control",
+      "label": "poll"
+     }
+    ],
+    "highlight": [
+     "worker",
+     "e_call_a",
+     "e_call_b"
+    ],
+    "remove": [
+     "e_call_a",
+     "e_call_b"
+    ]
+   }
+  },
+  {
+   "index": 2,
+   "name": "Acknowledge or Redeliver: At-Least-Once",
+   "problem": {
+    "statement": "The queue holds work, but when does it delete a message? If it removes the message the instant a consumer picks it up, a consumer that crashes mid-task, or after doing the work but before recording it, takes that message to the grave: nobody else ever sees it. If it never removes messages, they are delivered forever. The queue cannot tell 'done' from 'died' without the consumer telling it.",
+    "beginner": "When a worker takes a task, should the queue forget it? If it forgets and the worker then crashes, the task is lost. If it never forgets, the task is done again and again. The queue needs to know when a task is truly finished.",
+    "model": {
+     "id": "mutual-exclusion",
+     "application": "While a consumer works on a message, lease it to that consumer alone and hide it from everyone else for a set time; if the lease is not confirmed before it expires, assume the consumer died and hand the message to another."
+    }
+   },
+   "gate": {
+    "question": "A worker takes a message and might crash at any instant, including after finishing the work but before saying so. You must not lose the message and must not let two workers grab it at once. When do you delete it, and how do you recover the ones whose workers vanished?",
+    "hint": "Do not delete on delivery. Hide the message and start a timer instead. What has to happen before the timer runs out, and what happens if it does not?"
+   },
+   "solution": "Deliver without deleting. When a consumer receives a message, the queue makes it invisible to other consumers for a visibility timeout and hands over a receipt. The consumer does the work, then sends an explicit ack, and only then is the message deleted. If the ack does not arrive before the timeout, the queue assumes the consumer failed and makes the message visible again for redelivery. This is at-least-once delivery: no accepted message is lost, at the price that a message can be delivered more than once.",
+   "user_lens": {
+    "gives": "Work survives crashes: a consumer can die at any point and its message reappears for another to finish. And while one consumer holds a message, no other consumer touches it.",
+    "costs": "Duplicates become normal. A consumer that finishes the work but crashes before acking, or is just slower than the visibility timeout, gets its message redelivered and the work runs twice. You have bought 'never lost' with 'sometimes twice'."
+   },
+   "tech_lens": {
+    "mechanism": "Deliver, hide, ack. On dequeue the broker sets the message invisible for a timeout and issues a receipt handle; ack deletes it; timeout expiry re-queues it. The visibility timeout is a timed lease that grants one consumer exclusive claim on the message.",
+    "principle": "Never destroy work until its completion is confirmed, and guard the in-flight message with an exclusive timed lease so exactly one worker owns it at a time and a dead worker's claim expires on its own."
+   },
+   "tradeoff": "You get at-least-once but not exactly-once: the same message can be processed more than once, and the visibility timeout is a guess about processing time that is wrong in both directions when work is slow or workers stall.",
+   "at_scale": "The lease is per message and held in the broker, so millions of in-flight messages mean millions of timers, which brokers track cheaply with a time-ordered structure. The scaling hazard is the timeout itself: under load, processing slows, more messages breach their visibility window and redeliver while still being worked, and redundant reprocessing piles more load onto an already-slow consumer, a feedback loop that timeout tuning and backpressure must contain.",
+   "defends": [
+    "inv1",
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "deliver, hide, ack",
+      "software_concept": "at-least-once delivery with explicit acknowledgement"
+     },
+     {
+      "mechanism": "visibility timeout",
+      "software_concept": "a timed lease or lock on the in-flight message, auto-released on expiry"
+     }
+    ],
+    "interview_probes": [
+     "A consumer crashes after doing the work but before acking. What does the queue do, and what does the consumer now have to tolerate?"
+    ],
+    "approach": "Store each message with a state and a visible_at timestamp. Dequeue = select the oldest row where visible_at <= now, set visible_at = now + timeout, return a receipt; ack = delete by receipt; a message whose visible_at passes without an ack is picked up again. It is a lease you renew (ack) or forfeit (timeout).",
+    "vocab": [
+     "distributed-lock"
+    ]
+   },
+   "beginner_analogy": "Like a library book on hold under your name: while you have it, nobody else can borrow it, but if you do not check it back in by the due date, it goes back on the shelf for the next person, even if you actually finished reading it.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "ack",
+      "label": "Ack / visibility",
+      "kind": "process",
+      "lane": "control",
+      "order": 3,
+      "expands_to": "Distributed lock"
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_hide",
+      "from": "queue",
+      "to": "ack",
+      "kind": "control",
+      "label": "hide on poll"
+     },
+     {
+      "id": "e_ack",
+      "from": "worker",
+      "to": "ack",
+      "kind": "control",
+      "label": "ack done"
+     },
+     {
+      "id": "e_redeliver",
+      "from": "ack",
+      "to": "queue",
+      "kind": "control",
+      "label": "redeliver"
+     }
+    ],
+    "highlight": [
+     "e_deliver",
+     "worker"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 3,
+   "name": "Idempotency: Make a Repeat Harmless",
+   "problem": {
+    "statement": "At-least-once means duplicates are not an edge case, they are guaranteed: every timed-out-but-actually-finished message, every redelivery after a slow ack, arrives again. If processing a message has a side effect, charging a card, sending an email, incrementing a balance, then a duplicate does that side effect twice. Exactly-once delivery is impossible over a network, so the duplicate cannot be prevented; it can only be made not to matter.",
+    "beginner": "Because the queue may deliver the same task twice, a task that charges money or sends an email could do it twice. You cannot stop the second delivery, so you have to make doing the task a second time change nothing.",
+    "model": {
+     "id": "idempotency",
+     "application": "Make processing a message idempotent: doing it twice has the same effect as doing it once, so a duplicate delivery is safe and the impossible 'exactly-once delivery' becomes an achievable 'exactly-once effect'."
+    }
+   },
+   "gate": {
+    "question": "The queue will sometimes hand you the same message twice and you cannot make it stop. The message says 'charge this customer 10 dollars.' How do you guarantee the customer is charged only once, no matter how many times you receive it?",
+    "hint": "Give each message a stable identity, and remember what you have already done. The second time you see that identity, what should happen?"
+   },
+   "solution": "Give every message a stable idempotency key (its message id, or a business key like the order id) and make the consumer deduplicate on it. Before applying the side effect, the consumer records the key in a dedup store in the same atomic step as the effect, or checks it first: if the key is already present, the message is a duplicate and is acked without repeating the work. Delivery stays at-least-once, but the effect happens once. Where the side effect is naturally idempotent (a set, an upsert keyed by id), no dedup store is even needed.",
+   "user_lens": {
+    "gives": "Duplicates stop being dangerous: retries, redeliveries, and at-least-once delivery all become safe, so the system can retry freely without corrupting state.",
+    "costs": "Every consumer now carries the burden of idempotency: a dedup store to maintain and expire, or side effects carefully designed to be repeatable. Correctness moves out of the queue and into the application, where it is easy to get subtly wrong."
+   },
+   "tech_lens": {
+    "mechanism": "A deduplication key per message plus a record of processed keys, written atomically with the side effect (or a naturally idempotent operation). Seen key means skip and ack; new key means apply, record, ack.",
+    "principle": "When you cannot deliver exactly once, process idempotently: a stable key plus a memory of what is done turns unavoidable duplicates into no-ops and makes retries free."
+   },
+   "tradeoff": "You push the hardest guarantee, exactly-once effect, onto the consumer, and you take on a dedup store whose retention window bounds how long you can catch duplicates, and whose atomicity with the side effect is the real correctness battle.",
+   "at_scale": "The dedup store is now on the hot path of every message, so it must be as fast and as scalable as the queue itself, typically a partitioned key-value store keyed by idempotency key. Its retention sets a hard limit: you can only detect a duplicate whose key you still remember, so a very late redelivery past the window can slip through, and the store's size grows with throughput times retention.",
+   "defends": [
+    "inv3"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "idempotency key plus dedup store",
+      "software_concept": "idempotent consumer: dedup on a client-stable key"
+     },
+     {
+      "mechanism": "record key with the effect",
+      "software_concept": "atomic write of the dedup marker and the side effect in one transaction"
+     }
+    ],
+    "interview_probes": [
+     "Your queue is at-least-once and a message charges a card. Walk through exactly how you make the charge happen once."
+    ],
+    "approach": "Attach a stable id to each message. In the consumer, wrap the side effect and an INSERT of that id into a unique-keyed dedup table in one transaction: if the insert hits a unique-violation, it is a duplicate, so skip and ack. For naturally idempotent effects (PUT, upsert by id), just apply.",
+    "vocab": [
+     "idempotency-keys"
+    ]
+   },
+   "beginner_analogy": "Like a nightclub stamping your hand. The bouncer might wave you toward the door twice, but the stamp means you only pay once; the second time they see the stamp, they just let you pass.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "dedup",
+      "label": "Dedup store",
+      "kind": "store",
+      "lane": "consumers",
+      "order": 5
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_dedup",
+      "from": "worker",
+      "to": "dedup",
+      "kind": "control",
+      "label": "seen this id?"
+     }
+    ],
+    "highlight": [
+     "e_redeliver",
+     "worker"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 4,
+   "name": "Consumer Groups: Scale the Workers",
+   "problem": {
+    "statement": "One consumer, however careful, processes messages at a fixed rate. When producers consistently outpace it, the queue depth climbs forever and every message waits longer behind the backlog. Adding a second consumer naively creates a new hazard: if both pull the same message, the work is done twice, or they fight over the line. The consumer is now the throughput ceiling, and you cannot simply clone it without a rule for who gets what.",
+    "beginner": "A single worker can only go so fast. If work keeps arriving faster than it can finish, the line just grows forever. You want more workers, but if two of them grab the same task, it gets done twice.",
+    "model": {
+     "id": "bottleneck",
+     "application": "The single consumer's rate is the constraint that governs the whole system's throughput; add parallel consumers that share the queue and route each message to exactly one of them, so throughput scales with the number of workers."
+    }
+   },
+   "gate": {
+    "question": "Your one consumer cannot keep up and the backlog grows without end. You want to add workers, but each message must still be handled by exactly one of them. How do many consumers share a single queue without double-processing?",
+    "hint": "Let the workers compete for the same line, but make the broker the referee: once it hands a message to one worker, it hides that message from the rest. You already built that hiding mechanism."
+   },
+   "solution": "Run a consumer group: many consumers drawing from the same queue, the broker delivering each message to exactly one member. The visibility timeout from Layer 2 already guarantees this: when one consumer receives a message it goes invisible, so no other member sees it. Throughput now scales roughly linearly with the number of consumers until some other resource (the broker, a database) becomes the next bottleneck. Add workers to drain a growing backlog; remove them when it is empty.",
+   "user_lens": {
+    "gives": "Throughput you can dial: add consumers to process faster and clear backlogs, remove them to save money, all against one shared queue with no double-processing.",
+    "costs": "You lose ordering. With many consumers working in parallel, message two can finish before message one, so the strict first-in-first-out order the single consumer preserved is gone. And 'exactly one member' holds only as well as the visibility timeout: too short, and a slow message gets handed to a second worker too."
+   },
+   "tech_lens": {
+    "mechanism": "Competing consumers on one queue, arbitrated by the invisibility lease: delivery to one member hides the message from the group. Membership and load-spreading are managed so each consumer pulls its share.",
+    "principle": "Scale a throughput bottleneck horizontally by adding interchangeable workers behind a shared queue, and let a per-message lease make 'exactly one worker per message' automatic."
+   },
+   "tradeoff": "Parallelism buys throughput by sacrificing order: independent workers finish in unpredictable sequence, so any guarantee about processing order is lost unless you rebuild it, which is the next layer's whole job.",
+   "at_scale": "This is how the system keeps up with load: N consumers give roughly N times the drain rate, so a backlog is cleared by adding workers rather than by making any one faster. The ceiling moves off the consumer and onto whatever they all share, the broker's delivery rate or a downstream database, and onto the fact that unpartitioned competing consumers cannot preserve order at any scale.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "competing consumers on one queue",
+      "software_concept": "consumer group: horizontal scale-out of the worker"
+     },
+     {
+      "mechanism": "lease makes one-and-only-one",
+      "software_concept": "the visibility lock doubles as the anti-double-processing guarantee"
+     }
+    ],
+    "interview_probes": [
+     "Your backlog grows because one consumer is too slow. How do you add workers without any message being processed twice, and what do you lose by doing it?"
+    ],
+    "approach": "Run K identical worker processes all polling the same queue; rely on the broker's per-message invisibility so a dequeued message is hidden from the others. Scale K by watching queue depth or consumer lag: depth rising means add workers, depth near zero means remove them.",
+    "vocab": [
+     "load-balancing",
+     "stream"
+    ]
+   },
+   "beginner_analogy": "Like opening more checkout lanes at a busy supermarket. Shoppers form one flow and whichever cashier is free takes the next one; ten lanes clear the crowd ten times faster, but people no longer leave in the exact order they arrived.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "worker_b",
+      "label": "Worker B",
+      "kind": "process",
+      "lane": "consumers",
+      "order": 4
+     },
+     {
+      "id": "group",
+      "label": "Consumer group",
+      "kind": "process",
+      "lane": "control",
+      "order": 4
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_poll_b",
+      "from": "worker_b",
+      "to": "queue",
+      "kind": "control",
+      "label": "poll"
+     },
+     {
+      "id": "e_deliver_b",
+      "from": "queue",
+      "to": "worker_b",
+      "kind": "payload",
+      "label": "deliver"
+     },
+     {
+      "id": "e_grp_a",
+      "from": "worker",
+      "to": "group",
+      "kind": "control",
+      "label": "joins"
+     },
+     {
+      "id": "e_grp_b",
+      "from": "worker_b",
+      "to": "group",
+      "kind": "control",
+      "label": "joins"
+     }
+    ],
+    "highlight": [
+     "worker",
+     "queue"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 5,
+   "name": "Partitions: Win Back Ordering",
+   "problem": {
+    "statement": "Parallel consumers destroyed order. For a lot of work that is fine, but some sequences must not be reordered: apply 'account created' before 'account updated', process a customer's payments in the order they were made. With competing consumers pulling freely, 'update' can be processed before 'create', and the state is corrupted. But forcing global order means one consumer processing everything in sequence, throwing away all the parallelism you just built. You cannot have both strict global order and many workers.",
+    "beginner": "Because workers run in parallel, tasks can finish out of order. Usually fine, but sometimes order matters: you must create an account before you update it. Making everything happen in strict order means going back to a single worker, which is slow.",
+    "model": {
+     "id": "first-principles",
+     "application": "Drop the assumption that you need one global order. What must actually be true is that related messages stay ordered; messages that have nothing to do with each other can run in any order and in parallel."
+    }
+   },
+   "gate": {
+    "question": "You need parallel consumers for throughput, but messages about the same account must be processed in order. Global ordering forces a single consumer. How do you keep order only where it matters and stay parallel everywhere else?",
+    "hint": "Order only has to hold between messages that are actually related. What if each message carried a key, and every message with the same key was forced down the same single-file lane?"
+   },
+   "solution": "Partition by ordering key. Each message carries a key (account id, customer id); the queue is split into partitions, and a message's key decides its partition, so all messages for one key land in the same partition in enqueue order. Within a partition, order is strict and exactly one consumer in the group processes it, single-file. Across partitions, everything runs in parallel. You get per-key ordering and group-wide parallelism at once. Global order is gone, but nobody needed it; related messages stay in order, and the number of partitions caps how many consumers can work at once.",
+   "user_lens": {
+    "gives": "Order where it counts without giving up scale: all of a customer's events are processed in sequence, while different customers are handled fully in parallel.",
+    "costs": "You must choose a key wisely, and it constrains you: one consumer per partition means partition count is now the hard ceiling on parallelism, and a hot key (one customer with far more traffic than the rest) overloads its single partition while others sit idle."
+   },
+   "tech_lens": {
+    "mechanism": "Key-based partitioning: hash or map the ordering key to a partition; each partition is an ordered sub-queue consumed by exactly one group member. Order is preserved per partition, never across partitions.",
+    "principle": "Scope ordering to the smallest unit that needs it: partition by key so related messages serialize in one lane while unrelated ones run in parallel, trading global order (which you do not need) for throughput (which you do)."
+   },
+   "tradeoff": "Ordering costs parallelism and balance: one consumer per partition caps concurrency at the partition count, repartitioning is disruptive, and an uneven key distribution creates hot partitions that no amount of extra consumers can relieve.",
+   "at_scale": "Partitions are how ordered streams scale at all: throughput grows by adding partitions and consumers together, up to one consumer per partition, and consistent hashing keeps a partition addition from reshuffling every key. The residual ceiling is the hottest key, whose entire volume is pinned to one partition and one consumer, so a skewed key space, not total load, is what caps an ordered queue.",
+   "defends": [
+    "inv4"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "partition by ordering key",
+      "software_concept": "keyed partitioning for per-key ordering (Kafka partitions, SQS FIFO message groups)"
+     },
+     {
+      "mechanism": "one consumer per partition",
+      "software_concept": "partition ownership: exclusive assignment within a consumer group"
+     }
+    ],
+    "interview_probes": [
+     "You need a customer's events processed in order but still want parallelism across customers. How do you get both, and where does it break down?"
+    ],
+    "approach": "Give each message an ordering key and route it with partition = hash(key) mod P into P ordered sub-queues; assign each partition to exactly one consumer in the group. Within a partition, process strictly in offset order and only advance the offset after an ack.",
+    "vocab": [
+     "sharding",
+     "consistent-hashing"
+    ]
+   },
+   "beginner_analogy": "Like a bank with several tellers but a rule that one family is always served by the same teller, in the order they walked in. Different families go to different tellers at once, but your deposits are never processed out of sequence.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "part",
+      "label": "Partitioner",
+      "kind": "process",
+      "lane": "control",
+      "order": 2
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_part_route",
+      "from": "part",
+      "to": "queue",
+      "kind": "control",
+      "label": "by ordering key"
+     },
+     {
+      "id": "e_part_pin",
+      "from": "part",
+      "to": "group",
+      "kind": "control",
+      "label": "pin key→worker"
+     }
+    ],
+    "highlight": [
+     "e_deliver",
+     "e_deliver_b",
+     "worker_b"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 6,
+   "name": "The Dead-Letter Queue: Poison Messages",
+   "problem": {
+    "statement": "Some messages can never succeed: a malformed payload, a bug that throws every time, a referenced record that no longer exists. Under at-least-once with redelivery, such a poison message fails, its visibility times out, and it comes back, forever. It burns a consumer on every loop, and inside an ordered partition it is worse: the poison message sits at the head and blocks every message behind it, since nothing after it can be processed until it is done. One bad message stalls a whole lane.",
+    "beginner": "Some tasks always fail, maybe the data is broken or hits a bug. The queue keeps redelivering them, so they retry forever, wasting workers. In an ordered lane it is worse: the broken task sits at the front and nothing behind it can move.",
+    "model": {
+     "id": "graceful-degradation",
+     "application": "Accept that a few messages will always fail and keep the system running around them: after a bounded number of attempts, set the poison message aside into a separate queue so the rest of the line keeps flowing instead of jamming."
+    }
+   },
+   "gate": {
+    "question": "A message fails every single time it is processed, and your at-least-once queue keeps redelivering it, blocking an ordered partition behind it. You cannot fix the message automatically. What do you do with it so the rest of the queue keeps moving?",
+    "hint": "Count how many times a message has been delivered. After some limit, stop redelivering it to the main line, but do not throw it away either. Where does it go?"
+   },
+   "solution": "Track a receive count per message and cap it. After a message has been delivered and failed a set number of times (maxReceiveCount), the broker stops redelivering it to the main queue and moves it to a dead-letter queue, a separate queue for failures. The main line, or the blocked partition, immediately moves on to the next message. The poison message is not lost: it waits in the DLQ for a human or a repair job to inspect it, fix the cause, and replay it. Failure is isolated instead of allowed to jam the system or to vanish.",
+   "user_lens": {
+    "gives": "One bad message can no longer stall the queue or a partition, and no failed message is silently dropped: everything that could not be processed is captured in one place to examine and retry.",
+    "costs": "A message shunted to the DLQ is not done; someone has to watch the DLQ, diagnose why things landed there, and replay them, which is real operational work. Set the retry limit too low and you dead-letter transient failures that would have succeeded on the next try."
+   },
+   "tech_lens": {
+    "mechanism": "A per-message receive counter and a threshold; on exceeding it, the broker redirects the message to a designated dead-letter queue instead of making it visible again. The DLQ is an ordinary queue, inspected and replayed out of band.",
+    "principle": "Bound retries and isolate poison: cap how many times a message may fail, then move it out of the hot path into a holding area, so a single unprocessable message degrades one message's outcome, not the whole queue's flow."
+   },
+   "tradeoff": "You isolate failures at the cost of a new operational surface: the DLQ must be monitored and drained, and the retry threshold is a guess that trades reprocessing transient errors against dead-lettering them too eagerly.",
+   "at_scale": "This bounds the blast radius of bad data: without it, a burst of poison messages (a bad deploy, a schema change) multiplies into endless redeliveries that consume the whole consumer fleet; with it, each bad message costs at most N attempts before it is parked. The DLQ's depth becomes a health signal, a rising dead-letter rate is how you detect a systemic bug before it drowns the workers.",
+   "defends": [
+    "inv5"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "receive count plus max retries",
+      "software_concept": "retry budget per message before dead-lettering"
+     },
+     {
+      "mechanism": "dead-letter queue",
+      "software_concept": "poison-message isolation into a side queue for out-of-band handling"
+     }
+    ],
+    "interview_probes": [
+     "A message fails every time and your queue is at-least-once. What stops it from retrying forever, and where does it end up?"
+    ],
+    "approach": "Increment a receive-count on each delivery (in the message metadata or the row). When it exceeds maxReceiveCount, move the message to a separate DLQ table or queue instead of re-queuing it, and alert on DLQ depth. Drain the DLQ with a manual or scripted replay after fixing the cause.",
+    "vocab": [
+     "bulkhead"
+    ]
+   },
+   "beginner_analogy": "Like a mail sorting office setting aside letters with an unreadable address in a dead-letter bin after a few failed delivery attempts, so the carriers keep delivering everything else instead of circling the same bad envelope all day.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "dlq",
+      "label": "Dead-letter queue",
+      "kind": "store",
+      "lane": "broker",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_to_dlq",
+      "from": "ack",
+      "to": "dlq",
+      "kind": "payload",
+      "label": "> N retries"
+     }
+    ],
+    "highlight": [
+     "e_redeliver",
+     "ack",
+     "queue"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 7,
+   "name": "Backpressure: When Consumers Cannot Keep Up",
+   "problem": {
+    "statement": "Everything so far assumes the backlog is temporary. But if producers outrun consumers on average, not just in a burst, the queue depth grows without bound. The buffer that was a shock absorber becomes a liability: memory or disk fills, the oldest messages age past any usefulness, latency stretches to hours, and eventually the broker rejects writes or falls over, taking producers down with it. An unbounded queue does not prevent overload; it delays and hides it until it is catastrophic.",
+    "beginner": "The waiting line helps with short bursts. But if work keeps arriving faster than it can be done for a long time, the line grows forever until the queue runs out of space and breaks. A buffer alone does not fix being permanently too slow.",
+    "model": {
+     "id": "feedback-loop",
+     "application": "Feed the queue's depth back to the producers as a control signal: when the backlog grows, slow producers down or shed low-value work, so the system settles at a sustainable rate instead of running away."
+    }
+   },
+   "gate": {
+    "question": "Producers are permanently faster than consumers and the queue is filling toward its limit. Adding consumers is capped and the backlog only grows. How do you keep the whole system from collapsing when demand simply exceeds capacity?",
+    "hint": "The buffer cannot be infinite, so someone has to slow down or something has to be dropped. What signal tells the producers that the consumers are drowning, and what do they do about it?"
+   },
+   "solution": "Close the loop with backpressure. Monitor queue depth (or consumer lag) and feed it back to producers: as the backlog grows past thresholds, signal producers to slow their send rate, block, or shed the least valuable messages, and reject or rate-limit new work when the queue is near full. This turns silent unbounded growth into an explicit, early, survivable choice: apply the brakes, or drop deliberately, instead of collapsing later. The system settles at the consumers' sustainable rate rather than pretending to accept more than it can ever process.",
+   "user_lens": {
+    "gives": "The system degrades predictably under sustained overload instead of crashing: producers are told to slow down early, low-value work is dropped on purpose, and the queue stays within safe bounds.",
+    "costs": "Producers can no longer fire and forget without limit: they may be throttled, blocked, or rejected, and under heavy load some work is deliberately shed. The instant, always-accepts guarantee from Layer 1 is now conditional on the consumers keeping up."
+   },
+   "tech_lens": {
+    "mechanism": "A control loop on queue depth or lag: bounded queues that reject or block on full, rate limits and slow-start on producers, and load-shedding that drops or samples low-priority messages when the backlog crosses thresholds.",
+    "principle": "A buffer only absorbs bursts, not a permanent deficit, so close the loop: feed backlog back as pressure on the producer, and choose to slow or shed deliberately before the queue chooses collapse for you."
+   },
+   "tradeoff": "You trade the illusion of infinite intake for honest limits: producers lose their unconditional accept, and backpressure can propagate upstream, slowing or rejecting work far from the actual bottleneck.",
+   "at_scale": "This is what makes the queue stable rather than merely elastic under a million-per-second flood: depth-driven backpressure caps the backlog, keeps latency bounded, and forces the overload to be handled at the edge (throttle or shed) instead of at the breaking point. Without it, the queue's own capacity is just a longer fuse; with it, the system runs indefinitely at the consumers' true throughput and sheds the rest on purpose.",
+   "defends": [
+    "inv5",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "depth-driven producer throttling",
+      "software_concept": "backpressure: a bounded queue signaling the producer to slow"
+     },
+     {
+      "mechanism": "load-shedding on overload",
+      "software_concept": "drop or sample low-value work to protect the rest"
+     }
+    ],
+    "interview_probes": [
+     "Producers permanently outrun consumers. What happens to an unbounded queue, and how does backpressure change the failure?"
+    ],
+    "approach": "Bound the queue and act on depth: reject or block enqueue when depth exceeds a high-water mark, and expose lag so producers can slow (token-bucket rate limit) or shed by dropping low-priority messages first. In pull systems, backpressure is implicit: consumers only fetch what they can handle, and producers see the queue fill and must react.",
+    "vocab": [
+     "backpressure",
+     "load-shedding",
+     "rate-limiting"
+    ]
+   },
+   "beginner_analogy": "Like a highway on-ramp meter. When the freeway is jammed, the ramp light holds cars back so the road keeps flowing, instead of letting everyone pour on until the whole thing gridlocks.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "bp",
+      "label": "Backpressure",
+      "kind": "process",
+      "lane": "control",
+      "order": 1
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_bp_watch",
+      "from": "bp",
+      "to": "queue",
+      "kind": "control",
+      "label": "queue depth"
+     },
+     {
+      "id": "e_bp_a",
+      "from": "bp",
+      "to": "prod_a",
+      "kind": "control",
+      "label": "slow or shed"
+     },
+     {
+      "id": "e_bp_b",
+      "from": "bp",
+      "to": "prod_b",
+      "kind": "control",
+      "label": "slow or shed"
+     }
+    ],
+    "highlight": [
+     "queue",
+     "prod_a",
+     "prod_b"
+    ],
+    "remove": []
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "The consumer fleet dies during a spike",
+   "scenario": "A downstream dependency fails, every consumer in the group crashes at once, and producers keep enqueuing at full rate for ten minutes.",
+   "reveal": "Nothing is lost. Producers still get instant receipts and their messages accumulate in the queue (inv1); in-flight messages whose consumers died time out and become visible again rather than vanishing (inv2). When consumers recover, the group drains the backlog in parallel, and idempotency means the messages that were half-processed before the crash and then redelivered take effect only once (inv3). The one real cost is latency: everything enqueued during the outage waits, and if the outage runs long enough, backpressure starts throttling or shedding producers before the queue overflows (inv5). The queue converts a hard failure into a bounded delay."
+  },
+  {
+   "id": "st2",
+   "title": "A poison message at the head of an ordered partition",
+   "scenario": "In a partition that must stay strictly ordered, message five references a record that was deleted and throws on every attempt. Messages six onward for that key are piling up behind it.",
+   "reveal": "Head-of-line blocking is real: while message five keeps failing, everything behind it genuinely cannot advance, because processing them out of order would violate per-key ordering (inv4). The visibility timeout redelivers message five a bounded number of times, and once its receive count crosses the limit it moves to the dead-letter queue (inv5). The partition then unblocks and the rest proceed. The honest cost: those messages were delayed for the duration of the retries, and a human must now decide from the DLQ whether skipping message five was safe. This is the built-in tension between ordering and isolation, and the DLQ is the escape valve."
+  },
+  {
+   "id": "st3",
+   "title": "A hot key overwhelms one partition",
+   "scenario": "You partition payments by customer id for ordering. One enterprise customer suddenly generates a hundred times the traffic of any other, all under the same key.",
+   "reveal": "Partitioning by key pins that customer's entire stream to a single partition and a single consumer (inv4), so adding consumers does nothing: the other partitions sit idle while the hot one's backlog climbs. This is the confessed limit of ordered queues: the hottest key, not total load, sets the ceiling, and you cannot split its ordering without giving up the guarantee. Mitigations exist but each costs something: a finer key (sub-partition, losing whole-customer ordering), or relaxing ordering for that key. Backpressure keeps the hot partition from taking the broker down, but it cannot make one ordered key go faster."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "Decouple producers from consumers with a buffer so neither's speed or health can break the other; a burst becomes depth, not loss.",
+   "Never destroy work until completion is confirmed, and guard the in-flight item with a timed lease so a dead worker's claim releases itself.",
+   "Exactly-once delivery is impossible, so make processing idempotent: a stable key plus a memory of what is done turns unavoidable duplicates into no-ops.",
+   "Scope ordering to the smallest unit that needs it: partition by key so related items serialize while unrelated ones run in parallel.",
+   "Bound every retry and isolate what always fails; a single poison item should degrade one outcome, not stall the whole line.",
+   "A buffer absorbs bursts, not a permanent deficit; close the loop and feed backlog back as pressure before the queue collapses."
+  ],
+  "mappings": [
+   {
+    "mechanism": "durable queue between producer and consumer",
+    "elsewhere": "Thread pools with a task queue, CPU store buffers, and a printer spooler all decouple a fast producer from a slower consumer with a buffer."
+   },
+   {
+    "mechanism": "visibility timeout, lease plus ack",
+    "elsewhere": "TCP's send-and-acknowledge with retransmit, database row leases, and job schedulers reclaiming a dead worker's task all deliver at-least-once by holding work until it is confirmed."
+   },
+   {
+    "mechanism": "idempotency key plus dedup",
+    "elsewhere": "Idempotent HTTP PUT, payment idempotency keys, and exactly-once stream processing all make a repeat harmless with a stable id and a record of what is done."
+   },
+   {
+    "mechanism": "partition by key for ordering",
+    "elsewhere": "Database sharding, Kafka partitions, and per-actor mailboxes all serialize related work in one lane while parallelizing unrelated work across many."
+   },
+   {
+    "mechanism": "backpressure from a bounded buffer",
+    "elsewhere": "TCP flow control, reactive streams, and a freeway ramp meter all feed downstream congestion back to slow the source before it overflows."
+   }
+  ]
+ }
+}

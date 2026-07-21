@@ -4,6 +4,15 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [1.24.0] — 2026-07-20 · The Track, progress, and shareable Pulse
+### Added
+- **The Track** — a curated screen that walks the sample library as an ordered path (foundations first, then the systems built on them), with per-system completion. A study plan, not a toy box.
+- **Progress you can carry** — the Track shows systems done, thinking models collected, and gates earned, plus a one-tap **branded progress card** (PNG) to share.
+- **Pulse as a GIF** — a ⚏ button records a few seconds of the running simulation as a looping GIF, encoded in-browser (self-contained GIF89a/LZW, no dependencies).
+- Five infrastructure-primitive Deconstructs — **Distributed cache, Object storage, Message queue, Notification system, Unique ID generator** — the second batch of the canonical set. The library reaches 13.
+### Changed
+- Every drill target in the library now resolves to a real nested Deconstruct offline: the primitives are exactly the ⊕ badges the product studies pointed at.
+
 ## [1.23.0] — 2026-07-20 · The library grows
 ### Added
 - Five new worked Deconstructs, the first batch of the canonical interview set: **Video transcoding pipeline**, **Content delivery network**, **Recommendation feed**, **News feed**, and **URL shortener**. The sample library goes from 3 to 8.

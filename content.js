@@ -24,9 +24,10 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.23.0",
-  flagshipVersion: 8,                    // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
-  flagshipNames: ["youtube", "video-transcoding", "content-delivery-network", "recommendation-feed", "news-feed", "url-shortener", "whatsapp", "railway"],   // library slugs: seeding, #/study/<slug> deep links, share pages
+  appVersion: "1.24.0",
+  flagshipVersion: 9,                    // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
+  // foundations first, then the systems built on them — YouTube last, the capstone that drills into everything
+  flagshipNames: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue", "notification-system", "url-shortener", "content-delivery-network", "recommendation-feed", "video-transcoding", "news-feed", "whatsapp", "youtube", "railway"],
   siteUrl: "https://bate-epey93.github.io/vitruvian/",
   repoUrl: "https://github.com/Bate-Epey93/vitruvian"
 };
@@ -516,7 +517,7 @@ var NUMBERS_LIBRARY = [
 var COPY = {
   libraryTitle: "Library",
   sampleHeading: "Sample Deconstructs",
-  sampleNote: "Three worked examples that set the bar for a Deconstruct.",
+  sampleNote: "Worked examples that set the bar for a Deconstruct — and the path in Track walks them in order.",
   yoursHeading: "Your Deconstructs",
   yoursEmpty: "Nothing here yet. Name any system above and Vitruvian will take it apart, failure by failure.",
   deconstructPlaceholder: "Name a system to deconstruct…",
