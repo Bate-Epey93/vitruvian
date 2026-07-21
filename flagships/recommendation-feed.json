@@ -1,0 +1,768 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "Recommendation feed",
+  "narrowing": "The ranking path for a single feed request: candidate generation, scoring, the engagement feedback loop, and how it holds under a viral hot item. Not the training infrastructure or the ad auction.",
+  "ordering_note": "Layers follow the order each failure forces the next: a ranked feed needs a scorer; the scorer cannot run over the whole catalog, so retrieval splits off; a frozen scorer rots, so the feedback loop closes; the closed loop turns degenerate, so exploration and diversity correct it; exploration still cannot place brand-new users or items, so cold-start priors fill the gap; and all of it must survive a viral hot item. The two-stage architecture and engagement logging are well documented; the degenerate-loop and hot-item failures are the inevitable ones every large feed hits rather than a single dated incident, so history_confidence is medium.",
+  "history_confidence": "medium",
+  "domain": "software"
+ },
+ "essence": {
+  "text": "A recommendation feed decides, billions of times a second, what one person sees next out of a near-infinite catalog. Its genius is not any single model but a loop: it ranks what it predicts you will value, watches what you actually do, and feeds that back to rank again, all inside a couple hundred milliseconds. The hard part is that the loop learns from its own choices, so left alone it narrows into a bubble and chases whatever is already popular.",
+  "beginner": "A recommendation feed picks what to show you next from more content than you could watch in a thousand lifetimes. It guesses what you will like, sees what you actually do, and uses that to guess better next time.",
+  "deep_facts": [
+   "The pipeline is a funnel: candidate generation narrows millions of items to a few hundred, then a heavier ranker scores only those. YouTube's 2016 deep-learning paper describes exactly this two-stage split.",
+   "YouTube has publicly said recommendations drive more than 70% of the time people spend watching.",
+   "Netflix has put the value of its recommendation and personalization system at more than one billion dollars a year.",
+   "The model only ever observes outcomes for items it chose to show, so its training data is a biased sample of its own past decisions; it is blind to everything it never surfaced.",
+   "Every recommendation is also an experiment: the only way to learn whether you will like something is to show it and watch what you do, so a feed is part product, part data collection."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Decide, for each viewer in real time, which few items out of a near-infinite catalog to show next, maximizing long-term value to the viewer and the platform.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Viewer",
+    "want": "A feed worth their limited time that surprises them without wasting them."
+   },
+   {
+    "id": "a2",
+    "name": "Creator",
+    "want": "Their content shown to the audience most likely to value it."
+   },
+   {
+    "id": "a3",
+    "name": "Platform",
+    "want": "Long-term engagement and retention, not just today's clicks."
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "Every served feed is ordered by predicted value to THAT viewer, not by raw recency or global popularity alone."
+   },
+   {
+    "id": "inv2",
+    "text": "Every impression and its outcome is logged, so the model can learn from what actually happened."
+   },
+   {
+    "id": "inv3",
+    "text": "No feed is ever only one narrow slice; the system always reserves room for exploration and diversity."
+   },
+   {
+    "id": "inv4",
+    "text": "A feed request returns inside its latency budget even when the catalog is billions of items and load is enormous."
+   },
+   {
+    "id": "inv5",
+    "text": "New viewers and new items are always reachable: nothing is permanently unrankable for lack of history."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Item",
+    "note": "A piece of content with features: topic, creator, length, embedding."
+   },
+   {
+    "id": "en2",
+    "name": "Viewer profile",
+    "note": "The viewer's history and learned embedding; sparse or empty when new."
+   },
+   {
+    "id": "en3",
+    "name": "Engagement signal",
+    "note": "An impression plus its outcome: shown, watched, watch time, like, skip."
+   },
+   {
+    "id": "en4",
+    "name": "Ranking model",
+    "note": "The learned scorer; its parameters are a compressed memory of past signals."
+   },
+   {
+    "id": "en5",
+    "name": "Candidate set",
+    "note": "The few hundred items retrieved for one request; the only items that can be ranked."
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Items flow from creators into the catalog."
+   },
+   {
+    "id": "f2",
+    "text": "A request retrieves candidates, ranks them, and returns a feed to the viewer."
+   },
+   {
+    "id": "f3",
+    "text": "Engagement signals flow back from the viewer into the model."
+   }
+  ],
+  "constraints": [
+   "Attention is finite: a viewer sees a handful of items before leaving, so only the top slots have value.",
+   "Scoring is expensive: a heavy model cannot run over billions of items inside a request's latency budget.",
+   "The only ground truth about 'good' is behavior, and you only observe it after showing something; every recommendation is also an experiment.",
+   "Feedback is biased: you only see outcomes for items you chose to show, so the data is never a random sample."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "people",
+    "label": "People"
+   },
+   {
+    "id": "serving",
+    "label": "Serving"
+   },
+   {
+    "id": "signals",
+    "label": "Signals"
+   },
+   {
+    "id": "learning",
+    "label": "Learning"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "creator",
+    "label": "Creator",
+    "kind": "actor",
+    "lane": "people",
+    "order": 0
+   },
+   {
+    "id": "viewer",
+    "label": "Viewer",
+    "kind": "actor",
+    "lane": "people",
+    "order": 1
+   },
+   {
+    "id": "catalog",
+    "label": "Item catalog",
+    "kind": "store",
+    "lane": "serving",
+    "order": 0
+   },
+   {
+    "id": "feed",
+    "label": "The feed",
+    "kind": "channel",
+    "lane": "serving",
+    "order": 5
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_post",
+    "from": "creator",
+    "to": "catalog",
+    "kind": "payload",
+    "label": "posts"
+   },
+   {
+    "id": "e_chron",
+    "from": "catalog",
+    "to": "feed",
+    "kind": "payload",
+    "label": "newest first"
+   },
+   {
+    "id": "e_view",
+    "from": "feed",
+    "to": "viewer",
+    "kind": "payload",
+    "label": "scrolls"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "Ranking: Score, Don't Just Sort by Time",
+   "problem": {
+    "statement": "The naive feed is reverse-chronological: newest first, everything shown. As the catalog grows from hundreds of items to billions, this collapses. A viewer sees a handful of items before leaving, and the newest items are mostly noise to them; the one video they would have loved is buried a thousand rows down. Recency is not relevance, and attention is the scarce resource being wasted.",
+    "beginner": "A feed that just shows the newest posts first drowns you: there is far too much, most of it is not for you, and the thing you would love is buried where you will never scroll.",
+    "model": {
+     "id": "bottleneck",
+     "application": "The viewer's attention, a few slots at the top before they leave, is the constraint that governs the whole system; every decision is judged by whether it fills those few slots with the highest-value items."
+    }
+   },
+   "gate": {
+    "question": "You have a feed showing the newest items first, and the catalog just crossed a billion items. Viewers open the app, scroll three screens, and leave, mostly seeing junk. You cannot make people scroll more. How do you make those first three screens worth their time?",
+    "hint": "The slots at the top are the only ones that matter, and they are scarce. What would you have to know to fill them with the best items for this specific person?"
+   },
+   "solution": "Replace chronological ordering with a ranking model. For each candidate item, a learned model predicts the probability the viewer engages (clicks, watches, watches to completion), and the feed is assembled as the top-K items by that predicted score. The question shifts from 'what is newest?' to 'what is this specific viewer most likely to value?'",
+   "user_lens": {
+    "gives": "A feed that leads with what you are most likely to want, instead of whatever happened to be posted most recently.",
+    "costs": "The system now decides what is worth your attention; the item you would have loved but that the model cannot yet score for you stays invisible."
+   },
+   "tech_lens": {
+    "mechanism": "A learned scoring function predicts P(engagement | viewer, item) for each candidate; the feed is the top-K by that score.",
+    "principle": "Turn 'what should we show?' into a ranking problem: score every option by expected value and sort."
+   },
+   "tradeoff": "Optimizing a predicted score bakes in whatever the model already believes; a genuinely good item the model has never learned to value cannot rise, because the feed shows what it predicts, not what is true.",
+   "at_scale": "Ranking cost is O(candidates) per request, so scoring the whole catalog makes a feed request scale linearly with the catalog: at billions of items times millions of requests a second it is impossible, which is exactly what forces the next layer. The feed's quality is capped by how many items you can afford to score inside the latency budget.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "predicted-engagement ranking",
+      "software_concept": "learning-to-rank: a scoring function sorts candidates by expected utility"
+     }
+    ],
+    "interview_probes": [
+     "What is the true scarce resource in your feed, and does every ranking decision optimize for filling exactly those slots?"
+    ],
+    "approach": "Score candidates with a learned function f(viewer, item) that returns P(engage), then sort: compute the dot product between the viewer embedding and each item embedding and return the top-K, the way a learning-to-rank model orders results.",
+    "vocab": []
+   },
+   "beginner_analogy": "Like a bookstore that stops shelving books by arrival date and starts putting the ones you are most likely to buy on the front table.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "ranker",
+      "label": "Ranker",
+      "kind": "process",
+      "lane": "serving",
+      "order": 2
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_score",
+      "from": "catalog",
+      "to": "ranker",
+      "kind": "payload",
+      "label": "scores all"
+     },
+     {
+      "id": "e_ranked",
+      "from": "ranker",
+      "to": "feed",
+      "kind": "payload",
+      "label": "top-K"
+     }
+    ],
+    "highlight": [
+     "e_chron",
+     "feed"
+    ],
+    "remove": [
+     "e_chron"
+    ]
+   }
+  },
+  {
+   "index": 2,
+   "name": "Candidate Generation: Filter Cheap, Rank Dear",
+   "problem": {
+    "statement": "Ranking works, but the ranker is expensive: it runs a heavy model over every candidate to predict engagement. Scoring is O(candidates) per request, and 'candidates' is the whole catalog, billions of items. No feed can score a billion items inside a couple hundred milliseconds, times millions of requests a second. The scorer that made the feed good is now the thing that makes it impossible.",
+    "beginner": "The smart ranking is too slow: you cannot run a heavy prediction on every single item in the world every time someone opens the app.",
+    "model": {
+     "id": "separation-of-concerns",
+     "application": "Split the one impossible pass into two: a cheap stage that keeps recall high while cutting billions to hundreds, and an expensive stage that scores only those hundreds with high precision."
+    }
+   },
+   "gate": {
+    "question": "Your ranking model is great but takes 5 milliseconds per item, and the catalog is a billion items. Do the math on a single feed request, then redesign so it fits in 200 milliseconds without giving up much quality.",
+    "hint": "You do not need to score everything precisely. What if a rough, cheap pass could throw away 99.99% of the catalog before the expensive model ever runs?"
+   },
+   "solution": "A two-stage funnel. Candidate generation retrieves a few hundred plausible items from the whole catalog using cheap approximate-nearest-neighbor lookups over learned embeddings; the expensive ranking model then scores only that shortlist. Millions-to-hundreds happens fast and roughly; hundreds-to-K happens slowly and precisely.",
+   "user_lens": {
+    "gives": "Sub-second feeds even though the catalog is billions of items: you never wait for the system to consider everything.",
+    "costs": "Whatever the retrieval stage fails to fetch is unreachable; you cannot see, or even know you missed, what was filtered out before ranking."
+   },
+   "tech_lens": {
+    "mechanism": "A cheap retrieval stage (approximate nearest neighbor over item and viewer embeddings) narrows millions to hundreds; a heavy ranker scores only those hundreds.",
+    "principle": "Split one intractable pass into a high-recall cheap stage and a high-precision expensive stage: filter, then rank."
+   },
+   "tradeoff": "Recall is sacrificed for speed: anything the cheap retrieval stage misses can never be ranked, no matter how good it is, so the candidate generator's blind spots become the feed's blind spots.",
+   "at_scale": "Retrieval is O(log N) through the ANN index, so candidate generation stays flat as the catalog grows from millions to billions; only the index memory grows. Ranking cost is fixed at a few hundred items per request regardless of catalog size, so the pipeline now scales with QPS (add ranker replicas) rather than with catalog size.",
+   "defends": [
+    "inv4",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "candidate generation then ranking",
+      "software_concept": "two-stage retrieval: cheap high-recall retrieval feeds an expensive high-precision ranker"
+     },
+     {
+      "mechanism": "ANN candidate retrieval",
+      "software_concept": "approximate nearest neighbor over embeddings (HNSW / FAISS)"
+     }
+    ],
+    "interview_probes": [
+     "Where do you run an expensive computation over a set you could have cheaply narrowed first, and what would a recall-then-precision split save?"
+    ],
+    "approach": "Two stages: an approximate-nearest-neighbor index (HNSW or FAISS) over item embeddings returns a few hundred candidates by vector similarity in sub-millisecond time, then a heavier gradient-boosted or neural ranker scores only those. Retrieval is O(log N); ranking is O(hundreds).",
+    "vocab": [
+     "indexing",
+     "scaling-reads"
+    ]
+   },
+   "beginner_analogy": "Like hiring: you skim a thousand resumes in seconds to pick twenty, then interview only those twenty carefully. You never interview all thousand.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "candidate_gen",
+      "label": "Candidate gen",
+      "kind": "process",
+      "lane": "serving",
+      "order": 1
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_retrieve",
+      "from": "catalog",
+      "to": "candidate_gen",
+      "kind": "payload",
+      "label": "ANN top-N"
+     },
+     {
+      "id": "e_shortlist",
+      "from": "candidate_gen",
+      "to": "ranker",
+      "kind": "payload",
+      "label": "few hundred"
+     }
+    ],
+    "highlight": [
+     "ranker",
+     "e_score"
+    ],
+    "remove": [
+     "e_score"
+    ]
+   }
+  },
+  {
+   "index": 3,
+   "name": "The Feedback Loop: Learn From What Happened",
+   "problem": {
+    "statement": "The ranking model is trained once and frozen. But tastes shift by the hour, trends appear overnight, and a flood of new content arrives every second. Within a day the model is scoring a world that no longer exists, and nothing carries what actually happened (did the viewer watch, skip, finish?) back into it. The model is blind to the outcomes of its own recommendations.",
+    "beginner": "A recommender that never learns from what you actually did goes stale fast: it keeps guessing from an old picture of you and an old picture of the world.",
+    "model": {
+     "id": "feedback-loop",
+     "application": "Feed the output back as input: log what was shown and what happened, stream those outcomes back, and update the model continuously so it chases a moving target instead of a snapshot."
+    }
+   },
+   "gate": {
+    "question": "Your ranker was trained last month on last month's world. Tastes moved, trends turned over, millions of new items arrived, and the model has never once been told whether its past recommendations were watched or skipped. How do you keep it from rotting?",
+    "hint": "The system already shows items and the viewer already reacts. What are you doing with the reaction?"
+   },
+   "solution": "Close the loop. Every item shown is logged as an impression, and every outcome (watch time, like, skip, follow) is streamed back as a label. Near-line pipelines fold those signals into fresh features and retrain or update the ranking model continuously, so the model tracks tastes and content as they move.",
+   "user_lens": {
+    "gives": "A feed that keeps up with you: new interests, new content, and shifting tastes show up within hours, not never.",
+    "costs": "Every tap is training data; the feed watches what you do and adjusts, so your behavior is quietly steering what you will be offered next."
+   },
+   "tech_lens": {
+    "mechanism": "Impressions and outcomes are logged to an append-only event stream; near-line jobs fold them into fresh features and periodically update the model, which feeds back into scoring.",
+    "principle": "Close the loop: measure the outcome of every action and feed it back so the model tracks a moving target."
+   },
+   "tradeoff": "The loop couples the model to its own past behavior: it learns from outcomes of items it chose to show, so its training data is a biased sample of its own decisions, not of what viewers would have liked.",
+   "at_scale": "The engagement stream is the write-heavy path: every impression is an event, so a feed serving a billion impressions a day writes a billion events a day. It scales by partitioning the stream by viewer or item and folding events into features in batch and near-line jobs; the model updates on a schedule, decoupled from serving.",
+   "defends": [
+    "inv2",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "impression and engagement logging",
+      "software_concept": "an event stream as the training source of truth (Kafka)"
+     },
+     {
+      "mechanism": "continuous retraining",
+      "software_concept": "online / near-line learning: the model updates from a live feedback loop"
+     }
+    ],
+    "interview_probes": [
+     "Which of your models is trained once and never sees what happened next, and how stale is it by the time it serves?"
+    ],
+    "approach": "Log every (viewer, item, shown, outcome) tuple to an append-only event stream (Kafka), then run a near-line job that folds those events into fresh training examples and pushes updated weights on a schedule; treat the log as the source of truth for training.",
+    "vocab": [
+     "stream",
+     "realtime-updates"
+    ]
+   },
+   "beginner_analogy": "Like a barista who remembers your last order and notices when you switch to oat milk, instead of guessing from a form you filled out a year ago.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "eng_stream",
+      "label": "Engagement log",
+      "kind": "channel",
+      "lane": "signals",
+      "order": 3,
+      "expands_to": "Message queue"
+     },
+     {
+      "id": "trainer",
+      "label": "Trainer",
+      "kind": "process",
+      "lane": "learning",
+      "order": 2
+     },
+     {
+      "id": "model",
+      "label": "Ranking model",
+      "kind": "store",
+      "lane": "learning",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_shown",
+      "from": "feed",
+      "to": "eng_stream",
+      "kind": "control",
+      "label": "shown"
+     },
+     {
+      "id": "e_watch",
+      "from": "viewer",
+      "to": "eng_stream",
+      "kind": "control",
+      "label": "watch / skip"
+     },
+     {
+      "id": "e_signal",
+      "from": "eng_stream",
+      "to": "trainer",
+      "kind": "control",
+      "label": "signals"
+     },
+     {
+      "id": "e_train",
+      "from": "trainer",
+      "to": "model",
+      "kind": "control",
+      "label": "updates"
+     },
+     {
+      "id": "e_params",
+      "from": "model",
+      "to": "ranker",
+      "kind": "control",
+      "label": "params"
+     }
+    ],
+    "highlight": [
+     "ranker"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 4,
+   "name": "Exploration: Break the Degenerate Loop",
+   "problem": {
+    "statement": "The feedback loop works, and that is the danger: it is positive feedback. The model shows what it predicts you will engage with; you engage; it learns to show more of the same. Your feed narrows into a bubble, popular items get recommended more and so grow more popular (rich-get-richer), and because the model optimizes a proxy (clicks, watch time) it drifts toward clickbait that wins the proxy while losing your trust. The loop amplifies its own bias.",
+    "beginner": "A feed that only shows what you already click teaches itself to show you less and less variety, pushes whatever is already popular even harder, and learns that cheap clickbait works, even when you end up feeling worse.",
+    "model": {
+     "id": "incentive-alignment",
+     "application": "The metric the model optimizes (clicks, watch time) is not the thing you actually want (satisfaction); when a loop rewards the proxy it drifts toward gaming the proxy, so realign it with exploration, diversity, and a better objective."
+    }
+   },
+   "gate": {
+    "question": "Your model now learns continuously from what people click. Run that forward a year: what does each person's feed look like, what happens to already-popular items, and what kind of content wins? Then design against it.",
+    "hint": "A loop that only ever shows what it already believes you like can never discover it was wrong. What would you have to deliberately give up to find out?"
+   },
+   "solution": "Add exploration and correction on top of the greedy loop. A bandit reserves a fraction of slots for items the model is uncertain about; a diversity re-ranker prevents near-duplicate slates and filter-bubble collapse; and the objective is broadened from raw clicks toward longer-term satisfaction so the loop stops optimizing clickbait.",
+   "user_lens": {
+    "gives": "A feed that does not collapse into ten variations of the same thing, and that occasionally shows you something new you end up loving.",
+    "costs": "Some slots go to things the system is unsure about, so a fraction of your feed is deliberately not the safest bet, and it will sometimes miss."
+   },
+   "tech_lens": {
+    "mechanism": "A bandit reserves exploration slots for uncertain items, a diversity re-ranker de-correlates the slate, and the objective blends multiple signals (satisfaction, not just clicks) to fight proxy drift.",
+    "principle": "A greedy loop that optimizes a proxy metric will amplify its own bias; inject exploration and correct the objective to keep it honest."
+   },
+   "tradeoff": "Every exploration slot and diversity swap costs measured short-term engagement, so the system deliberately looks worse today to avoid collapsing into a narrow, clickbait-filled bubble tomorrow.",
+   "at_scale": "Exploration has a direct cost: every slot spent on an uncertain item is a slot not spent on the best-known one, so the exploration budget is a tunable tax on short-term engagement. At scale the bandit's uncertainty estimates and the diversity computation run per request over the candidate set, adding fixed per-request cost, not per-catalog cost.",
+   "defends": [
+    "inv3",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "exploration slot",
+      "software_concept": "multi-armed bandit: epsilon-greedy or Thompson sampling to escape a greedy policy"
+     },
+     {
+      "mechanism": "diversity re-ranking",
+      "software_concept": "MMR or determinantal point process to de-correlate the slate"
+     }
+    ],
+    "interview_probes": [
+     "Your model optimizes a proxy metric. Name the gap between that proxy and what the user actually wants, and what closes it."
+    ],
+    "approach": "Reserve an exploration slot with an epsilon-greedy or Thompson-sampling bandit: with probability epsilon serve an item the model is uncertain about, and add a diversity penalty (MMR) that down-weights a candidate similar to ones already in the slate.",
+    "vocab": []
+   },
+   "beginner_analogy": "Like a diet of only your favorite food: comfortable at first, but you never discover anything new and it quietly makes you worse off. A good cook sneaks in variety.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "reranker",
+      "label": "Explore + diversify",
+      "kind": "process",
+      "lane": "serving",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_torerank",
+      "from": "ranker",
+      "to": "reranker",
+      "kind": "payload",
+      "label": "scored list"
+     },
+     {
+      "id": "e_final",
+      "from": "reranker",
+      "to": "feed",
+      "kind": "payload",
+      "label": "final top-K"
+     }
+    ],
+    "highlight": [
+     "ranker",
+     "eng_stream",
+     "model"
+    ],
+    "remove": [
+     "e_ranked"
+    ]
+   }
+  },
+  {
+   "index": 5,
+   "name": "Cold Start: When There Is No Signal Yet",
+   "problem": {
+    "statement": "Exploration and diversity still assume signal exists. A brand-new viewer has no history, and a just-uploaded item has no engagement, so the collaborative model has nothing to place them with: the cold viewer gets garbage, and good new content gets zero impressions and dies before it can prove itself. Freshness and relevance pull in opposite directions, because proven old items always outscore unproven new ones.",
+    "beginner": "The system cannot recommend for someone it has never seen, or recommend something nobody has watched yet, so brand-new viewers get a bad feed and brand-new posts never get a chance.",
+    "model": {
+     "id": "first-principles",
+     "application": "You cannot derive taste from behavior that does not exist yet, so strip back to what you can actually know on day zero: what the item is about, who the viewer resembles, and what is broadly popular, plus spend impressions to gather the missing signal."
+    }
+   },
+   "gate": {
+    "question": "A viewer signs up thirty seconds ago; a creator uploads a video ten seconds ago. Your entire system runs on behavioral history, and there is none. What do you put in the new viewer's feed, and how does the new video ever get its first thousand views?",
+    "hint": "Behavior is not the only thing you know about a viewer or an item. What can you read off the item itself, or off who the viewer resembles, before anyone has clicked anything?"
+   },
+   "solution": "Build a cold-start path. New viewers get content-based and popularity-prior recommendations until behavioral signal accumulates; new items get content features, a time-decayed freshness boost, and a guaranteed exploration budget so they are shown enough to earn a real engagement estimate rather than dying unseen.",
+   "user_lens": {
+    "gives": "A useful feed from your very first session, and a real chance for brand-new content to be seen.",
+    "costs": "Before the system knows you, it shows you what is popular with people like you, which can feel generic and can push the already-popular even harder."
+   },
+   "tech_lens": {
+    "mechanism": "For cold viewers and items, fall back to content features and popularity priors, add a freshness boost with time decay, and guarantee an exploration budget so new items earn their first signals.",
+    "principle": "When behavioral signal is absent, derive from what you can know (content, context, popularity) and spend impressions to buy the signal you lack."
+   },
+   "tradeoff": "Content and popularity fallbacks are generic: a cold viewer gets the crowd's favorites, not their own, so cold-start trades personalization for coverage until enough signal arrives.",
+   "at_scale": "Cold-start load spikes with growth: a fast-growing platform or a flood of new uploads means a large fraction of traffic is cold at any moment, so the content-feature and popularity-prior path must carry real volume, not act as a rare fallback. Popularity priors are a shared read, so they cache extremely well.",
+   "defends": [
+    "inv5",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "content and popularity priors",
+      "software_concept": "content-based fallback and Bayesian popularity smoothing for cold-start"
+     }
+    ],
+    "interview_probes": [
+     "What does your system do the very first time it sees a user or an item it has no history for?"
+    ],
+    "approach": "For a cold viewer or item, fall back to content features and a popularity prior: rank by item-metadata similarity and a Bayesian-smoothed popularity score, and give new items a time-decayed freshness boost plus a guaranteed exploration budget so they accumulate their first signals.",
+    "vocab": []
+   },
+   "beginner_analogy": "Like a new employee's first day: nobody knows them yet, so you start them on the standard onboarding everyone gets, then tailor it as you learn what they are good at.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "coldstart",
+      "label": "Cold-start priors",
+      "kind": "process",
+      "lane": "learning",
+      "order": 1
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_content",
+      "from": "coldstart",
+      "to": "candidate_gen",
+      "kind": "control",
+      "label": "content+priors"
+     },
+     {
+      "id": "e_fresh",
+      "from": "coldstart",
+      "to": "reranker",
+      "kind": "control",
+      "label": "freshness boost"
+     }
+    ],
+    "highlight": [
+     "candidate_gen",
+     "ranker"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 6,
+   "name": "The Power Law: Surviving the Viral Hot Item",
+   "problem": {
+    "statement": "Everything above assumes even load. Real engagement is a power law: a tiny number of items and creators take a huge share of all attention. When a clip goes viral, one item's row is fetched by tens of millions of viewers at once (a hot key that melts one shard), the engagement events for it swamp a single stream partition, and when a celebrity with a hundred million followers posts, naively fanning that out is O(followers). The average case was fine; the superstar case takes the system down.",
+    "beginner": "When one video or one creator suddenly gets a huge share of all the traffic, the parts of the system that quietly handled the average load fall over on the superstar.",
+    "model": {
+     "id": "locality-and-caching",
+     "application": "Put copies of the hot item's features and candidate lists close to serving and precompute them, so millions of reads for one viral item are answered from cache instead of hammering the one machine that owns it."
+    }
+   },
+   "gate": {
+    "question": "One clip is being opened by forty million people this minute, and a creator with a hundred million followers just posted. Which piece of your pipeline melts first, and how do you keep the feed up without special-casing every superstar by hand?",
+    "hint": "Traffic is not uniform; it is a power law. What do you do to a key that is a thousand times hotter than the median that you would never bother doing to the median?"
+   },
+   "solution": "Engineer for the power law. Detect hot items and celebrities; cache and replicate their features and precomputed candidate lists; coalesce the flood of duplicate reads into one; shard the engagement stream by item so one viral clip cannot swamp a single partition; and assemble a celebrity's fan-out at read time instead of writing to hundreds of millions of inboxes.",
+   "user_lens": {
+    "gives": "The feed stays fast and stable even when everyone is watching the same viral clip or the same creator drops a post.",
+    "costs": "The most popular content is served from cached, slightly stale state, so counts and recommendations around a viral item can lag what is actually happening."
+   },
+   "tech_lens": {
+    "mechanism": "Hot items are detected and their features and candidate lists cached and replicated; duplicate reads are coalesced; the engagement stream is sharded by item; celebrity fan-out is assembled at read time.",
+    "principle": "Traffic follows a power law, so design for the hot key: replicate and cache it, and never fan a superstar out on write."
+   },
+   "tradeoff": "Caching and precomputation buy throughput with staleness and memory: the hot item's cached features and the celebrity's precomputed candidates lag reality, so the most-seen content is served from slightly old state.",
+   "at_scale": "This is where the feed meets its hardest scaling law: engagement is power-law distributed, so a handful of items and creators take a huge share of all traffic. One viral item is a hot key that a single shard cannot serve, and a celebrity's post is an O(followers) fan-out. You survive it by replicating and caching the hot key, coalescing duplicate reads, sharding the stream by item, and assembling celebrity fan-out on read.",
+   "defends": [
+    "inv4",
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "hot-item feature cache",
+      "software_concept": "hot-key replication and request coalescing behind a distributed cache"
+     },
+     {
+      "mechanism": "celebrity fan-out on read",
+      "software_concept": "read-time assembly for high-fan-out keys instead of write-time fan-out"
+     }
+    ],
+    "interview_probes": [
+     "When one item gets a thousand times the traffic of the median, which component falls over first, and is it a hot key, a fan-out, or a stream partition?"
+    ],
+    "approach": "Detect hot keys and cache their precomputed features and candidate lists in a distributed cache (Redis) with request coalescing, so millions of reads for one viral item hit one cached copy; shard the engagement stream by item id and precompute a celebrity's fan-out on read instead of writing to every follower.",
+    "vocab": [
+     "hot-key",
+     "fanout",
+     "caching"
+    ]
+   },
+   "beginner_analogy": "Like a highway that flows fine until one exit becomes a stadium: you add express lanes and signs for that one exit rather than rebuilding every road.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "feature_cache",
+      "label": "Feature cache",
+      "kind": "store",
+      "lane": "signals",
+      "order": 1,
+      "expands_to": "Distributed cache"
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_hotfeat",
+      "from": "catalog",
+      "to": "feature_cache",
+      "kind": "control",
+      "label": "precompute hot"
+     },
+     {
+      "id": "e_cachefeat",
+      "from": "feature_cache",
+      "to": "ranker",
+      "kind": "control",
+      "label": "hot features"
+     }
+    ],
+    "highlight": [
+     "ranker",
+     "candidate_gen",
+     "eng_stream"
+    ],
+    "remove": []
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "The clickbait spiral",
+   "scenario": "Engagement optimization starts rewarding rage-bait and cliffhanger thumbnails that win clicks but leave viewers unsatisfied; short-term watch time climbs and every dashboard is green.",
+   "reveal": "The multi-objective correction and satisfaction signals (survey responses, long-term retention, 'not interested' taps) are supposed to catch this, but only if they are weighted heavily enough. If the proxy still dominates, the system optimizes itself into a worse product while the metrics say engagement is up. The honest failure mode: you only catch it if you measure the thing you actually care about, and that thing is slow to move."
+  },
+  {
+   "id": "st2",
+   "title": "The rich-get-richer runaway",
+   "scenario": "A mediocre item gets a lucky early burst. The model reads the burst as quality, shows it more, which creates more engagement, which the model again reads as quality.",
+   "reveal": "Popularity calibration and exploration are the defense (inv3): down-weight raw popularity, hold out exploration traffic to get an unbiased estimate, and compare an item's engagement to its exposure, not its raw counts. Without that, exposure and quality become indistinguishable and the feed homogenizes into whatever got lucky first."
+  },
+  {
+   "id": "st3",
+   "title": "Cold catalog, viral overnight",
+   "scenario": "A brand-new creator's first video is genuinely great but has zero history, and that night it is on the edge of going viral.",
+   "reveal": "The freshness boost and exploration budget give it its first impressions (inv5, the cold-start path), engagement confirms quality, and the hot-item machinery (caching, stream sharding, fan-out on read) absorbs the sudden load (inv4). The two hardest cases, no signal and enormous load, arrive together, and the design only survives because both paths exist independently."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "Attention is the scarce resource: rank by expected value and spend the top slots on the best options, because most consumers only ever see the top.",
+   "Split an intractable pass into a cheap high-recall stage and an expensive high-precision stage: filter, then rank.",
+   "Close the loop by measuring the outcome of every action, but remember that a loop learning from its own choices trains on a biased sample of them.",
+   "A system that optimizes a proxy metric drifts toward gaming that proxy; inject exploration and correct the objective before the drift compounds.",
+   "When signal is absent, derive from what you can know (content, context, popularity) and spend some traffic to buy the signal you lack.",
+   "Design for the power law, not the average: the hot key, not the median request, is what takes you down."
+  ],
+  "mappings": [
+   {
+    "mechanism": "two-stage retrieval",
+    "elsewhere": "Web search (cheap candidate retrieval then expensive re-ranking) and database query planning (index scan, then filter)."
+   },
+   {
+    "mechanism": "engagement feedback loop",
+    "elsewhere": "Ad click-through models, spam filters, and fraud detection all retrain on the outcomes of their own past decisions."
+   },
+   {
+    "mechanism": "exploration versus exploitation",
+    "elsewhere": "A/B testing, reinforcement learning, and clinical trials all pay a known cost now to learn what pays off later."
+   },
+   {
+    "mechanism": "hot-key caching and fan-out on read",
+    "elsewhere": "News-feed timelines, CDNs, and celebrity handling in any social graph face the same power-law traffic."
+   },
+   {
+    "mechanism": "cold-start priors",
+    "elsewhere": "Credit scoring for thin-file applicants and search for zero-result queries both fall back to population priors."
+   }
+  ]
+ }
+}

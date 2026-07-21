@@ -1,0 +1,706 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "News feed",
+  "narrowing": "The home-timeline read/write path: how a post travels from an author to every follower's feed, and how that feed is read. Not the whole social network (auth, media storage, DMs, search).",
+  "ordering_note": "The layers follow the order the industry actually discovered them: precompute feeds, then rescue the design from celebrities, then cache the reads, then fix pagination, then rank. The fan-out and celebrity steps are well documented from Twitter's and Instagram's engineering talks; the exact thresholds and numbers here are illustrative, so confidence is medium.",
+  "history_confidence": "medium",
+  "domain": "software"
+ },
+ "essence": {
+  "text": "A news feed answers one question, 'what's new from everyone you follow?', for hundreds of millions of people at once, in the time it takes a thumb to stop scrolling. Its genius is a bet: a timeline is read far more than it is written, so do the expensive work when someone posts, not when someone looks.",
+  "beginner": "A news feed shows you the latest posts from everyone you follow. The hard part is doing it instantly, for hundreds of millions of people, all at the same time.",
+  "deep_facts": [
+   "Reads dwarf writes on a timeline: a person posts rarely but refreshes constantly, often more than a hundred reads per write, so the whole design optimizes reads and pays for it on the write side.",
+   "A home timeline is precomputed. When you post, the post's id is copied into the ready-made feed list of every follower, so reading a feed is a cheap lookup, not a live query over billions of posts.",
+   "One celebrity breaks the simple design: an account with tens of millions of followers turns a single post into tens of millions of writes. The industry answer was to NOT copy those posts out, and merge them in at read time instead.",
+   "Twitter and Instagram both abandoned pure reverse-chronological feeds for ranked ones, because with thousands of follows a chronological feed shows only the last few minutes and buries the best posts.",
+   "A feed list stores post ids, not post contents. The real post is looked up at read time, so a deleted or edited post is corrected on read, without rewriting it across tens of millions of feeds."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Show each user a fast, fresh, relevant stream of posts from the accounts they follow.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Reader",
+    "want": "Open the app and instantly see what's new, then scroll forever without a stutter"
+   },
+   {
+    "id": "a2",
+    "name": "Author",
+    "want": "Post once and have it reach all their followers quickly"
+   },
+   {
+    "id": "a3",
+    "name": "Celebrity",
+    "want": "The same as any author, except one post touches tens of millions of feeds"
+   },
+   {
+    "id": "a4",
+    "name": "Platform",
+    "want": "Serve billions of reads cheaply and keep people engaged enough to come back"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "The feed never silently drops a post from an account the reader follows and is allowed to see."
+   },
+   {
+    "id": "inv2",
+    "text": "Opening the feed returns the first page within a tight budget (tens of milliseconds), however many accounts the reader follows."
+   },
+   {
+    "id": "inv3",
+    "text": "A published post reaches its followers' feeds within a bounded delay, seconds not hours, even for the most-followed accounts."
+   },
+   {
+    "id": "inv4",
+    "text": "Scrolling never shows the same post twice and never skips a post between pages, even as new posts arrive at the top."
+   },
+   {
+    "id": "inv5",
+    "text": "The posts most worth a reader's attention are not buried below stale or low-value ones; the feed ranks, it does not merely list."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Post",
+    "note": "Content with an author, a timestamp, and an id. The id is tiny; the media may be large."
+   },
+   {
+    "id": "en2",
+    "name": "Follow edge",
+    "note": "A directed link, reader follows author. The graph that decides who sees what, and it is wildly uneven."
+   },
+   {
+    "id": "en3",
+    "name": "Feed inbox",
+    "note": "The precomputed list of post ids waiting for one reader."
+   },
+   {
+    "id": "en4",
+    "name": "Timeline read",
+    "note": "One request for the next page of a reader's feed."
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Posts flow from authors, out along follow edges, into follower feeds."
+   },
+   {
+    "id": "f2",
+    "text": "Reads flow the other way: a reader pulls their assembled feed, one page at a time."
+   },
+   {
+    "id": "f3",
+    "text": "Engagement signals flow back from readers into the ranking that orders future feeds."
+   }
+  ],
+  "constraints": [
+   "Reads outnumber writes by orders of magnitude, so read cost dominates the bill.",
+   "The follow graph is grotesquely uneven: most accounts have a handful of followers, a few have tens of millions.",
+   "A human reads a few hundred posts per session but may follow thousands of accounts producing far more than that.",
+   "Storage is cheap; a cross-service round trip to disk on every scroll is not."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "people",
+    "label": "People"
+   },
+   {
+    "id": "write",
+    "label": "Write path"
+   },
+   {
+    "id": "read",
+    "label": "Read path"
+   },
+   {
+    "id": "store",
+    "label": "Storage"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "author",
+    "label": "Author",
+    "kind": "actor",
+    "lane": "people",
+    "order": 0
+   },
+   {
+    "id": "reader",
+    "label": "Reader",
+    "kind": "actor",
+    "lane": "people",
+    "order": 1
+   },
+   {
+    "id": "post_svc",
+    "label": "Post service",
+    "kind": "process",
+    "lane": "write",
+    "order": 1
+   },
+   {
+    "id": "posts_db",
+    "label": "Posts table",
+    "kind": "store",
+    "lane": "store",
+    "order": 1
+   },
+   {
+    "id": "feed_svc",
+    "label": "Feed service",
+    "kind": "process",
+    "lane": "read",
+    "order": 2
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_publish",
+    "from": "author",
+    "to": "post_svc",
+    "kind": "payload",
+    "label": "publishes"
+   },
+   {
+    "id": "e_store",
+    "from": "post_svc",
+    "to": "posts_db",
+    "kind": "payload",
+    "label": "writes post"
+   },
+   {
+    "id": "e_open",
+    "from": "reader",
+    "to": "feed_svc",
+    "kind": "control",
+    "label": "opens feed"
+   },
+   {
+    "id": "e_pull",
+    "from": "feed_svc",
+    "to": "posts_db",
+    "kind": "payload",
+    "label": "query follows"
+   },
+   {
+    "id": "e_feed",
+    "from": "feed_svc",
+    "to": "reader",
+    "kind": "payload",
+    "label": "feed"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "Fan-out on Write: Precompute Every Feed",
+   "problem": {
+    "statement": "The naive feed is a query: 'give me the latest posts from everyone I follow, newest first.' For a reader following two thousand accounts, that is a two-thousand-way merge over a posts table with billions of rows, sorted and truncated, run again on every pull-to-refresh. Reads outnumber writes a hundred to one, so the system does its most expensive work at the exact moment a human is staring at a spinner.",
+    "beginner": "The simple way to build a feed is to search for the newest posts from everyone you follow, every single time you open the app. That search gets painfully slow when you follow thousands of people and there are billions of posts.",
+    "model": {
+     "id": "separation-of-concerns",
+     "application": "Split the write model from the read model: keep posts in one normalized store for authors, and maintain a separate, ready-to-serve feed for each reader, so the reader never has to run the expensive query."
+    }
+   },
+   "gate": {
+    "question": "Reads happen a hundred times more often than writes, and every read re-runs the same brutal merge across thousands of accounts. You cannot make that merge fast enough. Where else could the work happen, and when?",
+    "hint": "A post is written once but read by every follower. What if you paid the cost once, at write time, instead of once per reader per refresh?"
+   },
+   "solution": "Fan-out on write. When an author posts, a worker looks up their followers and inserts the new post's id into each follower's precomputed feed list, their inbox. A feed read then becomes a single lookup of your own short, already-ordered list. The expensive multi-way merge is gone; in its place, one write becomes many small inbox writes.",
+   "user_lens": {
+    "gives": "The feed opens instantly. Whether you follow ten accounts or ten thousand, reading is one cheap lookup of a list someone already assembled for you.",
+    "costs": "Freshness now lags by a fan-out: your post is not fully 'sent' until the worker has copied it into every follower's inbox, and you pay in storage for a copy of each post id sitting in every follower's list."
+   },
+   "tech_lens": {
+    "mechanism": "A materialized per-user feed (inbox) of post ids, updated by an asynchronous fan-out worker triggered on each publish. Reads hit the inbox; writes drive the fan-out. This is CQRS: two models for the same data, kept in sync.",
+    "principle": "When reads dominate writes, move the work to write time and precompute the exact answer each reader needs."
+   },
+   "tradeoff": "Write amplification. One post to N followers is N inbox writes, so the cost the reader stopped paying lands on the writer, multiplied by the follower count.",
+   "at_scale": "Reads scale beautifully: each is O(1) against a small list, so the read tier grows linearly with users and never re-merges. Writes are the new pressure: total fan-out work is the sum of follower counts across all posts, so a busy network does billions of tiny inbox writes a day. It holds as long as no single account has an outrageous follower count, which is exactly where the next failure waits.",
+   "defends": [
+    "inv2",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "the precomputed inbox",
+      "software_concept": "materialized view / read model maintained on write (CQRS)"
+     },
+     {
+      "mechanism": "the fan-out worker",
+      "software_concept": "asynchronous fan-out via a queue: publish decoupled from delivery"
+     }
+    ],
+    "interview_probes": [
+     "Your read path re-runs the same expensive query on every request. What would it cost to precompute the answer at write time instead, and who pays for it?"
+    ],
+    "approach": "Give each user a feed list (a Redis list or a NoSQL partition keyed by user id, holding post ids in order). On publish, enqueue a fan-out job that reads the author's follower ids and pushes the new post id onto each follower's list. Reads become a single range read of your own key.",
+    "vocab": [
+     "fanout",
+     "cqrs",
+     "scaling-reads"
+    ]
+   },
+   "beginner_analogy": "Like a newspaper. Instead of every reader searching the whole world for news each morning, the paper is assembled once and a copy is dropped on each subscriber's doorstep. Reading is just picking it up.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "fanout",
+      "label": "Fan-out worker",
+      "kind": "process",
+      "lane": "write",
+      "order": 3,
+      "expands_to": "Notification system"
+     },
+     {
+      "id": "feed_store",
+      "label": "Feed inboxes",
+      "kind": "store",
+      "lane": "store",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_notify",
+      "from": "post_svc",
+      "to": "fanout",
+      "kind": "control",
+      "label": "new post"
+     },
+     {
+      "id": "e_push",
+      "from": "fanout",
+      "to": "feed_store",
+      "kind": "payload",
+      "label": "push to inboxes"
+     },
+     {
+      "id": "e_inbox",
+      "from": "feed_svc",
+      "to": "feed_store",
+      "kind": "payload",
+      "label": "read inbox"
+     }
+    ],
+    "highlight": [
+     "feed_svc",
+     "posts_db",
+     "e_pull"
+    ],
+    "remove": [
+     "e_pull"
+    ]
+   }
+  },
+  {
+   "index": 2,
+   "name": "The Celebrity Problem: Don't Fan Out the Firehose",
+   "problem": {
+    "statement": "Fan-out on write assumes follower counts are sane. They are not. When an account with forty million followers posts, that one write explodes into forty million inbox insertions. The fan-out worker floods, the queue backs up, and every ordinary user's post now waits behind the celebrity's storm. A single post can jam delivery for the whole network. Twitter hit exactly this, which is why a plain push model cannot stand alone.",
+    "beginner": "Pushing a copy of each post to every follower works fine until someone with forty million followers posts. Now one post means forty million copies, all at once, and everyone else's posts get stuck in line behind it.",
+    "model": {
+     "id": "bottleneck",
+     "application": "The system's throughput is governed by its single worst case, the most-followed account. Find that constraint and route around it instead of trying to make fan-out fast enough to survive it."
+    }
+   },
+   "gate": {
+    "question": "Ninety-nine percent of accounts have few followers and fan out cheaply. A handful have tens of millions and fan out catastrophically. You cannot push the celebrity's post to everyone in time. So don't. What else could you do with just those accounts?",
+    "hint": "You already had a way to build a feed without pushing anything. What if the rule depended on how many followers the author has?"
+   },
+   "solution": "Hybrid fan-out. Below a follower threshold, push as before. Above it, do the opposite: do not fan out the celebrity's post at all. Leave it in the posts store, and when a follower reads their feed, pull the handful of celebrity accounts they follow at read time and merge those posts into their precomputed inbox. Most of the feed is prebuilt; the few explosive authors are handled on read, where the cost is one small query per reader instead of forty million writes.",
+   "user_lens": {
+    "gives": "A celebrity's post shows up in followers' feeds in seconds, because it was never queued behind tens of millions of copies. And ordinary posts stop getting stuck behind the firehose.",
+    "costs": "Reads get a little more expensive and more complex: every feed load now merges a prebuilt inbox with a live pull of whichever celebrities you follow, and the two have to be interleaved into one correct order."
+   },
+   "tech_lens": {
+    "mechanism": "A follower-count threshold splits authors into push and pull. Push authors fan out on write into inboxes; pull authors are read at request time and merged with the inbox by sort key. The read path becomes a small merge again, but only over a handful of accounts, not thousands.",
+    "principle": "Optimize for the common case and special-case the tail; when one input breaks a uniform strategy, split the input."
+   },
+   "tradeoff": "Two code paths and a merge on every read. The system now maintains two different ways of delivering a post and must keep their combined order correct, trading uniformity for survival.",
+   "at_scale": "This is what makes the whole design hold. Fan-out work is now bounded, because the accounts that would blow it up are excluded, and read work is bounded, because each reader follows only a few celebrities. The threshold is the tuning knob: set it too low and you push too little (reads get heavy); set it too high and one giant account can still jam the queue. Real systems tune it against the follower-count distribution.",
+   "defends": [
+    "inv3",
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "the follower-count threshold",
+      "software_concept": "hot-key detection: treat the heavy key differently from the long tail"
+     },
+     {
+      "mechanism": "pull-and-merge for celebrities",
+      "software_concept": "read-time fan-out for the few keys too expensive to fan out on write"
+     }
+    ],
+    "interview_probes": [
+     "One key in your system has a million times the traffic of the average. Why will a uniform strategy fail on it, and how would you special-case just that key?",
+     "Where is the celebrity problem in the design you just drew?"
+    ],
+    "approach": "Tag authors with a boolean above a follower threshold. In the fan-out job, skip pushing for hot authors. On read, load the reader's inbox, separately fetch recent posts from the few hot accounts they follow, and merge the two id-lists by sort key before returning the page.",
+    "vocab": [
+     "hot-key",
+     "fanout",
+     "scaling-writes"
+    ]
+   },
+   "beginner_analogy": "The paper still drops on your doorstep, but the one columnist read by half the country isn't reprinted into ten million copies. Their column stays at the press, and you're handed it as you walk in, slotted into your paper on the spot.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "celeb_list",
+      "label": "Celebrity set",
+      "kind": "store",
+      "lane": "store",
+      "order": 4
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_skip",
+      "from": "celeb_list",
+      "to": "fanout",
+      "kind": "control",
+      "label": "skip celebs"
+     },
+     {
+      "id": "e_celebpull",
+      "from": "feed_svc",
+      "to": "posts_db",
+      "kind": "payload",
+      "label": "pull celeb"
+     }
+    ],
+    "highlight": [
+     "fanout",
+     "feed_store"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 3,
+   "name": "Cache the Feed: Serve Scrolls from Memory",
+   "problem": {
+    "statement": "The inbox lives in a database, and the feed is read relentlessly: every open, every pull-to-refresh, every scroll to the next page is another hit. Hundreds of millions of users reading tens of times a session turn the feed store into a hotspot that no amount of push-side work relieves. The read that fan-out made cheap is still a network round trip to disk, on the single busiest path in the system.",
+    "beginner": "Even a quick lookup gets slow when hundreds of millions of people do it constantly. The database holding everyone's feeds becomes the busiest, most overloaded part of the whole system.",
+    "model": {
+     "id": "locality-and-caching",
+     "application": "The same feeds are read again and again within seconds. Keep each reader's assembled feed in fast memory close to the read path, so the common read never touches disk."
+    }
+   },
+   "gate": {
+    "question": "Fan-out already made the read a single lookup, and it is still too slow, because it is a disk read on the hottest path in the system, repeated billions of times a day. Where should the answer actually live?",
+    "hint": "Most reads are the same feed, requested again seconds later. What is far faster than a database, and what do you give up to use it?"
+   },
+   "solution": "Put the materialized feed in a distributed in-memory cache. Each reader's list of post ids lives as a list in a sharded memory store, read-through: a feed load hits memory first, and only a cache miss falls back to the database, which then refills the cache. The hottest data in the system now lives in RAM, spread across a fleet of cache nodes so no single one is the ceiling.",
+   "user_lens": {
+    "gives": "Feeds load in single-digit milliseconds, straight from memory, no matter how many people are scrolling at the same moment.",
+    "costs": "Staleness and cost. The cache can serve a feed a beat behind the newest write, and a whole tier of expensive memory servers now has to be run, kept warm, and stopped from stampeding the database when it empties."
+   },
+   "tech_lens": {
+    "mechanism": "A sharded in-memory store (Redis-style) holds per-user feed lists, keyed by user id and spread across nodes by consistent hashing. Reads are read-through with the database as backing store; fan-out writes update the cache directly so it stays warm.",
+    "principle": "Put copies of hot answers near the demand, and pay for speed with staleness and memory."
+   },
+   "tradeoff": "Freshness and durability yield to speed. A cache is allowed to be slightly stale and to lose data on restart, so the design must treat it as an accelerator over a durable store, never as the source of truth.",
+   "at_scale": "Memory throughput dwarfs disk, so a cache tier absorbs the read firehose that would flatten a database, and it scales horizontally: add nodes and reshard the keyspace. The ceilings are memory cost and the thundering herd when a hot key expires and thousands of readers miss at once, which real systems blunt with request coalescing and staggered expiry. This node is itself a whole system.",
+   "defends": [
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "the in-memory feed list",
+      "software_concept": "distributed cache (Redis / Memcached) as a read-through layer over the database"
+     },
+     {
+      "mechanism": "keying feeds across cache nodes",
+      "software_concept": "consistent hashing to shard the keyspace and survive node changes cheaply"
+     }
+    ],
+    "interview_probes": [
+     "Your cheapest read is still a disk round trip on your hottest path. What lives in memory instead, and what is your plan for the moment that cache is empty?"
+    ],
+    "approach": "Front the feed store with Redis: read-through with cache-aside fallback, feed lists keyed by user id, a TTL plus direct updates from the fan-out worker to keep them warm. Guard misses with a single-flight lock so one rebuild serves the whole herd.",
+    "vocab": [
+     "caching",
+     "distributed-cache",
+     "scaling-reads"
+    ]
+   },
+   "beginner_analogy": "Like keeping today's paper on the kitchen counter instead of walking to the mailbox each time you want a glance. It's right there, though the counter copy might be a couple of minutes behind the very latest edition.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "feed_cache",
+      "label": "Feed cache",
+      "kind": "store",
+      "lane": "read",
+      "order": 1,
+      "expands_to": "Distributed cache"
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_cachefill",
+      "from": "feed_svc",
+      "to": "feed_cache",
+      "kind": "control",
+      "label": "warm cache"
+     },
+     {
+      "id": "e_serve",
+      "from": "feed_cache",
+      "to": "reader",
+      "kind": "payload",
+      "label": "served from RAM"
+     }
+    ],
+    "highlight": [
+     "feed_store",
+     "e_inbox"
+    ],
+    "remove": [
+     "e_feed"
+    ]
+   }
+  },
+  {
+   "index": 4,
+   "name": "Cursor Pagination: A Stable Window on a Moving List",
+   "problem": {
+    "statement": "The feed is infinite scroll, fetched a page at a time. The obvious way, 'skip the first 40, give me the next 20,' assumes the list stands still between pages. It never does: new posts arrive at the top constantly. Offset by 40 after three posts were prepended, and you re-show three the reader already saw, or skip three they didn't. Deletions shift it the other way. Every refresh mid-scroll corrupts the page boundaries.",
+    "beginner": "Feeds load in pages as you scroll. If you ask for 'the next 20 after the first 40,' but new posts arrived at the top, the counting is off, and you'll see duplicates or miss posts. The list keeps moving under you.",
+    "model": {
+     "id": "first-principles",
+     "application": "Throw out 'page N' entirely: a position counted from the top is meaningless on a list that grows from the top. Anchor the next page to the content itself, the last post the reader actually saw."
+    }
+   },
+   "gate": {
+    "question": "New posts keep arriving at the top of the feed while a reader scrolls down. Counting 'skip 40, take 20' breaks the moment the list shifts. What is a page boundary that a moving list cannot corrupt?",
+    "hint": "Instead of 'how far from the top,' remember 'the last thing you saw.' What property of a post would let the server continue exactly from there?"
+   },
+   "solution": "Cursor pagination. Each page returns a cursor, an opaque token encoding the sort key of the last item on the page (a post id, or timestamp plus id). The next request says 'give me items after this cursor,' and the server returns the posts immediately following that fixed point in the ordered feed. New arrivals at the top do not move the boundary, because the boundary is a piece of content, not a count.",
+   "user_lens": {
+    "gives": "Scrolling is seamless and correct: no post shown twice, none skipped, and the reader can pull fresh posts at the top without disturbing where they are further down.",
+    "costs": "You lose random access. There is no 'jump to page 50,' only 'continue from here,' and the cursor has to stay meaningful even if the exact item it points at is later deleted."
+   },
+   "tech_lens": {
+    "mechanism": "The feed is an ordered list keyed by a monotonic sort key. A page is a range scan starting strictly after the cursor's key, limited to the page size. The cursor is stateless: the server holds nothing between requests, the client carries the position.",
+    "principle": "Anchor a window on a changing sequence to a stable element inside it, not to an offset from its edge."
+   },
+   "tradeoff": "No jump-to-page, and a slightly opaque contract: the client must treat the cursor as a black box and send it back verbatim, and the server must define a total order (id breaks timestamp ties) so 'after' is never ambiguous.",
+   "at_scale": "Cursor reads are cheap and constant however deep the reader scrolls, because each page is a bounded range scan from an indexed key, never a growing 'skip the first 10,000.' Offset pagination degrades linearly with depth; cursors do not. It also keeps the read stateless, so any server or cache node can serve any page, which is what lets the read tier scale horizontally.",
+   "defends": [
+    "inv4"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "the opaque cursor",
+      "software_concept": "keyset pagination: WHERE sort_key < cursor ORDER BY sort_key LIMIT n"
+     }
+    ],
+    "interview_probes": [
+     "Your list changes while users page through it. Why does OFFSET/LIMIT show duplicates, and what do you anchor the next page to instead?"
+    ],
+    "approach": "Sort the feed by a total order (timestamp, then post id as tiebreaker). Return the last item's (timestamp, id) as an encoded cursor. The next page runs a keyset query: items strictly after that key, limit N. No OFFSET anywhere in the read path.",
+    "vocab": [
+     "api-design"
+    ]
+   },
+   "beginner_analogy": "Like a bookmark instead of a page number. If someone slips new pages into the front of the book, 'page 41' now points somewhere wrong, but your bookmark still marks exactly where you stopped.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "kind": "channel",
+      "lane": "read",
+      "order": 5
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_cursor",
+      "from": "feed_svc",
+      "to": "cursor",
+      "kind": "control",
+      "label": "last post id"
+     },
+     {
+      "id": "e_next",
+      "from": "cursor",
+      "to": "reader",
+      "kind": "control",
+      "label": "next-page anchor"
+     }
+    ],
+    "highlight": [
+     "feed_store"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 5,
+   "name": "Ranking: Order by Relevance, Not Just Time",
+   "problem": {
+    "statement": "The feed is perfectly ordered by time and still fails its reader. Someone following two thousand accounts gets thousands of posts an hour; reverse-chronological shows them the last few minutes and buries a close friend's big news under a stranger's lunch. The best post of the day, published this morning, sits a hundred screens down. Instagram and Twitter both watched engagement fall on pure chronological feeds and abandoned it. A complete, fast, correctly-paged feed is still the wrong feed if the good posts never surface.",
+    "beginner": "A feed sorted purely by time shows you whatever was posted most recently, not what you'd most want to see. Follow enough accounts and the posts you care about get buried under a flood of newer, less interesting ones.",
+    "model": {
+     "id": "feedback-loop",
+     "application": "Measure what readers engage with, feed those signals back into a score for each candidate post, and order the feed by predicted relevance, so the loop steadily surfaces what this reader actually wants."
+    }
+   },
+   "gate": {
+    "question": "The feed is complete, fast, and correctly paginated, and users still miss the posts they care about, because a chronological firehose buries them. Newest is not the same as best. How should the feed decide what to show first?",
+    "hint": "The system already sees what every reader likes, shares, and lingers on. What could you do with that signal before you settle the order of the feed?"
+   },
+   "solution": "A ranking stage between the assembled candidates and the reader. Fan-out and celebrity pull produce a pool of eligible posts; a ranking service scores each one by predicted engagement for this reader, using post features, author affinity, recency, and the reader's own history, then returns the pool reordered by score. Recency becomes one signal among many instead of the only one. This scoring stage is itself a recommendation system.",
+   "user_lens": {
+    "gives": "The posts most likely to matter to you rise to the top, so even a short session surfaces the day's best content instead of only its most recent.",
+    "costs": "You lose the simple guarantee of time order and the transparency that came with it. The feed is now a model's opinion: it can feel arbitrary or filter-bubbled, and a wrong guess buries something you did want to see."
+   },
+   "tech_lens": {
+    "mechanism": "Candidate generation (fan-out inbox plus celebrity pull) produces a bounded pool; a ranking model scores each candidate from features (affinity, engagement history, recency, content signals); the feed is sorted by score. Engagement events flow back as training signal, closing the loop.",
+    "principle": "When there is more eligible content than attention, rank by predicted value and let measured behavior tune the ranking."
+   },
+   "tradeoff": "Relevance is bought with control and predictability. Ranking adds latency and a whole model to train and serve, and it trades the honest simplicity of 'newest first' for an opaque score no user can fully see.",
+   "at_scale": "Ranking runs per read over a bounded candidate pool, so cost is capped by the pool size, not the size of the network. That is why candidate generation must shrink thousands of eligible posts to a few hundred before scoring. Heavier models push the work onto precomputed features and cached embeddings, and the ranker scales horizontally because each reader's scoring is independent. The ranker is its own system, big enough to deconstruct on its own.",
+   "defends": [
+    "inv5"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "the ranking score",
+      "software_concept": "a learned scoring model over candidate features, served at read time"
+     },
+     {
+      "mechanism": "engagement events as training signal",
+      "software_concept": "a feedback loop: logged behavior becomes the labels for the next model"
+     }
+    ],
+    "interview_probes": [
+     "You have more eligible items than a user can consume. How do you generate a bounded candidate set and rank it, and where does the training signal come from?"
+    ],
+    "approach": "Split into candidate generation then ranking: assemble a few hundred eligible post ids (inbox plus celebrity pull), fetch precomputed features per (reader, post), score with a model, sort by score. Log impressions and engagements to retrain the model.",
+    "vocab": []
+   },
+   "beginner_analogy": "Like a good editor laying out the front page. They don't just print stories in the order they arrived; they put the story you most need to see at the top, judging from what readers have cared about.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "ranker",
+      "label": "Ranking service",
+      "kind": "process",
+      "lane": "read",
+      "order": 3,
+      "expands_to": "Recommendation feed"
+     },
+     {
+      "id": "signals",
+      "label": "Engagement signals",
+      "kind": "store",
+      "lane": "store",
+      "order": 5
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_cand",
+      "from": "feed_svc",
+      "to": "ranker",
+      "kind": "payload",
+      "label": "candidates"
+     },
+     {
+      "id": "e_ranked",
+      "from": "ranker",
+      "to": "feed_svc",
+      "kind": "payload",
+      "label": "ranked order"
+     },
+     {
+      "id": "e_signals",
+      "from": "signals",
+      "to": "ranker",
+      "kind": "control",
+      "label": "features"
+     }
+    ],
+    "highlight": [
+     "feed_store",
+     "e_inbox"
+    ],
+    "remove": []
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "A nobody becomes a megastar overnight",
+   "scenario": "An ordinary account goes viral and crosses the celebrity threshold within hours as tens of millions follow it. The fan-out worker was already pushing its posts into inboxes when the switch flips.",
+   "reveal": "The account flips from push to pull, but inboxes already hold its earlier posts. The system stops fanning it out and starts merging it on read, and for a while some followers have an old copy in their inbox and also get it pulled. Dedup on read, by post id, is what keeps inv4 and inv1 honest through the transition. Throughput holds; the cost is a dedup pass and a decision about whether to backfill old inboxes."
+  },
+  {
+   "id": "st2",
+   "title": "A cache shard dies at peak",
+   "scenario": "A cache node fails during the evening rush, taking a slice of users' feeds in memory with it. Those users all refresh at once.",
+   "reveal": "Their reads miss to the database, which refills the cache. The real danger is a thundering herd of simultaneous misses all rebuilding the same hot feeds. Single-flight rebuilds collapse duplicate work, and consistent hashing means only the dead node's keys move, not the whole keyspace. inv2 degrades for a blip; inv1 never does, because the durable store still holds every inbox."
+  },
+  {
+   "id": "st3",
+   "title": "A post is deleted after fan-out",
+   "scenario": "An author deletes a post that already sits in forty million inboxes and a few million caches.",
+   "reveal": "Inboxes store ids, not content, so the system does not rewrite forty million lists. The post is marked deleted in the source of truth, and read-time hydration drops it before it reaches anyone. inv5 and inv1 are defended precisely because the inbox is a list of pointers, corrected on read, not a copy of the content. The price: every read hydrates and filters, and a tombstoned id wastes inbox space until it ages out."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "When reads dominate writes, precompute the answer at write time; move the work to where it happens once, not where it happens often.",
+   "A uniform strategy dies on its most extreme input; find the worst case and give it its own path.",
+   "Cache the hottest answers in memory near the read, and accept staleness as the honest price of speed.",
+   "Anchor a window on a moving list to a stable element inside it, never to an offset from its edge.",
+   "When eligible content exceeds attention, rank by predicted value and let measured behavior tune the order.",
+   "Store pointers, not copies, so a correction happens once at the source instead of across every copy."
+  ],
+  "mappings": [
+   {
+    "mechanism": "fan-out on write into inboxes",
+    "elsewhere": "Push notifications, email fan-out, and materialized views all pay at write time so the read is a lookup."
+   },
+   {
+    "mechanism": "hybrid push/pull by follower count",
+    "elsewhere": "Hot-key handling in caches and databases: replicate or special-case the popular key the uniform path cannot carry."
+   },
+   {
+    "mechanism": "the distributed feed cache",
+    "elsewhere": "CDN edge caches, session stores, and query caches: hot answers held in memory near demand."
+   },
+   {
+    "mechanism": "cursor pagination",
+    "elsewhere": "Keyset pagination in databases, offsets in a Kafka log, and 'since_id' APIs everywhere a list grows while you read it."
+   },
+   {
+    "mechanism": "ranking by feedback",
+    "elsewhere": "Search result ranking, ad auctions, and recommendation systems all score a candidate set by predicted value."
+   }
+  ]
+ }
+}

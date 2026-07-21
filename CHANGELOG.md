@@ -4,6 +4,13 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [1.23.0] — 2026-07-20 · The library grows
+### Added
+- Five new worked Deconstructs, the first batch of the canonical interview set: **Video transcoding pipeline**, **Content delivery network**, **Recommendation feed**, **News feed**, and **URL shortener**. The sample library goes from 3 to 8.
+- These give semantic zoom real depth: **YouTube now drills into three nested Deconstructs** (transcoding, CDN, recommendation feed), all resolving offline.
+### Changed
+- Library ordered so the richest hub (YouTube) leads; all eight precached for offline reading and given share pages.
+
 ---
 
 ## [1.21.1] — 2026-07-19

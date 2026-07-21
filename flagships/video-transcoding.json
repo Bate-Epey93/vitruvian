@@ -1,0 +1,811 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "Video transcoding pipeline",
+  "narrowing": "The path from one uploaded master to a published, playable rendition ladder: ingest, queue, worker fleet, segmentation, retries, and the completion barrier. Playback, DRM, and the CDN edge are downstream and out of scope.",
+  "ordering_note": "The layers follow the order each failure forces in practice, not a single dated incident. Every failure here is the inevitable one the previous version hits as files get bigger, uploads get burstier, and machines keep dying; that sequence is how real pipelines were actually built, so history_confidence is medium rather than high.",
+  "history_confidence": "medium",
+  "domain": "software"
+ },
+ "essence": {
+  "text": "A transcoding pipeline takes the one master file a creator uploads and manufactures a whole ladder of renditions from it: the same video at a dozen resolutions and bitrates, cut into aligned segments, so any player on any network can pick a rung it can actually stream and hop rungs mid-playback without a stutter. The hard part is not running the encoder. It is doing it for millions of uploads, fast and cheap, on machines that die mid-job.",
+  "beginner": "When you upload a video, the site does not just store your one file and send it to everyone. It makes many copies at different sizes and qualities, so a phone on slow data and a TV on fast wifi each get a version that plays smoothly. This is the factory that makes all those copies.",
+  "deep_facts": [
+   "High-quality encoding is often slower than the video itself: a single core can take longer than the runtime to encode one 4K rendition, so serial encoding of a feature film is measured in hours.",
+   "One upload fans out into many outputs. A full ladder is several resolutions times several bitrates times one or more codecs, so the pipeline usually does five to ten times more encode work than the length of the source.",
+   "Adaptive streaming only works if every rendition is cut at the same keyframe boundaries. If the 480p and 1080p versions disagree on where a segment starts, the player cannot switch between them without a visible glitch.",
+   "Because segments become independent once you cut at keyframes, a two-hour master can be encoded in minutes by handing a few hundred segments to a few hundred workers at once. Throughput is bought with worker count."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Turn one uploaded master into a complete, aligned ladder of renditions for adaptive streaming, correctly and quickly, without ever losing or corrupting a job.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Uploader",
+    "want": "Their video available to watch, in every quality, as soon as possible after upload."
+   },
+   {
+    "id": "a2",
+    "name": "Viewer",
+    "want": "A stream that plays smoothly on their exact device and network, and adapts when the network changes."
+   },
+   {
+    "id": "a3",
+    "name": "Platform operator",
+    "want": "Maximum renditions per dollar of compute; encoding is the largest variable cost in the system."
+   },
+   {
+    "id": "a4",
+    "name": "Worker",
+    "want": "A well-defined unit of work it can finish, or fail cleanly, without guessing about the rest of the job."
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "Every accepted upload eventually produces a complete rendition ladder, or is explicitly marked failed. A job is never silently lost."
+   },
+   {
+    "id": "inv2",
+    "text": "Segments are keyframe-aligned across every rendition, so a player can switch bitrate at any boundary without a glitch."
+   },
+   {
+    "id": "inv3",
+    "text": "Retrying or redelivering a job never duplicates or corrupts its output. Doing the work twice yields the same result as doing it once."
+   },
+   {
+    "id": "inv4",
+    "text": "A ladder is published to viewers only when every required rendition and segment is present and valid; no one streams a half-built ladder."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Master file",
+    "note": "The uploaded source. Large (often gigabytes), single, authoritative; everything is derived from it."
+   },
+   {
+    "id": "en2",
+    "name": "Transcode job",
+    "note": "One unit of intent: this master, into this target ladder of renditions."
+   },
+   {
+    "id": "en3",
+    "name": "Rendition",
+    "note": "One output resolution and bitrate: a single rung of the ladder."
+   },
+   {
+    "id": "en4",
+    "name": "Segment",
+    "note": "A slice of the timeline, cut at a keyframe, that can be encoded independently of its neighbours."
+   },
+   {
+    "id": "en5",
+    "name": "Manifest",
+    "note": "The playlist that ties renditions and segments together and tells the player what exists and where."
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "The master flows in; renditions and their manifest flow out to storage and the edge."
+   },
+   {
+    "id": "f2",
+    "text": "Jobs and segment tasks flow from ingest through the queue to the worker fleet."
+   },
+   {
+    "id": "f3",
+    "text": "Progress and completion flow back from workers to the control plane, which decides when a ladder is done."
+   }
+  ],
+  "constraints": [
+   "Encoding is CPU-bound and often slower than real time; the compute cannot be wished away, only parallelized.",
+   "The master is large, so pushing it through application servers is ruinous; bytes must go straight to and from durable storage.",
+   "Any worker can die at any instant (spot reclaim, out-of-memory, a crash), usually mid-encode; the design must assume it.",
+   "Adaptive streaming demands keyframe-aligned cut points, so renditions cannot be segmented independently of one another."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "people",
+    "label": "People"
+   },
+   {
+    "id": "media",
+    "label": "Media path"
+   },
+   {
+    "id": "control",
+    "label": "Control"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "uploader",
+    "label": "Uploader",
+    "kind": "actor",
+    "lane": "people",
+    "order": 0
+   },
+   {
+    "id": "encoder",
+    "label": "Server + ffmpeg",
+    "kind": "process",
+    "lane": "media",
+    "order": 2
+   },
+   {
+    "id": "ladder",
+    "label": "Rendition ladder",
+    "kind": "store",
+    "lane": "media",
+    "order": 6
+   },
+   {
+    "id": "viewer",
+    "label": "Viewer",
+    "kind": "actor",
+    "lane": "people",
+    "order": 7
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_upload",
+    "from": "uploader",
+    "to": "encoder",
+    "kind": "payload",
+    "label": "POST 4 GB"
+   },
+   {
+    "id": "e_out",
+    "from": "encoder",
+    "to": "ladder",
+    "kind": "payload",
+    "label": "renditions"
+   },
+   {
+    "id": "e_stream",
+    "from": "ladder",
+    "to": "viewer",
+    "kind": "payload",
+    "label": "streams"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "Get the Bytes Out of the Request Path",
+   "problem": {
+    "statement": "The naive service is one box: the uploader POSTs the master straight to it over HTTP and it runs ffmpeg inline before responding. A 4 GB master pins that box for the entire encode, which outlasts every HTTP timeout, so the upload connection dies long before the renditions exist. A second upload arriving mid-encode fights for the same CPU and memory and one of them runs out of memory. Encoding inside the request is impossible for anything past a toy clip.",
+    "beginner": "The first version is a single computer that receives your whole video over the web connection and makes all the copies before it answers. Your file is huge and the copying takes ages, so the connection gives up, and a second upload can crash the machine.",
+    "model": {
+     "id": "separation-of-concerns",
+     "application": "Uploading bytes and transcoding them are two jobs on two timescales. Split them: accept and durably store the master in one fast step, and do the slow encode later, so neither blocks the other."
+    }
+   },
+   "gate": {
+    "question": "A user is uploading a 4 GB master and you must not tie up a web server for the minutes-to-hours the encode takes, nor route gigabytes through your app tier. How do you accept the file and return immediately?",
+    "hint": "The app server does not need to touch the bytes at all. What if the client uploaded straight to storage, and the server only learned that it happened?"
+   },
+   "solution": "Ingest hands the client a presigned URL and the client PUTs the master directly into object storage, never through the app tier. Ingest records a transcode job that points at that stored object and returns at once. Bytes and control plane are now separate: storage holds the master durably, and a job simply references it. Encoding becomes something that happens to a stored object, not something that happens inside a request.",
+   "user_lens": {
+    "gives": "The upload finishes in seconds from the client's view, and the master is safe in durable storage the moment the PUT completes.",
+    "costs": "The video is not watchable yet: 'uploaded' and 'ready' are now different states, and the user has to wait on a process they cannot see for the ladder to appear."
+   },
+   "tech_lens": {
+    "mechanism": "A presigned URL grants the client a scoped, time-limited write directly to object storage; ingest persists a job record referencing the object key and returns. No large payload ever transits the application server.",
+    "principle": "Never stream big blobs through your own servers; let clients talk to storage directly and keep only the reference."
+   },
+   "tradeoff": "You give up the simplicity of one synchronous box for a system with intermediate state: an uploaded-but-not-ready object that something else must later pick up and finish.",
+   "at_scale": "This is what lets the pipeline scale at all: app servers now handle tiny constant-size job records instead of gigabyte streams, so one modest ingest tier can admit thousands of uploads a second while the actual bytes fan out to object storage, which is built to absorb that bandwidth. The upload path stops being the bottleneck; the encode backlog becomes the thing to scale.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "presigned direct-to-storage upload",
+      "software_concept": "offloading blob transfer to object storage; the app records only the key"
+     },
+     {
+      "mechanism": "job record created at ingest",
+      "software_concept": "async work handoff: accept fast, process later"
+     }
+    ],
+    "interview_probes": [
+     "Where does your upload path push large payloads through application servers that could go straight to storage instead?"
+    ],
+    "approach": "Issue a presigned PUT URL (S3 createPresignedUrl or equivalent) and write a job record with the resulting object key; the client uploads to storage, your server only stores the key and returns 202 Accepted.",
+    "vocab": [
+     "large-blobs",
+     "blob-storage"
+    ]
+   },
+   "beginner_analogy": "Like dropping a big parcel at the post office's own loading dock instead of carrying it into the clerk's booth. The clerk just writes down that it arrived and deals with it later.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "object_store",
+      "label": "Object storage",
+      "kind": "store",
+      "lane": "media",
+      "order": 0,
+      "expands_to": "Object storage"
+     },
+     {
+      "id": "ingest",
+      "label": "Ingest API",
+      "kind": "process",
+      "lane": "control",
+      "order": 0
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_presign",
+      "from": "ingest",
+      "to": "uploader",
+      "kind": "control",
+      "label": "presigned URL"
+     },
+     {
+      "id": "e_put",
+      "from": "uploader",
+      "to": "object_store",
+      "kind": "payload",
+      "label": "PUT bytes"
+     },
+     {
+      "id": "e_src",
+      "from": "object_store",
+      "to": "encoder",
+      "kind": "payload",
+      "label": "reads master"
+     }
+    ],
+    "highlight": [
+     "e_upload"
+    ],
+    "remove": [
+     "e_upload"
+    ]
+   }
+  },
+  {
+   "index": 2,
+   "name": "The Queue and the Worker Fleet",
+   "problem": {
+    "statement": "Async helped, but there is still one encoder box pulling one job at a time. When a popular creator's fans upload a burst, jobs arrive far faster than one box can encode, and there is nowhere for the waiting work to sit except that box's memory. Worse, if the box crashes mid-encode, the job it was holding is simply gone: nothing recorded that it was owed, so inv1 breaks silently.",
+    "beginner": "Even after the upload is quick, one machine still makes all the copies, one video at a time. When lots of videos arrive at once they stack up, and if that machine crashes, the video it was working on just vanishes.",
+    "model": {
+     "id": "queue-and-buffer",
+     "application": "Put a durable queue between ingest and the encoders. It absorbs bursts as backlog instead of loss, and it remembers every owed job, so a crash costs a redelivery, not the work."
+    }
+   },
+   "gate": {
+    "question": "Uploads arrive in bursts; encoding is steady and slow. You need bursts to wait somewhere durable, many machines to share the work, and a crashed machine's job to survive. What sits between the two?",
+    "hint": "The work should outlive any single worker. Where can a job wait so that losing the worker does not lose the job?"
+   },
+   "solution": "Ingest enqueues each transcode job into a durable message queue. A fleet of stateless workers pulls jobs from it, encodes, and writes renditions to storage. The queue is the buffer that turns an upload burst into a backlog instead of dropped work, and it is durable, so a worker that dies mid-job just fails to acknowledge and the job returns to the queue for another worker. Throughput is now a function of fleet size: add workers, drain the queue faster.",
+   "user_lens": {
+    "gives": "Uploads are accepted even during huge spikes, and no job is lost to a single machine dying; it just waits a little longer.",
+    "costs": "Latency under load: during a spike your video sits in a queue behind everyone else's, and 'ready' can lag 'uploaded' by minutes or more."
+   },
+   "tech_lens": {
+    "mechanism": "A durable queue holds job messages; stateless workers long-poll, lease a message, process it, and acknowledge on success. Unacknowledged messages reappear for redelivery. Capacity scales by adding consumers.",
+    "principle": "Decouple producers from consumers with a durable buffer, and make workers stateless so the fleet is a dial you can turn."
+   },
+   "tradeoff": "You trade immediacy for durability and elasticity: work now waits in line, and you inherit a queue to monitor, size, and keep from growing without bound.",
+   "at_scale": "Throughput is roughly workers times per-worker encode rate, so you scale by adding consumers until a downstream limit (object-storage read bandwidth, or the queue's own throughput) becomes the new ceiling. The queue also protects the system: a ten-times upload spike grows the backlog and the wait, but does not drop jobs or topple the workers, which drain at their own steady rate.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "durable job queue",
+      "software_concept": "message queue with at-least-once delivery and a visibility timeout"
+     },
+     {
+      "mechanism": "stateless worker fleet",
+      "software_concept": "horizontally scaled consumers; the competing-consumers pattern"
+     }
+    ],
+    "interview_probes": [
+     "When a worker crashes halfway through a job, how does your system know the job is still owed, and who picks it up?"
+    ],
+    "approach": "Push each job as a message onto SQS, RabbitMQ, or Kafka; run N stateless consumers that lease a message with a visibility timeout, do the work, and delete it on success, so an un-deleted message redelivers after a crash.",
+    "vocab": [
+     "long-running-tasks",
+     "queue"
+    ]
+   },
+   "beginner_analogy": "Like a kitchen ticket rail: orders queue on the rail, any free cook grabs the next one, and if a cook walks off mid-order the ticket is still hanging there for someone else.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "queue",
+      "label": "Job queue",
+      "kind": "store",
+      "lane": "control",
+      "order": 2,
+      "expands_to": "Message queue"
+     },
+     {
+      "id": "fleet",
+      "label": "Worker fleet",
+      "kind": "process",
+      "lane": "media",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_enqueue",
+      "from": "ingest",
+      "to": "queue",
+      "kind": "control",
+      "label": "enqueue job"
+     },
+     {
+      "id": "e_pull",
+      "from": "queue",
+      "to": "fleet",
+      "kind": "control",
+      "label": "workers pull"
+     },
+     {
+      "id": "e_read",
+      "from": "object_store",
+      "to": "fleet",
+      "kind": "payload",
+      "label": "read master"
+     },
+     {
+      "id": "e_out2",
+      "from": "fleet",
+      "to": "ladder",
+      "kind": "payload",
+      "label": "renditions"
+     }
+    ],
+    "highlight": [
+     "encoder"
+    ],
+    "remove": [
+     "encoder"
+    ]
+   }
+  },
+  {
+   "index": 3,
+   "name": "Chunked Parallel Encoding",
+   "problem": {
+    "statement": "The fleet parallelizes across different jobs, but any single job still encodes on one worker from first frame to last. A three-hour 4K master is hours of wall-clock on one core, no matter how idle the rest of the fleet is. The creator waits, one machine is pinned, and a thousand spare cores sit watching. The bottleneck is the serial encode of one long file.",
+    "beginner": "Many machines help when there are many videos, but one long video is still handled start-to-finish by a single machine, which can take hours while all the other machines sit idle.",
+    "model": {
+     "id": "bottleneck",
+     "application": "The constraint is one job's wall-clock time, not the fleet's total capacity. Break the single serial encode into independent pieces the whole fleet can chew at once."
+    }
+   },
+   "gate": {
+    "question": "One master, one worker, hours of encoding, and hundreds of idle workers next door. The pieces of a video are not naturally independent, because of how compression works. How do you split it so many workers can encode one video at once?",
+    "hint": "Video compresses in groups that restart at keyframes. If you only ever cut on a keyframe boundary, what does that make each piece?"
+   },
+   "solution": "A segmenter splits the master at keyframe boundaries into short, independent segments and enqueues one task per segment. The fleet now pulls segment tasks, not whole-video tasks, so hundreds of workers encode one master in parallel. A stitcher concatenates the encoded segments back into each rendition. Because every rendition is cut at the same keyframe boundaries, the segments stay aligned across the ladder, which is exactly what adaptive playback needs.",
+   "user_lens": {
+    "gives": "A long master is ready in minutes instead of hours, because its segments encode simultaneously across the whole fleet.",
+    "costs": "More moving parts and overhead: cutting, tracking hundreds of segment tasks, and stitching them back, plus a small quality and size cost from forcing keyframes at every cut point."
+   },
+   "tech_lens": {
+    "mechanism": "Split-encode-stitch: partition the timeline on keyframes, map each segment to an independent encode task, then reduce the results by concatenation per rendition. Fixed cut points keep every rendition segment-aligned.",
+    "principle": "To break a serial bottleneck, find the natural boundary where the work is independent and fan it out; here the keyframe is that boundary."
+   },
+   "tradeoff": "Parallelism has a floor and a tax: forcing keyframes at every segment boundary slightly hurts compression efficiency, and very short segments add scheduling and stitching overhead that eventually outweighs the speedup.",
+   "at_scale": "One job's latency drops from proportional-to-length toward proportional-to-one-segment, so wall-clock is bounded by segment size and available workers, not by the master's runtime. A two-hour file becomes a few hundred segment tasks the fleet absorbs in parallel; scaling a single huge job is now the same act as scaling the fleet. The new ceiling is fan-out overhead and the slowest straggler segment.",
+   "defends": [
+    "inv2",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "segment-per-task fan-out",
+      "software_concept": "map-reduce: map segments to workers, reduce by concatenation"
+     },
+     {
+      "mechanism": "keyframe-aligned cut points",
+      "software_concept": "partitioning on a boundary that makes the shards independent"
+     }
+    ],
+    "interview_probes": [
+     "What is the natural boundary in your workload that makes pieces independent enough to process in parallel, and what does forcing that boundary cost?"
+    ],
+    "approach": "Probe keyframes (ffprobe), cut the master into GOP-aligned chunks, enqueue one encode task per (segment, rendition), and run a final concat pass per rendition; key each chunk by segment index so order survives.",
+    "vocab": [
+     "sharding"
+    ]
+   },
+   "beginner_analogy": "Like tearing a long book into chapters and handing one chapter each to a room full of translators, then binding the finished chapters back in order. It only works if you always tear at chapter breaks.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "splitter",
+      "label": "Segmenter",
+      "kind": "process",
+      "lane": "media",
+      "order": 1
+     },
+     {
+      "id": "stitcher",
+      "label": "Stitcher",
+      "kind": "process",
+      "lane": "media",
+      "order": 5
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_readm",
+      "from": "object_store",
+      "to": "splitter",
+      "kind": "payload",
+      "label": "read master"
+     },
+     {
+      "id": "e_fanout",
+      "from": "splitter",
+      "to": "queue",
+      "kind": "control",
+      "label": "N segment tasks"
+     },
+     {
+      "id": "e_seg",
+      "from": "fleet",
+      "to": "stitcher",
+      "kind": "payload",
+      "label": "encoded segs"
+     },
+     {
+      "id": "e_assemble",
+      "from": "stitcher",
+      "to": "ladder",
+      "kind": "payload",
+      "label": "concatenate"
+     }
+    ],
+    "highlight": [
+     "fleet",
+     "e_read"
+    ],
+    "remove": [
+     "e_read",
+     "e_out2"
+    ]
+   }
+  },
+  {
+   "index": 4,
+   "name": "Retries, Dead-Letter, and Idempotent Ids",
+   "problem": {
+    "statement": "At-least-once delivery is a promise with teeth: a worker that leases a segment task and dies before acknowledging will have that task redelivered. Now two encodes of the same segment can race, writing the same output twice or leaving a half-written file, which corrupts the stitched rendition and breaks inv3. And a genuinely poison segment (a corrupt codec, an unsupported pixel format) fails on every worker forever, retrying in an infinite loop that blocks its job and burns compute.",
+    "beginner": "The queue guarantees a task is tried at least once, which means sometimes twice. Two machines encoding the same piece can clash and corrupt the result. And a broken piece that can never succeed will retry forever, jamming the line.",
+    "model": {
+     "id": "idempotency",
+     "application": "Make encoding a segment safe to repeat: a redelivered task must land on the exact same output as the first, so a duplicate is a harmless overwrite. Then bound the retries and set the incurable ones aside."
+    }
+   },
+   "gate": {
+    "question": "The queue may deliver a segment task twice, and some segments can never succeed. Design it so a repeated task cannot corrupt the output, and an unfixable task cannot retry forever. What makes a repeat harmless, and where do the doomed tasks go?",
+    "hint": "If the output location is a pure function of the job and segment, what does a second attempt overwrite? And after N failures, where should a task go so it stops blocking the rest?"
+   },
+   "solution": "Give every segment a deterministic id from (job id, rendition, segment index) and write its output to a content-addressed path derived from that id. A redelivered task recomputes the same path and overwrites atomically, so doing it twice equals doing it once. Retries use exponential backoff up to a fixed limit; past that limit the task is routed to a dead-letter queue instead of retrying forever, where it waits for inspection while the rest of the job proceeds. The job's own id is the idempotency key that ties every attempt back to one intent.",
+   "user_lens": {
+    "gives": "Failures become invisible: a crashed encode is silently retried and a redelivered task cannot corrupt the result, so the ladder that appears is always clean.",
+    "costs": "A dead-lettered segment means a job can stall or come out incomplete, and someone (or something) has to watch the dead-letter queue; silent infinite retries are traded for visible, parked failures."
+   },
+   "tech_lens": {
+    "mechanism": "Deterministic output keys make writes idempotent; at-least-once redelivery plus atomic overwrite yields an exactly-once effect. Bounded retries with backoff cap the cost of transient faults; a dead-letter queue quarantines poison messages.",
+    "principle": "Make retried work idempotent so at-least-once delivery is safe, and give incurable work a dead end so it cannot poison the live path."
+   },
+   "tradeoff": "Exactly-once effect is bought with bookkeeping: deterministic keys, atomic writes, retry limits, and a dead-letter queue you must actually drain, not just create.",
+   "at_scale": "Idempotency is what makes the fleet safely elastic: because any task can be retried or double-delivered without harm, you can run cheap preemptible workers that die often and simply let their work reflow. At scale a steady trickle of segments dead-letters; the queue keeps that trickle from consuming capacity, so the failure rate adds a small constant tax instead of a cascading one.",
+   "defends": [
+    "inv3",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "deterministic segment output key",
+      "software_concept": "idempotency key: same input, same address, harmless retry"
+     },
+     {
+      "mechanism": "dead-letter queue after N retries",
+      "software_concept": "poison-message handling; bounded retry with backoff"
+     }
+    ],
+    "interview_probes": [
+     "If your queue delivers a message twice, what stops the second delivery from double-charging, double-writing, or corrupting state?",
+     "Where do messages that can never succeed go, and who looks at them?"
+    ],
+    "approach": "Derive the output path as hash(job_id + rendition + segment_index) and PUT to it (idempotent write); track attempts, retry with exponential backoff, and after a max-receive count let the queue route the message to a DLQ.",
+    "vocab": [
+     "idempotency-keys",
+     "long-running-tasks"
+    ]
+   },
+   "beginner_analogy": "Like writing each translated chapter into a numbered slot: redo a chapter and it just overwrites its own slot, no mess. And a page nobody can ever translate gets set aside in a 'problems' tray instead of being retried forever.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "dlq",
+      "label": "Dead-letter queue",
+      "kind": "store",
+      "lane": "control",
+      "order": 4
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_ack",
+      "from": "fleet",
+      "to": "queue",
+      "kind": "control",
+      "label": "ack / retry"
+     },
+     {
+      "id": "e_dead",
+      "from": "queue",
+      "to": "dlq",
+      "kind": "control",
+      "label": "poison to DLQ"
+     }
+    ],
+    "highlight": [
+     "fleet",
+     "e_seg"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 5,
+   "name": "The Completion Barrier and Atomic Publish",
+   "problem": {
+    "statement": "Segments and renditions finish at wildly different times: the 240p rung lands in seconds, the 4K rung minutes later, and segments arrive out of order. If the video is flipped to 'ready' the moment the first rung appears, a player will request a 1080p segment that has not been encoded yet and get a 404 mid-playback. A viewer streaming a half-built ladder is inv4 breaking in the worst possible place: in front of the audience.",
+    "beginner": "The different-quality copies finish at different times. If the video is marked ready as soon as the first copy is done, a viewer can ask for a piece that does not exist yet and the playback breaks. It must only go live when every piece is finished.",
+    "model": {
+     "id": "single-source-of-truth",
+     "application": "One job record is the sole authority on 'is this ladder complete?'. It tracks every required segment and rendition, and only it decides when to write the manifest and flip the video live."
+    }
+   },
+   "gate": {
+    "question": "Hundreds of segment encodes finish out of order across a dozen renditions. You must reveal the video to viewers only when the whole ladder exists, never a moment before. What tracks completeness, and what makes 'go live' a single, all-or-nothing step?",
+    "hint": "You need a fan-in point that knows the full set of expected outputs. What flips only when the last one checks in?"
+   },
+   "solution": "A job ledger holds the authoritative set of expected outputs: every (rendition, segment) the ladder requires. Each worker reports its finished segment to the ledger. Only when the ledger sees the complete set, and each output validates, does it write the manifest and atomically flip the video's state to ready. Publication is a single commit gated on completeness, so viewers only ever fetch a manifest whose every referenced segment already exists.",
+   "user_lens": {
+    "gives": "Playback that just works: once a video is visible, every quality and every segment it advertises is really there, so switching bitrate never hits a hole.",
+    "costs": "The video is invisible until the slowest rung finishes, so one straggling 4K segment holds back the whole release even though cheaper renditions were ready long ago."
+   },
+   "tech_lens": {
+    "mechanism": "A durable job ledger records expected-versus-done outputs; completion is a fan-in barrier; publishing the manifest and flipping state is one atomic commit conditioned on the full set being present and valid.",
+    "principle": "Make one record the authority on completeness and commit the result atomically, so nobody ever observes a partial state."
+   },
+   "tradeoff": "Correctness costs time-to-first-play: gating on the whole ladder means the release is only as fast as its slowest rendition, even when a watchable version existed earlier.",
+   "at_scale": "The ledger is a small per-job aggregate, so tracking completeness stays cheap even as one job explodes into thousands of segment outputs. The barrier also localizes failure: an incomplete job stays private and retriable instead of leaking a broken experience, so at high volume the blast radius of any single stuck segment is one unpublished video, not a wave of playback errors.",
+   "defends": [
+    "inv4",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "job ledger of expected vs done",
+      "software_concept": "durable workflow state; a fan-in completion barrier"
+     },
+     {
+      "mechanism": "atomic flip to ready on completion",
+      "software_concept": "commit point / feature flip guarded by an invariant"
+     }
+    ],
+    "interview_probes": [
+     "In a fan-out job, what records the full set of expected results, and what guarantees a consumer never sees the output until all of them exist?"
+    ],
+    "approach": "Persist a job row with a set or count of expected outputs; each worker does an atomic set-insert or decrement on completion; when the set is full, write the manifest and flip a single 'ready' flag in one transaction.",
+    "vocab": [
+     "multi-step-processes",
+     "workflow-engine"
+    ]
+   },
+   "beginner_analogy": "Like a restaurant that will not send a table's order out until every plate for that table is up. One slow dish holds the tray, but no one at the table is left watching the others eat.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "job_state",
+      "label": "Job ledger",
+      "kind": "store",
+      "lane": "control",
+      "order": 6
+     },
+     {
+      "id": "manifest",
+      "label": "Manifest (HLS)",
+      "kind": "store",
+      "lane": "media",
+      "order": 6
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_report",
+      "from": "fleet",
+      "to": "job_state",
+      "kind": "control",
+      "label": "segment done"
+     },
+     {
+      "id": "e_barrier",
+      "from": "job_state",
+      "to": "manifest",
+      "kind": "control",
+      "label": "publish if done"
+     },
+     {
+      "id": "e_serve",
+      "from": "manifest",
+      "to": "viewer",
+      "kind": "payload",
+      "label": "manifest"
+     }
+    ],
+    "highlight": [
+     "ladder",
+     "e_stream"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 6,
+   "name": "Autoscale the Fleet on Queue Depth",
+   "problem": {
+    "statement": "A fixed fleet is wrong at every hour. Sized for the daily peak it sits mostly idle at 3am, burning money on cores encoding nothing. Sized for the average it drowns when a big creator drops a 4K master and a thousand uploads land at once: the queue's oldest-message age climbs from seconds to hours and time-to-ready collapses. The fleet size is a constant in a workload that is anything but.",
+    "beginner": "The number of encoding machines is fixed, but the amount of work swings wildly. Too many machines and you waste money when it is quiet; too few and everything backs up for hours when a rush hits.",
+    "model": {
+     "id": "feedback-loop",
+     "application": "Let the backlog control the fleet. Measure queue depth or the age of the oldest job and feed it back to an autoscaler that adds workers when the backlog grows and removes them when it drains."
+    }
+   },
+   "gate": {
+    "question": "Work arrives in unpredictable spikes and idle machines cost real money. You want the fleet to grow when the backlog grows and shrink toward zero when it clears, on its own. What signal drives it, and what acts on that signal?",
+    "hint": "The queue already knows how far behind you are. What number, fed to a controller, would tell it exactly when to add or drop workers?"
+   },
+   "solution": "An autoscaler watches the queue's depth and oldest-message age and drives the worker count from it: backlog rising past a target adds workers, backlog draining removes them, down toward zero when the queue is empty. Throughput becomes a dial the backlog turns automatically. Under extreme overload, when even the maximum fleet cannot keep up, the system sheds gracefully: encode the lowest bitrate rung first so something is watchable soon, and defer the expensive 4K rungs.",
+   "user_lens": {
+    "gives": "Fast time-to-ready during spikes without a fleet that idles expensively the rest of the day; the system finds its own size.",
+    "costs": "Scaling lag and cost volatility: new workers take time to boot into a spike, a sustained rush means a real compute bill, and scaling to zero adds cold-start delay to the first job after a lull."
+   },
+   "tech_lens": {
+    "mechanism": "A control loop reads queue-depth and oldest-message-age metrics and adjusts a worker autoscaling group toward a target backlog. Load-shedding rules reorder or defer low-priority renditions when the backlog exceeds what any fleet can clear.",
+    "principle": "Close the loop: make the backlog itself the control signal for capacity, and degrade by priority when capacity runs out."
+   },
+   "tradeoff": "Elasticity trades steady-state predictability for responsiveness: you accept boot latency, cold starts, and a variable bill in exchange for never paying for idle capacity or drowning in a spike.",
+   "at_scale": "This is the answer to 'how does throughput scale with worker count': linearly, and now automatically, until a shared downstream limit (object-storage bandwidth, queue throughput, or encoder licenses) becomes the ceiling that adding workers can no longer move. Past that point load-shedding, not more workers, keeps the system serving; the backlog controls the fleet, and priority controls the backlog.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "autoscale on queue depth",
+      "software_concept": "metric-driven horizontal autoscaling (queue-length target)"
+     },
+     {
+      "mechanism": "encode low bitrate first under overload",
+      "software_concept": "load shedding by priority; graceful degradation"
+     }
+    ],
+    "interview_probes": [
+     "What signal would you autoscale your workers on, and why is queue depth usually a better trigger than CPU for a work-queue system?"
+    ],
+    "approach": "Export queue depth or oldest-message-age as a metric and drive a horizontal autoscaler (KEDA, a target-tracking ASG) off it; add a priority field so low-bitrate rungs jump the queue when backlog exceeds a threshold.",
+    "vocab": [
+     "backpressure",
+     "load-shedding"
+    ]
+   },
+   "beginner_analogy": "Like a call centre that pages in extra staff when hold times climb and sends them home when the lines go quiet, and during a flood answers the quick calls first.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "autoscaler",
+      "label": "Autoscaler",
+      "kind": "process",
+      "lane": "control",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_depth",
+      "from": "queue",
+      "to": "autoscaler",
+      "kind": "control",
+      "label": "queue depth"
+     },
+     {
+      "id": "e_scale",
+      "from": "autoscaler",
+      "to": "fleet",
+      "kind": "control",
+      "label": "scale workers"
+     }
+    ],
+    "highlight": [
+     "queue",
+     "fleet"
+    ],
+    "remove": []
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "A worker dies with a segment half-encoded",
+   "scenario": "A spot instance holding an in-progress segment task is reclaimed with no warning, halfway through writing its output.",
+   "reveal": "The layers compose to make this a non-event. The worker never acknowledged, so the queue redelivers the task (inv1); the output path is deterministic, so the retry overwrites the half-written file rather than duplicating it (inv3); and the job ledger never saw that segment check in, so the ladder was never at risk of publishing without it (inv4). Cost: a few wasted CPU-seconds and one redelivery."
+  },
+  {
+   "id": "st2",
+   "title": "One poison segment can never encode",
+   "scenario": "A master contains a stretch with a corrupt or unsupported codec; the segment covering it fails on every worker that tries it.",
+   "reveal": "Bounded retries with backoff try it a few times, then the dead-letter queue quarantines it so it stops burning compute and blocking the queue. The job ledger never completes, so the video stays unpublished (inv4 holds: better invisible than broken), and an operator or a fallback encoder pulls from the DLQ. The failure is parked and visible, not silent or infinite."
+  },
+  {
+   "id": "st3",
+   "title": "A celebrity uploads a two-hour 4K master at peak",
+   "scenario": "The largest possible single job arrives at the busiest moment: hundreds of heavy segments, on top of an already deep queue.",
+   "reveal": "Segmentation turns the one giant job into hundreds of independent tasks (inv2 preserved by keyframe-aligned cuts), the autoscaler sees the depth spike and grows the fleet, and load-shedding encodes the low rungs first so a watchable version appears fast while 4K trails. Throughput scales with the workers added; the ceiling is downstream bandwidth, not any single machine. Time-to-ready stretches but never stalls."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "Never move large payloads through your control plane; keep the bytes in storage and pass references.",
+   "A durable queue turns a burst into a backlog instead of loss, and makes throughput a dial you turn with worker count.",
+   "Break a serial bottleneck at the boundary where the work is genuinely independent, then fan it out to the whole fleet.",
+   "Make retried work idempotent so at-least-once delivery is safe, and give incurable work a dead end so it cannot poison the live path.",
+   "Let one record own completeness and commit the result atomically, so no one ever observes a half-built state.",
+   "Close the loop: make the backlog the control signal for capacity, and shed by priority when capacity runs out."
+  ],
+  "mappings": [
+   {
+    "mechanism": "job queue plus stateless worker fleet",
+    "elsewhere": "Every long-running-task backend: image processing, report generation, CI build farms, ML batch inference."
+   },
+   {
+    "mechanism": "split-encode-stitch on keyframes",
+    "elsewhere": "Map-reduce and any parallel batch job partitioned on a boundary that makes its shards independent."
+   },
+   {
+    "mechanism": "idempotency key plus dead-letter queue",
+    "elsewhere": "Payment processing, webhook delivery, and any at-least-once messaging system."
+   },
+   {
+    "mechanism": "fan-in completion barrier before atomic publish",
+    "elsewhere": "Scatter-gather queries, distributed builds, and two-phase 'stage then flip' deploys."
+   },
+   {
+    "mechanism": "autoscaling on queue depth",
+    "elsewhere": "Serverless concurrency, Kubernetes HPA and KEDA, and elastic thread pools driven by backlog."
+   }
+  ]
+ }
+}

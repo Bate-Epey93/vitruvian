@@ -1,0 +1,713 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "URL shortener",
+  "narrowing": "The core map-and-redirect service: turning a long URL into a short code and sending a click back to the original. Analytics, dashboards, and account management are left out; they hang off this spine but do not shape it.",
+  "ordering_note": "This is not one dated disaster but the standard path a shortener walks as it grows from a weekend project to billions of links. Each layer is forced by the concrete failure the previous state hits next: first correctness of the code, then privacy, then the read storm, then contention, then time, then the single-node ceiling. history_confidence is medium because the mechanisms and their failure modes are canonical and checkable, not because a specific named outage is being retold.",
+  "history_confidence": "medium",
+  "domain": "software"
+ },
+ "essence": {
+  "text": "A URL shortener is a dictionary the whole internet can write to and read from: one small string in, one long string out, forever. It looks like a two-line program, and it is, right up until the read side is a hundred times bigger than the write side, the codes must never collide or be guessable, and there are billions of rows. The entire discipline of the field is hidden in a lookup table.",
+  "beginner": "A URL shortener takes a long web address and gives you a tiny one that redirects to it. Type the short link, land on the original page. The trick is doing that for billions of links without ever sending two people to the wrong place.",
+  "deep_facts": [
+   "Seven base62 characters (a-z, A-Z, 0-9) give 62^7, about 3.5 trillion distinct codes; six characters give 62^6, about 57 billion. The length of the code is the size of the whole namespace.",
+   "The traffic is lopsided: redirects outnumber creations by roughly 100 to 1, so the system is almost entirely a read machine with a small writer bolted on the side.",
+   "If you generate codes by truncating a hash, the birthday bound bites long before you run out of space: in a 62^7 namespace you expect your first collision around 2 million links, not 3.5 trillion.",
+   "The redirect itself is an HTTP status code. A 301 is cached by the browser more or less permanently (cheap, but you can never change or expire the target); a 302 is revalidated (expensive, but the link stays yours to redirect, expire, or measure).",
+   "A monotonic counter plus base62 gives collision-free codes with zero lookups, but hands an attacker a ruler: /1, /2, /3 walks your entire database in order."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Store a mapping from a short code to a long URL, and redirect any request for that code to that URL, cheaply and forever.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Creator",
+    "want": "A short, stable link for a long URL, sometimes a custom one, sometimes one that expires"
+   },
+   {
+    "id": "a2",
+    "name": "Clicker",
+    "want": "To be sent to the real destination instantly, without knowing any of this exists"
+   },
+   {
+    "id": "a3",
+    "name": "Operator",
+    "want": "Serve a redirect for a fraction of a cent, at any scale, without ever sending a click to the wrong place"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "One code means one destination. The system never issues the same code for two different URLs, and a stored code never silently changes meaning."
+   },
+   {
+    "id": "inv2",
+    "text": "A live code redirects to exactly the URL it was created for. An expired or never-issued code redirects nowhere."
+   },
+   {
+    "id": "inv3",
+    "text": "Codes are unguessable: holding one code reveals nothing about any other, and you cannot walk the namespace."
+   },
+   {
+    "id": "inv4",
+    "text": "A valid code keeps resolving fast under read storms; the redirect path stays available when one link goes viral."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Long URL",
+    "note": "The real destination; opaque, up to a couple of kilobytes, supplied by the creator"
+   },
+   {
+    "id": "en2",
+    "name": "Short code",
+    "note": "A few base62 characters; the primary key and the entire user-facing product"
+   },
+   {
+    "id": "en3",
+    "name": "Mapping",
+    "note": "The record code to URL, plus expiry, owner, and creation time; read far more than written"
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Creation: a long URL flows in, a unique short code flows back and the mapping is stored."
+   },
+   {
+    "id": "f2",
+    "text": "Redirect: a short code flows in, the stored URL is looked up, and a redirect flows back to the browser."
+   }
+  ],
+  "constraints": [
+   "The code must be short, so the namespace is finite and every code must be spent carefully.",
+   "Reads dominate writes by about 100 to 1, so the redirect path is where all the money and all the risk live.",
+   "Links are expected to last forever, so the store only grows and old rows never stop being reachable.",
+   "A redirect is worth a fraction of a cent, so every millisecond and every extra database hit on the read path is a cost you cannot afford."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "people",
+    "label": "People"
+   },
+   {
+    "id": "service",
+    "label": "Service"
+   },
+   {
+    "id": "storage",
+    "label": "Storage"
+   },
+   {
+    "id": "control",
+    "label": "Control"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "creator",
+    "label": "Creator",
+    "kind": "actor",
+    "lane": "people",
+    "order": 0
+   },
+   {
+    "id": "clicker",
+    "label": "Clicker",
+    "kind": "actor",
+    "lane": "people",
+    "order": 2
+   },
+   {
+    "id": "app",
+    "label": "App server",
+    "kind": "process",
+    "lane": "service",
+    "order": 1
+   },
+   {
+    "id": "store",
+    "label": "Mapping DB",
+    "kind": "store",
+    "lane": "storage",
+    "order": 2
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_create",
+    "from": "creator",
+    "to": "app",
+    "kind": "payload",
+    "label": "long URL"
+   },
+   {
+    "id": "e_write",
+    "from": "app",
+    "to": "store",
+    "kind": "payload",
+    "label": "store map"
+   },
+   {
+    "id": "e_get",
+    "from": "clicker",
+    "to": "app",
+    "kind": "payload",
+    "label": "GET /code"
+   },
+   {
+    "id": "e_lookup",
+    "from": "app",
+    "to": "store",
+    "kind": "control",
+    "label": "lookup code"
+   },
+   {
+    "id": "e_redirect",
+    "from": "app",
+    "to": "clicker",
+    "kind": "payload",
+    "label": "302 redirect"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "The Code: Count, Don't Guess",
+   "problem": {
+    "statement": "The naive shortener hashes the long URL, takes the first few base62 characters, and hopes. Two problems arrive together. Truncated hashes collide: in a seven-character namespace the birthday bound puts your first collision around two million links, not 3.5 trillion, so every insert now needs a read-check-retry loop that races two concurrent writers straight into the same code. And a hash of the URL means one URL can only ever have one code, so you cannot hand two customers their own private link to the same page.",
+    "beginner": "The first idea is to scramble the long address into a short code with a math function. But two different addresses can accidentally produce the same short code, and then one link overwrites another. As you get more links, these accidents get common fast.",
+    "model": {
+     "id": "single-source-of-truth",
+     "application": "Stop deriving the code from the URL and hoping it is unique. Put one authoritative counter in charge of 'what is the next code', so uniqueness is guaranteed by construction and never has to be checked."
+    }
+   },
+   "gate": {
+    "question": "You need a short code that is never issued twice, without doing a database read to check for collisions on every single creation. What produces a guaranteed-unique code with no lookup at all?",
+    "hint": "What if the code were not computed from the URL, but simply the next number in line, written in a compact alphabet?"
+   },
+   "solution": "Keep one monotonic counter. Each new link takes the next integer, and that integer is encoded in base62 (0-9, a-z, A-Z) to become the code: 1 becomes '1', 125 becomes '21', a billion becomes six characters. Because every id is distinct, every code is distinct, with zero collision checks and zero retries. The counter is the single source of truth for identity; the base62 encoding is just a shorter way to write the same number.",
+   "user_lens": {
+    "gives": "Every link is created instantly and is guaranteed unique. Two customers can shorten the same destination and each gets their own code, because the code comes from the counter, not the URL.",
+    "costs": "The codes are sequential and therefore predictable, and the counter is now one thing the whole system must agree on before anyone can create a link."
+   },
+   "tech_lens": {
+    "mechanism": "A single incrementing integer (a database sequence or an atomic counter) allocates ids; base62 encoding maps each id to a compact string. Uniqueness is a property of the counter, not something verified per write.",
+    "principle": "When you need guaranteed uniqueness, generate from one authoritative source instead of generating-and-checking. Turn a collision problem into a counting problem."
+   },
+   "tradeoff": "You trade the statelessness of hashing for a stateful counter that everyone depends on, and you accept that consecutive codes are adjacent numbers, which the next layer will have to hide.",
+   "at_scale": "One counter handing out one id at a time is a write bottleneck and a single point of failure: at high creation rates every writer serializes through it. The standard fix is to allocate ranges, each app server grabs a block of, say, 1000 ids at once and serves them locally, so the counter is touched a thousand times less often and a brief counter outage just drains buffered blocks instead of halting creation.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "monotonic counter to base62",
+      "software_concept": "auto-increment primary key plus a radix encoding; identity by allocation, not by hashing"
+     },
+     {
+      "mechanism": "range allocation to app servers",
+      "software_concept": "id blocks / ticket servers (the Flickr ticketing pattern), amortizing a central counter across many local allocations"
+     }
+    ],
+    "interview_probes": [
+     "Counter versus hash for the code: what does each cost you, and at what link count does the hash approach start colliding?",
+     "How do you keep issuing unique ids when the single counter is down or is the write bottleneck?"
+    ],
+    "approach": "Encode a monotonically increasing integer into base62 with a simple divide-by-62 loop. Get the integer from a DB sequence or Redis INCR, and hand each app server a range (id_block) so it only talks to the counter once per thousand links.",
+    "vocab": [
+     "relational-db"
+    ]
+   },
+   "beginner_analogy": "Like a bakery ticket dispenser. You do not check whether your number is taken; you just take the next one off the roll. Two people can never hold the same ticket because the roll only prints each number once.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "id_counter",
+      "label": "ID counter",
+      "kind": "process",
+      "lane": "control",
+      "order": 0,
+      "expands_to": "Unique ID generator"
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_nextid",
+      "from": "id_counter",
+      "to": "app",
+      "kind": "control",
+      "label": "next id"
+     }
+    ],
+    "highlight": [
+     "app",
+     "store"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 2,
+   "name": "Hiding the Ruler: Unguessable Codes",
+   "problem": {
+    "statement": "The counter gave clean uniqueness but handed the world a ruler. Codes are sequential, so anyone can request /1, /2, /3 and walk the entire database in order, harvesting every link ever created, private ones included. Worse, the newest code reveals your total link count, and the rate it climbs reveals your business volume to any competitor with a loop and a weekend.",
+    "beginner": "Because codes are just counting numbers turned into text, they are easy to guess. Someone can try the next code, and the next, and read every link anyone ever made, plus figure out exactly how many links you have.",
+    "model": {
+     "id": "trust-boundary",
+     "application": "Treat the code as something handed across the line to untrusted strangers. It must carry no information about the sequence behind it, so scramble the id before it ever leaves the system."
+    }
+   },
+   "gate": {
+    "question": "You must keep uniqueness (no collisions, no lookups) but make consecutive codes look nothing like each other, so no one can enumerate them. How do you scatter a sequence without ever creating a duplicate?",
+    "hint": "You need a function that is one-to-one: every input maps to a different output. What kind of transform reorders a range without merging any two values?"
+   },
+   "solution": "Run the counter's id through a bijective (reversible, one-to-one) permutation before encoding: multiply by a large constant coprime to the namespace and take the modulus, or push it through a small Feistel network. Because the transform is one-to-one, distinct ids still produce distinct codes, so uniqueness is preserved exactly. But 1000 and 1001 now land in wildly different places, so the codes look random and cannot be walked in order.",
+   "user_lens": {
+    "gives": "Links that cannot be enumerated or guessed, and a code space that leaks neither your total count nor your growth rate.",
+    "costs": "The mapping from code to id now depends on a secret transform and its key. Lose or rotate that key carelessly and you can no longer reverse a code, so it becomes one more critical secret to guard."
+   },
+   "tech_lens": {
+    "mechanism": "A bijection over the id space (modular multiplication by a coprime, or a keyed Feistel permutation) applied before base62 encoding; because it is one-to-one, it scatters output while preserving uniqueness.",
+    "principle": "Uniqueness and unpredictability are separate properties. A bijection buys you unpredictability for free without reintroducing the collisions you just eliminated."
+   },
+   "tradeoff": "You give up the human-readable, obviously-ordered code for an opaque one, and you take on a secret permutation that must be stable for the life of every link, since changing it silently breaks decoding.",
+   "at_scale": "The permutation is pure arithmetic, so it costs nothing extra per link no matter how many billions you issue; it does not become a bottleneck. What scales with you is the blast radius of the secret: every historical code depends on it, so it can never be casually rotated, and enumeration defense must be backed by rate limiting on the redirect endpoint so an attacker cannot brute-force the now-sparse namespace.",
+   "defends": [
+    "inv3",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "bijective permutation of the id",
+      "software_concept": "format-preserving encryption / Feistel network: scramble a range without leaving it and without collisions"
+     }
+    ],
+    "interview_probes": [
+     "Sequential ids are enumerable. How do you make codes unguessable without going back to hashing and its collisions?"
+    ],
+    "approach": "Keep the counter, but before encoding, map id to (id * P) mod N where N is the namespace size and P is coprime to N, or run a keyed Feistel round. It is reversible, so decode is the inverse; distinctness is preserved because the map is a bijection.",
+    "vocab": [
+     "rate-limiting"
+    ]
+   },
+   "beginner_analogy": "Like assigning coat-check numbers by shuffling a deck instead of counting up. Everyone still gets a unique tag, but you cannot guess whose coat is next by looking at your own number.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "scrambler",
+      "label": "Scrambler (bijective)",
+      "kind": "process",
+      "lane": "control",
+      "order": 1
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_scramble",
+      "from": "id_counter",
+      "to": "scrambler",
+      "kind": "control",
+      "label": "raw id"
+     },
+     {
+      "id": "e_scrambled",
+      "from": "scrambler",
+      "to": "app",
+      "kind": "control",
+      "label": "scattered code"
+     }
+    ],
+    "highlight": [
+     "id_counter"
+    ],
+    "remove": [
+     "e_nextid"
+    ]
+   }
+  },
+  {
+   "index": 3,
+   "name": "The Read Storm: Cache the Redirect",
+   "problem": {
+    "statement": "Creation is solved, but creation was never the load. Redirects outnumber creations by roughly 100 to 1, and every redirect is currently a database read: look up the code, return the URL. At a few thousand redirects a second the database is already the bottleneck, and a popular link turns a single row into a hotspot that saturates the disk it lives on. You are spending a full database query to answer a question whose answer almost never changes.",
+    "beginner": "Far more people click short links than create them. Right now every click asks the database 'where does this go?'. That is fine for a few clicks, but with millions the database cannot keep up, and clicking gets slow or fails.",
+    "model": {
+     "id": "locality-and-caching",
+     "application": "The code-to-URL mapping is read constantly and changes almost never, the ideal cache candidate. Keep the hot answers in memory right next to the redirect path so the database is barely touched."
+    }
+   },
+   "gate": {
+    "question": "The redirect answer for a given code is the same on the millionth request as the first, yet you are hitting the database every time. Where do you put the answer so a redirect almost never needs the database, and what is the price of doing so?",
+    "hint": "Most traffic concentrates on a small set of hot links. What if the answer lived in memory, keyed by code, and the database were only the fallback?"
+   },
+   "solution": "Put a distributed in-memory cache (Redis or Memcached) in front of the store, keyed by code. On a redirect, check the cache first; on a hit, return the URL without touching the database. On a miss, read the database, populate the cache, then respond. Because the working set of hot links is tiny compared to the whole namespace, hit rates run well above 90 percent, and the database load collapses to misses and writes only.",
+   "user_lens": {
+    "gives": "Redirects served from memory in well under a millisecond, and a system that stays fast even as total links grow into the billions, because only the hot ones need to be fast.",
+    "costs": "A second copy of the truth that can go stale: if a link is deleted or its target changes, the cache may still serve the old answer until it expires or is invalidated."
+   },
+   "tech_lens": {
+    "mechanism": "Cache-aside: read the cache, fall back to the database on a miss, and write the value back into the cache with a time-to-live. Reads are absorbed by memory; the database sees only misses, writes, and cold keys.",
+    "principle": "When reads dwarf writes and answers rarely change, move the answer close to the reader. You pay for the speed in freshness, not in correctness, as long as you bound the staleness."
+   },
+   "tradeoff": "You accept eventual consistency on the read path: for the length of a cache TTL, a redirect can point at a stale target. For a shortener that is usually fine, but it is a real window that expiry and deletion must reckon with.",
+   "at_scale": "Caching is what lets the system scale reads at all: a single database node serves maybe tens of thousands of reads a second, while a cache fleet serves hundreds of thousands, and a CDN can serve the redirect from the edge for the very hottest codes. The ceiling moves from the database to cache memory and to the single hottest key, which the final layer confronts directly.",
+   "defends": [
+    "inv4"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "cache-aside on the redirect path",
+      "software_concept": "read-through cache with TTL; the database is the source of truth, the cache is a disposable accelerator"
+     },
+     {
+      "mechanism": "edge caching of the 302 for hot codes",
+      "software_concept": "CDN in front of the redirect, turning a cross-continent lookup into a same-city one"
+     }
+    ],
+    "interview_probes": [
+     "With a 100 to 1 read-to-write ratio, where does the first bottleneck appear, and what is your cache hit rate likely to be and why?",
+     "301 versus 302 for the redirect: how does that choice interact with your cache, your analytics, and your ability to expire a link?"
+    ],
+    "approach": "Cache-aside keyed by code: GET code from Redis; on miss, read the DB, SET code with a TTL, then return. Keep the cache TTL at or below the record's expiry so expired links cannot outlive their deletion in the cache.",
+    "vocab": [
+     "caching",
+     "distributed-cache",
+     "scaling-reads"
+    ]
+   },
+   "beginner_analogy": "Like a receptionist who memorizes the ten most-asked-for room numbers. Almost every visitor gets an instant answer, and only the rare unusual request sends her to the big directory in the back.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "cache",
+      "label": "Redirect cache",
+      "kind": "store",
+      "lane": "storage",
+      "order": 1,
+      "expands_to": "Distributed cache"
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_cachechk",
+      "from": "app",
+      "to": "cache",
+      "kind": "control",
+      "label": "code?"
+     },
+     {
+      "id": "e_cachehit",
+      "from": "cache",
+      "to": "app",
+      "kind": "payload",
+      "label": "URL (hit)"
+     }
+    ],
+    "highlight": [
+     "store",
+     "e_lookup"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 4,
+   "name": "Custom Aliases: One Namespace, Many Claimants",
+   "problem": {
+    "statement": "Customers want vanity links: not a scrambled code but /launch or /sale. Now humans are choosing codes, and two problems collide. A chosen alias can clash with a generated code, or with the same alias someone else picked a millisecond earlier. Under any real traffic, two creators can submit /launch at the same instant, both check that it is free, and both write, and now one code has two destinations. The counter guaranteed uniqueness precisely because nobody chose; the moment people choose, uniqueness becomes a race.",
+    "beginner": "People want to pick their own short link, like /sale. But two people might pick the same word at the same time, and if you are not careful you save both, so one short link now points at two different pages.",
+    "model": {
+     "id": "mutual-exclusion",
+     "application": "The alias is a shared resource that exactly one creator may claim. Make claiming atomic so that of two simultaneous claimants, one wins and one is cleanly rejected, never both."
+    }
+   },
+   "gate": {
+    "question": "Two users submit the same custom alias at the same moment. A read-then-write ('is it free? yes, take it') lets both succeed. How do you make the claim atomic so exactly one wins?",
+    "hint": "Do not separate the check from the write. Is there a single database operation that means 'create this only if it does not already exist'?"
+   },
+   "solution": "Reserve custom aliases in the same code namespace and claim them with a single atomic conditional write: an INSERT that fails on a unique-key violation, or a put-if-absent / SETNX. There is no separate check step to lose the race in. Of two simultaneous claimants for /launch, the database admits exactly one and rejects the other with a clear 'alias taken'. Generated codes and custom aliases share one uniqueness constraint, so neither can shadow the other.",
+   "user_lens": {
+    "gives": "Memorable, branded links, with an instant honest answer when a name is already taken instead of a silently corrupted link.",
+    "costs": "Good aliases are a land grab: the short, desirable names go fast and never come back, and you inherit a squatting and moderation problem the generated namespace never had."
+   },
+   "tech_lens": {
+    "mechanism": "A uniqueness constraint on the code column plus a conditional insert; the database, not the application, arbitrates the race in one indivisible step.",
+    "principle": "Never split a check from the act it guards. Collapse 'is it free, then take it' into one atomic operation, and let the store be the single arbiter of who wins."
+   },
+   "tradeoff": "You give up the freedom to let generated codes roam the whole namespace, since custom aliases now carve reserved holes out of it, and you take on the human mess of name disputes, reservations, and abuse.",
+   "at_scale": "The conditional write is cheap and local to the shard that owns the code, so it scales as well as the store does; contention only appears on genuinely contested names. The real scaling cost is social and operational: policing a global namespace of human-chosen names (trademarks, abuse, squatting) grows with popularity far faster than the technical cost of the atomic claim.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "atomic conditional claim",
+      "software_concept": "unique constraint + INSERT ... ON CONFLICT, or a compare-and-set / SETNX; the store as race arbiter"
+     }
+    ],
+    "interview_probes": [
+     "Two users claim the same alias in the same millisecond. Walk through why check-then-write is wrong and what single operation fixes it.",
+     "How do custom aliases and generated codes coexist in one namespace without ever colliding?"
+    ],
+    "approach": "Put a unique index on the code column and claim with one conditional write: INSERT ... ON CONFLICT DO NOTHING (SQL) or SETNX (Redis). If it reports zero rows / false, the alias is taken; there is no separate read to race.",
+    "vocab": [
+     "contention",
+     "optimistic-concurrency"
+    ]
+   },
+   "beginner_analogy": "Like engraving your name on a trophy: the engraver does the checking and the engraving in one motion. If two people ask for the same name at once, only the first cut lands and the second person is simply told it is taken.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "alias_guard",
+      "label": "Claim guard",
+      "kind": "process",
+      "lane": "service",
+      "order": 0
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_claim",
+      "from": "creator",
+      "to": "alias_guard",
+      "kind": "payload",
+      "label": "custom alias"
+     },
+     {
+      "id": "e_putif",
+      "from": "alias_guard",
+      "to": "store",
+      "kind": "control",
+      "label": "put-if-absent"
+     }
+    ],
+    "highlight": [
+     "store"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 5,
+   "name": "Time: Links That Must Die",
+   "problem": {
+    "statement": "Links were promised forever, but some must not last. A one-day promo code, a link the creator revokes, a phishing URL you must kill: all must stop redirecting the instant their time is up. Two failures follow if you ignore time. Expired links keep sending clicks to stale or now-dangerous destinations, violating the promise that a code points where it should. And because nothing is ever removed, the store grows without bound, carrying billions of dead rows that will never be clicked again but still cost storage and slow every scan.",
+    "beginner": "Some links should expire, like a coupon that ends tomorrow, or one someone wants taken down. If nothing ever expires, dead links keep working forever and the database fills up with junk that never gets cleaned out.",
+    "model": {
+     "id": "graceful-degradation",
+     "application": "When a link's time is up, degrade it to a clean, safe dead end (a 410 Gone) rather than serving a stale redirect, and reclaim its space lazily so the read path never has to wait on cleanup."
+    }
+   },
+   "gate": {
+    "question": "A link must stop working the moment it expires, even though the answer for it may be sitting in a cache that has not been evicted yet. How do you make sure an expired code never redirects, without scanning billions of rows constantly?",
+    "hint": "Store the expiry with the record and check it where the read already happens. Cleanup can be lazy; correctness cannot."
+   },
+   "solution": "Store an expiry timestamp on each mapping. The read path checks it: an expired record is treated as absent and returns 410 Gone, never a redirect, and expiry is evicted from the cache at the same moment. Keep the cache TTL at or below the record's expiry so a cache hit can never outlive the link. Reclaim space in two ways: lazy deletion (drop the row when an expired code is next requested) and a background sweeper that removes long-dead rows in batches, off the hot path.",
+   "user_lens": {
+    "gives": "Links that reliably stop when they should, revocation that actually takes effect, and a store that does not drown in decades of dead rows.",
+    "costs": "Nothing is truly permanent anymore: every link carries a clock, and a creator who forgets an expiry, or a cache TTL set longer than an expiry, can still see a link work a little past its death or die a little before it should."
+   },
+   "tech_lens": {
+    "mechanism": "Expiry timestamp per record, enforced at read time (expired reads as gone); cache TTL bounded by the record's expiry; reclamation by lazy deletion on access plus a batched background sweep.",
+    "principle": "Enforce time where you already read, and reclaim space where you do not. Correctness of expiry must be synchronous on the read; garbage collection can be lazy and asynchronous."
+   },
+   "tradeoff": "You accept a bounded staleness window (as wide as your cache TTL) in exchange for never scanning the whole store to enforce expiry, and you add a background sweeper that competes for the store's I/O with live traffic.",
+   "at_scale": "Enforcing expiry on read costs nothing extra as links multiply, because it is one comparison on a row you were already fetching. The scaling pressure is the sweep: at billions of rows a naive full scan is impossible, so cleanup must be indexed by expiry time and batched, running against replicas or off-peak so garbage collection never contends with the redirect storm.",
+   "defends": [
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "expiry checked on read, returns 410",
+      "software_concept": "lazy expiration: validate TTL at access time, treat expired as a miss"
+     },
+     {
+      "mechanism": "background sweeper indexed by expiry",
+      "software_concept": "batched garbage collection on a secondary index, kept off the hot path"
+     }
+    ],
+    "interview_probes": [
+     "A link expires but its answer is warm in the cache. What guarantees a clicker still cannot use it, and how wide is the window where they might?",
+     "How do you delete expired rows from a billion-row table without a full scan and without hurting live redirects?"
+    ],
+    "approach": "Add an expires_at column and index it. On read, if now > expires_at treat the code as gone (return 410) and evict it from the cache. Sweep with a ranged, batched delete over the expiry index (DELETE ... WHERE expires_at < now LIMIT N) on a schedule.",
+    "vocab": []
+   },
+   "beginner_analogy": "Like a parking permit on your dashboard. The attendant glances at the date as they walk past (the read-time check); an expired one is void immediately, and the lot is cleared of old tickets in a weekly sweep, not scanned every minute.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "sweeper",
+      "label": "TTL sweeper",
+      "kind": "process",
+      "lane": "control",
+      "order": 2
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_sweep",
+      "from": "sweeper",
+      "to": "store",
+      "kind": "control",
+      "label": "evict expired"
+     }
+    ],
+    "highlight": [
+     "store",
+     "cache"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 6,
+   "name": "Billions: The Single Node Gives Way",
+   "problem": {
+    "statement": "Everything so far assumed one database holding one table. At billions of links that assumption breaks two ways at once. The dataset outgrows any single node's disk and its write throughput, so one machine can neither store nor ingest the whole namespace. And traffic is not uniform: one link in a Super Bowl ad draws millions of redirects a second, and if its cache entry ever expires, every one of those requests stampedes the single database row that owns it, melting the shard it lives on while the rest of the fleet sits idle. The first ceiling is capacity; the second is the hot key.",
+    "beginner": "One database cannot hold billions of links or handle all the clicks. And clicks are uneven: one viral link can get more traffic than everything else combined, overwhelming the one machine that happens to store it while the others do nothing.",
+    "model": {
+     "id": "bottleneck",
+     "application": "Find the two ceilings, total capacity and the single hottest key, and route around each: spread the data across many shards so no one node holds it all, and protect the one row everyone wants so it never becomes the whole system's chokepoint."
+    }
+   },
+   "gate": {
+    "question": "One database cannot hold billions of rows or survive a link that gets millions of hits a second. How do you spread the data so no node holds it all, and how do you keep one viral code from crushing the single shard that owns it?",
+    "hint": "The code is a great shard key: it is random (post-scramble) and every lookup already has it. And the hottest key needs more than sharding: it needs coalescing or replication."
+   },
+   "solution": "Shard the store by code. Because scrambled codes are uniformly distributed, hashing the code to a shard spreads both data and load evenly, and every redirect already carries the exact key it needs, so there are no cross-shard queries. A shard router in front of the store sends each request to the one shard that owns the code. For the hot key, lean on the cache tier: replicate the hottest entries across cache nodes, coalesce concurrent misses so only one request refills the cache on expiry (a stampede lock), and push the very hottest 302s to the CDN edge so most viral traffic never reaches your origin at all.",
+   "user_lens": {
+    "gives": "A system that grows by adding machines instead of hitting a wall, and that shrugs off a viral link because the load is spread, cached, replicated, and pushed to the edge.",
+    "costs": "Operational complexity multiplies: resharding, rebalancing, and per-shard failover to manage, and the hardest single problem in the whole system, the one link that is hotter than everything else, now needs its own dedicated defenses."
+   },
+   "tech_lens": {
+    "mechanism": "Hash-based sharding on the code (uniform because codes are scrambled), a routing layer that maps code to shard, and hot-key mitigation in the cache tier: key replication, request coalescing on miss, and edge caching of the redirect.",
+    "principle": "Scale by partitioning on a key you already hold and that spreads evenly, then treat the hottest key as a separate problem, because averages hide the one item that will actually take you down."
+   },
+   "tradeoff": "Sharding trades a simple single database for a distributed one with rebalancing, hotspots, and no cheap cross-shard queries, and hot-key defenses add layers of cache and edge machinery whose only job is to survive a handful of viral links.",
+   "at_scale": "This is the architecture that actually reaches billions: capacity scales horizontally by adding shards, and consistent hashing keeps a shard addition from reshuffling the whole namespace. Read load scales through cache and CDN, so the origin sees almost nothing. The residual ceiling is always the single hottest key at the instant its cache entry expires, which is why coalescing and edge caching, not more shards, are what keep a viral link from becoming an outage.",
+   "defends": [
+    "inv4",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "hash-shard on the code",
+      "software_concept": "partitioning by a uniformly distributed key; the lookup carries its own shard key, so no scatter-gather"
+     },
+     {
+      "mechanism": "hot-key replication and miss coalescing",
+      "software_concept": "hot-key mitigation: cache replication, single-flight refill, and edge caching of the response"
+     }
+    ],
+    "interview_probes": [
+     "Why is the (scrambled) code a good shard key, and what would go wrong if you sharded on creation time instead?",
+     "A viral link's cache entry expires and a million requests arrive in the same second. Walk through exactly what protects the shard that owns that row."
+    ],
+    "approach": "Shard by hash(code) mod N (or via a consistent-hashing ring so adding a shard moves little), routed by a thin layer that all requests pass through. For the hot key, wrap cache refill in a single-flight lock so only one miss hits the DB, and let the CDN cache the 302 for the hottest codes.",
+    "vocab": [
+     "sharding",
+     "hot-key",
+     "consistent-hashing"
+    ]
+   },
+   "beginner_analogy": "Like a huge post office splitting mail across many sorting rooms by postcode so no one room is buried. But when a single address gets a truckload of letters at once, that room needs extra hands and a copy of its records, because sorting rooms alone do not save you from one wildly popular destination.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "router",
+      "label": "Shard router",
+      "kind": "process",
+      "lane": "service",
+      "order": 2
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_r1",
+      "from": "app",
+      "to": "router",
+      "kind": "control",
+      "label": "lookup"
+     },
+     {
+      "id": "e_r2",
+      "from": "router",
+      "to": "store",
+      "kind": "control",
+      "label": "shard by code"
+     }
+    ],
+    "highlight": [
+     "store",
+     "cache"
+    ],
+    "remove": [
+     "e_lookup"
+    ]
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "A link goes viral mid-flight",
+   "scenario": "A code is put on a Super Bowl ad. Redirects jump from hundreds a second to millions a second in under a minute, all for one code, and at some point its cache entry's TTL expires.",
+   "reveal": "The layered read path holds: the CDN edge serves most of the viral 302s without ever reaching the origin, and the cache serves the rest from memory. The one dangerous instant is TTL expiry, when a million concurrent misses could stampede the single owning shard. Request coalescing (single-flight) lets exactly one miss refill the cache while the rest wait for it, so the shard sees one query, not a million. inv4 holds; the cost is a few milliseconds of queued waiting at the expiry boundary."
+  },
+  {
+   "id": "st2",
+   "title": "Two creators grab the same alias",
+   "scenario": "During a product launch, two teammates paste the same vanity alias, /launch, into the creation form and submit within the same millisecond.",
+   "reveal": "The atomic conditional claim decides it in the store, not the application. The unique constraint admits exactly one INSERT and rejects the other; there is no check-then-write window to lose. One teammate gets the link, the other gets an immediate 'alias taken'. inv1 holds with no corrupted double-mapped code, which a naive read-then-write would have produced under exactly this timing."
+  },
+  {
+   "id": "st3",
+   "title": "The central counter dies during a creation spike",
+   "scenario": "The single id counter goes down while links are being created at peak rate. Without it, the naive design cannot mint a unique code and creation halts.",
+   "reveal": "Range allocation absorbs it. Each app server is holding a pre-allocated block of ids and keeps minting from its local block, so creation continues uninterrupted until blocks drain, buying time to recover the counter. Uniqueness is never at risk because blocks never overlap. This is why you amortize the counter into ranges rather than calling it on every write: it turns a single point of failure into a buffered dependency. Redirects, being pure reads, are entirely unaffected."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "Turn uniqueness into counting: generate ids from one authoritative source instead of generating-and-checking against collisions.",
+   "Uniqueness and unpredictability are different properties; a bijection buys the second without sacrificing the first.",
+   "When reads dwarf writes and answers rarely change, move the answer close to the reader and pay for speed in bounded staleness, not correctness.",
+   "Never split a check from the act it guards; collapse 'is it free, then take it' into one atomic operation arbitrated by the store.",
+   "Enforce time where you already read and reclaim space where you do not: correctness synchronous, garbage collection lazy.",
+   "Averages hide the one item that will take you down; shard on a key that spreads evenly, then treat the hottest key as its own separate problem."
+  ],
+  "mappings": [
+   {
+    "mechanism": "counter plus base62",
+    "elsewhere": "Any system minting unique ids: database sequences, Snowflake ids, ticket servers, and order numbers all trade a hash's collisions for a counter's coordination."
+   },
+   {
+    "mechanism": "cache-aside on the read path",
+    "elsewhere": "Product catalogues, user profiles, DNS, and CDNs all put a rarely-changing answer in front of the source of truth and accept staleness as the price."
+   },
+   {
+    "mechanism": "atomic put-if-absent",
+    "elsewhere": "Username registration, seat and ticket booking, and distributed locks all resolve a claim race in one indivisible operation at the store."
+   },
+   {
+    "mechanism": "shard by a uniform key plus hot-key defenses",
+    "elsewhere": "Feeds, key-value stores, and object storage all partition on a well-spread key and then bolt on special handling for the celebrity row that breaks the average."
+   }
+  ]
+ }
+}

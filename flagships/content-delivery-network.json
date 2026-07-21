@@ -1,0 +1,844 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "Content delivery network",
+  "narrowing": "The read path for cacheable content (static assets and media segments), from a user request to the bytes served, not live-streaming ingest or edge compute.",
+  "ordering_note": "The layers follow the order each failure forces the next, which is also the order real CDNs grew: cache near users, route users to the nearest cache, keep copies fresh, stop a cold-object stampede, shield the origin with a mid-tier, then survive the origin going dark. These are the standard, inevitable failures every CDN hits rather than one company's dated history, so confidence is medium.",
+  "history_confidence": "medium",
+  "domain": "software"
+ },
+ "essence": {
+  "text": "A CDN is a copy of the internet's popular half, pre-positioned within a few milliseconds of almost everyone. It turns one distant, expensive origin into thousands of nearby, cheap ones, and then spends its whole life paying the one bill that buys: every copy might be wrong the instant the original changes.",
+  "beginner": "A CDN keeps copies of websites, images, and videos on computers close to you, so pages load fast and the one original server far away does not get crushed when millions of people show up.",
+  "deep_facts": [
+   "A round trip from Europe to a US server costs roughly 100 to 150 ms of pure distance. Light in fiber is the ceiling, so the only way to be faster is to be closer.",
+   "Large CDNs run caches in hundreds of cities. A cache hit is often served from within your own metro area in a few milliseconds, never touching the origin.",
+   "CDNs routinely serve well over 90% of requests from cache, so a busy origin sees only a small fraction of the traffic aimed at it.",
+   "Cache invalidation is half of a famous joke about the two hard problems in computer science; CDNs mostly dodge it by versioning URLs, so a change becomes a new object instead of an update to an old one.",
+   "When a hot object is cold or expires, thousands of simultaneous misses can hit the origin in the same instant, a thundering herd, so CDNs collapse them into a single origin fetch."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Serve content to users worldwide as if the origin were next door, while the origin behind it stays small, cheap, and un-melted.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Reader",
+    "want": "The content, fast, correct, and available, without knowing or caring where it came from"
+   },
+   {
+    "id": "a2",
+    "name": "Publisher",
+    "want": "Global reach without their origin melting, plus control over exactly what is cached and when it updates"
+   },
+   {
+    "id": "a3",
+    "name": "CDN operator",
+    "want": "A high cache-hit ratio, low origin egress cost, and every PoP healthy and near its users"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "The bytes served for a URL match the version the origin published for it: never a wrong or corrupted object."
+   },
+   {
+    "id": "inv2",
+    "text": "A cached copy is never served past its freshness policy while the origin is reachable, and never after an explicit purge."
+   },
+   {
+    "id": "inv3",
+    "text": "Origin load stays bounded no matter how many edges or users read: the origin is never stampeded."
+   },
+   {
+    "id": "inv4",
+    "text": "A single failure, a dead PoP or an unreachable origin, never cuts users off from content that can still be served from a copy."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Content object",
+    "note": "The cacheable thing (image, media segment, page), identified by a cache key derived from its URL"
+   },
+   {
+    "id": "en2",
+    "name": "Edge PoP",
+    "note": "A point of presence: cache servers in a city, close to a population of users"
+   },
+   {
+    "id": "en3",
+    "name": "Regional cache",
+    "note": "A larger, warmer mid-tier cache that shields the origin from the edge fleet"
+   },
+   {
+    "id": "en4",
+    "name": "Origin",
+    "note": "The authoritative source of the content; the single source of truth every copy answers to"
+   },
+   {
+    "id": "en5",
+    "name": "Freshness metadata",
+    "note": "TTL, Cache-Control, and ETag: the rules that say how long a copy may live and how to revalidate it"
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Content flows outward from origin, through regional and edge caches, to users."
+   },
+   {
+    "id": "f2",
+    "text": "Requests flow inward from users; on a miss, only as far inward as the nearest copy, and rarely all the way to origin."
+   },
+   {
+    "id": "f3",
+    "text": "Freshness and invalidation signals flow outward from the publisher to every cached copy."
+   }
+  ],
+  "constraints": [
+   "The speed of light in fiber sets a hard latency floor: a cross-continent round trip costs over 100 ms no matter how good the code is.",
+   "Origin bandwidth and compute are finite and expensive, and egress is metered per byte.",
+   "Caches have finite memory, so not everything fits; cold and unpopular objects are evicted and must be re-fetched.",
+   "A cache is a copy, and a copy can be wrong the instant the original changes."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "users",
+    "label": "Users"
+   },
+   {
+    "id": "cache",
+    "label": "Cache tier"
+   },
+   {
+    "id": "control",
+    "label": "Control"
+   },
+   {
+    "id": "source",
+    "label": "Source"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "user_a",
+    "label": "User · Tokyo",
+    "kind": "actor",
+    "lane": "users",
+    "order": 0
+   },
+   {
+    "id": "user_b",
+    "label": "User · Berlin",
+    "kind": "actor",
+    "lane": "users",
+    "order": 1
+   },
+   {
+    "id": "origin",
+    "label": "Origin server",
+    "kind": "store",
+    "lane": "source",
+    "order": 5,
+    "expands_to": "Object storage"
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_req_a",
+    "from": "user_a",
+    "to": "origin",
+    "kind": "control",
+    "label": "requests"
+   },
+   {
+    "id": "e_req_b",
+    "from": "user_b",
+    "to": "origin",
+    "kind": "control",
+    "label": "requests"
+   },
+   {
+    "id": "e_cont_a",
+    "from": "origin",
+    "to": "user_a",
+    "kind": "payload",
+    "label": "content"
+   },
+   {
+    "id": "e_cont_b",
+    "from": "origin",
+    "to": "user_b",
+    "kind": "payload",
+    "label": "content"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "The Edge Cache: Put a Copy Near the User",
+   "problem": {
+    "statement": "One origin server, users on every continent. Every request, even for the same unchanging logo served a million times, crosses the planet to the same machine. Latency is bad, and the origin's bandwidth and CPU are a hard ceiling: a popular launch can melt an origin while the content itself never changed once.",
+    "beginner": "There is one server, maybe in Virginia, and everyone in the world reads from it. It is slow for far-away users, and the server drowns when a lot of people show up at once, even though they all want the same file.",
+    "model": {
+     "id": "locality-and-caching",
+     "application": "Most demand is repeated reads of the same objects, so keep a copy of each object close to where it is wanted and turn a far, slow, expensive origin read into a near, fast, cheap cache read."
+    }
+   },
+   "gate": {
+    "question": "One origin, users worldwide, and the same handful of files requested over and over. You cannot move the origin closer to everyone, and you cannot beat the speed of light. What do you put between the user and the origin?",
+    "hint": "If the same bytes are read a million times and rarely change, you should have to fetch them from far away at most once."
+   },
+   "solution": "A cache server at the network edge, close to users. On the first request for an object it misses, fetches from origin, and stores the bytes keyed by the request URL; every later request for that key is served locally without touching the origin. This is cache-aside, moved out to the edge of the network.",
+   "user_lens": {
+    "gives": "Pages and media load in milliseconds instead of hundreds; the far server stops being felt at all.",
+    "costs": "You may be handed a copy, not the live original. The first staleness enters the system the moment the edge keeps bytes the origin has since changed."
+   },
+   "tech_lens": {
+    "mechanism": "A reverse-proxy cache keyed by URL. Miss: fetch from origin, store with a lifetime, serve. Hit: serve from local memory or disk, origin untouched.",
+    "principle": "Distance is latency and repetition is opportunity: cache the repeated read next to the demand and pay the long trip at most once per object per edge."
+   },
+   "tradeoff": "Every cached copy is a bet that the original has not changed since you stored it; the price of speed is potential staleness.",
+   "at_scale": "Read capacity now scales with the number of edges, not the origin: a hot object is served in parallel from every PoP at cache speed, so a million reads a second becomes a million local hits and a handful of origin fetches. The ceiling moves from origin throughput to edge memory and the hit ratio; a low hit ratio (a long tail against a tiny cache) pushes load straight back to the origin.",
+   "defends": [
+    "inv3",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "edge cache-aside",
+      "software_concept": "read-through / cache-aside cache in front of a slow backing store"
+     },
+     {
+      "mechanism": "URL as cache key",
+      "software_concept": "content-addressed keying: the request is its own lookup key"
+     }
+    ],
+    "interview_probes": [
+     "What fraction of your reads are the same objects requested over and over, and what would caching them at the edge do to origin load?"
+    ],
+    "approach": "Start here: put a reverse proxy (Varnish or NGINX) in front of the origin, keyed by the request URL. On a miss, fetch and store the bytes with a TTL; on a hit, serve from the local store. In code it is a get-or-compute over a key/value store: cache.get(url) else fill(url).",
+    "vocab": [
+     "caching",
+     "scaling-reads"
+    ]
+   },
+   "beginner_analogy": "Like a neighborhood library branch that keeps copies of the popular books, so you do not travel to the national archive for every read.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "edge_a",
+      "label": "Edge · Asia",
+      "kind": "store",
+      "lane": "cache",
+      "order": 2
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_ua_e",
+      "from": "user_a",
+      "to": "edge_a",
+      "kind": "control",
+      "label": "request"
+     },
+     {
+      "id": "e_ub_e",
+      "from": "user_b",
+      "to": "edge_a",
+      "kind": "control",
+      "label": "request"
+     },
+     {
+      "id": "e_ea_ua",
+      "from": "edge_a",
+      "to": "user_a",
+      "kind": "payload",
+      "label": "cached"
+     },
+     {
+      "id": "e_ea_ub",
+      "from": "edge_a",
+      "to": "user_b",
+      "kind": "payload",
+      "label": "cached"
+     },
+     {
+      "id": "e_miss",
+      "from": "edge_a",
+      "to": "origin",
+      "kind": "control",
+      "label": "on miss"
+     },
+     {
+      "id": "e_fill",
+      "from": "origin",
+      "to": "edge_a",
+      "kind": "payload",
+      "label": "fill"
+     }
+    ],
+    "highlight": [
+     "origin",
+     "e_cont_a",
+     "e_cont_b"
+    ],
+    "remove": [
+     "e_req_a",
+     "e_req_b",
+     "e_cont_a",
+     "e_cont_b"
+    ]
+   }
+  },
+  {
+   "index": 2,
+   "name": "Geographic Routing: Send Each User to Their Nearest Edge",
+   "problem": {
+    "statement": "One edge cache helps the users near it and nobody else. Put caches in many cities and a new problem appears: a browser in Berlin has no idea an edge sits two miles away and will happily open a connection to the cache in Tokyo. Copies near users are worthless if requests never find the near one, and a dead PoP must not swallow the users routed to it.",
+    "beginner": "You put caches in lots of cities, but how does someone's phone know which one is closest? If it picks the wrong one, or one that is broken, they are back to slow, or an error.",
+    "model": {
+     "id": "feedback-loop",
+     "application": "Continuously sense which PoP is nearest and healthy for each user and steer the request there, withdrawing any PoP that fails so traffic reroutes itself."
+    }
+   },
+   "gate": {
+    "question": "You have caches in fifty cities, all holding the same content. A user's device must reach the closest healthy one automatically, with no configuration, and re-route within seconds if that PoP goes dark. How do you deliver the right address?",
+    "hint": "The user has to resolve a name or an address before the first byte. What if the answer to 'where is this content?' depended on who was asking and which PoPs were alive?"
+   },
+   "solution": "Two cooperating tricks. GeoDNS answers a lookup with the address of the PoP nearest the resolver. Anycast announces one IP address from every PoP at once and lets the internet's own routing carry each user to the topologically closest one. Health checks withdraw a failed PoP from DNS and BGP, so requests reroute to the next-nearest within seconds.",
+   "user_lens": {
+    "gives": "Every user reaches a cache in or near their own city without choosing or configuring anything, and a PoP outage is invisible because they are quietly moved to the next one.",
+    "costs": "'Nearest' is a guess from coarse signals (resolver location, network topology), so some users get routed to a surprisingly far PoP, and DNS caching means a withdrawal can take a while to reach everyone."
+   },
+   "tech_lens": {
+    "mechanism": "GeoDNS resolves by client location; anycast lets routing choose the nearest of many identical IPs; health probes drive automatic withdrawal and failover.",
+    "principle": "Make proximity and liveness a routing decision, not a fixed address: resolve 'which copy?' per request from live signals, and let failure reroute traffic by itself."
+   },
+   "tradeoff": "The routing map is only as good as its inputs and only as fresh as DNS TTLs allow; you trade exactness and instant failover for a decentralized system that needs no central dispatcher.",
+   "at_scale": "This is how the system spans the planet without a bottleneck: no central router sees every request; each user is resolved locally and routing is distributed across DNS and BGP. Adding a region is just announcing the same anycast address from one more place. The ceiling is DNS TTL granularity and the coarseness of geolocation, not any single component's throughput.",
+   "defends": [
+    "inv4"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "anycast + GeoDNS",
+      "software_concept": "location-aware load balancing / service discovery"
+     },
+     {
+      "mechanism": "health-check withdrawal",
+      "software_concept": "failover: remove unhealthy nodes from the pool automatically"
+     }
+    ],
+    "interview_probes": [
+     "How does a client discover the nearest healthy replica, and how fast does traffic move off a replica that just died?"
+    ],
+    "approach": "Start here: run GeoDNS that returns the closest PoP for the resolver's region, and announce one anycast IP from every PoP; attach health checks that pull a PoP out of DNS and BGP on failure. Model it as a routing table from (client region) to nearest live PoP, refreshed by health probes.",
+    "vocab": [
+     "geo-distribution",
+     "load-balancing"
+    ]
+   },
+   "beginner_analogy": "Like a national helpline that connects you to the branch in your own city automatically, and reroutes you if that branch's line is down.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "edge_b",
+      "label": "Edge · EU",
+      "kind": "store",
+      "lane": "cache",
+      "order": 2
+     },
+     {
+      "id": "router",
+      "label": "Geo router",
+      "kind": "process",
+      "lane": "control",
+      "order": 1
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_route_a",
+      "from": "router",
+      "to": "edge_a",
+      "kind": "control",
+      "label": "Tokyo → Asia"
+     },
+     {
+      "id": "e_route_b",
+      "from": "router",
+      "to": "edge_b",
+      "kind": "control",
+      "label": "Berlin → EU"
+     },
+     {
+      "id": "e_ub_eb",
+      "from": "user_b",
+      "to": "edge_b",
+      "kind": "control",
+      "label": "request"
+     },
+     {
+      "id": "e_eb_ub",
+      "from": "edge_b",
+      "to": "user_b",
+      "kind": "payload",
+      "label": "cached"
+     },
+     {
+      "id": "e_miss_b",
+      "from": "edge_b",
+      "to": "origin",
+      "kind": "control",
+      "label": "on miss"
+     }
+    ],
+    "highlight": [
+     "e_ub_e",
+     "e_ea_ub",
+     "user_b"
+    ],
+    "remove": [
+     "e_ub_e",
+     "e_ea_ub"
+    ]
+   }
+  },
+  {
+   "index": 3,
+   "name": "TTL and Invalidation: Copies That Know They Can Be Wrong",
+   "problem": {
+    "statement": "A cache is a copy, and the origin keeps changing. Publish a fix, a price change, a corrected headline, and every edge still serves yesterday's bytes until something tells it not to. Cache forever and you are fast but wrong; never cache and you are correct but you have thrown the CDN away. The hard case is a copy that must be dropped the instant the publisher says so.",
+    "beginner": "The copies can go out of date. If the site changes but the caches keep the old version, people see stale pages. But if you never keep copies, the CDN is pointless. You need a rule for how long a copy may live, and a way to say 'drop it now.'",
+    "model": {
+     "id": "single-source-of-truth",
+     "application": "The origin is the one authoritative version; every cached copy is subordinate and must carry an expiry and obey a purge, so when copies and origin disagree the origin always wins."
+    }
+   },
+   "gate": {
+    "question": "The origin's content changes on its own schedule and the edges hold copies. Design the rules that decide how long a copy may be served and how the publisher forces a copy to be dropped immediately, without the origin having to track every edge that ever cached it.",
+    "hint": "Two mechanisms, not one: a default that expires copies on a timer, and an explicit override for 'this exact object, now.'"
+   },
+   "solution": "Each object carries a TTL from the origin's Cache-Control headers: serve it locally until it expires, then revalidate with the origin (a cheap 'still good?' that returns 304 Not Modified or fresh bytes). For 'now,' an explicit purge is pushed to every PoP to evict a key on demand. And the escape hatch that dodges invalidation entirely: version the URL (style.v7.css), so a change is a new key, never a stale one.",
+   "user_lens": {
+    "gives": "Content that is fast and bounded-fresh: you see updates within the TTL automatically, and critical changes (a pulled article, a rotated key) can be forced everywhere at once.",
+    "costs": "A visible freshness window: for up to the TTL you may be served a copy the origin has already changed, and a global purge is a blunt, expensive event that briefly sends misses back to the origin."
+   },
+   "tech_lens": {
+    "mechanism": "Per-object TTL via Cache-Control and Expires; conditional revalidation with ETag and If-None-Match returning 304; a purge API that fans an eviction out to all PoPs; content versioning to turn updates into new keys.",
+    "principle": "Keep one source of truth and make every copy subordinate to it: give copies an expiry so staleness is bounded by default, and a purge so it can be revoked on command."
+   },
+   "tradeoff": "You choose per object between freshness and origin load: short TTLs cut staleness but multiply revalidations, long TTLs cut origin traffic but widen the stale window. No setting is both cheap and always-fresh.",
+   "at_scale": "TTLs are what keep origin load flat as traffic grows: a one-hour TTL caps revalidations for an object at roughly one per edge per hour, no matter how many millions read it. Purges are the opposite: a global invalidation is O(number of PoPs) and briefly turns every edge into a miss, so a mass purge is the one operation that can stampede the origin, which is exactly what the next layer must survive.",
+   "defends": [
+    "inv2",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "TTL + revalidation",
+      "software_concept": "cache expiry with conditional GET (ETag / If-None-Match, 304 Not Modified)"
+     },
+     {
+      "mechanism": "URL versioning",
+      "software_concept": "immutable content addressing to sidestep invalidation entirely"
+     }
+    ],
+    "interview_probes": [
+     "How do you bound how stale a cached value can be, and how do you force a specific key to drop everywhere immediately?"
+    ],
+    "approach": "Start here: store each value with an expiry timestamp and an ETag; serve while fresh, and on expiry send a conditional GET (If-None-Match) so an unchanged object costs a 304, not a refetch. For hard invalidation keep a purge endpoint that deletes a key across nodes; prefer versioned keys so updates are new entries.",
+    "vocab": [
+     "caching",
+     "eventual-consistency"
+    ]
+   },
+   "beginner_analogy": "Like a milk carton with a use-by date: you trust it until then, and a recall notice can pull a specific batch off every shelf at once.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "invalidator",
+      "label": "TTL / purge",
+      "kind": "process",
+      "lane": "control",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_purge_a",
+      "from": "invalidator",
+      "to": "edge_a",
+      "kind": "control",
+      "label": "purge / TTL"
+     },
+     {
+      "id": "e_purge_b",
+      "from": "invalidator",
+      "to": "edge_b",
+      "kind": "control",
+      "label": "purge / TTL"
+     },
+     {
+      "id": "e_upd",
+      "from": "origin",
+      "to": "invalidator",
+      "kind": "control",
+      "label": "content changed"
+     }
+    ],
+    "highlight": [
+     "edge_a",
+     "edge_b"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 4,
+   "name": "Request Coalescing: Surviving the Thundering Herd",
+   "problem": {
+    "statement": "A popular object goes cold, its TTL expires, or a purge drops it everywhere at the same instant. Now a single edge takes ten thousand simultaneous requests for a key it does not have, and, naively, fires ten thousand identical fetches at the origin. Multiply by every PoP and one expiry becomes a self-inflicted denial of service on the origin. The stampede is caused by the cache, not the users.",
+    "beginner": "Imagine a hugely popular video's copy expires at midnight. The instant it does, a flood of viewers all miss at once, and the cache asks the origin for the same file thousands of times in the same second. The origin falls over, not because the file is big, but because everyone asked at the exact same moment.",
+    "model": {
+     "id": "mutual-exclusion",
+     "application": "On a miss for a key, let exactly one request hold the right to fetch from origin while every other request for that same key waits for its result, so concurrent misses collapse into a single origin read."
+    }
+   },
+   "gate": {
+    "question": "Ten thousand requests hit one edge for the same missing key in the same millisecond. You must fetch it from origin, but you must not fetch it ten thousand times. What do you do with requests 2 through 10,000 while the first one is in flight?",
+    "hint": "Only one fetch per key should be allowed to exist at a time. What can the other requests wait on?"
+   },
+   "solution": "Request coalescing, also called single-flight: a per-key in-flight lock at the edge. The first miss for a key acquires the lock and fetches from origin; every concurrent request for that same key blocks on the in-flight fetch and is served from its result when it lands. Ten thousand misses become one origin request and 9,999 waiters. TTL jitter spreads expiries so keys do not all fall due together.",
+   "user_lens": {
+    "gives": "Even a cold, wildly popular object stays available and the origin survives its moment of fame; you wait for one fetch, not for an overloaded origin.",
+    "costs": "A brief serialized wait on the first miss: requests 2 through N pause until the single fetch completes, and if that one fetch is slow, all of them feel it."
+   },
+   "tech_lens": {
+    "mechanism": "A per-key mutex or shared promise keyed by cache key; the winner fetches, the losers await the shared result; combined with TTL jitter and often serve-stale-while-revalidate so the old copy covers the refresh.",
+    "principle": "Deduplicate concurrent work on the same key: make the expensive operation single-flight so N simultaneous demands cost one execution."
+   },
+   "tradeoff": "You trade a little latency on the first miss (everyone waits on one fetch) and some per-key locking machinery for protection against the origin-melting stampede.",
+   "at_scale": "This is what makes cache misses safe at scale: without it, origin load scales with concurrent misses (unbounded); with it, origin load per object is capped at one fetch per edge per fill, however many millions miss at once. The residual load is O(number of edges) simultaneous fetches, which is exactly the fan-in the regional tier attacks next.",
+   "defends": [
+    "inv3"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "single-flight in-flight lock",
+      "software_concept": "request coalescing / dogpile prevention with a per-key lock"
+     },
+     {
+      "mechanism": "TTL jitter",
+      "software_concept": "randomized expiry to avoid synchronized cache expiration"
+     }
+    ],
+    "interview_probes": [
+     "When a hot key expires and a thousand requests miss at once, how many times do you hit the backing store, and why not a thousand?"
+    ],
+    "approach": "Start here: keep a map from key to in-flight Promise or Future. The first miss inserts a promise and does the fetch; concurrent misses find the promise and await it instead of fetching. Add random jitter to each TTL so popular keys do not expire in lockstep.",
+    "vocab": [
+     "hot-key",
+     "distributed-lock"
+    ]
+   },
+   "beginner_analogy": "Like one person volunteering to make the coffee run for the whole office: everyone else writes down their order and waits, instead of ten people driving to the same cafe.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "lock",
+      "label": "Coalescer",
+      "kind": "process",
+      "lane": "control",
+      "order": 4
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_coal_a",
+      "from": "edge_a",
+      "to": "lock",
+      "kind": "control",
+      "label": "miss"
+     },
+     {
+      "id": "e_coal_b",
+      "from": "edge_b",
+      "to": "lock",
+      "kind": "control",
+      "label": "miss"
+     },
+     {
+      "id": "e_lock_o",
+      "from": "lock",
+      "to": "origin",
+      "kind": "control",
+      "label": "single fetch"
+     }
+    ],
+    "highlight": [
+     "e_miss",
+     "e_miss_b",
+     "origin"
+    ],
+    "remove": [
+     "e_miss",
+     "e_miss_b"
+    ]
+   }
+  },
+  {
+   "index": 5,
+   "name": "The Regional Shield: A Mid-Tier Between Edge and Origin",
+   "problem": {
+    "statement": "Coalescing caps each edge at one fetch per object, but a big CDN has hundreds of edges. On a cold object every one of them still misses independently and every one sends its single fetch to the origin at once. The origin now sees hundreds of requests for one object, and small edge caches, short on memory, evict long-tail content constantly, so the miss rate stays high. The origin's ingress is the last shared bottleneck.",
+    "beginner": "There are hundreds of edge caches. Even if each one asks the origin only once, hundreds of 'once's still land on the origin together. And small edge caches cannot hold everything, so they keep having to ask. The origin is still doing too much.",
+    "model": {
+     "id": "bottleneck",
+     "application": "The origin's request rate is the governing constraint, and it grows with the number of edges; insert a middle caching layer so the origin sees requests proportional to a handful of regions, not to every edge in the world."
+    }
+   },
+   "gate": {
+    "question": "A cold object makes all several hundred of your edges miss and fetch from origin in the same window. Coalescing already made it one fetch per edge. How do you make the origin see far fewer than one fetch per edge, without giving every edge a giant cache?",
+    "hint": "What if edges did not fetch from the origin at all, but from a smaller number of larger caches that do?"
+   },
+   "solution": "A regional cache (a mid-tier shield) between the edges and the origin. Edges in a region fetch from their regional parent, which coalesces their misses and holds a much larger, warmer cache; only the regional tier talks to the origin. Now the origin sees at most one fetch per region per object, edges get fast fills from a nearby parent, and the big regional cache keeps warm the long tail that the little edges could not. This is a cache hierarchy: edge, then regional, then origin.",
+   "user_lens": {
+    "gives": "Higher hit ratios and faster misses (a miss is filled from a nearby region, not across the planet), and an origin that barely notices global demand.",
+    "costs": "Another hop and another layer to keep consistent: a purge now has to reach both edge and regional tiers, and a poorly placed regional cache adds latency to the very miss path it was meant to shorten."
+   },
+   "tech_lens": {
+    "mechanism": "Hierarchical caching with request coalescing at each tier; consistent hashing routes each key to a specific regional parent so an object has one home per region, maximizing hit ratio and dedup.",
+    "principle": "Break a fan-in bottleneck by inserting an aggregation tier: turn O(edges) load into O(regions) load with a warmer intermediate cache."
+   },
+   "tradeoff": "You buy origin protection and a higher hit ratio with added latency on some misses, more infrastructure to run, and a harder invalidation story spread across multiple tiers.",
+   "at_scale": "This is the layer that lets the origin stay small while the edge fleet grows without bound: origin request rate becomes roughly (objects times regions divided by TTL) instead of scaling with edge count or user count. Add more edges and the origin does not feel them; only adding regions moves origin load. Consistent hashing pins each object to one regional owner, so adding a regional node reshuffles almost nothing.",
+   "defends": [
+    "inv3"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "regional shield tier",
+      "software_concept": "multi-tier cache hierarchy / origin shielding"
+     },
+     {
+      "mechanism": "key to regional parent",
+      "software_concept": "consistent hashing to pin a key to one cache owner"
+     }
+    ],
+    "interview_probes": [
+     "Your origin load grows linearly with the number of edge caches. Where do you put a tier so it grows with regions instead?"
+    ],
+    "approach": "Start here: give each region one shielding cache and route edge misses to it by consistent-hashing the cache key to a regional node; only that tier fetches from origin. Each tier runs the same single-flight coalescing, so misses funnel down and collapse at every level.",
+    "vocab": [
+     "consistent-hashing",
+     "scaling-reads"
+    ]
+   },
+   "beginner_analogy": "Like a regional warehouse between the corner shops and the factory: shops restock from the nearby warehouse, and only the warehouse ever calls the factory.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "regional",
+      "label": "Regional cache",
+      "kind": "store",
+      "lane": "cache",
+      "order": 3,
+      "expands_to": "Distributed cache"
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_lock_reg",
+      "from": "lock",
+      "to": "regional",
+      "kind": "control",
+      "label": "fetch via shield"
+     },
+     {
+      "id": "e_reg_fill_a",
+      "from": "regional",
+      "to": "edge_a",
+      "kind": "payload",
+      "label": "fill"
+     },
+     {
+      "id": "e_reg_fill_b",
+      "from": "regional",
+      "to": "edge_b",
+      "kind": "payload",
+      "label": "fill"
+     },
+     {
+      "id": "e_reg_o",
+      "from": "regional",
+      "to": "origin",
+      "kind": "control",
+      "label": "miss → origin"
+     },
+     {
+      "id": "e_o_reg",
+      "from": "origin",
+      "to": "regional",
+      "kind": "payload",
+      "label": "fill"
+     }
+    ],
+    "highlight": [
+     "origin",
+     "e_lock_o"
+    ],
+    "remove": [
+     "e_lock_o",
+     "e_fill"
+    ]
+   }
+  },
+  {
+   "index": 6,
+   "name": "Serving Through an Origin Outage",
+   "problem": {
+    "statement": "Every layer so far still ends at the origin: a miss, an expiry, or a revalidation eventually needs it. So what happens when the origin is down, overloaded, or unreachable? Naively, an expired object cannot be revalidated, a miss cannot be filled, and the edge returns an error, so the origin's bad day becomes an outage for users worldwide, even for content sitting right there in the cache, merely expired.",
+    "beginner": "Everything still depends on the origin being reachable at some point. If the origin goes down, the caches cannot check for updates or get new files, and users get errors, even for pages the cache already has but has marked 'expired.' The worst part: the content is right there, just past its date.",
+    "model": {
+     "id": "graceful-degradation",
+     "application": "When the origin is unreachable, choose to serve slightly stale content over serving nothing: let the cache fall back to its last known-good copy and keep the site up, degraded but alive."
+    }
+   },
+   "gate": {
+    "question": "The origin is completely down. An edge holds an expired copy of the page a user wants. The strict rule says 'expired, so revalidate before serving,' but the origin cannot answer. What should the edge do, and how does it decide it is allowed to?",
+    "hint": "An expired copy is not a useless copy. What is better for the user: an error, or yesterday's page while the source is unreachable?"
+   },
+   "solution": "Serve-stale on error. stale-while-revalidate lets the edge serve the expired copy instantly and refresh in the background; stale-if-error lets it keep serving that copy when the origin returns errors or times out. A circuit breaker stops edges from hammering a dead origin: fail fast, back off, then probe. And origin redundancy (multiple origins behind health-checked failover) removes the single origin as a single point of failure. Availability is chosen over strict freshness exactly when the origin cannot be reached.",
+   "user_lens": {
+    "gives": "The site stays up through an origin outage: users keep getting content, cache-fresh where possible and gracefully stale where not, instead of a wall of errors.",
+    "costs": "During an outage you may be served visibly out-of-date content with no way to get the newest version, and a truly uncached, never-before-seen object still fails, because there is no copy to fall back to."
+   },
+   "tech_lens": {
+    "mechanism": "stale-while-revalidate and stale-if-error directives; circuit breakers around origin fetches; multiple origins with health-checked failover; the cache's last-known-good copy as the fallback of record.",
+    "principle": "Degrade, do not collapse: when the source of truth is unreachable, keep serving the last good copy and choose availability over freshness on purpose."
+   },
+   "tradeoff": "You trade strict freshness for availability during failures, and accept that the freshness guarantee weakens exactly when you can least verify it: the classic availability-over-consistency choice under a partition.",
+   "at_scale": "This is what decouples user-facing availability from origin availability: with high hit ratios and serve-stale, a total origin outage still lets the CDN serve the overwhelming majority of traffic from cache, so origin uptime stops being the ceiling on site uptime. The residual risk concentrates in cold and uncacheable objects, which is why keeping the long tail warm (the regional tier) directly widens what survives an outage.",
+   "defends": [
+    "inv4"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "stale-if-error",
+      "software_concept": "graceful degradation: serve last-known-good on backend failure"
+     },
+     {
+      "mechanism": "circuit breaker on origin",
+      "software_concept": "trip after repeated failures, fail fast, then probe for recovery"
+     }
+    ],
+    "interview_probes": [
+     "When the backing store is down, does your cache return errors or the last good value, and did you choose that on purpose?"
+    ],
+    "approach": "Start here: keep the last-known-good value even after expiry; on a revalidation that errors or times out, serve the stale copy (stale-if-error) and wrap origin calls in a circuit breaker that trips after N failures, fails fast for a cooldown, then probes. Add a second origin behind health-checked failover.",
+    "vocab": [
+     "circuit-breaker",
+     "cap-theorem"
+    ]
+   },
+   "beginner_analogy": "Like a shop that, when it cannot reach head office for today's prices, keeps selling at yesterday's prices instead of closing the doors.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "health",
+      "label": "Origin health",
+      "kind": "process",
+      "lane": "control",
+      "order": 5
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_probe",
+      "from": "health",
+      "to": "origin",
+      "kind": "control",
+      "label": "probe"
+     },
+     {
+      "id": "e_failover",
+      "from": "health",
+      "to": "regional",
+      "kind": "control",
+      "label": "on outage: stale"
+     }
+    ],
+    "highlight": [
+     "origin",
+     "e_reg_o",
+     "e_o_reg"
+    ],
+    "remove": []
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "A global purge on a hot object",
+   "scenario": "The publisher purges a viral object from every PoP at once (a legal takedown, a bad deploy pulled back). The next request for it now misses everywhere in the world simultaneously.",
+   "reveal": "The purge empties every edge and regional cache, so the object is cold globally at the same instant, the mass-purge stampede. Coalescing at each tier collapses the flood: each edge makes one fetch to its regional parent, each region makes one to origin, so the origin sees roughly one fetch per region, not one per user. Freshness (inv2) is restored at the cost of a brief latency spike, and inv3 holds because the hierarchy plus single-flight bound the fan-in. This is why mass purges are rationed and versioned URLs are preferred: a new key is never a synchronized global miss."
+  },
+  {
+   "id": "st2",
+   "title": "The long-tail request nobody cached",
+   "scenario": "During an origin brownout, a user requests a rare object that is in no edge and no regional cache: a never-popular page, a one-off download.",
+   "reveal": "Serve-stale has nothing to fall back on, because there is no copy anywhere. This request honestly fails or hangs until the origin recovers. It is the design's confessed weak spot: the CDN protects the popular half of the internet, not the cold tail. Larger regional caches and tiered storage keep more of the tail warm and shrink the failure, but cannot erase it. Uncacheable and never-seen content is only ever as available as the origin itself (inv4 explicitly promises content that can be served from a copy, and this has none)."
+  },
+  {
+   "id": "st3",
+   "title": "A PoP dies mid-request under peak load",
+   "scenario": "An entire edge location loses power while serving its region at peak traffic. Thousands of in-flight users are pointed at a cache that just vanished.",
+   "reveal": "Health checks withdraw it from GeoDNS and anycast within seconds, and its users reroute to the next-nearest PoP (inv4). That PoP is cold for this region's traffic, so it briefly misses more and leans on the regional shield and coalescing to avoid stampeding the origin (inv3). Latency rises for a few minutes as the new PoP warms; no errors, just degraded speed. The failover works because every PoP holds the same content addressed the same way, so any PoP can stand in for any other."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "Distance is latency: the only way to beat the speed of light is to already be closer, so put copies near demand.",
+   "Every cache is a copy, and every copy is a bet the original has not changed; bound the bet with an expiry and a way to revoke it.",
+   "Deduplicate concurrent work on the same key: make expensive fills single-flight so N simultaneous demands cost one execution.",
+   "Break a fan-in bottleneck with an aggregation tier: turn load proportional to your fleet into load proportional to a few regions.",
+   "Route by live signals, not fixed addresses: resolve which copy and which node per request, so failure reroutes itself.",
+   "When the source of truth is unreachable, degrade to the last known-good copy: choose availability over freshness on purpose."
+  ],
+  "mappings": [
+   {
+    "mechanism": "edge cache",
+    "elsewhere": "CPU L1/L2 caches, the browser cache, and memoization all put a copy of a costly read next to whoever keeps asking."
+   },
+   {
+    "mechanism": "TTL + purge",
+    "elsewhere": "DNS record TTLs, HTTP caching, and materialized-view refresh all bound staleness with an expiry plus an invalidation."
+   },
+   {
+    "mechanism": "request coalescing",
+    "elsewhere": "single-flight in RPC clients, dogpile locks in application caches, and write batching in databases all collapse duplicate concurrent work."
+   },
+   {
+    "mechanism": "regional shield tier",
+    "elsewhere": "Write-back cache hierarchies, read replicas fronting a primary, and broker tiers all insert an aggregation layer to protect a scarce core."
+   },
+   {
+    "mechanism": "serve-stale on error",
+    "elsewhere": "Circuit breakers, last-known-good configuration, and resolvers serving expired DNS records all keep serving through a backend outage."
+   }
+  ]
+ }
+}
