@@ -1,0 +1,755 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "Search typeahead",
+  "narrowing": "The read-and-serve path of query autocomplete: turning the prefix a user has typed into a ranked list of the most likely completions, on every keystroke, under a hard latency budget. The offline pipeline that mines and ranks the query log is treated as the builder that feeds this path. Spell correction, personalization, and full document search hang off this spine but do not shape it.",
+  "ordering_note": "This is not one dated outage but the standard path query autocomplete walks as it grows from a LIKE query to a globally sharded index. Each layer is forced by the concrete failure the previous state hits next: first the scan that will not scale, then ranking the subtree it finds, then the keystroke storm that cheap lookups unmask, then the repeated work on hot prefixes, then the staleness of a snapshot, then the single-node ceiling and the hot prefix. history_confidence is medium because the mechanisms and their failure modes are canonical and checkable, not because a specific named incident is being retold.",
+  "history_confidence": "medium",
+  "domain": "software"
+ },
+ "essence": {
+  "text": "Search typeahead is the box that finishes your thought before you do. Press one key and, in the gap before the next, it reaches into a corpus of billions of past queries, finds the handful that begin the way you are typing, ranks them by how often the world searches them, and paints them under your cursor. Then it does the whole thing again on the very next key, faster than you can notice, for everyone typing at once. The entire art is answering 'what are people most likely typing next?' in under 100 milliseconds, on every letter.",
+  "beginner": "Search typeahead is the dropdown that guesses what you are searching for as you type. Type 'weat' and it offers 'weather', 'weather today', 'weather radar'. The hard part is picking the best few guesses out of billions of possibilities and showing them before your next keystroke.",
+  "deep_facts": [
+   "The suggestions have to land between keystrokes. A fast typist hits a key about every 150 ms, so the whole round trip, network included, must finish well inside that, which is why the target is sub-100ms.",
+   "A prefix trie turns 'find every query that starts with these letters' into a walk of one node per letter, so lookup cost depends on the length of what you typed, not on the billions of queries behind it.",
+   "At each trie node you can precompute the top few completions, so a lookup returns a ready-made ranked list without ever visiting the millions of leaves beneath the node.",
+   "Typing fires a request per keystroke, so a single search for 'restaurants' can trigger eleven lookups; debouncing and cancelling stale requests is what keeps that from becoming eleven times the load and a flickering, out-of-order dropdown.",
+   "The traffic is savagely head-heavy: a tiny set of prefixes, the short ones and the trending ones, accounts for most requests, which is exactly why an in-memory cache in front of the index answers the vast majority of keystrokes.",
+   "Suggestions are a snapshot. A query that trends in the last hour, an earthquake or a score, appears in no precomputed list until the index is rebuilt, so freshness is a deliberate, bounded lag rather than a given."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Given the prefix a user has typed so far, return the few most likely completions ranked by popularity, fast enough to update on every keystroke.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Typist",
+    "want": "See the best few completions appear as they type, without waiting, so they can pick a query instead of finishing it"
+   },
+   {
+    "id": "a2",
+    "name": "Operator",
+    "want": "Serve a ranked suggestion list for any prefix in under 100ms, for everyone typing at once, cheaply"
+   },
+   {
+    "id": "a3",
+    "name": "Safety reviewer",
+    "want": "Guarantee that banned, unsafe, or removed suggestions never appear, and that trending real ones do"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "Every suggestion shown actually starts with the prefix the user has typed. The box never offers a completion that does not match."
+   },
+   {
+    "id": "inv2",
+    "text": "The suggestions are the top-ranked completions for that prefix, in rank order, not an arbitrary matching subset."
+   },
+   {
+    "id": "inv3",
+    "text": "The box only ever displays suggestions for the prefix currently in it. A slow response for an earlier prefix is discarded, never rendered over a newer one."
+   },
+   {
+    "id": "inv4",
+    "text": "A lookup returns within the interactive budget, about 100ms, or it is useless. Suggestions that arrive after the user has moved on do not count."
+   },
+   {
+    "id": "inv5",
+    "text": "Suggestions track the corpus within a bounded lag: a newly popular query surfaces and a banned or removed one disappears within that bound."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Query",
+    "note": "A past search string with a popularity count; the raw material the whole system completes and ranks"
+   },
+   {
+    "id": "en2",
+    "name": "Prefix",
+    "note": "The characters typed so far; the key every lookup is made against"
+   },
+   {
+    "id": "en3",
+    "name": "Suggestion list",
+    "note": "The ordered top-k completions for a prefix; the user-facing product, read constantly, rebuilt periodically"
+   },
+   {
+    "id": "en4",
+    "name": "Trie node",
+    "note": "One character-step in the prefix tree; may carry a precomputed top-k list for the prefix that reaches it"
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Serve: a prefix flows in on each keystroke, a ranked suggestion list flows back to the box."
+   },
+   {
+    "id": "f2",
+    "text": "Build: the query log flows into the builder, which emits a trie with a precomputed top-k list at each node."
+   },
+   {
+    "id": "f3",
+    "text": "Freshness: live query counts flow back into ranking, so popularity updates and trending terms reach the suggestions."
+   }
+  ],
+  "constraints": [
+   "The suggestion must arrive between keystrokes, so the whole round trip has a hard budget of roughly 100ms including the network.",
+   "The corpus is enormous, billions of distinct past queries, so no lookup can afford to scan it and no single machine can hold all of it.",
+   "Reads dwarf writes: the index is read on every keystroke of every user but rebuilt only periodically, so the serve path is where all the cost and risk live.",
+   "Popularity is a moving target: what people search shifts by the hour, so any precomputed ranking is stale the moment it is built."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "people",
+    "label": "People"
+   },
+   {
+    "id": "serving",
+    "label": "Serving"
+   },
+   {
+    "id": "index",
+    "label": "Index"
+   },
+   {
+    "id": "cache",
+    "label": "Cache"
+   },
+   {
+    "id": "control",
+    "label": "Control"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "user",
+    "label": "User",
+    "kind": "actor",
+    "lane": "people",
+    "order": 0
+   },
+   {
+    "id": "qsvc",
+    "label": "Query service",
+    "kind": "process",
+    "lane": "serving",
+    "order": 1
+   },
+   {
+    "id": "log",
+    "label": "Query log DB",
+    "kind": "store",
+    "lane": "index",
+    "order": 2
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_type",
+    "from": "user",
+    "to": "qsvc",
+    "kind": "payload",
+    "label": "keystroke"
+   },
+   {
+    "id": "e_scan",
+    "from": "qsvc",
+    "to": "log",
+    "kind": "control",
+    "label": "LIKE p%"
+   },
+   {
+    "id": "e_sugg",
+    "from": "qsvc",
+    "to": "user",
+    "kind": "payload",
+    "label": "top matches"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "The Scan Won't Scale: Build a Prefix Trie",
+   "problem": {
+    "statement": "The naive box runs a database query on every keystroke: SELECT ... WHERE query LIKE 'weat%'. Two things break together. A LIKE-prefix scan over billions of rows is a heavy index range read, and the first keystroke 'w' matches millions of them, so the database does its most work on the least specific input. And 'as you type' means this fires again on 'we', 'wea', 'weat', one scan per character, per user, all at once. Latency climbs into seconds and the database is the first thing to fall over.",
+    "beginner": "The first idea is to ask the database 'give me every saved search that starts with these letters' each time a key is pressed. That works for a few searches, but with billions of them the database sifts a huge pile on every keystroke, so the suggestions arrive too late to help, if they arrive at all.",
+    "model": {
+     "id": "first-principles",
+     "application": "A prefix lookup should cost the length of what you typed, not the size of the corpus behind it. Throw out the scan and rebuild the data structure around the prefix itself."
+    }
+   },
+   "gate": {
+    "question": "You must find every stored query that begins with a given prefix, on every keystroke, without scanning billions of rows. What structure makes 'starts with these letters' cost only as much as the letters?",
+    "hint": "Share the common beginnings. If a thousand queries all start with 'wea', they should walk the same three steps before they diverge."
+   },
+   "solution": "Build a prefix trie: a tree where each edge is one character and each path from the root spells a prefix. Looking up 'weat' is four hops, root to 'w' to 'e' to 'a' to 't', independent of how many queries live below. Every completion of that prefix hangs in the subtree under the node you land on. The trie is built offline from the query log and held in memory, so a lookup is a handful of pointer-follows instead of a database scan.",
+   "user_lens": {
+    "gives": "Suggestions that appear the instant you type, because finding the matching branch costs four steps whether the corpus holds a thousand queries or a billion.",
+    "costs": "The trie is a second copy of the data that must be built ahead of time and kept in memory, and it only knows what the last build put into it."
+   },
+   "tech_lens": {
+    "mechanism": "A character-indexed tree walked one node per input character; the node reached represents the prefix, and its subtree holds every completion. Built from the query log as an offline batch, served from RAM.",
+    "principle": "When a lookup must not depend on corpus size, index by the shape of the query. A trie makes prefix cost proportional to the prefix, not the data."
+   },
+   "tradeoff": "You trade a stateless database query for a large in-memory structure that must be built and shipped in advance, and finding the branch is fast but reading everything under it is not, which the next layer must confront.",
+   "at_scale": "Lookup is O(length of prefix), flat as the corpus grows from millions to billions of queries, so read cost never depends on how much you have indexed. What grows is memory: the trie holds every distinct prefix, so a node's RAM, not its CPU, becomes the ceiling, and a very short prefix sits above an enormous subtree the next layers must avoid walking.",
+   "defends": [
+    "inv1",
+    "inv4"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "prefix trie walked per character",
+      "software_concept": "trie / radix tree; prefix search in O(len) instead of a LIKE scan"
+     },
+     {
+      "mechanism": "offline build from the query log",
+      "software_concept": "batch-built read index; an inverted index with edge n-grams is the alternative shape"
+     }
+    ],
+    "interview_probes": [
+     "Why does WHERE query LIKE 'prefix%' stop working at billions of rows, and what does a trie change about the cost?",
+     "Where does the trie live, how big does it get, and what does that cost you compared to keeping the data only in the database?"
+    ],
+    "approach": "Build a trie (or a compressed radix tree / FST) keyed by character; to serve, walk one node per input character and land on the prefix node. Build it offline from the query-count log as a batch job and load the immutable structure into the serving process's memory.",
+    "vocab": [
+     "indexing",
+     "search-db"
+    ]
+   },
+   "beginner_analogy": "Like a phone book with letter tabs. To find names starting with 'Sm' you flip to S, then to 'Sm', never reading the A's through R's. The tabs cost nothing to skip past; that is the trie.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "trie",
+      "label": "Prefix trie",
+      "kind": "store",
+      "lane": "index",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_walk",
+      "from": "qsvc",
+      "to": "trie",
+      "kind": "control",
+      "label": "walk prefix"
+     }
+    ],
+    "highlight": [
+     "qsvc",
+     "log",
+     "e_scan"
+    ],
+    "remove": [
+     "e_scan"
+    ]
+   }
+  },
+  {
+   "index": 2,
+   "name": "Ranking the Subtree: Precompute Top-K",
+   "problem": {
+    "statement": "The trie finds the branch fast, but the branch is huge. Type 'a' and you land above millions of completions; the box has room for maybe ten. To choose which ten, you must rank the whole subtree by popularity, which means visiting every leaf under the node on every keystroke. You have moved the cost from 'scan the corpus' to 'walk the subtree', and for short, popular prefixes those are nearly the same size. The heaviest inputs are still the least specific ones.",
+    "beginner": "The tree quickly finds the branch for what you typed, but that branch can hold millions of possible completions, and the box shows only a handful. Sorting millions of options by popularity every time you press a key is just as slow as before, all over again.",
+    "model": {
+     "id": "bottleneck",
+     "application": "The subtree walk is now the one operation that governs every keystroke's cost. Route around it by computing the ranked answer ahead of time, so the read path never does the walk."
+    }
+   },
+   "gate": {
+    "question": "At a trie node above a million completions you need only the ten most popular, but ranking a million on every keystroke is hopeless. Where do you do that work so the keystroke doesn't have to?",
+    "hint": "The answer for a prefix barely changes between keystrokes, or between users. What if the top ten were already sitting at the node, computed once when the trie was built?"
+   },
+   "solution": "At build time, precompute the top-k completions for every node and store that little ranked list on the node itself. Serving a prefix becomes: walk to the node, read its ready-made list of ten, return it. The million-leaf walk happens once, offline, in the builder, never on the request. The build rolls popularity up the tree, a child's top-k feeding its parent's, so the whole trie is annotated in one pass over the corpus.",
+   "user_lens": {
+    "gives": "A ranked list of the best completions returned in the few hops it takes to reach the node, with no sorting on the request path, so even 'a' answers instantly with its ten most-searched completions.",
+    "costs": "The ranking is frozen at build time. A completion's popularity, and the whole order of the list, is only as current as the last build, and storing a top-k list on every node inflates the structure."
+   },
+   "tech_lens": {
+    "mechanism": "A materialised top-k list per trie node, computed by rolling child rankings up to parents in the offline build; the serve path reads the precomputed list rather than ranking the subtree.",
+    "principle": "When the answer is read far more than it changes, compute it once at write time and store it. Move ranking off the hot path into the build."
+   },
+   "tradeoff": "You trade freshness and memory for speed: every node now carries a stored list that is stale between builds, and the structure grows, in exchange for a keystroke that never ranks anything.",
+   "at_scale": "The serve cost is now constant, k items read after a prefix-length walk, no matter how popular the prefix, so short hot prefixes stop being expensive. The cost moves to the builder: rolling top-k over billions of leaves is a heavy batch job whose runtime sets how often you can rebuild, which is exactly what caps freshness later. Storage grows by k entries per node, a real but bounded multiplier.",
+   "defends": [
+    "inv2",
+    "inv4"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "top-k stored at each node",
+      "software_concept": "materialised view / precomputed aggregate; read-time work moved to build time"
+     },
+     {
+      "mechanism": "roll child top-k into parent",
+      "software_concept": "bottom-up merge of bounded heaps; a k-way merge keeping only the best k"
+     }
+    ],
+    "interview_probes": [
+     "A prefix has a million completions and you can show ten. Why is ranking that on every keystroke the wrong place, and where does the work belong?",
+     "How do you compute top-k for every trie node in one pass instead of re-sorting each subtree independently?"
+    ],
+    "approach": "In the offline build, do a post-order pass: each node merges its children's top-k lists (bounded min-heaps of size k) with its own count and keeps the best k. Store that list on the node so serving is a walk plus a constant-size read.",
+    "vocab": [
+     "indexing",
+     "scaling-reads"
+    ]
+   },
+   "beginner_analogy": "Like a bakery posting its ten best-sellers on a sign at the door instead of counting every receipt when you ask. The counting still happens, but at closing time, so the answer to 'what's popular?' is already written down when you walk in.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "builder",
+      "label": "Index builder",
+      "kind": "process",
+      "lane": "control",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_build",
+      "from": "builder",
+      "to": "trie",
+      "kind": "control",
+      "label": "build top-k"
+     },
+     {
+      "id": "e_src",
+      "from": "log",
+      "to": "builder",
+      "kind": "payload",
+      "label": "query log"
+     }
+    ],
+    "highlight": [
+     "trie",
+     "e_walk"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 3,
+   "name": "The Keystroke Storm: Debounce and Cancel Stale",
+   "problem": {
+    "statement": "Each lookup is now cheap, which unmasks a new problem: there are far too many of them, and they race. 'As you type' fires a request on every keystroke, so searching 'restaurants' launches eleven lookups from one person, most for prefixes they pass through in milliseconds and never read. Worse, the responses come back out of order: the lookup for 'resta' can arrive after the lookup for 'restau', painting an older, wrong list over a newer one. The box flickers and sometimes shows suggestions for a prefix the user has already left behind.",
+    "beginner": "Now each guess is fast, but typing a ten-letter word asks the system ten times, once per letter, and most of those answers are for half-typed words nobody waits to read. The answers can also come back in the wrong order, so the dropdown flickers and briefly shows guesses for letters you already typed past.",
+    "model": {
+     "id": "queue-and-buffer",
+     "application": "Keystrokes are a bursty producer and the service is a steady consumer. Put a buffer on the client that waits out the burst, sends only settled prefixes, and drops responses that arrive too late to matter."
+    }
+   },
+   "gate": {
+    "question": "Typing fires one request per key, and slow responses can overwrite fast ones with stale suggestions. How do you cut the flood of requests and guarantee the box never shows a list for an old prefix?",
+    "hint": "Two moves: wait a beat before sending so you skip the letters flying by, and tag each response so you can tell it is answering a question the user has already moved past."
+   },
+   "solution": "Add a client-side buffer, the search box, that does three things. Debounce: wait a short pause after the last keystroke before sending, so a fast run of keys produces one request, not one per key. Cancel-stale: tag every request with its prefix and discard any response whose prefix is no longer what is in the box, so an out-of-order answer is dropped instead of rendered. Minimum length: do not query one- or two-character prefixes at all, since their giant, generic lists are the least useful and the most expensive. The service only ever sees settled prefixes, and the box only ever shows a response for the text currently in it.",
+   "user_lens": {
+    "gives": "A calm, correct dropdown: it updates when you pause, never flickers backwards, and does not waste a request on every fleeting half-word.",
+    "costs": "A deliberate delay. Suggestions appear a beat after you stop typing rather than on the exact keystroke, and very short prefixes get no help at all."
+   },
+   "tech_lens": {
+    "mechanism": "A client-side debounce timer coalescing keystrokes into one request; a request/prefix tag so late responses are recognised as stale and discarded; a minimum-prefix-length gate. Load is shed at the source, before it reaches the network.",
+    "principle": "Match a bursty producer to a steady consumer at the edge: coalesce what you can skip, and make superseded work identifiable so you can throw it away instead of showing it."
+   },
+   "tradeoff": "You trade instant-per-keystroke response for a small, deliberate latency and fewer requests, and you push correctness (ordering) onto the client, which must be trusted to drop its own stale responses.",
+   "at_scale": "Debounce is the cheapest scaling lever in the system: cutting eleven requests per word down to one or two removes most of the read load before it ever reaches a server, so the whole fleet is sized for settled prefixes, not raw keystrokes. Across millions of typists this is the difference between a survivable request rate and an order-of-magnitude flood; the ordering tag keeps that saving from corrupting the display.",
+   "defends": [
+    "inv3",
+    "inv4"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "debounce keystrokes into one request",
+      "software_concept": "trailing-edge debounce / request coalescing at the client"
+     },
+     {
+      "mechanism": "discard responses for stale prefixes",
+      "software_concept": "monotonic sequence tag; drop out-of-order replies, a last-write-wins guard on the UI"
+     }
+    ],
+    "interview_probes": [
+     "Typing one word fires ten requests and the replies race. Walk through debouncing and how you stop an older response from overwriting a newer one.",
+     "Where should the ordering guarantee live, the client or the server, and why is the client the natural place for typeahead?"
+    ],
+    "approach": "On the client, hold a debounce timer that resets on each keystroke and fires the request only after about 50 ms of quiet; stamp each request with its prefix (or an incrementing seq) and, when a response lands, render it only if its prefix still equals the box's current value. Gate out prefixes shorter than 2-3 chars.",
+    "vocab": [
+     "rate-limiting",
+     "load-shedding"
+    ]
+   },
+   "beginner_analogy": "Like waiting until someone finishes their sentence before answering, instead of blurting a guess after every word. And if you realise you started answering the wrong question, you stop, rather than talk over their new one.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "box",
+      "label": "Search box",
+      "kind": "process",
+      "lane": "people",
+      "order": 1
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_key",
+      "from": "user",
+      "to": "box",
+      "kind": "payload",
+      "label": "keystrokes"
+     },
+     {
+      "id": "e_req",
+      "from": "box",
+      "to": "qsvc",
+      "kind": "payload",
+      "label": "settled prefix"
+     },
+     {
+      "id": "e_resp",
+      "from": "qsvc",
+      "to": "box",
+      "kind": "payload",
+      "label": "suggestions"
+     },
+     {
+      "id": "e_show",
+      "from": "box",
+      "to": "user",
+      "kind": "payload",
+      "label": "fresh only"
+     }
+    ],
+    "highlight": [
+     "e_type",
+     "e_sugg",
+     "qsvc"
+    ],
+    "remove": [
+     "e_type",
+     "e_sugg"
+    ]
+   }
+  },
+  {
+   "index": 4,
+   "name": "The Distributed Cache: Answer Before the Index",
+   "problem": {
+    "statement": "Even a settled prefix now crosses the network to a serving node, walks the in-memory trie, and reads a top-k list, a few milliseconds each, multiplied by every keystroke of every typist. But the request distribution is savagely head-heavy: a small set of prefixes, the short ones and the trending ones, accounts for most of the traffic, and the answer for a given prefix is identical for everyone and barely changes between builds. Recomputing 'wea' from the trie for the millionth time this minute is pure waste, and it keeps the trie nodes hot enough to become the bottleneck.",
+    "beginner": "The same popular half-words get typed over and over by millions of people, and every time the system looks them up fresh even though the answer is the same for everyone. That repeated work piles onto the index and slows everything down.",
+    "model": {
+     "id": "locality-and-caching",
+     "application": "A tiny set of prefixes is asked for constantly and their answers rarely change, the perfect cache. Keep prefix-to-suggestions in fast shared memory in front of the index so most keystrokes never reach the trie."
+    }
+   },
+   "gate": {
+    "question": "The top-k list for a popular prefix is the same for every user and changes only when you rebuild, yet you recompute it on every request. Where do you put it so a keystroke almost never touches the index?",
+    "hint": "Most traffic is a handful of prefixes. What if their finished lists lived in shared memory, keyed by prefix, with the trie as the fallback?"
+   },
+   "solution": "Put a distributed in-memory cache (Redis or Memcached) in front of the index, keyed by prefix, holding the precomputed top-k list. On a lookup, check the cache first; on a hit, return the list without walking the trie. On a miss, walk the trie, populate the cache with a short time-to-live, then respond. Because the hot set of prefixes is tiny compared with the whole trie, hit rates run very high, and the index is left to serve only the long tail and cold prefixes.",
+   "user_lens": {
+    "gives": "Suggestions returned from memory in a millisecond or two, comfortably inside the sub-100ms budget even under global load, because the prefixes people actually type are already sitting in the cache.",
+    "costs": "A second copy of the answer that can go stale: for the length of its TTL, a cached prefix can serve a slightly out-of-date list even after a rebuild has changed it."
+   },
+   "tech_lens": {
+    "mechanism": "Cache-aside on the prefix: read the shared cache, fall back to the trie on a miss, write the list back with a TTL. Reads are absorbed by memory; the index sees only misses and cold keys.",
+    "principle": "When reads dwarf changes and the answer is identical across users, move the answer close to the reader and pay for speed in bounded staleness."
+   },
+   "tradeoff": "You accept a staleness window as wide as the TTL on the read path, and a whole cache tier to operate and keep warm, in exchange for taking the index almost entirely out of the common case.",
+   "at_scale": "This is what makes global typeahead affordable: one cache fleet serves hundreds of thousands of lookups a second from memory while a handful of trie replicas handle the misses, and a short prefix that everyone types is answered by the cache instead of hammering one node. The ceiling moves from index CPU to cache memory and, ultimately, to the single hottest prefix, which the final layer confronts.",
+   "defends": [
+    "inv4"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "cache-aside keyed by prefix",
+      "software_concept": "read-through cache with TTL; the trie is the source of truth, the cache a disposable accelerator"
+     }
+    ],
+    "interview_probes": [
+     "What is your likely cache hit rate for typeahead and why, and which prefixes should you never bother caching?",
+     "How do you choose the cache TTL so a rebuild's new rankings show up without serving badly stale suggestions?"
+    ],
+    "approach": "Cache-aside keyed by prefix: GET prefix from Redis; on miss, walk the trie, SET prefix to the top-k list with a short TTL (seconds to minutes), then return. Skip caching prefixes below the min length and let the TTL bound how stale a list can get.",
+    "vocab": [
+     "caching",
+     "distributed-cache",
+     "scaling-reads"
+    ]
+   },
+   "beginner_analogy": "Like a barista who keeps the ten most-ordered drinks pre-made on the counter. Almost everyone gets theirs handed over instantly, and only the rare unusual order sends her back to make it from scratch.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "cache",
+      "label": "Suggestion cache",
+      "kind": "store",
+      "lane": "cache",
+      "order": 2,
+      "expands_to": "Distributed cache"
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_cq",
+      "from": "qsvc",
+      "to": "cache",
+      "kind": "control",
+      "label": "prefix?"
+     },
+     {
+      "id": "e_ch",
+      "from": "cache",
+      "to": "qsvc",
+      "kind": "payload",
+      "label": "top-k (hit)"
+     }
+    ],
+    "highlight": [
+     "qsvc",
+     "e_walk"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 5,
+   "name": "Trending: When the Snapshot Goes Stale",
+   "problem": {
+    "statement": "Every ranking in the system is frozen at the last build, and builds are hours apart because rolling top-k over billions of queries is slow. So the moment the world changes, the box lies. An earthquake, a breaking score, a new product: millions type the term within minutes, but it appears in no precomputed list, and the cache faithfully serves the stale one. The reverse is worse: a query that must be removed, a banned or unsafe suggestion, keeps being offered until the next rebuild and TTL expiry finally flush it. Popularity is a moving target and the snapshot cannot follow it.",
+    "beginner": "The suggestions are a photo taken at the last rebuild, hours ago. When something suddenly becomes popular, like breaking news, it is missing from the guesses because the photo is old. And if a bad suggestion needs to be pulled, it lingers until the next photo is taken.",
+    "model": {
+     "id": "feedback-loop",
+     "application": "Let the system watch its own live query stream and feed that signal back into the ranking, so what people are typing right now bends the suggestions without waiting for the next full build."
+    }
+   },
+   "gate": {
+    "question": "A term trends in the last ten minutes but lives in no precomputed list, and a banned term must vanish now, not at the next rebuild. How do you make suggestions follow live reality without rebuilding billions of nodes every minute?",
+    "hint": "You do not need to rebuild everything, only to overlay what changed. Count what is being typed now, and let a small, fresh layer win over the big, slow one."
+   },
+   "solution": "Add a fast feedback path. A trend counter tallies live query volume in near real time, a streaming count over the last minutes, and injects rising terms and updated counts into a small, frequently-updated layer that the serve path merges on top of the trie's precomputed lists. The big trie is still rebuilt on its slow cadence for the long tail; the fast layer carries the last hour of change. Removals go through the same fast path as a blocklist that suppresses a suggestion immediately, and the cache TTL is kept short with targeted eviction of affected prefixes so a pull takes effect within seconds, not at the next build.",
+   "user_lens": {
+    "gives": "Suggestions that keep up with the world: a trending query surfaces within minutes and a banned one disappears within seconds, without waiting for the multi-hour rebuild.",
+    "costs": "Two ranking sources to merge and keep consistent, and a freshness that is bounded but never instant. A term is only as current as the fast layer's window, and the merge adds work to every serve."
+   },
+   "tech_lens": {
+    "mechanism": "A streaming counter over the live query log feeds a small real-time index; the serve path merges the real-time layer over the batch-built top-k, newest wins. A suppression list on the same path removes suggestions immediately; cache TTL and targeted eviction bound how long a stale or pulled list survives.",
+    "principle": "When the truth moves faster than you can rebuild, do not rebuild faster: overlay a small fresh layer on the big slow one and let recency win. Sense the system's own output and feed it back into the ranking."
+   },
+   "tradeoff": "You add a second, live ranking layer and the merge that reconciles it with the batch build, trading a simple single index for bounded freshness and more moving parts, and the fast path can over-react to a momentary spike.",
+   "at_scale": "The feedback loop scales because the fast layer is tiny, only the terms that moved recently, so counting and merging touch kilobytes, not the billion-node trie. The batch build still owns the long tail and runs on its own cadence; freshness is tuned by the fast layer's window and the cache TTL, not by rebuilding more. The danger at scale is the loop amplifying a spike, so counts are smoothed and decayed rather than trusted raw.",
+   "defends": [
+    "inv5",
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "real-time layer merged over the batch trie",
+      "software_concept": "lambda-style batch plus speed layer; a fast index overlaid on a slow one, recency wins"
+     },
+     {
+      "mechanism": "streaming count of live queries",
+      "software_concept": "windowed counters / count-min sketch over the query stream for trending detection"
+     }
+    ],
+    "interview_probes": [
+     "Your index rebuilds every few hours but a term trends in ten minutes. How do you surface it without rebuilding, and how fresh can you actually make it?",
+     "A suggestion must be banned immediately. Trace exactly what has to change, including the cache, for it to stop appearing within seconds."
+    ],
+    "approach": "Run a streaming job (count-min sketch or windowed counters) over the live query log to detect rising terms; write them to a small real-time store the serve path merges over the trie's top-k, newest-first. Keep a suppression set checked on serve, and evict affected prefixes from the cache on change.",
+    "vocab": [
+     "eventual-consistency",
+     "stream"
+    ]
+   },
+   "beginner_analogy": "Like a newsroom with a printed morning paper plus a running ticker. The paper (the nightly build) covers everything; the ticker (the live layer) carries what just happened, and when the two disagree, you trust the ticker.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "trend",
+      "label": "Trend counter",
+      "kind": "process",
+      "lane": "control",
+      "order": 2
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_count",
+      "from": "qsvc",
+      "to": "trend",
+      "kind": "control",
+      "label": "live counts"
+     },
+     {
+      "id": "e_promote",
+      "from": "trend",
+      "to": "qsvc",
+      "kind": "control",
+      "label": "trending merge"
+     }
+    ],
+    "highlight": [
+     "trie",
+     "builder",
+     "cache"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 6,
+   "name": "Billions of Prefixes: Shard the Trie, Tame the Hot One",
+   "problem": {
+    "statement": "One machine has held the whole trie until now, and that assumption breaks two ways at once. The trie for every language and every past query outgrows a single node's memory, and the builder that rolls top-k over the entire corpus outgrows a single node's throughput, so neither storing nor rebuilding fits on one box. And load is not uniform: when one query goes viral, every typist racing toward the same prefix pounds the single trie replica and the single cache key that own it, melting them while the rest of the fleet idles. The first ceiling is capacity; the second is the hot prefix.",
+    "beginner": "One computer cannot hold the tree of every possible search in every language, and it cannot rebuild it fast enough either. On top of that, when one search suddenly goes viral, everyone typing the same letters hammers the one machine that happens to hold that branch while the others sit idle.",
+    "model": {
+     "id": "separation-of-concerns",
+     "application": "Split the one giant trie into independent partitions by prefix so no node holds or rebuilds it all, and treat the single hottest prefix as its own separate problem the partitioning alone cannot solve."
+    }
+   },
+   "gate": {
+    "question": "The trie no longer fits on one machine, and a viral query overwhelms whichever node owns its prefix. How do you split the structure so no node holds everything, and how do you keep one white-hot prefix from crushing the shard that owns it?",
+    "hint": "The first characters of the prefix make a natural partition key, and every lookup already carries it. But the hottest key needs more than partitioning, it needs copies and coalescing."
+   },
+   "solution": "Shard the trie by prefix: the first characters route a lookup to the one partition that owns that branch, and each partition holds and rebuilds only its slice, so capacity and build throughput both scale by adding shards. A router in front of the serving path maps prefix to shard, and because every lookup already knows its prefix there are no cross-shard queries. For the hot prefix, lean on the cache tier: replicate the hottest entries across cache nodes, coalesce concurrent misses so only one request refills a key while the rest wait for it, and push the very hottest lists to edge caches near users so most viral traffic never reaches the origin at all.",
+   "user_lens": {
+    "gives": "A system that grows by adding machines instead of hitting a memory or rebuild wall, and that absorbs a viral query because its list is replicated, coalesced, and served from the edge instead of crushing one node.",
+    "costs": "Operational weight: shards to route, rebalance, and rebuild independently, plus dedicated defences for the single hottest prefix, the one problem sharding alone never solves."
+   },
+   "tech_lens": {
+    "mechanism": "Prefix-based sharding with a routing layer mapping prefix to partition; per-shard build and serve; hot-key mitigation in the cache tier via key replication, single-flight miss refills, and edge caching of the hottest lists.",
+    "principle": "Partition on a key every request already carries so lookups stay single-shard, then handle the hottest key separately, because the average load hides the one prefix that will actually take you down."
+   },
+   "tradeoff": "Sharding trades a simple single index for a distributed one with routing, rebalancing, and per-shard rebuilds, and the hot-prefix defences add cache and edge machinery whose only job is to survive a handful of viral queries.",
+   "at_scale": "This is the architecture that reaches global scale: capacity and build throughput grow linearly with shards, and prefix routing keeps every lookup on one partition. Read load is absorbed by cache and edge tiers so origins see almost nothing. The residual ceiling is always the single hottest prefix at the instant its cache entry expires, which is why coalescing and edge replication, not more shards, are what keep a viral query from becoming an outage.",
+   "defends": [
+    "inv4",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "shard the trie by prefix",
+      "software_concept": "partitioning by a key the request already carries; no scatter-gather because the prefix picks the shard"
+     },
+     {
+      "mechanism": "hot-prefix replication and miss coalescing",
+      "software_concept": "hot-key mitigation: cache replication, single-flight refill, and edge caching of the response"
+     }
+    ],
+    "interview_probes": [
+     "Why is the prefix a good shard key for a trie, and what breaks if you shard by something else, like a hash of the full query?",
+     "A prefix goes viral and its cache entry expires with a million lookups in flight. Walk through exactly what protects the shard that owns it."
+    ],
+    "approach": "Route by the first 1-2 characters (or a consistent-hashing ring over prefixes) so each lookup hits one shard; build and serve each shard independently. For the hot prefix, wrap cache refill in a single-flight lock so one miss repopulates the key, replicate that key across cache nodes, and let an edge cache serve the hottest lists.",
+    "vocab": [
+     "sharding",
+     "hot-key",
+     "consistent-hashing"
+    ]
+   },
+   "beginner_analogy": "Like splitting one enormous dictionary into volumes by first letter across many desks, so no desk holds it all. But when everyone suddenly wants the same word at once, that desk needs several photocopies and a helper who makes one copy for the whole crowd instead of one each.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "router",
+      "label": "Shard router",
+      "kind": "process",
+      "lane": "serving",
+      "order": 2
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_route",
+      "from": "qsvc",
+      "to": "router",
+      "kind": "control",
+      "label": "lookup"
+     },
+     {
+      "id": "e_shard",
+      "from": "router",
+      "to": "trie",
+      "kind": "control",
+      "label": "by prefix"
+     }
+    ],
+    "highlight": [
+     "trie",
+     "e_walk"
+    ],
+    "remove": [
+     "e_walk"
+    ]
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "A query goes viral",
+   "scenario": "A breaking-news term explodes: within a minute, millions of people are typing the same prefix, and at some point the cache entry for that prefix expires.",
+   "reveal": "The layered read path holds. Edge caches and replicated cache keys serve most of the viral lookups without reaching a shard, and the fast trending layer has already injected the term so the list is correct rather than stale. The one dangerous instant is the cache expiry, when a million misses could stampede the owning shard; single-flight coalescing lets exactly one miss refill the key while the rest wait for it, so the shard sees one walk, not a million. inv4 and inv5 both hold; the cost is a few milliseconds of queued waiting at expiry."
+  },
+  {
+   "id": "st2",
+   "title": "A suggestion must be pulled now",
+   "scenario": "An unsafe or defamatory completion is discovered in the live suggestions. It cannot wait hours for the next full rebuild to disappear.",
+   "reveal": "The removal goes through the fast path, not the batch build. A suppression entry is checked on every serve so the term stops being offered immediately, and the cache entries for the affected prefixes are evicted so no stale list keeps serving it. It is gone within seconds. inv5 holds. The price is that every serve now pays a suppression check, and correctness leans on the fast path being reliable, since the slow build would take hours to catch up."
+  },
+  {
+   "id": "st3",
+   "title": "Answers race on a slow link",
+   "scenario": "A user on a poor connection types 'restaurant'. The response for 'resta' is delayed in the network and arrives after the response for 'restaurant' has already been shown.",
+   "reveal": "The box's prefix tag saves the display. Each response is checked against the text currently in the box, and the late 'resta' list no longer matches, so it is discarded rather than painted over the correct one. inv3 holds: the dropdown never shows suggestions for a prefix the user has left. If nothing arrives inside the budget, the box shows its last valid list or nothing, never a stale one, which is inv4 choosing silence over a wrong answer."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "When a lookup must not depend on corpus size, index by the shape of the query: a trie makes prefix cost proportional to the prefix, not the data.",
+   "When an answer is read far more than it changes, compute it once at write time and store it; move ranking and aggregation off the hot path into the build.",
+   "Match a bursty producer to a steady consumer at the edge: coalesce what you can skip, and make superseded work identifiable so you can discard it instead of acting on it.",
+   "When reads dwarf changes and the answer is identical across readers, move it close to the reader and pay for speed in bounded staleness.",
+   "When the truth moves faster than you can rebuild, overlay a small fresh layer on the big slow one and let recency win, rather than rebuilding faster.",
+   "Partition on a key every request already carries, then treat the single hottest key as its own problem, because averages hide the item that takes you down."
+  ],
+  "mappings": [
+   {
+    "mechanism": "prefix trie with per-node top-k",
+    "elsewhere": "IDE and shell autocomplete, contact and emoji pickers, and spell-suggest all walk a prefix structure with precomputed best-completions at each node."
+   },
+   {
+    "mechanism": "precompute the ranked answer at build time",
+    "elsewhere": "Materialised views, leaderboards, recommendation feeds, and search result caches all move ranking off the read path into a periodic build."
+   },
+   {
+    "mechanism": "debounce and cancel-stale on the client",
+    "elsewhere": "Live search filters, map pan-and-zoom tiles, and any as-you-type field coalesce input and drop out-of-order responses to avoid flicker."
+   },
+   {
+    "mechanism": "cache-aside on a head-heavy key distribution",
+    "elsewhere": "DNS, product catalogues, and CDN edges all front a source of truth with an in-memory cache because a tiny hot set dominates the traffic."
+   },
+   {
+    "mechanism": "batch index plus a real-time speed layer",
+    "elsewhere": "Trending topics, fraud scoring, and analytics dashboards all overlay a fast streaming layer on a slow batch build, the lambda architecture."
+   }
+  ]
+ }
+}

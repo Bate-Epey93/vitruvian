@@ -1,0 +1,734 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "Rate limiter",
+  "narrowing": "The per-caller request rate limiter that sits on the critical path and returns allow or reject for each incoming request, keyed by caller identity. Quota billing, network-layer DDoS scrubbing, and concurrency (in-flight) limits are left out; they reuse this spine but do not shape it.",
+  "ordering_note": "This is the canonical path a rate limiter walks from a weekend counter to a global sharded service, not one dated outage. Each layer is forced by the concrete failure the previous state hits next: first a count with no clock is not a rate, then the fixed window's boundary seam leaks a double burst, then smoothing rejects legitimate bursts, then per-server state multiplies the limit, then an unverified key makes the cap meaningless, and finally the shared store's hot key and single point of failure. history_confidence is medium because the mechanisms and their failure modes are canonical and checkable, not because a specific named incident is being retold.",
+  "history_confidence": "medium",
+  "domain": "software"
+ },
+ "essence": {
+  "text": "A rate limiter is a bouncer that has to decide, in the time it takes to read a name off a list, whether to let each request through. It stands in front of everything valuable and answers one question, 'may this caller proceed?', millions of times a second, keyed by who is asking, so that no single caller can drink the whole system dry and leave everyone else with nothing. The entire craft is packing a fair, global, adversary-proof decision into a few microseconds and two integers.",
+  "beginner": "A rate limiter controls how often each user is allowed to hit a service. If the rule is 100 requests a minute, it lets the first 100 through and turns the rest away until time passes. This stops any one user, or a runaway program, from overwhelming the service and slowing it down for everyone else.",
+  "deep_facts": [
+   "A fixed-window limiter set to N per minute will happily pass 2N requests in a two-second span: N in the last second of one window and N in the first second of the next, and each window only ever saw its lawful N.",
+   "A token-bucket limiter stores just two numbers per caller, a token count and a last-refill timestamp, and refills by arithmetic at check time, so it never runs a background timer for millions of buckets.",
+   "Token bucket and leaky bucket are duals: a token bucket allows a burst then enforces the average, while a leaky bucket forces a constant drip and queues or drops whatever arrives faster.",
+   "The exact algorithm, a sliding-window log, stores one timestamp per request in the window, so a 10,000 per second limit costs 10,000 stored timestamps per caller; the sliding-window counter approximates the same answer with two integers.",
+   "The check has to cost less than the request it guards, or the limiter becomes the very bottleneck it was installed to prevent; a limiter that does a database round trip per request has already lost."
+  ]
+ },
+ "strip_down": {
+  "purpose": "For every incoming request, decide allow or reject fast enough to sit on the critical path, so that no caller exceeds its allotted rate and one caller's excess never starves the others.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Caller",
+    "want": "Every legitimate request served, and a clear, immediate signal (not a hang) when it is being throttled"
+   },
+   {
+    "id": "a2",
+    "name": "Protected service",
+    "want": "To never receive more traffic than it can handle, no matter who sends it or how they burst"
+   },
+   {
+    "id": "a3",
+    "name": "Operator",
+    "want": "Fair sharing between callers and enforcement so cheap the limiter itself never becomes the bottleneck or a new point of failure"
+   },
+   {
+    "id": "a4",
+    "name": "Abuser",
+    "want": "To consume as much capacity as possible by bursting, rotating identities, or racing requests across servers"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "No caller is admitted above its configured rate over the window that rate is defined on."
+   },
+   {
+    "id": "inv2",
+    "text": "The allow/reject check is constant-time and far cheaper than the work it guards, so the limiter never becomes the bottleneck."
+   },
+   {
+    "id": "inv3",
+    "text": "The cap is global per caller: the whole fleet enforcing a limit together never admits more than one caller's quota."
+   },
+   {
+    "id": "inv4",
+    "text": "The limiter is never a single point of failure for the service; if its own state is unreachable it degrades to a safe default instead of blocking everyone."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Caller identity",
+    "note": "The key the count is charged against (API key, user id, or IP). Choosing it correctly is most of the design."
+   },
+   {
+    "id": "en2",
+    "name": "Policy / limit",
+    "note": "The rule: how many requests per unit time, plus any burst allowance, possibly per tier or per endpoint."
+   },
+   {
+    "id": "en3",
+    "name": "Bucket / counter state",
+    "note": "The tiny per-caller record read and written on every request: a windowed count, or tokens plus a last-refill timestamp."
+   },
+   {
+    "id": "en4",
+    "name": "Verdict",
+    "note": "Allow or reject, plus the Retry-After the caller needs to back off politely."
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Decision: a request arrives carrying an identity; the limiter reads that caller's state, decides allow or reject, updates the state, and returns the verdict before the request reaches the service."
+   },
+   {
+    "id": "f2",
+    "text": "Recovery: allowance replenishes over time (tokens drip back, windows roll), so a throttled caller automatically recovers without any operator action."
+   }
+  ],
+  "constraints": [
+   "The check runs on every request's critical path, so it must add microseconds, not milliseconds; a slow limiter is worse than no limiter.",
+   "There may be millions of distinct callers, and the state is touched on every request, so per-caller state must be tiny and cheap to update.",
+   "Callers are adversarial: identities can be spoofed, bursts are deliberate, and requests can be raced across servers to beat the counter.",
+   "Enforcing 'N per second' means agreeing on when a second begins and ends across machines whose clocks drift, so time itself is a shared, imperfect resource."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "people",
+    "label": "People"
+   },
+   {
+    "id": "service",
+    "label": "Service"
+   },
+   {
+    "id": "storage",
+    "label": "Storage"
+   },
+   {
+    "id": "control",
+    "label": "Control"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "caller",
+    "label": "Caller",
+    "kind": "actor",
+    "lane": "people",
+    "order": 0
+   },
+   {
+    "id": "limiter",
+    "label": "Limiter",
+    "kind": "process",
+    "lane": "service",
+    "order": 1
+   },
+   {
+    "id": "api",
+    "label": "Protected API",
+    "kind": "process",
+    "lane": "service",
+    "order": 3
+   },
+   {
+    "id": "counter",
+    "label": "Counter map",
+    "kind": "store",
+    "lane": "storage",
+    "order": 2
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_req",
+    "from": "caller",
+    "to": "limiter",
+    "kind": "payload",
+    "label": "request"
+   },
+   {
+    "id": "e_count",
+    "from": "limiter",
+    "to": "counter",
+    "kind": "control",
+    "label": "count++"
+   },
+   {
+    "id": "e_pass",
+    "from": "limiter",
+    "to": "api",
+    "kind": "payload",
+    "label": "allow"
+   },
+   {
+    "id": "e_deny",
+    "from": "limiter",
+    "to": "caller",
+    "kind": "control",
+    "label": "429 reject"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "A Rate Needs a Clock: The Fixed Window",
+   "problem": {
+    "statement": "The naive limiter keeps a running count per caller and rejects anyone past N. But a count with no clock is a lifetime quota, not a rate: a steady, well-behaved caller sends its N requests over an hour and is then locked out forever, while nothing ever forgives old traffic. The word 'rate' means events per unit of time, and this design has thrown the time away.",
+    "beginner": "The first idea is to count each user's requests and stop them at 100. But if you never reset that count, a normal user who makes 100 requests over a whole day is banned for good. A limit with no clock is not a speed limit, it is a total you can never exceed.",
+    "model": {
+     "id": "first-principles",
+     "application": "Strip 'rate limiting' to what a rate actually is, events divided by time, and bind every count to a slice of the clock so old traffic ages out."
+    }
+   },
+   "gate": {
+    "question": "You have a per-caller counter and a limit of N. What one ingredient turns it from a lifetime cap into a rate, and how do you add it without keeping a history of every request?",
+    "hint": "Chop time into equal slices. If the count belongs to the current slice, what happens to last slice's count when the clock ticks over?"
+   },
+   "solution": "Divide time into fixed windows (say, one-minute buckets). Key the counter by (caller, current window), increment on each request, and reject once it passes N. When the clock rolls into the next window the key changes, so the old count is simply abandoned and the caller starts fresh. One integer per caller per active window, no request history, an O(1) check.",
+   "user_lens": {
+    "gives": "A real speed limit: a caller can spend its whole allowance, go quiet, and get the full allowance again next window, forever.",
+    "costs": "The reset is a cliff, not a curve. A caller that hits the limit early sees every request rejected until the window rolls, even if traffic has calmed down, and it cannot borrow against the next window."
+   },
+   "tech_lens": {
+    "mechanism": "A counter keyed by caller and window id (for example floor(now / window_size)); increment-and-compare against the limit; the previous window's count is discarded implicitly because its key is no longer written or read.",
+    "principle": "A rate is a count over time. Bind the count to a clock slice and expiry becomes free: you never delete old data, you just stop addressing it."
+   },
+   "tradeoff": "Simplicity buys a coarse, bursty enforcement. Within a window the limiter cannot tell a smooth caller from one that fires all N requests in the first millisecond, and the hard reset at the boundary is the seam the next layer has to attack.",
+   "at_scale": "A fixed-window counter is the cheapest possible limiter: one integer, one atomic increment, constant memory per active caller because dead windows evict themselves. It scales to millions of callers on a single node. Its weakness is not cost but correctness at the window seam, which the next layer confronts, and shared state across nodes, which a later one does.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "counter keyed by (caller, window)",
+      "software_concept": "a bucketed counter with a TTL equal to the window, so expiry is automatic"
+     }
+    ],
+    "interview_probes": [
+     "Why is a plain per-caller counter with no time component not a rate limiter at all, and what is the smallest change that makes it one?"
+    ],
+    "approach": "Store an integer at key caller:floor(now/window). INCR it, set its TTL to the window length on first write, and reject when the value exceeds N. The TTL makes old windows disappear on their own; you never run a cleanup job.",
+    "vocab": [
+     "rate-limiting",
+     "load-shedding"
+    ]
+   },
+   "beginner_analogy": "Like a nightclub that counts heads and resets the tally every hour on the hour. Come in during a busy hour and you might be turned away; wait for the clock to strike and the count starts over.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "fixed_window",
+      "label": "Fixed window",
+      "kind": "process",
+      "lane": "control",
+      "order": 0
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_win",
+      "from": "fixed_window",
+      "to": "limiter",
+      "kind": "control",
+      "label": "window id"
+     }
+    ],
+    "highlight": [
+     "counter",
+     "limiter"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 2,
+   "name": "The Boundary Burst: Sliding the Window",
+   "problem": {
+    "statement": "Fixed windows have a seam, and the seam leaks. A caller limited to N per minute can send N requests in the last second of 10:00 and another N in the first second of 10:01: two full allowances, 2N requests, inside a two-second span, and each window saw only its lawful N. An attacker who lines their burst up with the boundary doubles their rate, and the doubled burst lands exactly when the service is least ready for it.",
+    "beginner": "The clock reset has a weak spot. If your limit is 100 a minute, you can send 100 at 11:59:59 and another 100 at 12:00:01, which is 200 requests in about two seconds, yet each minute only counted 100. Someone who aims for the reset moment gets double.",
+    "model": {
+     "id": "inversion",
+     "application": "Name the exact way the fixed window fails, a burst straddling the reset, and design the counting so that failure cannot be expressed rather than merely discouraged."
+    }
+   },
+   "gate": {
+    "question": "Your per-minute count is honest inside each minute but blind across the seam between them. How do you count 'the last 60 seconds' at every instant, without storing a timestamp for every single request?",
+    "hint": "You already have this minute's count and last minute's count. If you are 15 seconds into the current minute, how much of last minute is still inside a rolling 60-second view?"
+   },
+   "solution": "Slide the window instead of resetting it. The exact form, a sliding-window log, stores each request's timestamp and counts how many fall inside the trailing window, but that costs one timestamp per request. The practical form, a sliding-window counter, keeps just the current and previous fixed-window counts and estimates the rolling total as current + previous * (fraction of the previous window still inside the trailing window). Two integers, O(1), and the 2N boundary burst collapses to roughly N.",
+   "user_lens": {
+    "gives": "A limit that means the same thing at every instant, not just at the top of the minute. Bursts aimed at the reset no longer buy double, so the caller's real experienced rate matches the stated one.",
+    "costs": "The sliding-window counter is an estimate, not a census. It assumes the previous window's requests were spread evenly, so it can be slightly generous or slightly strict against a caller whose traffic was itself bursty within that window."
+   },
+   "tech_lens": {
+    "mechanism": "Weighted two-window sum: estimate = current_count + previous_count * overlap_fraction, recomputed per request from two integers and the current clock offset. The exact alternative keeps a log of timestamps and evicts those older than the window.",
+    "principle": "When a discrete boundary creates a failure, make the boundary continuous. Approximating a rolling window with two adjacent counts trades a little accuracy for constant memory and kills the edge case."
+   },
+   "tradeoff": "You accept a small, bounded approximation error in exchange for O(1) memory. The exact log is precise but its cost scales with the limit itself, which is unaffordable for high limits or millions of callers.",
+   "at_scale": "The sliding-window counter stays two integers per caller no matter how high the limit, so it scales exactly like the fixed window while removing the boundary exploit. The exact log does not: a limit of 10,000 per second means 10,000 stored timestamps per caller, so its memory scales with the limit and it is reserved for low-limit, high-value endpoints.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "weighted current+previous window estimate",
+      "software_concept": "a rolling approximation that holds two counters instead of an event log"
+     }
+    ],
+    "interview_probes": [
+     "Walk through the 2x boundary burst on a fixed window, then show how a sliding-window counter reduces it and what accuracy you give up to get O(1) memory."
+    ],
+    "approach": "Keep two integer counts, current and previous window, each with a window TTL. On each request compute elapsed = now mod window; estimate = current + previous * (1 - elapsed/window); reject if estimate >= N. No per-request timestamps.",
+    "vocab": []
+   },
+   "beginner_analogy": "Like a doorman who does not wipe the clipboard on the hour but instead always looks back exactly sixty minutes, counting part of the previous hour depending on how far into this one you are. There is no magic minute where the count suddenly forgets.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "sliding",
+      "label": "Sliding window",
+      "kind": "process",
+      "lane": "control",
+      "order": 1
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_feed",
+      "from": "fixed_window",
+      "to": "sliding",
+      "kind": "control",
+      "label": "curr + prev"
+     },
+     {
+      "id": "e_slide",
+      "from": "sliding",
+      "to": "limiter",
+      "kind": "control",
+      "label": "rolling count"
+     }
+    ],
+    "highlight": [
+     "fixed_window"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 3,
+   "name": "Bursts Are Not Abuse: The Token Bucket",
+   "problem": {
+    "statement": "Smoothing the window fixed the exploit but broke a legitimate pattern. Real clients are bursty on purpose: a page load fires twenty parallel requests, a batch job flushes a hundred rows at once, a mobile app syncs on wake. A flat rolling rate rejects those honest bursts unless you raise the limit so high it no longer protects anything. You are forced to choose between blocking good traffic and admitting bad, because one number cannot express both 'a short burst is fine' and 'a high sustained rate is not'.",
+    "beginner": "Normal apps often send a quick clump of requests, then go quiet. A smooth limit punishes that clump even though the average is fine. To let the clump through you would have to raise the limit so much that it stops protecting the service. One dial cannot say both 'a quick burst is okay' and 'a steady flood is not'.",
+    "model": {
+     "id": "queue-and-buffer",
+     "application": "Give each caller a bucket that holds a reserve of permits. The bucket absorbs a burst up to its size, then the steady refill rate governs the sustained pace, so burst allowance and average rate become two separate dials."
+    }
+   },
+   "gate": {
+    "question": "You want to allow a short burst of up to B requests but cap the long-run rate at r per second. What single mechanism encodes both a burst size and a sustained rate, and updates in O(1) without a background timer?",
+    "hint": "Imagine a bucket that fills with permits at a steady drip up to a maximum. Spending a permit costs one request. What do the bucket's size and its drip rate each control?"
+   },
+   "solution": "The token bucket. Each caller has a bucket of capacity B, refilled at r tokens per second up to the cap. Every request tries to remove one token; if the bucket is empty, reject. Store only two numbers, the current token count and the last-refill timestamp. On each check, add r * (now - last_refill) tokens (capped at B), then try to spend one. Bursts up to B pass instantly; sustained throughput settles at r. Its dual, the leaky bucket, instead drains at a fixed rate r and queues or drops the overflow, giving a perfectly smooth output where the token bucket gives a controlled-burst one.",
+   "user_lens": {
+    "gives": "Honest bursty clients work as designed while the sustained ceiling still holds. Two independent dials, burst size and refill rate, let the operator shape traffic instead of just capping it.",
+    "costs": "Two dials mean two ways to misconfigure. Set B too large and a caller can dump a damaging burst all at once; set r too low and legitimate sustained use starves. The right values now depend on understanding each caller's real shape."
+   },
+   "tech_lens": {
+    "mechanism": "Lazy-refill token bucket: state is (tokens, last_refill_ts); each check computes tokens = min(B, tokens + r * (now - last_refill_ts)), decrements on success, and rejects on empty. No timer thread, because refill is arithmetic evaluated at read time. Leaky bucket is the same idea inverted: a fixed-rate drain with a bounded queue.",
+    "principle": "Separate the things that were being conflated. Burstiness and sustained rate are different properties; a buffer with a size and a drain rate gives each its own control."
+   },
+   "tradeoff": "You trade a single obvious number for a small model of traffic. The token bucket is more expressive but demands you know, or measure, how each caller actually behaves, and a generous burst size is itself a small load you have agreed to accept at any instant.",
+   "at_scale": "The token bucket is still two integers and an O(1) update per request, so it is as cheap as the counters before it while being strictly more expressive, which is why it is the default in production limiters. Lazy refill is what makes it scale: you never run timers for millions of buckets, you compute the refill only when a caller actually shows up, so idle callers cost nothing.",
+   "defends": [
+    "inv1",
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "lazy-refill token bucket",
+      "software_concept": "a two-field record (tokens, last_refill) refilled by arithmetic at access time, no scheduler"
+     },
+     {
+      "mechanism": "leaky bucket as the dual",
+      "software_concept": "a fixed-rate drain over a bounded queue: shape output instead of gating input"
+     }
+    ],
+    "interview_probes": [
+     "Token bucket versus leaky bucket: which shapes bursts and which smooths output, and what does each store per caller?",
+     "How does lazy refill let a token bucket serve millions of callers without a single background timer?"
+    ],
+    "approach": "Store a hash of {tokens, ts} per caller. On each request: tokens = min(B, tokens + r*(now-ts)); ts = now; if tokens >= 1 { tokens -= 1; allow } else reject. Two fields, one read-modify-write, no cron.",
+    "vocab": [
+     "backpressure"
+    ]
+   },
+   "beginner_analogy": "Like an arcade token dispenser that refills at a steady trickle up to a full tray. You can grab a whole tray at once for a quick burst of games, but after that you can only play as fast as new tokens drip in.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "token_bucket",
+      "label": "Token bucket",
+      "kind": "process",
+      "lane": "control",
+      "order": 0
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_tb",
+      "from": "token_bucket",
+      "to": "limiter",
+      "kind": "control",
+      "label": "spend token"
+     }
+    ],
+    "highlight": [
+     "fixed_window",
+     "sliding"
+    ],
+    "remove": [
+     "fixed_window",
+     "sliding"
+    ]
+   }
+  },
+  {
+   "index": 4,
+   "name": "One Truth for the Whole Fleet: The Shared Counter",
+   "problem": {
+    "statement": "Everything so far lived in one server's memory. Put the service behind a load balancer with ten app servers, each with its own local bucket, and a caller limited to 100 per minute now gets up to 1,000: a hundred from whichever server it happens to hit, times ten servers, because no bucket knows about the others. Worse, the limit becomes nondeterministic, depending on how the balancer sprays requests. The per-server copies each think they are the truth, and together they admit ten times the cap.",
+    "beginner": "Big services run on many servers at once. If each server keeps its own count, a user allowed 100 requests gets 100 on every server, so ten servers means 1,000. Each server is honest on its own, but together they let through far more than the limit.",
+    "model": {
+     "id": "single-source-of-truth",
+     "application": "The count cannot live in ten places that disagree. Move it to one authoritative store every server reads and writes, so 'how many has this caller used?' has exactly one answer for the whole fleet."
+    }
+   },
+   "gate": {
+    "question": "Ten servers each enforce the same 100/minute limit locally, and a caller is getting 1,000. Where does the count have to live, and what must be true about updating it when ten servers race to spend the same caller's last token?",
+    "hint": "One shared number, not ten local ones. But if two servers read '1 token left' at the same instant, both will spend it. What kind of operation stops that?"
+   },
+   "solution": "Move the bucket state to a shared, fast, in-memory store (Redis or Memcached) that every app server reads and writes, keyed by caller. Make the spend atomic so racing servers cannot both take the last token: a single INCR-and-compare, or a small server-side script that refills and decrements the bucket in one indivisible step. Now there is one bucket per caller for the entire fleet, and the global cap holds no matter which server answers.",
+   "user_lens": {
+    "gives": "The stated limit is the real limit, fleet-wide, regardless of how many servers run or which one a request lands on.",
+    "costs": "Every request now makes a network round trip to the shared store, adding latency and a dependency to the hot path, and the atomic operation serializes concurrent spends on a popular caller, so the store's throughput becomes a ceiling."
+   },
+   "tech_lens": {
+    "mechanism": "Per-caller bucket state in a shared in-memory store; the check is a single atomic read-modify-write (INCR with expiry, or a Lua script that does refill-and-decrement server-side) so no interleaving of two servers can double-spend a token.",
+    "principle": "When copies disagree, elect one authority. Replace N local counters with one shared counter, and guard its update with an atomic operation so concurrency cannot corrupt the count."
+   },
+   "tradeoff": "You trade a free in-memory check for a network hop and a hard dependency: the limiter is now correct across the fleet but slower per request and coupled to a store that can be slow, hot, or down, problems the last layer must face.",
+   "at_scale": "One shared store centralizes the count but also centralizes the load: every request in the fleet now touches it, so it must be in-memory and its atomic op must be cheap, and a single very active caller funnels all its traffic to the one key that holds its bucket. That concentration, the hot key, plus the store becoming a fleet-wide dependency, are exactly the ceilings the final layer breaks through.",
+   "defends": [
+    "inv3",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "shared counter with atomic spend",
+      "software_concept": "centralized state in Redis; INCR or a Lua refill-and-decrement as the one-step critical section"
+     },
+     {
+      "mechanism": "expiry on the key",
+      "software_concept": "let the store evict idle buckets with a TTL instead of sweeping them"
+     }
+    ],
+    "interview_probes": [
+     "Ten servers, local buckets, one caller: why does the effective limit become 10x, and what exactly moves to fix it?",
+     "Two servers try to spend a caller's last token at the same instant. What operation guarantees only one succeeds?"
+    ],
+    "approach": "Put the bucket in Redis keyed by caller. Do the refill and decrement in one atomic Lua script (or INCR + EXPIRE for a fixed window) so the read-modify-write cannot interleave. Return allow/deny plus the TTL as Retry-After.",
+    "vocab": [
+     "distributed-cache",
+     "contention"
+    ]
+   },
+   "beginner_analogy": "Like a chain of bars that share one guest list at the front desk instead of each keeping its own. Without the shared list, a banned guest just walks to the next door; with it, one refusal counts everywhere.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "shared_store",
+      "label": "Shared counters",
+      "kind": "store",
+      "lane": "storage",
+      "order": 4,
+      "expands_to": "Distributed cache"
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_state",
+      "from": "limiter",
+      "to": "shared_store",
+      "kind": "control",
+      "label": "atomic spend"
+     }
+    ],
+    "highlight": [
+     "counter",
+     "limiter"
+    ],
+    "remove": [
+     "counter"
+    ]
+   }
+  },
+  {
+   "index": 5,
+   "name": "Counting the Right Caller: Identity at the Boundary",
+   "problem": {
+    "statement": "A globally correct limiter is still only as good as the key it counts. Key by IP and a corporate NAT or mobile carrier puts thousands of real users behind one address, so they throttle each other, while an abuser rents a hundred cheap IPs and multiplies their quota by a hundred. The identity arrives from outside, unverified, and the limiter has been trusting it. If the key can be spoofed or shared, the cap protects nothing.",
+    "beginner": "The limiter counts per 'who', but who is that? If it uses the network address, a whole office sharing one connection gets treated as a single user and blocks each other, while a cheater who buys many addresses looks like many users. The limiter has been trusting whatever the request claims to be.",
+    "model": {
+     "id": "trust-boundary",
+     "application": "The caller's identity crosses from the untrusted outside into the system. Verify it at that line, key the limit to an identity the caller cannot forge or cheaply multiply, and apply the limits at the edge before the request reaches anything expensive."
+    }
+   },
+   "gate": {
+    "question": "IP is spoofable, shareable, and rentable. What do you count against instead so that one caller cannot cheaply look like a thousand, and where in the request path should that check happen?",
+    "hint": "Tie the limit to something the caller had to authenticate to get. And put the whole check as far forward as possible, before the request touches your real work."
+   },
+   "solution": "Resolve a verified identity at the edge, an authenticated API key, account id, or signed token, and key the limit to that, falling back to IP only for anonymous traffic. Apply layered limits at once: per key, per account, per endpoint, and a coarse per-IP net for the unauthenticated. Run the whole check at the API gateway so a rejected request is turned away before it consumes any real backend work.",
+   "user_lens": {
+    "gives": "The limit tracks a real, hard-to-forge caller, so shared connections stop cross-throttling and buying more IPs stops buying more quota. Rejections happen at the door, cheaply.",
+    "costs": "Identity now has to be resolved and trusted on every request, adding an auth lookup to the path, and the operator inherits a policy problem: which key, which tier, which endpoint, and what to do with anonymous callers who have no stable identity at all."
+   },
+   "tech_lens": {
+    "mechanism": "Authenticate at the edge, derive the limit key from the verified principal, and evaluate a set of limits (per key, per account, per route, per IP) in one gateway pass, each against its own bucket in the shared store.",
+    "principle": "Enforce where you can verify. A limit is only as trustworthy as the identity it is keyed to, so pin it to something authenticated and check it at the boundary, before spending real resources."
+   },
+   "tradeoff": "You give up the simplicity of the free, always-present IP for a verified identity that costs a lookup and forces real policy decisions, and anonymous traffic still needs a weaker, coarser net because it has nothing solid to key on.",
+   "at_scale": "Layered keys multiply the number of buckets checked per request (a few small atomic ops instead of one), which the shared store absorbs cheaply, and checking at the gateway is what makes rejection scale: shed load at the edge and your expensive backends never see the traffic you were going to deny anyway. The residual pressure is that a single hot identity concentrates on one bucket, the problem the last layer solves.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "key the limit to a verified principal",
+      "software_concept": "authenticate first, then rate-limit on the authenticated id, not the raw IP"
+     },
+     {
+      "mechanism": "layered per-key / per-IP limits at the gateway",
+      "software_concept": "multiple buckets evaluated at the edge; deny before the request reaches a service"
+     }
+    ],
+    "interview_probes": [
+     "Why is keying a limit on IP both too strict (shared NAT) and too loose (rented IPs), and what do you key on instead?",
+     "Where in the request path do you run the limit check, and why is the gateway better than the service itself?"
+    ],
+    "approach": "At the gateway, resolve the API key or account from the auth token, then check several buckets in one shared-store pipeline: key:<id>, account:<acct>, route:<path>, ip:<ip>. Deny if any is exhausted, before proxying to the backend.",
+    "vocab": [
+     "api-gateway"
+    ]
+   },
+   "beginner_analogy": "Like a members' club checking your membership card instead of counting by the car you arrived in. A carpool of members no longer counts as one person, and you cannot get extra entries just by borrowing more cars.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "identity",
+      "label": "Identity resolver",
+      "kind": "process",
+      "lane": "service",
+      "order": 0
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_id",
+      "from": "caller",
+      "to": "identity",
+      "kind": "payload",
+      "label": "request + key"
+     },
+     {
+      "id": "e_fwd",
+      "from": "identity",
+      "to": "limiter",
+      "kind": "payload",
+      "label": "keyed request"
+     }
+    ],
+    "highlight": [
+     "e_req"
+    ],
+    "remove": [
+     "e_req"
+    ]
+   }
+  },
+  {
+   "index": 6,
+   "name": "The Limiter Under Fire: Hot Keys and Fail-Open",
+   "problem": {
+    "statement": "The shared store made the limiter correct and then made it fragile. Two failures arrive together at scale. First, the hot key: an abuser hammering one identity drives every one of those requests to the single store key that holds that caller's bucket, so the very counter meant to throttle the attack is the first thing the attack melts, and it can take its shard down with it. Second, the store is now on every request's critical path, so if it slows or dies, the naive limiter blocks the entire service, turning a limiter outage into a total outage. The thing installed to protect availability has become the biggest threat to it.",
+    "beginner": "Two problems show up when this runs for real. A single attacker pounding one account sends all that traffic to the one place that stores that account's count, overwhelming it. And because every request now checks the shared counter, if that counter is slow or down, nobody can get in at all, so the safety device becomes the thing that breaks the site.",
+    "model": {
+     "id": "bottleneck",
+     "application": "Find the two ceilings, the single hottest key and the shared store on the critical path, and route around each: spread buckets across shards, defend the hot key with a local pre-check, and make the limiter fail open so its own failure never blocks the service."
+    }
+   },
+   "gate": {
+    "question": "One identity's bucket is a single key taking millions of hits a second, and the store that holds it is on every request's path. How do you keep that one key from melting its shard, and how do you make sure a dead limiter does not take down the service it guards?",
+    "hint": "The hottest key needs a copy closer to the request, so most hits never reach the shared store. And ask: when the limiter cannot decide, is the safe default to block everyone or to let them through?"
+   },
+   "solution": "Shard the buckets across many store nodes by hashing the caller key, so load and data spread evenly and no single node holds the whole namespace. For the hot key, keep a small local token bucket in each app server that pre-admits or pre-rejects most requests in memory and only syncs with the shared store periodically, so a viral caller is mostly handled locally and the shared key sees a trickle, not a flood. And make the limiter fail open: if the store is unreachable within a tight timeout, allow the request (optionally falling back to the local bucket) rather than block, because a limiter that cannot decide must not become an outage. Fail closed only for endpoints where over-admission is worse than downtime.",
+   "user_lens": {
+    "gives": "A limiter that survives both a single viral caller and its own backing store failing, and that grows by adding shards instead of hitting a wall.",
+    "costs": "Local pre-checks make the global count approximate for the hottest callers, allowing a small controlled overshoot, and fail-open means that during a store outage the limits briefly do not hold at all. You are choosing availability over exactness at the two worst moments."
+   },
+   "tech_lens": {
+    "mechanism": "Hash-based sharding of buckets across store nodes; a per-server local token bucket that absorbs most of a hot key's traffic and reconciles with the shared bucket on an interval; and a fail-open policy with a tight store timeout, with fail-closed reserved for the few endpoints where admitting too much is worse than serving nothing.",
+    "principle": "Averages hide the one key that takes you down; handle the hottest key as its own problem with a local copy. And a guard must fail toward the thing it protects: for a limiter, that usually means letting traffic through rather than becoming the outage."
+   },
+   "tradeoff": "Local pre-checks trade exactness for survival, letting the hot caller slightly overshoot; fail-open trades enforcement for uptime during store failures; sharding trades a simple single store for rebalancing and cross-node operations. Every one of these buys availability with a little correctness.",
+   "at_scale": "This is the architecture that actually holds at millions of requests a second: sharding scales the store horizontally, local pre-checks turn a hot key from a fleet-wide flood into a per-server trickle plus an occasional sync, and fail-open guarantees the limiter's own scaling limits can never cap the service below the store's ceiling. The residual truth is that global accuracy and single-key hotness trade off against each other, so the hottest callers are always enforced a little loosely on purpose.",
+   "defends": [
+    "inv2",
+    "inv4"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "hash-shard buckets across store nodes",
+      "software_concept": "partition the key space so no node owns it all; consistent hashing to limit reshuffle"
+     },
+     {
+      "mechanism": "local pre-check bucket for hot keys",
+      "software_concept": "an in-process token bucket that absorbs most hits and syncs periodically, coalescing load off the hot key"
+     },
+     {
+      "mechanism": "fail-open on store timeout",
+      "software_concept": "a circuit-breaker style fallback: when the limiter cannot decide fast, allow rather than block"
+     }
+    ],
+    "interview_probes": [
+     "One caller sends a million requests a second to a single bucket key. Walk through what protects the shard that owns it.",
+     "Your rate-limit store goes down. Should the limiter fail open or fail closed, and how does that choice differ by endpoint?"
+    ],
+    "approach": "Shard by hash(caller) across store nodes (a consistent-hashing ring so adding a node moves little). Front the shared bucket with a small in-process token bucket per server that syncs every N ms. Wrap the store call in a tight timeout that, on failure, allows the request (fail open) except on explicitly fail-closed routes.",
+    "vocab": [
+     "hot-key",
+     "sharding",
+     "circuit-breaker"
+    ]
+   },
+   "beginner_analogy": "Like a chain of ticket booths that split customers by last name so no booth is swamped, give each booth a small local stack of passes for the one celebrity everyone wants, and agree that if the head office phone line drops, they wave people through rather than freeze the whole queue.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "router",
+      "label": "Shard router",
+      "kind": "process",
+      "lane": "service",
+      "order": 2
+     },
+     {
+      "id": "local_cache",
+      "label": "Local bucket",
+      "kind": "store",
+      "lane": "storage",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_local",
+      "from": "limiter",
+      "to": "local_cache",
+      "kind": "control",
+      "label": "pre-check"
+     },
+     {
+      "id": "e_route",
+      "from": "limiter",
+      "to": "router",
+      "kind": "control",
+      "label": "shard by key"
+     },
+     {
+      "id": "e_shard",
+      "from": "router",
+      "to": "shared_store",
+      "kind": "control",
+      "label": "to shard"
+     }
+    ],
+    "highlight": [
+     "shared_store",
+     "e_state"
+    ],
+    "remove": [
+     "e_state"
+    ]
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "A caller times its burst to the window seam",
+   "scenario": "A caller limited to 100 per minute sends 100 requests at 11:59:59.5 and another 100 at 12:00:00.5, deliberately aiming to double its rate across the window reset.",
+   "reveal": "On the original fixed-window design this admits 200 requests in one second, each window seeing only its lawful 100. The sliding-window counter, and the token bucket that replaced it, count a rolling window instead, so the second burst still sees the first in view and is throttled back to roughly the true 100. The token bucket additionally caps the instantaneous burst at its capacity B. inv1 holds and the boundary exploit is gone."
+  },
+  {
+   "id": "st2",
+   "title": "One account goes viral and gets attacked",
+   "scenario": "An attacker floods a single API key with a million requests a second, all hashing to one bucket on one shard.",
+   "reveal": "If every hit reached the owning shard it would melt. Instead each app server's local token bucket rejects most of the flood in memory and syncs only a trickle to the shared bucket, so the hot key sees a fraction of the traffic, and sharding confines the blast to one node while the rest of the fleet is untouched. inv2 holds because the per-request check stays cheap; the cost is that this one hot caller overshoots its global limit by a small, bounded amount, exactly the accuracy the local pre-check trades away."
+  },
+  {
+   "id": "st3",
+   "title": "The rate-limit store dies mid-peak",
+   "scenario": "The shared counter store becomes unreachable during peak traffic, so the limiter can no longer read or write any caller's bucket.",
+   "reveal": "Fail-open saves the service. Within a tight timeout the limiter stops waiting and allows requests, falling back to each server's local bucket where one exists, rather than blocking everyone, so a limiter outage degrades enforcement instead of taking the site down. inv4 holds. On the few endpoints marked fail-closed, where over-admission is worse than downtime, it rejects instead, a deliberate per-endpoint choice. Global limits stay loose only for as long as the store is down."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "A rate is a count over time; bind the count to a clock slice and expiry comes for free.",
+   "When a discrete boundary creates an exploit, make the boundary continuous, trading a little accuracy for a closed edge case.",
+   "Separate the properties you were conflating: burst allowance and sustained rate want different dials, so give each its own.",
+   "When copies disagree, elect one authority and guard its update with an atomic operation.",
+   "Enforce where you can verify: a limit is only as trustworthy as the identity it is keyed to, and cheapest when checked at the edge.",
+   "A guard must fail toward the thing it protects, and averages hide the single hottest key, so handle that key as its own problem."
+  ],
+  "mappings": [
+   {
+    "mechanism": "token bucket",
+    "elsewhere": "Network traffic shaping, TCP congestion control, and cloud API quotas all meter flow with a bucket that allows a burst then enforces an average."
+   },
+   {
+    "mechanism": "sliding window over fixed buckets",
+    "elsewhere": "Monitoring and billing systems compute rolling rates the same way, weighting the previous bucket so there is no reset seam to exploit."
+   },
+   {
+    "mechanism": "shared atomic counter",
+    "elsewhere": "Inventory decrements, seat booking, and feature-flag quotas all move a contended count to one authoritative store and guard it with an atomic op."
+   },
+   {
+    "mechanism": "fail-open guard with local fallback",
+    "elsewhere": "Auth caches, feature flags, and circuit breakers all decide what a gate does when it cannot reach its source of truth, choosing availability or safety per case."
+   },
+   {
+    "mechanism": "hot-key mitigation by local pre-check",
+    "elsewhere": "CDNs, distributed caches, and celebrity-account feeds all absorb a viral key with a copy close to the request so the origin sees only a trickle."
+   }
+  ]
+ }
+}

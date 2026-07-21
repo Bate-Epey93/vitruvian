@@ -1,0 +1,812 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "Ride matching",
+  "narrowing": "The real-time matching spine: from a rider's request to a dispatched, priced driver. It covers the geospatial index, freshness, the dispatch claim, batched assignment, surge, and city-to-planet scale. Navigation and turn-by-turn routing, payments and payouts, ratings, and the in-trip experience hang off this spine but do not shape it, so they are left out.",
+  "ordering_note": "This is not one dated outage but the standard path a matching system walks as it grows from a campus demo to a global fleet. Each layer is forced by the concrete failure the previous state hits next: first the full-fleet scan, then stale ghosts, then the dispatch race, then greedy myopic matching, then supply-demand collapse, then the single-node ceiling and the hot cell. history_confidence is medium because the mechanisms and their failure modes are canonical and checkable, not because a specific named incident is being retold.",
+  "history_confidence": "medium",
+  "domain": "software"
+ },
+ "essence": {
+  "text": "Ride matching is a market that clears in a couple hundred milliseconds. A rider taps once; somewhere a fleet of cars is streaming its position every few seconds, and the system must answer 'who is nearest, who is free, and what should this cost' before the rider looks up from their phone. The engine underneath is not a map. It is a geospatial index that turns 'who is near me' from a scan of the whole city into a lookup, wrapped in an auction that rebalances supply and demand cell by cell.",
+  "beginner": "Ride matching connects someone who wants a car right now with a nearby driver, in the time it takes to glance at a screen. Cars are moving and reporting where they are; when you request a ride, the app has to find a close, free driver, send them to you, and tell you the price, all at once and without ever sending the same driver to two people.",
+  "deep_facts": [
+   "A naive nearest-driver search measures the distance from the rider to every driver in the city on every request. With 50,000 active drivers and tens of thousands of requests a second, that is billions of distance calculations a second, which is why a geospatial index exists at all.",
+   "Driver locations are write-heavy and read-light: a car reports its position every few seconds whether or not anyone is looking, but that position is only read when someone nearby asks for a ride. It is the inverse of most databases.",
+   "Straight-line distance lies in a city. The crow-flies-nearest driver can be across a river with a fifteen-minute detour, while a slightly farther car is three minutes away, so real dispatch ranks by estimated time of arrival, not distance.",
+   "Geohash and S2 turn a two-dimensional 'who is near this point' question into a one-dimensional prefix or cell-id lookup, so a spatial search becomes an ordinary index range scan.",
+   "Surge pricing is a control loop, not a greed dial: raising the price in a supply-starved area suppresses some demand and pulls nearby drivers in, until supply and demand rebalance and the multiplier falls again."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Match a rider who wants a car now to the best nearby available driver, dispatch it, and price it, in real time and without ever double-booking a driver.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Rider",
+    "want": "A car that arrives quickly, at a price shown and honored before the trip begins"
+   },
+   {
+    "id": "a2",
+    "name": "Driver",
+    "want": "A steady stream of nearby requests and good earnings, with little idle time between trips"
+   },
+   {
+    "id": "a3",
+    "name": "Platform",
+    "want": "Every request matched to the best driver in a few hundred milliseconds, high fleet utilization, and no driver sent to two riders at once"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "One driver, one ride. The system never assigns the same driver to two riders at the same time."
+   },
+   {
+    "id": "inv2",
+    "text": "A match is real and local. A rider is matched only to a driver who is actually nearby and currently available, never a stale, offline, or arbitrarily distant one."
+   },
+   {
+    "id": "inv3",
+    "text": "Every request resolves. An accepted request is matched to a driver or told 'no cars available' within a bounded time; it never hangs forever."
+   },
+   {
+    "id": "inv4",
+    "text": "The quoted price is honored. Once a rider is shown a price and accepts, that trip is charged at that price."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Driver",
+    "note": "A moving car with a status (free, held, on trip) and a position that changes every few seconds"
+   },
+   {
+    "id": "en2",
+    "name": "Rider request",
+    "note": "A pickup point, a destination, and a timestamp; lives only until it is matched or abandoned"
+   },
+   {
+    "id": "en3",
+    "name": "Location ping",
+    "note": "A driver's latest position, written constantly, read only when someone nearby searches"
+   },
+   {
+    "id": "en4",
+    "name": "Match",
+    "note": "The binding of one request to one driver; the thing the whole system exists to produce"
+   },
+   {
+    "id": "en5",
+    "name": "Cell",
+    "note": "A patch of the map with an id, the unit the geospatial index searches instead of raw coordinates"
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Drivers stream their position into the index continuously, whether or not anyone is searching."
+   },
+   {
+    "id": "f2",
+    "text": "A request flows in; nearby free drivers flow back; one is held, offered, and bound into a match."
+   },
+   {
+    "id": "f3",
+    "text": "Per-area supply and demand flow into a price signal, which flows back as a surge multiplier that moves both."
+   }
+  ],
+  "constraints": [
+   "Drivers move, so any stored location is already slightly wrong; freshness has a shelf life measured in seconds.",
+   "The nearest driver by straight-line distance is not the nearest by time; rivers, one-way streets, and traffic bend the map.",
+   "Demand is spiky and geographic: a concert ends and one neighbourhood needs five hundred cars in five minutes while the rest of the city is quiet.",
+   "A match must land in a couple hundred milliseconds; a rider watching a spinner abandons and opens a competitor."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "people",
+    "label": "People"
+   },
+   {
+    "id": "service",
+    "label": "Service"
+   },
+   {
+    "id": "storage",
+    "label": "Storage"
+   },
+   {
+    "id": "control",
+    "label": "Control"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "rider",
+    "label": "Rider",
+    "kind": "actor",
+    "lane": "people",
+    "order": 0
+   },
+   {
+    "id": "driver",
+    "label": "Driver",
+    "kind": "actor",
+    "lane": "people",
+    "order": 3
+   },
+   {
+    "id": "app",
+    "label": "Match server",
+    "kind": "process",
+    "lane": "service",
+    "order": 1
+   },
+   {
+    "id": "locations",
+    "label": "Driver table",
+    "kind": "store",
+    "lane": "storage",
+    "order": 2
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_ping",
+    "from": "driver",
+    "to": "app",
+    "kind": "payload",
+    "label": "GPS ping"
+   },
+   {
+    "id": "e_store",
+    "from": "app",
+    "to": "locations",
+    "kind": "payload",
+    "label": "write loc"
+   },
+   {
+    "id": "e_request",
+    "from": "rider",
+    "to": "app",
+    "kind": "payload",
+    "label": "request ride"
+   },
+   {
+    "id": "e_scan",
+    "from": "app",
+    "to": "locations",
+    "kind": "control",
+    "label": "scan all"
+   },
+   {
+    "id": "e_dispatch",
+    "from": "app",
+    "to": "driver",
+    "kind": "control",
+    "label": "dispatch"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "The Index: Search a Cell, Not a City",
+   "problem": {
+    "statement": "The naive matcher keeps every driver's position in one table and, on each request, measures the distance to all of them to find the nearest. That is a full scan per request. With tens of thousands of drivers and thousands of requests a second it is billions of distance calculations a second, and the table is simultaneously being rewritten by every car reporting its position every few seconds. The match server melts, and latency blows past the couple hundred milliseconds a rider will wait.",
+    "beginner": "The first version keeps all the cars in one list and, every time someone asks for a ride, checks the distance to every single car to find the closest. With a few cars that is fine. With tens of thousands, checking them all for every request is far too slow.",
+    "model": {
+     "id": "bottleneck",
+     "application": "The whole-fleet distance scan is the one constraint that caps throughput. Partition the map into cells so a search touches only the rider's neighbourhood, and the scan stops being proportional to the whole city."
+    }
+   },
+   "gate": {
+    "question": "You need the nearest free drivers to a point, thousands of times a second, over a set of points that is constantly moving. Scanning every driver per request is hopeless. How do you make 'who is near me' a lookup instead of a scan?",
+    "hint": "You do not need distance to every driver, only to the ones in the same patch of map. What if every position mapped to a cell id you could index?"
+   },
+   "solution": "Partition the map into cells with a geospatial scheme (a geohash prefix or an S2 cell id) and index drivers by cell. Each position maps to a cell; a search computes the rider's cell plus its ring of neighbours and reads only those buckets. A two-dimensional 'near this point' question becomes a one-dimensional lookup over cell ids, so a request touches a neighbourhood of drivers, not the fleet.",
+   "user_lens": {
+    "gives": "Matches that stay fast as the fleet grows, because the cost of a search depends on how many drivers are near the rider, not on how many exist in the world.",
+    "costs": "Cell edges are arbitrary. A driver just across a cell boundary can be closer than one in the rider's own cell, so the search must read neighbouring cells too, and the right cell size becomes a tuning problem that changes with density."
+   },
+   "tech_lens": {
+    "mechanism": "A geospatial index (geohash, S2, or Redis GEO) buckets each driver by a cell id derived from latitude and longitude. Queries expand the rider's cell into a neighbour ring and scan only those buckets.",
+    "principle": "When a search over a continuous space is too big, quantize the space into indexed cells so proximity becomes a key lookup. Turn geometry into an index."
+   },
+   "tradeoff": "You give up exactness at cell boundaries and inherit a cell-size tuning knob: cells too big and each bucket is a mini-scan, too small and one search must union many buckets.",
+   "at_scale": "The index is what lets matching scale at all: search cost tracks local driver density, not fleet size, so a city of a million cars costs the same per query as a town if the rider's neighbourhood is equally dense. The pressure moves to write throughput (every car updating its cell constantly) and to dense hot cells, both of which the next layers confront.",
+   "defends": [
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "map position to a cell id",
+      "software_concept": "geospatial indexing: geohash prefix or S2 cell, so a spatial query is a key-range scan"
+     },
+     {
+      "mechanism": "read the cell plus its neighbour ring",
+      "software_concept": "k-nearest search over a grid; union the adjacent buckets to fix boundary error"
+     }
+    ],
+    "interview_probes": [
+     "Why does a plain latitude/longitude table with a distance function stop working, and at what fleet size, and what does a geohash or S2 index change about the query?",
+     "A driver sits just over a cell boundary from the rider. How does your search avoid missing them?"
+    ],
+    "approach": "Encode each position as an S2 cell id or a geohash prefix and store drivers in a bucket per cell (a Redis GEO set or a sorted index on the cell id). To search, compute the rider's cell, union its eight neighbours, and rank only those drivers by distance.",
+    "vocab": [
+     "proximity-services",
+     "geospatial-index",
+     "indexing"
+    ]
+   },
+   "beginner_analogy": "Like finding the nearest coffee shop by looking only at your own map square and the eight around it, instead of measuring the distance to every coffee shop in the country.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "loc_cache",
+      "label": "Live geo index",
+      "kind": "store",
+      "lane": "storage",
+      "order": 2,
+      "expands_to": "Distributed cache"
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_idx",
+      "from": "app",
+      "to": "loc_cache",
+      "kind": "payload",
+      "label": "index loc"
+     },
+     {
+      "id": "e_query",
+      "from": "app",
+      "to": "loc_cache",
+      "kind": "control",
+      "label": "cells near"
+     },
+     {
+      "id": "e_near",
+      "from": "loc_cache",
+      "to": "app",
+      "kind": "payload",
+      "label": "cell drivers"
+     }
+    ],
+    "highlight": [
+     "app",
+     "locations",
+     "e_scan"
+    ],
+    "remove": [
+     "locations"
+    ]
+   }
+  },
+  {
+   "index": 2,
+   "name": "Freshness: No Ghost Cars",
+   "problem": {
+    "statement": "The index is fast, but every entry in it is a few seconds old, and a few seconds is a long time in traffic. A driver may have moved a block, ended their shift, or crashed their app since their last ping. Match a rider to a stale entry and you dispatch a car that is not where the index thinks, or not driving at all. The rider watches a phantom crawl toward them and then vanish. Offline drivers that stopped pinging linger in the buckets and keep getting matched.",
+    "beginner": "The list of cars is always a little out of date, because cars move and phones drop off. If the app matches you to a car that already left or turned off, you wait for a driver who never comes.",
+    "model": {
+     "id": "graceful-degradation",
+     "application": "When the last ping is too old, the safe assumption is that the driver is gone, not present. Treat missing knowledge as absence, so a silent driver drops out rather than being dispatched as a ghost."
+    }
+   },
+   "gate": {
+    "question": "Your index answers instantly, but its answers are seconds stale and some drivers behind it have quietly disappeared. How do you keep a rider from ever being matched to a car that is no longer there?",
+    "hint": "A live driver keeps announcing itself. What should happen to an entry whose driver has gone quiet for longer than a couple of heartbeats?"
+   },
+   "solution": "Give every index entry a short time-to-live and require drivers to heartbeat with each ping. A position not refreshed within a few seconds expires and drops from the buckets, so a search only ever returns drivers seen very recently. At the moment of dispatch, re-check that the chosen driver is still live and still near before committing. Freshness is enforced where the read already happens; a silent driver fails safe to gone.",
+   "user_lens": {
+    "gives": "Confidence that a matched car is really there and really moving, because a driver that stopped reporting is invisible to the search within seconds.",
+    "costs": "A driver in a tunnel or a dead-zone with a brief signal drop can blink out of the index and miss requests they could have taken, so real coverage shrinks to whoever is currently reporting."
+   },
+   "tech_lens": {
+    "mechanism": "Per-entry TTL keyed to the heartbeat interval; expiry evicts stale positions; a re-validation read at dispatch confirms the driver is live and near before the match is bound.",
+    "principle": "Bound the staleness of a fast copy and fail safe when its signal lapses. An absent signal should read as 'gone', never as 'still here'."
+   },
+   "tradeoff": "You trade some usable supply for trust: raise the TTL and ghosts creep back in, lower it and flaky-connection drivers vanish too easily. The heartbeat interval becomes a dial between freshness and coverage.",
+   "at_scale": "TTL costs nothing per read, since expiry is a property of the entry the search already fetched. The scaling cost is the heartbeat write rate: every driver refreshing every few seconds is a permanent write storm on the index, tens of thousands of writes a second that the in-memory store must absorb, which is exactly why the index lives in memory and not on disk.",
+   "defends": [
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "TTL on each position",
+      "software_concept": "lazy expiration: entries self-remove when the heartbeat lapses, so reads never see stale keys"
+     },
+     {
+      "mechanism": "re-validate at dispatch",
+      "software_concept": "read-time freshness check before committing an assignment"
+     }
+    ],
+    "interview_probes": [
+     "A driver's app loses signal for eight seconds. Walk through what your index does, and how you avoid both dispatching a ghost and dropping a good driver too eagerly."
+    ],
+    "approach": "Store each driver in the geo index with an expiry set to a few heartbeat intervals (a Redis GEO member plus a per-key TTL, or a last-seen timestamp filtered on read). Refresh it on every ping; if now minus last-seen exceeds the threshold, treat the driver as absent and skip it.",
+    "vocab": [
+     "caching",
+     "eventual-consistency"
+    ]
+   },
+   "beginner_analogy": "Like a room where everyone must say 'still here' every few seconds. The moment someone goes quiet, you cross them off, so you never send a message to someone who already left.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "ttl",
+      "label": "TTL sweeper",
+      "kind": "process",
+      "lane": "control",
+      "order": 0
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_evict",
+      "from": "ttl",
+      "to": "loc_cache",
+      "kind": "control",
+      "label": "drop stale"
+     },
+     {
+      "id": "e_revalidate",
+      "from": "app",
+      "to": "loc_cache",
+      "kind": "control",
+      "label": "confirm live"
+     }
+    ],
+    "highlight": [
+     "loc_cache"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 3,
+   "name": "The Dispatch Race: One Driver, One Rider",
+   "problem": {
+    "statement": "Two riders a block apart both request at the same instant, and the index hands both searches the same nearest free driver. Each match server reads 'driver is free' and dispatches. Now one car has two riders, and the second rider is promised a driver who is already gone. The check ('is this driver free?') and the act ('take them') are two steps, and under real traffic something always slips between them. Naive dispatch also has no acceptance step, so a driver who ignores the ping leaves the rider hanging with no fallback.",
+    "beginner": "Two people nearby can ask for a ride at the same moment and both get matched to the same closest car. Only one can actually ride, so the other is left waiting for a driver who is already taken.",
+    "model": {
+     "id": "mutual-exclusion",
+     "application": "A free driver is a resource exactly one request may claim. Make claiming atomic and possession-based, so of two requests racing for one driver, one holds them and the other is cleanly turned away."
+    }
+   },
+   "gate": {
+    "question": "Two requests find the same free driver in the same millisecond and both try to take them. A read-then-write ('free? yes, take') lets both succeed. How do you make sure exactly one wins the driver?",
+    "hint": "Do not separate checking from taking. What if grabbing the driver were a single atomic flip of their status, and offering were a short lease rather than a command?"
+   },
+   "solution": "Claim the driver with one atomic operation: compare-and-set their status from free to held with a short lease, so only one request can flip it. The winner pushes a time-limited offer to that one driver; on accept, the hold becomes a bound match; on decline or timeout, the lease expires, the driver returns to free, and the next candidate is tried. The loser of the race never saw a free driver at all and moves straight to its own next candidate.",
+   "user_lens": {
+    "gives": "A driver is only ever promised to one rider, and a rider who is offered a car either gets a confirmed accept or is quickly rerouted to another driver instead of waiting on a double-booked one.",
+    "costs": "Matching gains a round trip. The system must wait out the offer window for an accept before it knows the match is real, adding seconds when drivers are slow to tap, and a driver holding then declining briefly locks supply that no one else could use."
+   },
+   "tech_lens": {
+    "mechanism": "Compare-and-set on the driver's status with a lease TTL, an offer pushed to exactly the held driver, and an accept, decline, or timeout that either commits the match or releases the hold for the next candidate.",
+    "principle": "Never split a check from the act it guards. Collapse 'is it free, then take it' into one atomic claim, and make an offer a revocable lease, not an irreversible send."
+   },
+   "tradeoff": "You give up instant fire-and-forget dispatch for a slower offer-and-confirm handshake, and held-but-not-yet-accepted drivers are briefly unavailable to everyone else, which tightens effective supply during the offer window.",
+   "at_scale": "The atomic claim is cheap and local to the entry that owns the driver, so it scales with the index. Contention appears only on genuinely contested drivers in dense, busy cells, and there it serializes: many requests chasing few free drivers queue on the same holds, which is the hot-cell pressure the final layer must spread and shed.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "compare-and-set the driver status",
+      "software_concept": "atomic claim with a lease; the store arbitrates the race, not the application"
+     },
+     {
+      "mechanism": "offer, accept, or timeout",
+      "software_concept": "revocable lock with a TTL so a crashed or idle driver cannot hold supply forever"
+     }
+    ],
+    "interview_probes": [
+     "Two match servers pick the same free driver at the same instant. Walk through why check-then-dispatch double-books and what single operation prevents it.",
+     "A driver is offered a ride and never taps. What releases them, and how long is the supply locked?"
+    ],
+    "approach": "Hold the driver with a single conditional write: compare-and-set status free to held with a TTL (a Redis Lua CAS or SETNX on a hold key), and only the winner offers. Bind the match on accept; on timeout, let the lease expire and offer the next candidate.",
+    "vocab": [
+     "contention",
+     "distributed-lock",
+     "pessimistic-locking"
+    ]
+   },
+   "beginner_analogy": "Like putting a short hold on a hotel room while the guest decides. Only one person can hold a given room at a time; if they do not confirm in a few minutes, the hold drops and the room opens to the next person.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "offer_push",
+      "label": "Offer push",
+      "kind": "channel",
+      "lane": "control",
+      "order": 1,
+      "expands_to": "Notification system"
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_hold",
+      "from": "app",
+      "to": "loc_cache",
+      "kind": "control",
+      "label": "hold (CAS)"
+     },
+     {
+      "id": "e_offer",
+      "from": "app",
+      "to": "offer_push",
+      "kind": "control",
+      "label": "offer"
+     },
+     {
+      "id": "e_push",
+      "from": "offer_push",
+      "to": "driver",
+      "kind": "control",
+      "label": "ride offer"
+     },
+     {
+      "id": "e_accept",
+      "from": "driver",
+      "to": "app",
+      "kind": "control",
+      "label": "accept"
+     }
+    ],
+    "highlight": [
+     "driver",
+     "loc_cache",
+     "e_dispatch"
+    ],
+    "remove": [
+     "e_dispatch"
+    ]
+   }
+  },
+  {
+   "index": 4,
+   "name": "Batch and ETA: Nearest Is Not Best",
+   "problem": {
+    "statement": "Matching each request the instant it arrives, to the straight-line-nearest free driver, is greedy and wrong twice over. It ranks by crow-flies distance, so it picks the car across the river with a fifteen-minute detour over one three minutes away by road. And by committing immediately, it grabs a driver an early rider barely needed, leaving a rider who arrives two hundred milliseconds later and needed that exact car with nothing. Locally each choice looks fine; globally total waiting time is far worse than it had to be.",
+    "beginner": "Grabbing the closest-looking car for each rider the second they ask sounds right, but the closest by map distance can be a long drive away, and taking a car for one rider can leave the next rider, who needed it more, stuck. Deciding one at a time makes everyone wait longer on average.",
+    "model": {
+     "id": "queue-and-buffer",
+     "application": "Hold requests in a short window instead of matching each on arrival. Buffering a few seconds of demand turns a stream of greedy one-off choices into one batch you can solve for the best overall assignment."
+    }
+   },
+   "gate": {
+    "question": "Matching each rider to their nearest-looking driver the moment they ask gives worse total wait times than if you had waited a moment. What do you gain by delaying each match by a few seconds, and how do you use that pause?",
+    "hint": "If you had all the requests and all the drivers in a small window at once, matching them is a classic optimization. And measure cost in minutes-to-pickup, not map distance."
+   },
+   "solution": "Collect requests over a short window, a few seconds, into a batch. Score every plausible request-driver pair by road-network estimated time of arrival, not straight-line distance. Then solve the batch as a minimum-cost bipartite assignment (Hungarian or min-cost flow) that minimizes total ETA across all riders at once. The window trades a small, bounded delay for a globally better set of matches, and ETA ranking sends the car that arrives soonest, not the one that looks closest on a map.",
+   "user_lens": {
+    "gives": "Shorter pickups overall and matches that respect real driving time, so the car sent is the one that will actually reach you first, not the one that is nearest as the crow flies.",
+    "costs": "Every rider eats a few seconds of deliberate delay before matching, and a rider who would have won a greedy grab can lose their nearest car to someone the batch decides needs it more."
+   },
+   "tech_lens": {
+    "mechanism": "A windowed batch of requests, an ETA cost computed per candidate pair from the road network, and a min-cost bipartite matching over the batch that minimizes summed pickup time.",
+    "principle": "Optimize the objective you actually care about, over a batch, not a proxy, one at a time. A short buffer converts myopic greedy choices into a solvable global assignment."
+   },
+   "tradeoff": "You add latency on purpose and give up the simplicity of first-come-first-served: the batch can hand your nearest driver to another rider, which is globally better but locally feels unfair, and the assignment solve grows with batch size.",
+   "at_scale": "The batch is bounded per cell and per window, so the assignment stays small and solvable even as the city grows, because you never match Manhattan against Brooklyn in one matrix. Under heavy load the window and batch size become tuning dials: a longer window finds better matches but makes every rider wait, so the system leans the dial toward speed exactly when demand spikes, which is where surge takes over.",
+   "defends": [
+    "inv3",
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "windowed batch of requests",
+      "software_concept": "micro-batching: buffer a few seconds of arrivals and process them together"
+     },
+     {
+      "mechanism": "min-cost assignment on ETA",
+      "software_concept": "bipartite matching (Hungarian / min-cost flow) minimizing total cost, cost = road ETA not distance"
+     }
+    ],
+    "interview_probes": [
+     "Why does greedy nearest-driver matching lose to batching, and what is the cost of the window you add?",
+     "Why rank candidates by ETA instead of straight-line distance, and what breaks if you use distance in a city cut by a river?"
+    ],
+    "approach": "Buffer incoming requests for a fixed window (say two to five seconds) per region, build a cost matrix of request-by-candidate using road-network ETAs, and run a min-cost bipartite matching (Hungarian or min-cost flow) to assign the whole batch at once.",
+    "vocab": []
+   },
+   "beginner_analogy": "Like seating a rush of dinner guests. If you seat each party the instant they walk in, you strand a big group that arrives a minute later. Wait a moment, look at everyone waiting, and you can seat the whole room better.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "batch_matcher",
+      "label": "Batch matcher",
+      "kind": "process",
+      "lane": "service",
+      "order": 2
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_batch",
+      "from": "app",
+      "to": "batch_matcher",
+      "kind": "payload",
+      "label": "queue request"
+     },
+     {
+      "id": "e_cand",
+      "from": "batch_matcher",
+      "to": "loc_cache",
+      "kind": "control",
+      "label": "query cells"
+     },
+     {
+      "id": "e_cdrv",
+      "from": "loc_cache",
+      "to": "batch_matcher",
+      "kind": "payload",
+      "label": "drivers+ETA"
+     },
+     {
+      "id": "e_assign",
+      "from": "batch_matcher",
+      "to": "app",
+      "kind": "control",
+      "label": "assignment"
+     }
+    ],
+    "highlight": [
+     "app",
+     "e_near"
+    ],
+    "remove": [
+     "e_query",
+     "e_near"
+    ]
+   }
+  },
+  {
+   "index": 5,
+   "name": "Surge: Pricing the Imbalance",
+   "problem": {
+    "statement": "In a hot area the batch runs out of nearby free drivers. A concert lets out, it starts to rain, and demand in a few cells jumps far past supply. With no way to move supply or shed demand, requests either wait for ever-farther cars, dragging pickups out for everyone, or queue with no end in sight. There is also nothing that tells price-flexible riders to wait and nothing that pulls idle drivers a mile away toward the shortage.",
+    "beginner": "Sometimes far more people want a ride in one spot than there are cars, like right after a concert. With no way to respond, everyone waits longer and longer, and there is no signal telling nearby drivers to head over or telling riders who can wait that now is a bad time.",
+    "model": {
+     "id": "feedback-loop",
+     "application": "Make price a control signal on the supply-demand ratio per cell. A shortage raises the multiplier, which suppresses some demand and pulls drivers in, and the higher supply lowers the multiplier again. It is negative feedback that clears the local market."
+    }
+   },
+   "gate": {
+    "question": "One neighbourhood suddenly needs far more cars than exist there. You cannot conjure drivers. What signal simultaneously cools demand and pulls supply toward the shortage, and settles on its own?",
+    "hint": "Something that measures free drivers against open requests in each cell, and feeds a number back to both riders and drivers. Which way must it move to rebalance, and what makes it come back down?"
+   },
+   "solution": "Compute a surge multiplier per cell from its live supply-demand ratio: few free drivers per open request pushes the multiplier up. The higher price suppresses price-sensitive demand and, shown to drivers as higher earnings, pulls nearby cars toward the hot cell. As supply arrives and demand thins, the ratio recovers and the multiplier falls. Quote the surge price to the rider up front and lock it for that request, so the number they accepted is the number they pay even if the multiplier moves mid-trip.",
+   "user_lens": {
+    "gives": "A shortage clears in minutes instead of stranding everyone: riders who can wait step back, drivers nearby come running, and the rider who accepts a price knows it will not climb underneath them.",
+    "costs": "Rides in the shortage cost more, sometimes a lot more, exactly when people most need them, and the mechanism that clears the market also prices some riders out of it."
+   },
+   "tech_lens": {
+    "mechanism": "A per-cell controller reads free-driver and open-request counts, maps the ratio to a multiplier, and publishes it to pricing and to driver incentives; the accepted quote is frozen per request.",
+    "principle": "Price is the fastest lever on a supply-demand imbalance. Close a negative feedback loop on the local ratio so the market clears itself instead of queueing without bound."
+   },
+   "tradeoff": "You clear the shortage by rationing with money, which is efficient and deeply unpopular, and a jumpy multiplier that overreacts can whipsaw both prices and driver movement, so the loop must be damped.",
+   "at_scale": "The controller runs per cell, so it scales with the grid and naturally isolates a surge to the few cells that have one instead of moving price city-wide. The risk at scale is the loop's own dynamics: too tight and prices oscillate as drivers over-chase and demand over-flees, so the signal is smoothed and rate-limited, and the hottest cell still overwhelms one partition, which the final layer addresses.",
+   "defends": [
+    "inv3",
+    "inv4"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "multiplier from supply-demand ratio",
+      "software_concept": "closed-loop controller; the ratio is the error signal, the multiplier the correction"
+     },
+     {
+      "mechanism": "lock the quote per request",
+      "software_concept": "price idempotency: freeze the accepted quote so downstream changes cannot alter it"
+     }
+    ],
+    "interview_probes": [
+     "Surge is a feedback loop. What is the measured signal, which way does the multiplier move to rebalance, and what makes it settle instead of oscillating?",
+     "A rider accepts a 1.8x quote and the cell jumps to 2.5x during the ride. What do they pay, and what guarantees it?"
+    ],
+    "approach": "Per cell, keep rolling counts of free drivers and open requests, map the ratio to a multiplier through a smoothed, clamped function updated every few seconds, and stamp the computed price onto the request at accept time so it is fixed for that trip.",
+    "vocab": [
+     "backpressure",
+     "load-shedding"
+    ]
+   },
+   "beginner_analogy": "Like umbrellas at a train station when it starts to pour. The price rises, some people decide to wait out the rain, more sellers rush over with stock, and once supply catches up the price eases back down.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "surge",
+      "label": "Surge engine",
+      "kind": "process",
+      "lane": "control",
+      "order": 2
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_signal",
+      "from": "batch_matcher",
+      "to": "surge",
+      "kind": "control",
+      "label": "supply/demand"
+     },
+     {
+      "id": "e_price",
+      "from": "surge",
+      "to": "app",
+      "kind": "control",
+      "label": "multiplier"
+     },
+     {
+      "id": "e_quote",
+      "from": "app",
+      "to": "rider",
+      "kind": "money",
+      "label": "price quote"
+     }
+    ],
+    "highlight": [
+     "rider",
+     "batch_matcher"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 6,
+   "name": "The Hot Cell: Shard and Degrade",
+   "problem": {
+    "statement": "Everything so far assumed one index and one matcher for the whole map. At real scale two ceilings arrive together. One in-memory node cannot hold every driver on the planet or absorb the global heartbeat storm. And load is geographically brutal: the concert cell gets five hundred requests against twenty cars and hammers the single partition that owns it, while the rest of the fleet sits idle. Sharding spreads the map, but the hot cell is one place and cannot be spread away, so it needs its own defense.",
+    "beginner": "One computer cannot track every car in the world or handle every location update. And the load is lopsided: one packed neighbourhood can get more requests than everywhere else combined, overwhelming the one machine responsible for it while the others do nothing.",
+    "model": {
+     "id": "bottleneck",
+     "application": "Find the two ceilings, total capacity and the single hottest cell, and route around each: shard the map by region so no node owns it all, and give the hot cell dedicated relief since sharding alone cannot save one overloaded place."
+    }
+   },
+   "gate": {
+    "question": "One index cannot hold the planet, and one packed cell can get more requests than the rest of the city combined. How do you spread the map so no node owns all of it, and what saves the one cell that is hotter than everything else?",
+    "hint": "The cell id is a natural shard key, and a local match never needs another region. But the hottest cell is a single place; sharding cannot divide it, so it needs widening, pricing, and queueing instead."
+   },
+   "solution": "Shard the index by region, each shard owning a contiguous block of cells, and route each request to the shard that owns the rider's cell. Because a local match never crosses regions, there are no scatter-gather queries. For the hot cell, degrade gracefully instead of collapsing: widen the search into neighbouring cells to reach more drivers, let surge pull supply in and shed price-sensitive demand, and queue the remaining riders with an honest wait estimate rather than dropping them or spinning forever. The invariant that every request resolves is upheld by a truthful 'no cars, about eight minutes' when it cannot be upheld by an instant match.",
+   "user_lens": {
+    "gives": "A system that grows by adding regional shards instead of hitting a wall, and that survives a viral surge because the hot cell widens, prices, and queues rather than freezing the whole city.",
+    "costs": "Operational weight multiplies: shards to rebalance as cities grow, boundaries where a rider near a region edge needs a cross-shard peek, and in the worst hot cell some riders get an honest long wait or a high price instead of a car."
+   },
+   "tech_lens": {
+    "mechanism": "Region-sharded geo index keyed by cell, a router mapping cell to shard, and hot-cell mitigation: neighbour-ring widening, surge-driven supply pull and demand shedding, and a bounded rider queue with an ETA.",
+    "principle": "Partition on a key that already carries locality, then treat the hottest partition as a separate problem, because the average hides the one cell that actually takes you down."
+   },
+   "tradeoff": "Sharding trades a simple single index for a distributed one with rebalancing and edge-of-region seams, and the hot cell is met with degradation, wider searches, higher prices, and queues, none of which are free to the rider caught in it.",
+   "at_scale": "This is the architecture that actually reaches a planet: capacity scales horizontally by adding regional shards, and consistent hashing on the cell keeps adding a shard from reshuffling the map. A local match stays within one shard, so throughput scales with regions. The residual ceiling is always the single hottest cell at peak, which is why widening, surge, and queueing, not more shards, are what keep a concert from becoming an outage.",
+   "defends": [
+    "inv1",
+    "inv3"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "shard the index by cell",
+      "software_concept": "partitioning on a locality-bearing key; a local query stays on one shard, no scatter-gather"
+     },
+     {
+      "mechanism": "widen, price, and queue the hot cell",
+      "software_concept": "hot-key mitigation plus load shedding: reduce service deliberately instead of collapsing"
+     }
+    ],
+    "interview_probes": [
+     "Why is the cell a good shard key for ride matching, and what goes wrong at a region boundary?",
+     "A concert lets out and one cell gets five hundred requests against twenty cars. Walk through exactly what keeps that shard alive and what each waiting rider sees."
+    ],
+    "approach": "Shard the geo index by region using consistent hashing on the cell id, and route each request through a thin layer to the owning shard. For a hot cell, expand the neighbour ring, lean on surge to rebalance, and place overflow riders in a bounded queue that returns an honest ETA.",
+    "vocab": [
+     "sharding",
+     "hot-key",
+     "consistent-hashing"
+    ]
+   },
+   "beginner_analogy": "Like a taxi network splitting a country into regional dispatch offices so no one office is buried. But when one neighbourhood floods with calls at once, that office cannot be split in half, so it widens its search, raises fares, and gives honest wait times instead of jamming.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "shard_router",
+      "label": "Region router",
+      "kind": "process",
+      "lane": "service",
+      "order": 0
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_route",
+      "from": "app",
+      "to": "shard_router",
+      "kind": "control",
+      "label": "route by cell"
+     },
+     {
+      "id": "e_shard",
+      "from": "shard_router",
+      "to": "loc_cache",
+      "kind": "control",
+      "label": "region shard"
+     },
+     {
+      "id": "e_degrade",
+      "from": "app",
+      "to": "rider",
+      "kind": "control",
+      "label": "queue + ETA"
+     }
+    ],
+    "highlight": [
+     "loc_cache",
+     "rider"
+    ],
+    "remove": []
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "The concert lets out",
+   "scenario": "A stadium empties at 10 pm. Within two minutes one cell goes from thirty requests a minute to five hundred, against maybe twenty free cars, while the rest of the city is calm.",
+   "reveal": "The layered defense holds without an instant match for everyone, because there cannot be one. Region sharding keeps the load on the cells that own the stadium, so the rest of the city is unaffected. Surge in those cells jumps, cooling price-flexible demand and pulling nearby drivers toward the money. The search widens into neighbouring cells to reach more cars. Riders who still cannot be matched are queued with an honest wait estimate rather than dropped or left spinning. inv3 holds as a truthful 'no cars, about seven minutes', and inv1 holds throughout because every assignment still goes through the atomic hold."
+  },
+  {
+   "id": "st2",
+   "title": "Two riders, one last car",
+   "scenario": "On a quiet night one free driver sits in a cell, and two riders a block apart both request within the same millisecond. Both searches return that single car.",
+   "reveal": "The atomic claim decides it in the index, not the application. A compare-and-set flips the driver from free to held, and only one request wins the flip; the other never sees a free car and moves to its next candidate, which on a quiet night may be a longer wait or a widened search. inv1 holds with no double-booked driver, the exact corruption a check-then-dispatch would have produced under this timing."
+  },
+  {
+   "id": "st3",
+   "title": "A driver vanishes mid-offer",
+   "scenario": "A driver is held and sent an offer, then drives into a tunnel and drops signal before tapping accept. The rider is waiting on that offer.",
+   "reveal": "The hold is a lease, not a commitment. When the offer window passes with no accept and the heartbeat lapses, the lease expires: the driver's entry ages out of the index under its TTL, and the hold releases so the driver is not stuck locked. The match server moves to the next candidate for that rider. inv2 holds because a driver gone quiet is treated as gone, and the rider is rerouted rather than promised a ghost. The cost is the seconds spent waiting out the dead offer."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "Quantize a continuous space into indexed cells so proximity becomes a key lookup instead of a scan.",
+   "Bound the staleness of any fast copy and fail safe when its signal lapses: an absent heartbeat means gone, not still here.",
+   "Never split a check from the act it guards; collapse claiming a shared resource into one atomic, leaseable operation.",
+   "Buffer a stream of greedy one-at-a-time choices into a short window and solve the batch for a global optimum, measured in the objective you actually care about.",
+   "Close a feedback loop on a supply-demand ratio so a market clears itself instead of queueing without bound.",
+   "Shard on a key that already carries locality, then treat the single hottest partition as its own problem, because averages hide the item that takes you down."
+  ],
+  "mappings": [
+   {
+    "mechanism": "geospatial cell index",
+    "elsewhere": "Delivery, store locators, matchmaking, and multiplayer games all bucket points into cells (geohash, S2, quadtrees) so 'who is near' is a lookup, not a scan."
+   },
+   {
+    "mechanism": "TTL heartbeat with fail-safe expiry",
+    "elsewhere": "Service discovery, presence systems, and cluster membership all drop a node the moment it stops heartbeating, treating silence as absence."
+   },
+   {
+    "mechanism": "atomic hold with a lease",
+    "elsewhere": "Seat booking, inventory reservation, and distributed locks all claim a contested resource with one revocable, time-limited operation."
+   },
+   {
+    "mechanism": "surge as negative feedback",
+    "elsewhere": "Electricity spot pricing, cloud spot markets, and airline yield management all move price to clear a supply-demand imbalance in real time."
+   },
+   {
+    "mechanism": "shard by a locality key plus hot-key defense",
+    "elsewhere": "Key-value stores, feeds, and CDNs all partition on a well-spread key and then bolt on special handling for the celebrity partition that breaks the average."
+   }
+  ]
+ }
+}

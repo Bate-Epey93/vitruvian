@@ -1,0 +1,726 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "Photo store",
+  "narrowing": "The object path: uploading a photo, storing its bytes durably, generating the sizes viewers actually need, and delivering them fast worldwide, plus turning stored photos into a feed. The social graph, likes, comments, direct messages, ranking models, and moderation hang off this spine but do not shape it and are left out.",
+  "ordering_note": "This is not one dated outage but the canonical path an Instagram-scale photo store walks as it grows. Each layer is forced by the concrete failure the previous state hits next: first the database chokes on blobs, then the app tier drowns proxying bytes, then serving originals wastes bandwidth, then the origin buckles under a read storm, then read-time feed assembly becomes the bottleneck. history_confidence is medium because the mechanisms and their failure modes are canonical and checkable, not because a specific named incident is being retold.",
+  "history_confidence": "medium",
+  "domain": "software"
+ },
+ "essence": {
+  "text": "A photo store ingests billions of images and hands each one back, instantly, to anyone on earth. The trick is that the photo bytes never touch the database. The database holds only a tiny pointer; the heavy, immutable pixels live in object storage, get resized once into a handful of sizes, and are served from a cache in the viewer's own city. The whole discipline is keeping large immutable blobs cheap to keep and close to every eye.",
+  "beginner": "A photo app lets you upload a picture and lets millions of people see it. The hard part is not taking the photo, it is storing billions of them without ever losing one, and showing each one fast, at the right size, to people all over the world.",
+  "deep_facts": [
+   "A photo is large and immutable; its metadata is tiny and mutable. Storing multi-megabyte blobs as database rows bloats backups and pollutes the query cache, which is why the bytes live in object storage and the database holds only a short pointer.",
+   "Reads dwarf writes: a single upload can be viewed millions of times, so nearly all the cost and all the risk live on the serving path, not the upload path.",
+   "The original is almost never what you serve. A 12-megapixel photo is several megabytes; the feed thumbnail a phone actually shows can be under 30 kilobytes, so serving the master would waste over 99 percent of the bytes.",
+   "Because a photo never changes after upload, CDN edge caches hit almost every time; an immutable object can be cached at the edge essentially forever, with no invalidation problem to solve.",
+   "A presigned URL lets the browser upload straight to the blob store, so the application servers never touch the photo bytes; they only sign a short, expiring permission for one object."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Store every uploaded photo durably and forever, and deliver the right-sized rendition to any viewer, fast and for a fraction of a cent.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Uploader",
+    "want": "Their photo saved reliably at full quality, and posted the instant they hit share"
+   },
+   {
+    "id": "a2",
+    "name": "Viewer",
+    "want": "Photos that load instantly in the feed, sized to their screen, wherever in the world they are"
+   },
+   {
+    "id": "a3",
+    "name": "Operator",
+    "want": "Store billions of immutable blobs and serve each for a fraction of a cent, without ever losing one or serving the wrong bytes"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "A photo, once acknowledged as uploaded, is never lost. Durability is absolute: the bytes survive disk, machine, and datacenter failure."
+   },
+   {
+    "id": "inv2",
+    "text": "A photo id resolves to exactly the bytes uploaded for it, and every rendition is a faithful downscale of that original, never mixed up with another photo's."
+   },
+   {
+    "id": "inv3",
+    "text": "An upload writes only where its signed permission allows, and the stored bytes are exactly the bytes the client sent, uncorrupted and untruncated."
+   },
+   {
+    "id": "inv4",
+    "text": "The view path stays fast and available under read storms; one photo going viral never slows delivery or overwhelms the store."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Photo (original)",
+    "note": "The master image; large, immutable, several megabytes, written once and never changed"
+   },
+   {
+    "id": "en2",
+    "name": "Metadata",
+    "note": "A tiny mutable row: id, owner, object key, dimensions, status, timestamps. Read far more than written"
+   },
+   {
+    "id": "en3",
+    "name": "Rendition",
+    "note": "A derived resized copy (thumbnail, feed, full-screen); a deterministic downsample of the original, stored as its own object"
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Upload: photo bytes flow from the client straight to object storage, while a tiny metadata row flows to the database."
+   },
+   {
+    "id": "f2",
+    "text": "View: a viewer requests a rendition, which flows from the nearest CDN edge, falling back to the object store only on a miss."
+   },
+   {
+    "id": "f3",
+    "text": "Feed: a newly ready photo's reference fans out into each follower's materialized feed, which flows back as a ready list when the app opens."
+   }
+  ],
+  "constraints": [
+   "Photos are large and immutable; the store only grows and old objects never change, so it is a write-once, read-many, cost-per-byte game.",
+   "Reads dominate writes by orders of magnitude, so the serving path carries nearly all the load and nearly all the cost.",
+   "A photo is worth a fraction of a cent to serve, so every byte of egress and every origin fetch you can avoid is money.",
+   "Viewers are spread across the globe, but the speed of light makes a cross-continent fetch visibly slow, so bytes must be cached near the eye."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "people",
+    "label": "People"
+   },
+   {
+    "id": "service",
+    "label": "Service"
+   },
+   {
+    "id": "storage",
+    "label": "Storage"
+   },
+   {
+    "id": "control",
+    "label": "Control"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "uploader",
+    "label": "Uploader",
+    "kind": "actor",
+    "lane": "people",
+    "order": 0
+   },
+   {
+    "id": "viewer",
+    "label": "Viewer",
+    "kind": "actor",
+    "lane": "people",
+    "order": 4
+   },
+   {
+    "id": "app",
+    "label": "App server",
+    "kind": "process",
+    "lane": "service",
+    "order": 2
+   },
+   {
+    "id": "db",
+    "label": "Photo DB",
+    "kind": "store",
+    "lane": "storage",
+    "order": 2
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_upload",
+    "from": "uploader",
+    "to": "app",
+    "kind": "payload",
+    "label": "photo bytes"
+   },
+   {
+    "id": "e_store",
+    "from": "app",
+    "to": "db",
+    "kind": "payload",
+    "label": "store row"
+   },
+   {
+    "id": "e_view",
+    "from": "viewer",
+    "to": "app",
+    "kind": "payload",
+    "label": "GET photo"
+   },
+   {
+    "id": "e_read",
+    "from": "app",
+    "to": "db",
+    "kind": "control",
+    "label": "read row"
+   },
+   {
+    "id": "e_serve",
+    "from": "app",
+    "to": "viewer",
+    "kind": "payload",
+    "label": "photo bytes"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "Bytes Out of the Database",
+   "problem": {
+    "statement": "The naive store keeps each photo as a row in the database, bytes and all. Backups that used to take minutes now take hours, and simple metadata queries crawl because the database is dragging megabytes of pixels through memory and polluting the buffer cache that used to hold hot rows. A relational database is built for small, mutable, queryable rows. A photo is none of those, and every one you insert makes the whole database slower.",
+    "beginner": "The first idea is to save the whole photo inside the database, like pasting a giant picture into a spreadsheet cell. It works for a few photos, but as they pile up the database gets huge and slow, and even looking up simple facts about a photo drags.",
+    "model": {
+     "id": "separation-of-concerns",
+     "application": "A tiny mutable pointer and a huge immutable blob have opposite needs. Split them: put the bytes in a store built for large objects and keep only a pointer in the database built for small rows."
+    }
+   },
+   "gate": {
+    "question": "Your backups now take hours and metadata queries crawl, all because the photo bytes live as rows in your database. The pixels are huge, written once, and never changed. Where should they actually live, and what should the database keep instead?",
+    "hint": "The database is great at small, mutable, queryable rows. A photo is the opposite. What kind of store is built for big things you write once and never edit?"
+   },
+   "solution": "Move the photo bytes into a dedicated object store, addressed by an opaque object key. The database keeps a small row per photo: id, owner, the object key, width and height, status, and timestamps. Bytes and the facts about them now live in stores tuned for their opposite shapes, and a metadata query never touches a single pixel again.",
+   "user_lens": {
+    "gives": "The database stays small and fast forever, backups are quick again, and storage grows into the petabytes without the query layer noticing.",
+    "costs": "A photo is now two writes in two systems that can disagree: a row can point at an object that was never stored, or an object can sit with no row, so you inherit a consistency and cleanup problem across the boundary."
+   },
+   "tech_lens": {
+    "mechanism": "Bytes in an object store (write-once, key-addressed, replicated for durability); a small pointer row in a relational database that references the object by key. The object never moves; the row just points at it.",
+    "principle": "Store data where its shape is cheap. Keep large immutable payloads out of the transactional database and hold only a reference to them."
+   },
+   "tradeoff": "You trade one system that held everything for two systems and the seam between them, gaining scale and speed at the price of cross-store consistency you now have to manage.",
+   "at_scale": "The object store scales to exabytes horizontally and handles durability internally through replication or erasure coding, while the metadata database, holding only small rows, stays small enough to index and cache no matter how many billions of photos exist. The database's growth is decoupled from photo size entirely.",
+   "defends": [
+    "inv1",
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "bytes in object store, pointer in DB",
+      "software_concept": "blob storage plus a metadata table; the DB row is effectively a foreign key into an object bucket"
+     },
+     {
+      "mechanism": "opaque object key",
+      "software_concept": "UUID or content-addressed key; the key is the only coupling between the two stores"
+     }
+    ],
+    "interview_probes": [
+     "Why not store photo blobs directly in the database, and at what size does that decision start to hurt backups and query latency?",
+     "You now have two stores that can disagree. How do you detect and clean up a metadata row with no object, or an object with no row?"
+    ],
+    "approach": "Model a photos table with (id, owner_id, object_key, width, height, status, created_at) and put the bytes in an S3-style bucket keyed by object_key. Write the object first, then the row, and never inline the blob into the row.",
+    "vocab": [
+     "large-blobs",
+     "blob-storage",
+     "data-modeling"
+    ]
+   },
+   "beginner_analogy": "Like a library that does not glue each book into the card catalog. The catalog card is small and easy to flip through; it just tells you the shelf where the heavy book actually sits.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "blobstore",
+      "label": "Object store",
+      "kind": "store",
+      "lane": "storage",
+      "order": 4,
+      "expands_to": "Object storage"
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_putblob",
+      "from": "app",
+      "to": "blobstore",
+      "kind": "payload",
+      "label": "put bytes"
+     },
+     {
+      "id": "e_getblob",
+      "from": "app",
+      "to": "blobstore",
+      "kind": "control",
+      "label": "get bytes"
+     }
+    ],
+    "highlight": [
+     "db",
+     "e_store",
+     "e_read"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 2,
+   "name": "Presigned Upload: Payload Off the App Tier",
+   "problem": {
+    "statement": "The bytes are out of the database, but every upload still streams the full photo through your app servers on its way to the object store. A fleet sized for small JSON requests now melts proxying gigabytes of pixels it only passes along, and its bandwidth and memory become the bottleneck. Worse, each app server holds the object store's write credentials, a fat trust target sitting in the byte path.",
+    "beginner": "Now the photos live in proper storage, but every upload still travels through your app servers first, and they are choking on all those pixels they just hand along. And those servers hold the master key to your storage, which is risky.",
+    "model": {
+     "id": "trust-boundary",
+     "application": "The photo bytes and a write credential must cross to an untrusted client. Hand the client a narrow, expiring capability to write exactly one object, so it can move the payload directly without ever holding your storage keys."
+    }
+   },
+   "gate": {
+    "question": "Every uploaded photo streams through your app servers, and they are drowning in pixels they only pass along. How do you let a browser put bytes into your private blob store without routing them through your app and without handing it your storage keys?",
+    "hint": "A permission can be a URL. What if you signed a one-time, expiring link that authorizes a single upload to a single spot?"
+   },
+   "solution": "The app server issues a presigned URL: a URL signed with the store's key that authorizes a PUT of one object, to one key, for a few minutes. The client uploads bytes straight to the object store with that URL, and the app never sees the payload. When the PUT finishes, the client calls back with the photo's dimensions, the app writes the small metadata row and acknowledges. Bytes go client to store; only a signature goes through the app.",
+   "user_lens": {
+    "gives": "Uploads are as fast as the client's own link to the store, and huge photos never bottleneck on the app tier.",
+    "costs": "The client now talks directly to storage, so you must scope every signed URL tightly (one key, short expiry, size limit) or a leaked URL is a write-anywhere hole, and you need a reconciliation step for uploads that PUT bytes but never confirm."
+   },
+   "tech_lens": {
+    "mechanism": "A short-lived HMAC-signed URL granting a scoped PUT; the object store verifies the signature itself, so no app server proxies the bytes. A confirm callback writes metadata and flips the photo toward visible.",
+    "principle": "Move the payload off the control path. Hand out a narrow, expiring capability instead of proxying data or sharing a master credential."
+   },
+   "tradeoff": "You give up the app tier's single choke point where you could inspect or transform every byte, and take on scoped-credential management and orphan cleanup, in exchange for getting the payload off your servers entirely.",
+   "at_scale": "Upload throughput now scales with the object store's ingest capacity, not your app fleet, which only mints tiny signatures and stays small and stateless. The residual cost is issuing and rate-limiting signatures and reconciling orphaned objects, both cheap and independent of photo size.",
+   "defends": [
+    "inv3",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "presigned PUT URL",
+      "software_concept": "capability URL / scoped expiring token: possession of the signed URL is the permission"
+     },
+     {
+      "mechanism": "confirm-then-visible",
+      "software_concept": "two-phase write: durable object first, metadata commit second, visibility last"
+     }
+    ],
+    "interview_probes": [
+     "Why route uploads directly to blob storage instead of through your API, and what new failure (the orphaned object) does that introduce?",
+     "How do you keep a presigned URL from becoming a write-anywhere credential if it leaks?"
+    ],
+    "approach": "Issue a presigned S3-style URL server-side (createPresignedUrl with a fixed key, a content-length range, and a short expiry); the client PUTs to it, then POSTs a confirm to your API that writes the metadata row. Rate-limit URL issuance per user.",
+    "vocab": [
+     "api-design",
+     "rate-limiting"
+    ]
+   },
+   "beginner_analogy": "Like a coat check that, instead of taking your coat and carrying it to the back itself, hands you a numbered ticket and points to the exact empty hook to hang it on yourself. The clerk never lifts the coat; they just authorize the hook.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "presign",
+      "label": "Presign authority",
+      "kind": "process",
+      "lane": "control",
+      "order": 0
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_mint",
+      "from": "app",
+      "to": "presign",
+      "kind": "control",
+      "label": "mint URL"
+     },
+     {
+      "id": "e_url",
+      "from": "app",
+      "to": "uploader",
+      "kind": "control",
+      "label": "presigned URL"
+     },
+     {
+      "id": "e_direct",
+      "from": "uploader",
+      "to": "blobstore",
+      "kind": "payload",
+      "label": "PUT bytes"
+     },
+     {
+      "id": "e_confirm",
+      "from": "uploader",
+      "to": "app",
+      "kind": "control",
+      "label": "confirm + meta"
+     }
+    ],
+    "highlight": [
+     "app",
+     "e_upload",
+     "e_putblob"
+    ],
+    "remove": [
+     "e_upload",
+     "e_putblob"
+    ]
+   }
+  },
+  {
+   "index": 3,
+   "name": "Renditions: Never Serve the Original",
+   "problem": {
+    "statement": "Two problems arrive with serving. First, you are handing the full-resolution original to every viewer, so a feed of twenty photos is tens of megabytes for a phone that will show each at a few hundred pixels, wasting bandwidth, battery, and egress money. Second, if you resize during the upload request, the user waits seconds while the server generates every size, and a burst of uploads pins your CPUs. You need several sizes, and you cannot make the uploader wait for them.",
+    "beginner": "A phone screen is small, but you are sending it the giant original photo, which is slow and expensive. You need smaller copies. But making those copies takes time, and you do not want the person who just posted to wait while the server shrinks their photo five different ways.",
+    "model": {
+     "id": "queue-and-buffer",
+     "application": "Resizing is slow and bursty; the upload response must be fast. Put a queue between them: accept the upload instantly, drop a transcode job on the queue, and let a pool of workers generate the sizes at their own pace."
+    }
+   },
+   "gate": {
+    "question": "You need a thumbnail, a feed size, and a full-screen size for every photo, but generating them takes seconds you cannot add to the upload. How do you get the sizes made without blocking the person who just posted?",
+    "hint": "Separate accepting the work from doing the work. What sits between a fast producer and a slow consumer so neither waits on the other?"
+   },
+   "solution": "On upload confirm, enqueue a transcode job carrying the photo id and object key. A pool of workers pulls jobs, reads the original from the object store, generates a fixed set of renditions (thumbnail, feed, full-screen), writes each back as its own object, and marks the photo ready. The upload returns the instant the job is queued; rendition generation happens behind it. Each request is then served the smallest rendition that fits the display.",
+   "user_lens": {
+    "gives": "Instant upload acknowledgement, and viewers get a size that fits their screen, so feeds load fast on any connection.",
+    "costs": "A photo is briefly uploaded but not yet viewable while its renditions are still generating, so you must show a placeholder or the progressive original, and you now run and scale a worker fleet that can fall behind under a posting surge."
+   },
+   "tech_lens": {
+    "mechanism": "A durable job queue decouples upload from transcode; stateless workers consume jobs, resize with an image library, and write renditions as separate immutable objects. A status field gates visibility until the renditions exist.",
+    "principle": "Decouple a fast path from a slow one with a buffer. Precompute derived representations asynchronously so the request path never pays for the transform."
+   },
+   "tradeoff": "You accept eventual readiness, a lag between posting and being fully viewable, plus the operational weight of a worker fleet and a queue, in exchange for instant uploads and cheap, right-sized delivery.",
+   "at_scale": "The queue absorbs bursts: a spike in uploads lengthens the queue, not the upload latency, and you scale throughput by adding stateless workers until the queue drains. The ceiling is worker CPU and object-store write bandwidth, both scaled horizontally; the queue is the shock absorber that keeps a posting surge from becoming an upload outage.",
+   "defends": [
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "transcode job on a queue",
+      "software_concept": "producer-consumer over a durable work queue; upload is the producer, workers are the consumers"
+     },
+     {
+      "mechanism": "fixed rendition set per photo",
+      "software_concept": "precomputed derived assets keyed by (photo id, size); materialize once, read many"
+     }
+    ],
+    "interview_probes": [
+     "Why generate renditions asynchronously instead of during the upload request, and how does a viewer see the photo before its renditions exist?",
+     "A million uploads land in an hour. What in this design bends instead of breaks, and what is the actual ceiling?"
+    ],
+    "approach": "On confirm, publish {photo_id, object_key} to a queue (SQS or Kafka). A worker consumes it, runs an image library (libvips or ImageMagick) to emit the fixed sizes, PUTs each as its own object, then sets status=ready. Make it idempotent by keying each output object on photo_id plus size.",
+    "vocab": [
+     "long-running-tasks",
+     "queue",
+     "multi-step-processes"
+    ]
+   },
+   "beginner_analogy": "Like a photo lab that takes your film, hands you a claim ticket immediately, and develops the prints in the back. You do not stand at the counter while they work, and they make several print sizes at once for later pickup.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "queue",
+      "label": "Transcode queue",
+      "kind": "channel",
+      "lane": "control",
+      "order": 2
+     },
+     {
+      "id": "worker",
+      "label": "Transcode worker",
+      "kind": "process",
+      "lane": "service",
+      "order": 4
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_enqueue",
+      "from": "app",
+      "to": "queue",
+      "kind": "control",
+      "label": "enqueue job"
+     },
+     {
+      "id": "e_dequeue",
+      "from": "queue",
+      "to": "worker",
+      "kind": "control",
+      "label": "job"
+     },
+     {
+      "id": "e_renditions",
+      "from": "worker",
+      "to": "blobstore",
+      "kind": "payload",
+      "label": "put renditions"
+     }
+    ],
+    "highlight": [
+     "e_serve",
+     "viewer"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 4,
+   "name": "The Read Storm: Serve From the Edge",
+   "problem": {
+    "statement": "Renditions exist, but every view still fetches them from your central object store. A viewer in Jakarta waits on a round trip to a bucket in Virginia, and when one photo goes viral, millions of identical requests stampede that single origin and saturate its bandwidth. You are paying origin egress and cross-ocean latency to hand out the exact same immutable bytes over and over.",
+    "beginner": "Every time someone looks at a photo, it is fetched from one central storage far away. That is slow for people on the other side of the world, and if a photo gets very popular, that one storage location gets buried under identical requests.",
+    "model": {
+     "id": "locality-and-caching",
+     "application": "A photo never changes after upload, so the same bytes answer every request. Cache each rendition at the network edge, in the viewer's own region, and let the origin serve only the first miss."
+    }
+   },
+   "gate": {
+    "question": "The bytes for a rendition are identical on the ten-millionth request and the first, yet you fetch them from one distant origin every time. Where do you put them so a view is a local, cached read, and what makes photos unusually easy to cache?",
+    "hint": "The data is immutable, so a cache never goes stale. What sits in hundreds of cities and answers most requests without ever calling home?"
+   },
+   "solution": "Put a CDN in front of the object store. A rendition is requested by URL from the nearest edge; on a hit the edge serves it directly, and on a miss it fetches once from the origin, caches it, and serves every later request locally. Because renditions are immutable, they can be cached at the edge with a very long lifetime and no invalidation, so hit rates run extremely high and the origin sees almost only cold objects.",
+   "user_lens": {
+    "gives": "Photos load in milliseconds from a nearby city, and a viral photo is served by thousands of edges instead of one origin, so it loads fast for everyone and never melts the store.",
+    "costs": "You pay for a CDN and lose direct control over deletion timing: to truly unpublish a photo you must purge every edge, and a rendition URL, once handed out, can keep serving from cache after the original is gone unless you plan for it."
+   },
+   "tech_lens": {
+    "mechanism": "Immutable renditions served through a CDN keyed by URL, with long TTLs and cache-control set for near-permanent edge caching; the origin object store answers only misses. Deletion requires an explicit edge purge or versioned URLs.",
+    "principle": "Immutable data is a caching dream: move it to the edge, cache it near the reader essentially forever, and let the origin see only cold misses."
+   },
+   "tradeoff": "You trade tight, immediate control over the bytes (instant deletion, one source) for enormous read scale and low latency, and you take on cache purging and URL versioning to handle the rare case where an immutable object must actually disappear.",
+   "at_scale": "This is what lets reads scale without bound: a single origin serves thousands of requests a second, a CDN serves millions from thousands of edges, and because photos are immutable the edge hit rate approaches 100 percent, so origin load stays nearly flat as viewership grows. The residual ceiling is the single hottest object at one edge, which CDNs handle with tiered caching and replication.",
+   "defends": [
+    "inv4"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "CDN in front of immutable renditions",
+      "software_concept": "edge cache with long TTL; origin is the object store, edges absorb the read storm"
+     },
+     {
+      "mechanism": "versioned immutable URLs",
+      "software_concept": "content-addressed URLs, so a changed image is a new URL, sidestepping invalidation"
+     }
+    ],
+    "interview_probes": [
+     "Why are photos an almost ideal CDN workload, and what single operation (deletion) does immutability plus edge caching make genuinely hard?",
+     "A photo is taken down for legal reasons. Walk through how you actually stop every edge from serving it."
+    ],
+    "approach": "Front the bucket with a CDN (CloudFront or Fastly); set Cache-Control public, a very long max-age, and immutable on renditions, and address each rendition by an immutable key so updates never need invalidation. Purge only for takedowns.",
+    "vocab": [
+     "caching",
+     "cdn",
+     "geo-distribution"
+    ]
+   },
+   "beginner_analogy": "Like newspapers. The story is printed once and identical copies are trucked to newsstands in every city, so readers grab one on their own corner instead of everyone phoning the printing press.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "cdn",
+      "label": "CDN edge",
+      "kind": "store",
+      "lane": "storage",
+      "order": 6,
+      "expands_to": "Content delivery network"
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_edgeget",
+      "from": "viewer",
+      "to": "cdn",
+      "kind": "payload",
+      "label": "GET rendition"
+     },
+     {
+      "id": "e_origin",
+      "from": "cdn",
+      "to": "blobstore",
+      "kind": "control",
+      "label": "on miss"
+     },
+     {
+      "id": "e_edgeserve",
+      "from": "cdn",
+      "to": "viewer",
+      "kind": "payload",
+      "label": "image (cached)"
+     }
+    ],
+    "highlight": [
+     "e_serve",
+     "e_getblob",
+     "blobstore"
+    ],
+    "remove": [
+     "e_view",
+     "e_serve",
+     "e_getblob"
+    ]
+   }
+  },
+  {
+   "index": 5,
+   "name": "The Feed: Build the Read Ahead of Time",
+   "problem": {
+    "statement": "A viewer opens the app and expects a stream of the newest photos from everyone they follow. Computed the obvious way, that means querying the metadata database for the recent photos of hundreds or thousands of followees and merging them, on every single app open, by every user. This fan-in read is the most frequent action in the whole product, and it hammers the one store you worked so hard to keep small, turning feed assembly into the new bottleneck.",
+    "beginner": "When you open the app, it has to find the latest photos from everyone you follow and put them in order. Doing that search fresh every time you open the app, for every user, is a huge amount of repeated work on the database.",
+    "model": {
+     "id": "inversion",
+     "application": "Reading the feed is constant; posting a photo is rare. Invert the work: assemble each person's feed when a photo is posted, not when a feed is opened, so the common action becomes a single cheap read of an already-built list."
+    }
+   },
+   "gate": {
+    "question": "Assembling a feed by querying every followee at read time runs on every app open by every user. How do you make opening the feed a single cheap read instead of a giant live search across the database?",
+    "hint": "Posting happens far less often than viewing. What if you did the merging work once, when the photo is posted, and just stored the result for each follower?"
+   },
+   "solution": "Maintain a materialized feed per user. When a photo becomes ready, fan its reference out into the precomputed feeds of the poster's followers, so each follower's feed is a ready list of photo ids. Opening the app is then one sequential read of that list, and each id resolves to CDN rendition URLs. Accounts with enormous follower counts are handled by the opposite trick, pulled in at read time, so a celebrity post does not fan out to a hundred million feeds at once. Ranking and fanout policy are the feed subsystem's job; the photo store supplies the immutable references it lists.",
+   "user_lens": {
+    "gives": "Opening the app is instant even for someone following thousands of accounts, because the feed is already built and waiting.",
+    "costs": "You duplicate every post across all its followers' feeds, so a post becomes many writes instead of one, feed storage grows with followers not photos, and a new follow or a deletion must be reconciled across many precomputed lists."
+   },
+   "tech_lens": {
+    "mechanism": "Fanout-on-write: a ready photo's reference is pushed into each follower's feed list (a per-user materialized timeline in a fast store), read sequentially on app open. A pull path handles high-fanout accounts to bound write amplification.",
+    "principle": "Invert expensive-on-read work to happen once on write when writes are rare and reads are constant. Materialize the answer the reader will ask for."
+   },
+   "tradeoff": "You trade a single cheap write and expensive reads for cheap reads and hugely amplified writes, plus the bookkeeping of keeping many materialized feeds consistent, a good trade only because reads so vastly outnumber posts.",
+   "at_scale": "Read cost per app open drops to one list read regardless of how many people you follow, which is what makes the feed scale to hundreds of millions of users. The cost moves to write amplification: a post to a million followers is a million feed writes, which is exactly why very-high-fanout accounts switch to fanout-on-read, blending push and pull so neither path explodes.",
+   "defends": [
+    "inv4"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "fanout-on-write into per-user feeds",
+      "software_concept": "materialized view / denormalized read model; write amplification traded for O(1) reads"
+     },
+     {
+      "mechanism": "pull path for high-fanout accounts",
+      "software_concept": "hybrid push and pull fanout to cap write amplification on celebrity posts"
+     }
+    ],
+    "interview_probes": [
+     "Fanout-on-write versus fanout-on-read for the feed: what does each cost, and why do large systems use a hybrid?",
+     "A user with fifty million followers posts. Why would pure fanout-on-write hurt, and what do you do instead?"
+    ],
+    "approach": "Store each user's feed as a capped list (a Redis list or a timeline table) of photo_ids. On a ready photo, enqueue a fanout job that pushes the id into each follower's list; for accounts above a follower threshold, skip fanout and merge their recent photos in at read time.",
+    "vocab": [
+     "fanout",
+     "cqrs"
+    ]
+   },
+   "beginner_analogy": "Like a newsletter folded into each subscriber's mailbox the day it is written, so every morning they just open their box, instead of everyone driving to the publisher to ask what is new.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "feedsvc",
+      "label": "Feed service",
+      "kind": "process",
+      "lane": "service",
+      "order": 6,
+      "expands_to": "News feed"
+     },
+     {
+      "id": "feedstore",
+      "label": "Feed store",
+      "kind": "store",
+      "lane": "storage",
+      "order": 0
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_fanout",
+      "from": "worker",
+      "to": "feedsvc",
+      "kind": "control",
+      "label": "fan out photo"
+     },
+     {
+      "id": "e_fanwrite",
+      "from": "feedsvc",
+      "to": "feedstore",
+      "kind": "payload",
+      "label": "push refs"
+     },
+     {
+      "id": "e_openfeed",
+      "from": "viewer",
+      "to": "feedsvc",
+      "kind": "control",
+      "label": "open feed"
+     },
+     {
+      "id": "e_feedlist",
+      "from": "feedsvc",
+      "to": "viewer",
+      "kind": "payload",
+      "label": "photo refs"
+     }
+    ],
+    "highlight": [
+     "db",
+     "e_read"
+    ],
+    "remove": []
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "A photo goes viral overnight",
+   "scenario": "One photo is shared everywhere and jumps from hundreds of views a second to millions in a few minutes, all for the same rendition, spread across every continent.",
+   "reveal": "The layered read path holds. Because the rendition is immutable, CDN edges cache it after the first miss and serve nearly all of the millions of requests locally, so the origin object store sees only one cold fetch per edge, not millions. The hot edge is handled by the CDN's own tiered caching. inv4 holds; the cost is CDN egress, not an origin meltdown."
+  },
+  {
+   "id": "st2",
+   "title": "The client dies mid-upload",
+   "scenario": "A phone PUTs the photo bytes to the object store using its presigned URL, then loses signal before it can call back to confirm, so the app never writes the metadata row.",
+   "reveal": "There is now an object with no row: an orphan. Because the app acknowledges a photo only after the metadata write, nothing was ever promised to the user, so inv1 is not violated. A reconciliation sweep lists objects with no matching row older than a TTL and garbage-collects them; the upload simply never became a photo. This is the consistency cost the blob-and-pointer split introduced, paid off in the background."
+  },
+  {
+   "id": "st3",
+   "title": "A transcode worker crashes mid-job",
+   "scenario": "A worker reads an original and crashes partway through generating its renditions, leaving some sizes written and some missing.",
+   "reveal": "The queue redelivers the job (at-least-once delivery), and because rendition output is deterministic and keyed by photo id plus size, reprocessing simply overwrites each object with identical bytes. Half-written renditions are replaced, not duplicated, and the photo flips to ready only once all sizes exist. inv2 holds: every rendition is still a faithful downscale of the one original."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "Separate the big immutable payload from the small mutable metadata, and store each where its shape is cheap.",
+   "Move the payload off the control path: hand clients a narrow, expiring capability to move bytes directly instead of proxying them.",
+   "Precompute derived representations once and serve the smallest that fits, never the master.",
+   "Immutable data is a caching dream: put it at the edge and let the origin see only cold misses.",
+   "Invert expensive-on-read work to happen once on write when reads vastly outnumber writes; materialize the answer the reader will ask for."
+  ],
+  "mappings": [
+   {
+    "mechanism": "blob store plus metadata pointer",
+    "elsewhere": "Video platforms, file sync like Dropbox, and email attachments all keep the bytes in object storage and only a pointer in the database."
+   },
+   {
+    "mechanism": "presigned direct upload",
+    "elsewhere": "Any direct-to-storage upload, OAuth scoped tokens, and capability URLs all hand out a narrow permission instead of proxying data or sharing a master key."
+   },
+   {
+    "mechanism": "CDN of immutable renditions",
+    "elsewhere": "Software downloads, map tiles, and video segments are all immutable assets pushed to the edge and cached near the reader for a long time."
+   },
+   {
+    "mechanism": "materialized feed by fanout-on-write",
+    "elsewhere": "Timelines, notification inboxes, and cached search results all precompute a per-reader answer at write time to make the read a single cheap lookup."
+   }
+  ]
+ }
+}

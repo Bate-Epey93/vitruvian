@@ -1,0 +1,780 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "Ticket booking",
+  "narrowing": "The core claim-and-pay spine: a buyer takes one specific seat and pays for it, without that seat ever being sold twice, under an on-sale where demand dwarfs supply. Seat-map rendering, discovery and search, dynamic pricing, the payment processor's internals, refunds, and fraud are left out. They hang off this spine but do not shape it; the whole difficulty lives in claiming a scarce seat under a stampede.",
+  "ordering_note": "This is the canonical path a ticketing system walks as it grows from a weekend booker to a stadium on-sale, not one dated disaster. Each layer is forced by the concrete failure the previous state hits next: first the double-book race, then the payment gap, then the thundering herd, then contention on the best seats, then retries, then distributed drift. The November 2022 Ticketmaster on-sale is a real anchor for the herd layer; the rest are the inevitable failures of the mechanisms, which is why history_confidence is medium rather than high.",
+  "history_confidence": "medium",
+  "domain": "software"
+ },
+ "essence": {
+  "text": "A ticketing system is a sprint to sell a few thousand identical-looking seats to a few million people in the first ninety seconds, and to never sell one seat twice. The database is the easy part. The hard part is that demand does not trickle in, it arrives as a wall, and the one mistake you are never allowed to make, selling the same seat to two buyers, is exactly the mistake a stampede is built to cause.",
+  "beginner": "A ticketing system takes a limited set of seats and sells each one to exactly one person, even when millions of people click at the same second for a big show. The whole trick is handing every seat to a single buyer, and never to two, in the chaos of everyone rushing at once.",
+  "deep_facts": [
+   "The supply-demand gap is brutal: a 20,000-seat arena can face millions of buyers in the opening minutes, so the system spends almost all its effort saying no.",
+   "A hold is a lease: for the few minutes of checkout a seat is neither free nor sold, which is why a seat you clearly saw available can be gone before you finish typing your card.",
+   "There are two ways to be correct under contention: pessimistic (lock the seat so nobody else can touch it) and optimistic (let everyone try, and one compare-and-set wins). Which is cheaper depends entirely on how contested the seat is.",
+   "The queue is the product. A virtual waiting room turns a stampede into a line, trading a fair, visible wait for a system that survives the on-sale at all.",
+   "Overselling is unrecoverable in a way most software errors are not: you cannot apologize a second person into an occupied seat, so a ticketing system deliberately chooses 'sold out' over 'sold twice' every time."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Sell each seat in a fixed inventory to exactly one buyer, take the money, and survive the moment when far more buyers arrive than there are seats.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Buyer",
+    "want": "The specific seat they picked, confirmed and paid, without being told 'gone' after they have already paid"
+   },
+   {
+    "id": "a2",
+    "name": "Promoter",
+    "want": "Every seat sold once and only once: no oversell, no seat lost to a stuck reservation, and the house filled"
+   },
+   {
+    "id": "a3",
+    "name": "Operator",
+    "want": "The system to stay up through the on-sale spike and never, under any failure, sell one seat to two people"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "No double-booking. A seat is confirmed to at most one buyer, ever; the system never issues two valid tickets for the same seat."
+   },
+   {
+    "id": "inv2",
+    "text": "No lost inventory. A seat held but not paid for returns to sale when the hold lapses; no seat is stranded, buyable by nobody."
+   },
+   {
+    "id": "inv3",
+    "text": "Survives the herd. When millions arrive at once for a few thousand seats, the system keeps serving and stays fair instead of collapsing."
+   },
+   {
+    "id": "inv4",
+    "text": "Exactly once. A single booking intent yields one seat and one charge, no matter how many times the request is retried or duplicated."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Seat",
+    "note": "The scarce, exclusive unit; has a status of free, held, or sold, and may be sold only once"
+   },
+   {
+    "id": "en2",
+    "name": "Hold",
+    "note": "A time-boxed reservation with a TTL that lends a seat to one buyer during checkout and reclaims it if payment never lands"
+   },
+   {
+    "id": "en3",
+    "name": "Booking",
+    "note": "The confirmed sale: a seat, a buyer, and a settled payment, tied together and durable"
+   },
+   {
+    "id": "en4",
+    "name": "Inventory",
+    "note": "The set of seats for an event and their live counts; read constantly during an on-sale, and the thing that must never oversell"
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Claim and pay: a buyer picks a seat, a hold is placed, payment is taken, and the hold becomes a confirmed booking or lapses back to inventory."
+   },
+   {
+    "id": "f2",
+    "text": "The on-sale: a flood of buyers contends for a small pool of seats, and the system must serialize claims so exactly one buyer wins each seat."
+   }
+  ],
+  "constraints": [
+   "Supply is fixed and small against demand at on-sale; you cannot conjure more seats, so most buyers must be turned away.",
+   "Demand arrives as a spike: the bulk of the traffic lands in the first seconds, not spread across the day.",
+   "Payment takes seconds to minutes and can fail, so a seat must be reserved before money moves and released if the money never comes.",
+   "A confirmed sale is money and a promise; correctness cannot be traded for speed the way a 'like' or a view count can."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "people",
+    "label": "People"
+   },
+   {
+    "id": "service",
+    "label": "Service"
+   },
+   {
+    "id": "storage",
+    "label": "Storage"
+   },
+   {
+    "id": "control",
+    "label": "Control"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "buyer",
+    "label": "Buyer",
+    "kind": "actor",
+    "lane": "people",
+    "order": 0
+   },
+   {
+    "id": "app",
+    "label": "Booking service",
+    "kind": "process",
+    "lane": "service",
+    "order": 1
+   },
+   {
+    "id": "seatdb",
+    "label": "Seat inventory",
+    "kind": "store",
+    "lane": "storage",
+    "order": 2
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_pick",
+    "from": "buyer",
+    "to": "app",
+    "kind": "payload",
+    "label": "pick seat"
+   },
+   {
+    "id": "e_sell",
+    "from": "app",
+    "to": "seatdb",
+    "kind": "control",
+    "label": "check & sell"
+   },
+   {
+    "id": "e_ok",
+    "from": "app",
+    "to": "buyer",
+    "kind": "payload",
+    "label": "confirmed"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "Claim, Don't Check: The Double-Book",
+   "problem": {
+    "statement": "The naive booker reads the seat, sees 'free', then writes 'sold'. Between the read and the write sits a gap, and under any real load two buyers fall into it together. Both read seat 12F as free, both write sold, and now two strangers hold the same seat for the same show. The check told the truth the instant it ran; by the time the write lands, the truth has already moved.",
+    "beginner": "The first design looks at a seat, sees it is open, then books it. But two people can look at the same instant, both see it open, and both book it. Now two strangers own the very same seat, and nobody notices until the door.",
+    "model": {
+     "id": "mutual-exclusion",
+     "application": "A seat is a resource exactly one buyer may hold. Make the claim a single indivisible act, so two claimants can never both succeed no matter how their timing lines up."
+    }
+   },
+   "gate": {
+    "question": "Two buyers claim seat 12F in the same millisecond. A read ('is it free?') followed by a write ('take it') lets both win. What single operation makes exactly one of them win?",
+    "hint": "Never let the check and the take be two steps. Is there one statement that means 'take it only if it is still free'?"
+   },
+   "solution": "Collapse check-and-take into one atomic operation. A conditional write, UPDATE seat SET status='held' WHERE id=? AND status='free', either flips exactly one row or touches zero. Of two simultaneous claimants the database admits one and returns 'no rows' to the other, who is cleanly told the seat is gone. For a genuinely hot seat you can instead take a pessimistic row lock (SELECT ... FOR UPDATE) so the second claimant blocks until the first commits. Either way the store, not the application, arbitrates the race.",
+   "user_lens": {
+    "gives": "Every confirmed seat belongs to exactly one buyer. Click the same seat as someone else and you get a clean 'taken', never a corrupted double sale you only discover at the venue.",
+    "costs": "Losers of the race pay in disappointment: you can see a seat, reach for it, and be told a stranger got it a millisecond sooner. The seat map you were shown is already slightly out of date."
+   },
+   "tech_lens": {
+    "mechanism": "A status guard enforced in one indivisible statement: a compare-and-set on the seat's status, or a row lock held for the length of the claim. The check is fused to the act it guards.",
+    "principle": "Never split a check from the act it protects. Fuse 'is it free, then take it' into one operation the store arbitrates, so timing cannot produce two winners."
+   },
+   "tradeoff": "You give up the simplicity of read-then-write and you funnel every claim on a seat through one point of arbitration. On a contended seat, claims can proceed only one at a time.",
+   "at_scale": "One seat can be claimed only as fast as the store commits one write to it, so a single seat is a serial resource, which is fine because a seat is sold only once. The danger is the aggregate: when a million buyers converge on the same few hundred hot seats, those rows become contended hot keys and the lock waits or CAS retries pile up. Later layers spread and serialize that load; this layer buys correctness, not survival.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "conditional claim on status",
+      "software_concept": "compare-and-set / optimistic write: UPDATE ... WHERE status='free', zero rows affected means you lost"
+     },
+     {
+      "mechanism": "row lock for hot seats",
+      "software_concept": "pessimistic locking: SELECT ... FOR UPDATE serializes claimants on one row until commit"
+     }
+    ],
+    "interview_probes": [
+     "Two users book the same seat in the same millisecond. Explain why check-then-write double-sells and what single operation fixes it.",
+     "When would you reach for a pessimistic row lock over an optimistic compare-and-set on the seat, and what does each cost under high contention?"
+    ],
+    "approach": "Model seat status as a small state machine (free, held, sold) and change it only with a guarded conditional write: UPDATE seat SET status='held', held_by=? WHERE id=? AND status='free'. If it reports zero rows, the seat is gone and there is no separate read to lose the race. For the hottest rows, wrap the claim in SELECT ... FOR UPDATE.",
+    "vocab": [
+     "contention",
+     "pessimistic-locking",
+     "relational-db"
+    ]
+   },
+   "beginner_analogy": "Like musical chairs where grabbing a chair and sitting down are the same motion. Two kids can lunge at one chair, but only one body ends up in it; the other is simply out, not sharing the seat.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "claim",
+      "label": "Claim guard",
+      "kind": "process",
+      "lane": "control",
+      "order": 0
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_claimreq",
+      "from": "app",
+      "to": "claim",
+      "kind": "control",
+      "label": "claim seat"
+     },
+     {
+      "id": "e_cas",
+      "from": "claim",
+      "to": "seatdb",
+      "kind": "control",
+      "label": "atomic claim"
+     }
+    ],
+    "highlight": [
+     "seatdb",
+     "e_sell"
+    ],
+    "remove": [
+     "e_sell"
+    ]
+   }
+  },
+  {
+   "index": 2,
+   "name": "The Hold: Reserve Before You Pay",
+   "problem": {
+    "statement": "Payment is slow and can fail; the claim is fast and cannot. If you mark a seat sold the instant it is claimed and the card then declines, the seat is stranded sold with no buyer behind it. If instead you wait for payment before claiming, the buyer spends thirty seconds typing a card and someone faster takes the seat out from under them, so they pay for nothing. The atomic claim was right; it just happens at the wrong moment relative to the money.",
+    "beginner": "Paying takes time, and cards get declined. If you mark the seat sold before the payment, a failed card leaves a seat that is 'sold' to nobody. If you wait until after the payment, someone else grabs the seat while the buyer is still typing their card.",
+    "model": {
+     "id": "separation-of-concerns",
+     "application": "Split the fast exclusive claim from the slow fallible payment. Reserve the seat with a short-lived hold, take the money as a separate step, and let the hold expire on its own if the money never comes."
+    }
+   },
+   "gate": {
+    "question": "A buyer needs the seat locked to them for the thirty seconds they spend paying, but a buyer who wanders off must not freeze that seat forever. How do you reserve without stranding?",
+    "hint": "What if the reservation carried its own clock and released itself the moment it ran out?"
+   },
+   "solution": "Introduce a hold: a time-boxed reservation. The atomic claim now moves the seat from free to held (not sold) and writes a hold with a short TTL, often two to ten minutes, into a fast expiry store. The buyer pays against that hold. On success the seat goes from held to sold; on decline or timeout the hold expires and the seat returns to free automatically. The seat is exclusively the buyer's for the length of the timer and nobody else's, and an abandoned cart cannot lock it up past the TTL.",
+   "user_lens": {
+    "gives": "A protected window to pay: the seat is yours while you check out, and you are not racing anyone during those minutes. Walk away and you lose nothing but the hold.",
+    "costs": "The clock is now on you. A slow card or a dropped connection can let the hold lapse and hand your seat to the next person, and the countdown itself pressures a purchase you might have wanted to think about."
+   },
+   "tech_lens": {
+    "mechanism": "A two-phase reservation: an atomic claim to 'held' plus a lease with a TTL in a fast store; payment converts a held seat to sold; a lapsed lease reverts it to free. Reserving and paying are decoupled and fail independently.",
+    "principle": "Decouple a fast exclusive step from a slow fallible one with a self-expiring lease. A reservation that reclaims itself needs no cleanup crew for the common case."
+   },
+   "tradeoff": "You accept that inventory goes temporarily invisible: seats sit in 'held' that are neither buyable nor sold, so displayed availability understates true availability for the length of every hold. Set the TTL too long and abandoned carts choke supply; too short and real buyers lose seats mid-payment.",
+   "at_scale": "Holds move the pressure to the expiry store, which must handle a create-and-expire for every attempt, not just every sale, and at a flash sale attempts dwarf sales. An in-memory store with native key expiry (Redis) absorbs this cheaply and expires leases without scanning. The scaling risk is a thundering release: when a wave of holds all lapse at once, a burst of seats returns and a second wave of buyers pounces, so expiry should be jittered rather than aligned to one tick.",
+   "defends": [
+    "inv2",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "time-boxed hold",
+      "software_concept": "lease / lock with TTL: possession expires on its own, no manual unlock needed"
+     },
+     {
+      "mechanism": "held, sold, free state machine",
+      "software_concept": "two-phase reservation; payment is a separate step that commits or rolls back the hold"
+     }
+    ],
+    "interview_probes": [
+     "Why reserve a seat before charging the card instead of after, and what does the hold TTL trade off when it is too long or too short?",
+     "A buyer's hold expires the instant before their payment succeeds. Who owns the seat, and how do you avoid charging someone for a seat they no longer hold?"
+    ],
+    "approach": "Store holds as keys in Redis with SET seat:{id} {buyer} EX 300 NX: the NX makes the reservation atomic, the EX gives it a self-releasing TTL. Keep seat status in the DB; on payment success convert held to sold in one transaction guarded by the hold still being valid; rely on TTL expiry plus a sweeper to revert abandoned holds.",
+    "vocab": [
+     "distributed-lock",
+     "multi-step-processes"
+    ]
+   },
+   "beginner_analogy": "Like a fitting room. The attendant hands you a room and a tag for a few minutes; the clothes are yours to try and nobody else can take them, but linger too long and the tag expires and the items go back on the rack.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "holds",
+      "label": "Hold timers",
+      "kind": "store",
+      "lane": "storage",
+      "order": 1,
+      "expands_to": "Distributed cache"
+     },
+     {
+      "id": "payment",
+      "label": "Payment",
+      "kind": "channel",
+      "lane": "service",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_hold",
+      "from": "claim",
+      "to": "holds",
+      "kind": "control",
+      "label": "hold, TTL"
+     },
+     {
+      "id": "e_pay",
+      "from": "app",
+      "to": "payment",
+      "kind": "money",
+      "label": "charge card"
+     },
+     {
+      "id": "e_settle",
+      "from": "payment",
+      "to": "seatdb",
+      "kind": "control",
+      "label": "held→sold"
+     },
+     {
+      "id": "e_expire",
+      "from": "holds",
+      "to": "seatdb",
+      "kind": "control",
+      "label": "expire→free"
+     }
+    ],
+    "highlight": [
+     "seatdb",
+     "claim"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 3,
+   "name": "The Thundering Herd: A Line, Not a Mob",
+   "problem": {
+    "statement": "Correctness held, but correctness was never the threat; the on-sale is. When tickets drop, a few thousand seats meet millions of buyers in the same ten seconds, and every one of them hammers the claim path at once. The database connection pool saturates, hold writes stack behind each other, latency climbs, and clients that time out simply retry, piling on load exactly when there is least to spare. The system melts not because the work is hard but because it all arrives together. Ticketmaster's November 2022 on-sale is the canonical case: demand and bot traffic overwhelmed the system and the sale buckled.",
+    "beginner": "The moment tickets go on sale, millions of people click in the same second for a few thousand seats. The servers cannot answer everyone at once, requests pile up, people hit refresh, and the extra clicks make the jam worse until the whole thing stalls.",
+    "model": {
+     "id": "queue-and-buffer",
+     "application": "Arrivals are a spike; the seat store can only serve a steady rate. Put a buffer between them: admit buyers into a queue and release them onto the claim path at a rate the store can actually sustain."
+    }
+   },
+   "gate": {
+    "question": "A million buyers arrive in ten seconds for five thousand seats. The claim path can safely handle a few thousand requests a second. How do you keep the surge from destroying the very system that sells the tickets?",
+    "hint": "You cannot serve them all at once and stay correct. What if you put everyone in a line and admitted them a controlled trickle at a time?"
+   },
+   "solution": "Put a virtual waiting room in front of everything and a queue behind it. On arrival a buyer is parked in the waiting room and handed a position, not a seat. A queue drains at a fixed admission rate onto the booking path, so the claim tier only ever sees the load it can handle. Buyers past the point where seats can plausibly remain are shown 'sold out' without ever touching the store. The stampede becomes an orderly line, and the store sees a steady stream instead of a wall.",
+   "user_lens": {
+    "gives": "A system that stays up during the exact minute it matters, and a fair, visible place in line instead of a coin flip between a spinner and an error page.",
+    "costs": "You wait, sometimes for an hour, watching a queue position tick down, with no guarantee a seat remains when you reach the front. The wait becomes the experience, and the line can sell out before it reaches you."
+   },
+   "tech_lens": {
+    "mechanism": "Admission control: a waiting-room service issues queue tokens and drains them at a bounded rate onto the booking path; a durable queue absorbs the burst and decouples arrival rate from service rate. Load past the plausible-sellout point is shed early.",
+    "principle": "When arrivals spike far past service capacity, convert the spike into a line. A buffer turns a rate mismatch into bounded waiting instead of collapse, and work you cannot serve should be shed before it reaches the expensive path."
+   },
+   "tradeoff": "You trade instant access for survival and fairness: everyone waits, and the queue itself must be built to survive the burst the rest of the system cannot. You also make the wait the product, so a slow line becomes the thing buyers remember.",
+   "at_scale": "This is what actually survives an on-sale. The waiting room and queue are cheap per request and scale horizontally, absorbing tens of millions of arrivals while the expensive claim tier runs flat out at its safe rate. The ceiling moves to the admission rate you pick: too high and you melt the store again, too low and seats sell slower than they could. The queue must itself be distributed and replicated, because it is now the front door the entire event depends on.",
+   "defends": [
+    "inv3",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "virtual waiting room",
+      "software_concept": "admission control / token queue: hand out a place in line and admit at a fixed rate"
+     },
+     {
+      "mechanism": "burst-absorbing queue",
+      "software_concept": "message queue as a shock absorber decoupling arrival rate from service rate"
+     }
+    ],
+    "interview_probes": [
+     "A million requests hit a five-thousand-seat on-sale in ten seconds. Walk through where the system melts first and how a waiting room plus queue prevents it.",
+     "How do you choose the admission rate out of the waiting room, and what breaks if you set it too high or too low?"
+    ],
+    "approach": "Front the sale with a waiting-room service that issues a signed queue token (position plus timestamp) and admits tokens onto the booking path at a fixed rate using a token-bucket limiter backed by Redis. Push claim requests through a durable queue (Kafka or SQS) so a burst becomes backlog, not failure, and 'sold out' any arrival past the point seats can remain.",
+    "vocab": [
+     "queue",
+     "load-shedding",
+     "rate-limiting"
+    ]
+   },
+   "beginner_analogy": "Like a nightclub with one door and a velvet rope. Instead of a crush at the entrance, a bouncer forms a line outside and lets people in a few at a time, so the room inside never becomes a dangerous scrum.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "waiting",
+      "label": "Waiting room",
+      "kind": "process",
+      "lane": "service",
+      "order": 0
+     },
+     {
+      "id": "queue",
+      "label": "Booking queue",
+      "kind": "channel",
+      "lane": "control",
+      "order": 2,
+      "expands_to": "Message queue"
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_join",
+      "from": "buyer",
+      "to": "waiting",
+      "kind": "payload",
+      "label": "join queue"
+     },
+     {
+      "id": "e_enq",
+      "from": "waiting",
+      "to": "queue",
+      "kind": "control",
+      "label": "enqueue"
+     },
+     {
+      "id": "e_deq",
+      "from": "queue",
+      "to": "app",
+      "kind": "control",
+      "label": "admit one"
+     }
+    ],
+    "highlight": [
+     "app",
+     "claim",
+     "e_pick"
+    ],
+    "remove": [
+     "e_pick"
+    ]
+   }
+  },
+  {
+   "index": 4,
+   "name": "One Writer: Serialize, Don't Fight",
+   "problem": {
+    "statement": "The queue smoothed the arrival rate, but many booking workers still drain it in parallel and pile onto the same few hundred desirable seats. Each hot row becomes a contention point: pessimistic locks make workers wait in line for one seat while holding database connections, and optimistic writes spin through retry after retry as they lose to each other. The best seats in the house are a hot key, and a hot key does not care that the average load is fine. Throughput on exactly the seats everyone wants collapses to one-at-a-time with a mountain of wasted retries.",
+    "beginner": "Even with an orderly line, everyone still wants the same handful of good seats. All the workers fight over those few rows, waiting on locks or retrying failed grabs, so the seats people actually want sell painfully slowly while the workers burn effort losing to each other.",
+    "model": {
+     "id": "bottleneck",
+     "application": "The hot seats are the constraint, and adding general capacity does nothing. Remove the fight itself: serialize claims for one event through a single writer that owns the inventory, so there is nothing left to contend on."
+    }
+   },
+   "gate": {
+    "question": "Thousands of workers retry-storm the same fifty front-row seats, each attempt mostly a wasted losing lock. Adding workers makes it worse. How do you sell hot seats fast without any of them fighting?",
+    "hint": "Contention exists only because many things write the same rows. What if exactly one thing did, and everyone else just asked it?"
+   },
+   "solution": "Partition inventory by event and give each event a single-writer allocator fed directly by its queue. The allocator holds that event's seat map in memory and assigns seats in order, with no lock and no retry, because it is the only writer. It persists each claim with an optimistic versioned append to the durable store. For uncontended events the old per-seat conditional write is still fine; the single writer is the answer specifically for the hottest events, where serializing beats fighting. Sharding by event means one blockbuster never touches another show's throughput.",
+   "user_lens": {
+    "gives": "The good seats sell as fast as one machine can assign them, cleanly and in order, instead of grinding through a storm of failed grabs. Once you are admitted, an answer comes back quickly.",
+    "costs": "One writer per event is a throughput ceiling for that event and a single thing that must be kept alive and failed over; if it dies, that event's sales pause until a replacement takes ownership. You have traded a fair fight for a single, precious server."
+   },
+   "tech_lens": {
+    "mechanism": "Shard inventory by event id; each shard has one authoritative in-memory allocator that serializes claims (no lock needed, since there is a single writer) and persists via an optimistic versioned write. Contention is designed out rather than resolved.",
+    "principle": "The cheapest way to win a contention fight is to not have one. Route all writes to a hot resource through a single serialized owner, and partition by a key so one hot owner never limits the others."
+   },
+   "tradeoff": "A single writer per event caps that event at one machine's write rate and needs careful failover, replacing many contending workers with one indispensable one. Optimistic versus pessimistic stops being the question once nobody contends, but the single owner becomes the thing you must never lose.",
+   "at_scale": "Sharding by event scales horizontally across shows without limit, and the single-writer-per-event pattern makes each hot event's throughput predictable and lock-free. The residual ceiling is one event whose demand exceeds a single allocator's rate; you widen it by pre-partitioning that event's seats across several owners by section, so 'one writer per shard' becomes 'one writer per section', trading a little cross-section coordination for parallelism.",
+   "defends": [
+    "inv1",
+    "inv3"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "single-writer allocator per event",
+      "software_concept": "single-writer principle / an actor owning a partition: serialize writes to remove contention entirely"
+     },
+     {
+      "mechanism": "shard inventory by event",
+      "software_concept": "partitioning by a key so a hot partition is isolated from every other event's load"
+     }
+    ],
+    "interview_probes": [
+     "Under a flash sale, thousands of workers retry the same hot seats. Contrast pessimistic locking, optimistic CAS, and a single-writer allocator, and say which wins and why.",
+     "How does sharding inventory by event help, and what do you do when a single event's demand exceeds one allocator's write rate?"
+    ],
+    "approach": "Route each event's claims through one consumer that owns that partition (a Kafka partition per event, consumed by a single worker) holding the seat bitmap in memory. Assign seats sequentially in that one thread with no lock, and persist with a versioned optimistic write. For a mega-event, pre-split seats by section across several single-writer consumers.",
+    "vocab": [
+     "hot-key",
+     "optimistic-concurrency",
+     "pessimistic-locking"
+    ]
+   },
+   "beginner_analogy": "Like a deli counter for the popular cheese. Instead of a scrum where customers grab and mostly miss, one clerk stands behind the counter and hands out numbers in order. One person serving is faster than fifty people shoving.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "worker",
+      "label": "Seat allocator",
+      "kind": "process",
+      "lane": "service",
+      "order": 2
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_toworker",
+      "from": "app",
+      "to": "worker",
+      "kind": "control",
+      "label": "claim"
+     },
+     {
+      "id": "e_claim2",
+      "from": "worker",
+      "to": "seatdb",
+      "kind": "control",
+      "label": "serial claim"
+     },
+     {
+      "id": "e_hold2",
+      "from": "worker",
+      "to": "holds",
+      "kind": "control",
+      "label": "hold, TTL"
+     }
+    ],
+    "highlight": [
+     "claim",
+     "seatdb"
+    ],
+    "remove": [
+     "claim"
+    ]
+   }
+  },
+  {
+   "index": 5,
+   "name": "Exactly Once: Retries That Don't Double-Book",
+   "problem": {
+    "statement": "The sale is fast, the network is not, and anxious buyers make it worse. A buyer double-clicks 'buy', a request times out and the client retries, a browser is refreshed mid-checkout, a mobile connection drops and reconnects. Each of these can deliver the same booking intent twice. Without protection, two identical requests claim two seats for one buyer, or worse, charge the same card twice for the same seat. The claim is retry-hostile: doing it twice does two things.",
+    "beginner": "People double-click, refresh, and retry when things feel slow, and phones drop and resend. If the system treats each try as a fresh order, one buyer ends up with two seats, or gets charged twice for one. The same click must not book twice.",
+    "model": {
+     "id": "idempotency",
+     "application": "Make a booking request carry a key so the second, third, and fourth copies of the same intent all resolve to the one booking the first created, instead of each doing the work again."
+    }
+   },
+   "gate": {
+    "question": "A buyer's phone sends 'buy seat 12F' twice because the first response was lost on the way back. How do you make the duplicate a no-op that returns the original result, not a second seat or a second charge?",
+    "hint": "Give the intent a name the client generates once and reuses on every retry. What can the server do the first time it sees that name versus every time after?"
+   },
+   "solution": "Require an idempotency key on every booking request: a unique id the client generates once per intent and resends on every retry. The server records the key with the result of the first successful booking. A repeat of the same key returns the stored result without claiming another seat or charging again. The payment step carries the same key through to the processor, so a retried charge is recognized and not billed twice. One intent, one seat, one charge, however many times the request arrives.",
+   "user_lens": {
+    "gives": "Freedom to retry: mash the button, refresh, recover from a dropped connection, and still end up with exactly one seat and one charge. A flaky network stops meaning a double booking.",
+    "costs": "The client must generate and hold a stable key per attempt, and the server must store keys durably long enough to catch late retries. A key reused too broadly, the same key for a genuinely new purchase, silently collapses two real orders into one."
+   },
+   "tech_lens": {
+    "mechanism": "A client-supplied idempotency key persisted with the outcome of the first execution; duplicate keys short-circuit to the stored result. The same key is threaded into the payment call so the processor deduplicates the charge.",
+    "principle": "Turn an unreliable 'do this' into a safe 'ensure this is done'. A remembered key makes a retry return the first result instead of repeating its side effects."
+   },
+   "tradeoff": "You add a durable write and a lookup on the hot booking path, and you inherit the key's lifecycle: how long to remember it, when to expire it, and how to keep the key store consistent with the seat and the charge if a crash lands between them.",
+   "at_scale": "The key store takes a write per attempt, which at flash-sale volume is large, so it must be fast and durable at once (an indexed table or a persistent key-value store), and its retention must outlast the longest plausible retry. Because keys partition naturally by buyer or intent, the store shards cleanly and never becomes a single hot point. The subtle hazard is a crash between claiming the seat and recording the key, which the final layer's single source of truth must resolve.",
+   "defends": [
+    "inv4"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "client idempotency key",
+      "software_concept": "idempotency key stored with the first result; duplicates return the stored outcome"
+     },
+     {
+      "mechanism": "key threaded to payment",
+      "software_concept": "processor-level idempotency so a retried charge is deduplicated, not re-billed"
+     }
+    ],
+    "interview_probes": [
+     "A buyer double-clicks buy and both requests arrive. Show exactly how an idempotency key yields one seat and one charge.",
+     "Where do you store idempotency keys, how long do you keep them, and what happens if the server crashes after claiming the seat but before recording the key?"
+    ],
+    "approach": "Require an Idempotency-Key header (a client-generated UUID per intent). On first sight, INSERT the key with status 'in progress' inside the booking transaction; on a duplicate, return the recorded result. Pass the same key as the payment processor's idempotency key so a retried charge collapses to one. Keep keys in a durable, indexed store with a retention window longer than your longest retry.",
+    "vocab": [
+     "idempotency-keys",
+     "relational-db"
+    ]
+   },
+   "beginner_analogy": "Like a coat check giving you a numbered ticket. Hand the same ticket in twice and you still get back the one coat, not a second coat and a second bill; the number ties every request to the one thing you actually own.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "idem",
+      "label": "Idempotency keys",
+      "kind": "store",
+      "lane": "storage",
+      "order": 0
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_idem",
+      "from": "app",
+      "to": "idem",
+      "kind": "control",
+      "label": "check key"
+     },
+     {
+      "id": "e_dup",
+      "from": "idem",
+      "to": "app",
+      "kind": "control",
+      "label": "already booked"
+     }
+    ],
+    "highlight": [
+     "app",
+     "e_pay",
+     "worker"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 6,
+   "name": "One Truth: No Oversell, Ever",
+   "problem": {
+    "statement": "The system now spans a fast cache of holds, a durable seat store, a queue, a single-writer allocator, and a key store, and distributed parts drift. A hold expires in Redis but the release never lands in the database; the allocator crashes after handing out a seat but before persisting it; the cache says free while the store says sold. Any such split risks the one thing a ticketing system must never do: sell the same seat to two people, or lose a seat nobody can ever buy. Under a network partition you cannot have both perfect availability and a guaranteed count, and overselling a concert is not a bug you can apologize your way out of.",
+    "beginner": "The system is now many moving parts that can disagree: the fast memory says one thing, the real database another. If they drift, you either sell one seat to two people or lock a seat away that nobody can buy. For tickets, selling the same seat twice is the one mistake you cannot make.",
+    "model": {
+     "id": "single-source-of-truth",
+     "application": "Name one store as the only authority on whether a seat is sold. Every other copy is a hint that must reconcile back to it, and when the authority cannot be reached, refuse to sell rather than guess."
+    }
+   },
+   "gate": {
+    "question": "The fast cache and the durable store disagree about seat 12F after a crash. One says free, one says sold. Which do you believe, and what do you do when you cannot reach the one you trust?",
+    "hint": "Pick the authority in advance, make every other copy defer to it, and decide now whether an unreachable authority means 'sell anyway' or 'do not sell'."
+   },
+   "solution": "Make the durable seat store the single source of truth for 'sold'; the cache and holds are advisory accelerators that always reconcile back to it. Commit the seat and the booking in one transaction so a seat is never sold without a durable record. A reconciler continuously sweeps expired holds and repairs any cache-versus-store drift toward the store. When the authority is unreachable, fail closed: refuse to confirm rather than risk a second sale. The system chooses 'sold out' over 'sold twice' every time, because an oversell is unrecoverable and a refusal is merely disappointing.",
+   "user_lens": {
+    "gives": "An ironclad guarantee that a confirmed seat is truly yours and truly unique, and that the count you were sold against was real. No arriving to find a stranger already sitting in your seat.",
+    "costs": "Under failure the system gets stricter, not looser: it will tell you 'try again' or 'sold out' rather than take a risk, so a partition can cost you a sale you might have won if the system were willing to guess. Availability yields to correctness."
+   },
+   "tech_lens": {
+    "mechanism": "A designated authoritative store, an atomic commit of seat plus booking, a reconciler that repairs advisory copies toward the authority, and a fail-closed default when the authority is unreachable. Consistency is chosen over availability for the sold-count.",
+    "principle": "When copies can disagree and one error is unrecoverable, crown one authority and make everyone reconcile to it, then fail closed on the unrecoverable side. Choose the harmless failure on purpose."
+   },
+   "tradeoff": "You accept reduced availability under partition and the ongoing cost of reconciliation: a background repair path, transactions that span seat and booking, and a deliberate refusal to sell when unsure. You are slower and stricter precisely when the system is stressed.",
+   "at_scale": "Choosing consistency for the sold-count bounds availability under partition (CAP is not negotiable), but the blast radius stays small: only genuinely conflicted seats block, while the vast uncontended majority sell freely. Reconciliation is cheap because holds carry TTLs and the store is authoritative, so repair is a bounded sweep, not a full scan. The permanent cost is that the one authoritative write per seat is the correctness chokepoint, which is exactly why earlier layers worked so hard to funnel each seat's writes through a single serialized owner.",
+   "defends": [
+    "inv1",
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "authoritative store plus reconciler",
+      "software_concept": "system of record with a reconciliation loop repairing caches toward it"
+     },
+     {
+      "mechanism": "fail closed under partition",
+      "software_concept": "CP choice: refuse the write when the authority is unreachable, never oversell"
+     }
+    ],
+    "interview_probes": [
+     "The hold cache and the seat database disagree after a crash. Which is authoritative, how do you reconcile, and why does a ticketing system fail closed instead of open?",
+     "Explain the CAP tradeoff for the sold-count: what do you give up to guarantee you never oversell, and how do you keep that from blocking uncontended seats?"
+    ],
+    "approach": "Treat the relational store as the system of record: commit seat status and the booking row in one ACID transaction so 'sold' is never cache-only. Run a reconciler that sweeps expired holds (revert WHERE expires_at < now) and repairs cache drift toward the DB. On a store or partition failure, return 'unavailable' or 'sold out' rather than confirming, so the invariant holds even under failure.",
+    "vocab": [
+     "cap-theorem",
+     "eventual-consistency"
+    ]
+   },
+   "beginner_analogy": "Like a paper deed office behind a fast rumor mill. People trade rumors about who owns what, but only the deed book is real; when the rumors and the book disagree, the book wins, and if the office is closed, no sale is final until it reopens.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "reconciler",
+      "label": "Reconciler",
+      "kind": "process",
+      "lane": "control",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_recon",
+      "from": "reconciler",
+      "to": "seatdb",
+      "kind": "control",
+      "label": "reconcile truth"
+     },
+     {
+      "id": "e_sweep",
+      "from": "reconciler",
+      "to": "holds",
+      "kind": "control",
+      "label": "sweep expired"
+     }
+    ],
+    "highlight": [
+     "holds",
+     "seatdb"
+    ],
+    "remove": []
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "The on-sale spike",
+   "scenario": "A stadium show goes on sale at 10:00 sharp. In the first minute, several million buyers hit the site for around forty thousand seats, and most refresh when a page is slow.",
+   "reveal": "The waiting room and queue hold the line. Arrivals are parked and handed positions, and the admission rate lets only as many buyers onto the claim path as the tier can serve, so the store never melts. Single-writer allocators sell the hot sections lock-free and in order, and buyers past the plausible-sellout point are shown 'sold out' before touching the store. inv3 holds; the cost is a real wait and no promise a seat remains when you reach the front."
+  },
+  {
+   "id": "st2",
+   "title": "Two buyers, the last seat, same instant",
+   "scenario": "One front-row seat remains. Two admitted buyers submit a claim for it within the same millisecond, both convinced it is theirs.",
+   "reveal": "The claim is decided in the store, not the application. The single-writer allocator assigns the seat to exactly one of them and returns 'taken' to the other, and even the raw conditional write would admit one row and reject the second. One buyer gets the seat, the other a clean rejection. inv1 holds with no double-mapped seat, which a naive read-then-write would have produced under exactly this timing."
+  },
+  {
+   "id": "st3",
+   "title": "Payment fails, then a worker crashes",
+   "scenario": "A buyer holds a seat, then abandons checkout when their card declines. Moments later the allocator that handed out a neighbouring seat crashes after assigning it but before the durable commit lands.",
+   "reveal": "Both holes close without an oversell. The abandoned hold's TTL lapses and the seat returns to free, swept by the reconciler, so inv2 holds and no seat is stranded. The crashed allocator's un-committed seat has no durable booking, so on recovery the single source of truth shows it never sold and it is reclaimed; because confirmation requires the committed record, no buyer ever received a ticket for it. inv1 holds through the crash: the system reclaimed rather than double-sold."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "Fuse the check with the act it guards and let the store arbitrate a claim in one atomic step, so timing cannot produce two winners.",
+   "Decouple a fast exclusive step from a slow fallible one with a self-expiring lease; a reservation that reclaims itself needs no cleanup crew.",
+   "When arrivals spike past service capacity, convert the mob into a line and shed the work you cannot serve before it reaches the expensive path.",
+   "The cheapest way to win a contention fight is to not have one: serialize hot writes through a single owner and partition so hot owners do not limit each other.",
+   "Give each intent a key so retries return the first result instead of repeating side effects.",
+   "When copies can disagree and one error is unrecoverable, crown one authority, reconcile every copy to it, and fail closed on the unrecoverable side."
+  ],
+  "mappings": [
+   {
+    "mechanism": "atomic seat claim",
+    "elsewhere": "Username registration, domain grabs, and inventory decrement all resolve a claim race with one conditional write arbitrated by the store."
+   },
+   {
+    "mechanism": "time-boxed hold",
+    "elsewhere": "Cart reservations in e-commerce, ride-matching offers, and distributed leases all lend a resource for a bounded window that reclaims itself."
+   },
+   {
+    "mechanism": "virtual waiting room plus queue",
+    "elsewhere": "Sneaker drops, exam registration, and vaccine-slot booking all put a line in front of a stampede and admit at a survivable rate."
+   },
+   {
+    "mechanism": "single writer per partition",
+    "elsewhere": "Kafka partition consumers, sharded counters, and actor-model systems all serialize writes to one key to erase contention."
+   },
+   {
+    "mechanism": "idempotency key",
+    "elsewhere": "Payments, order submission, and message delivery all use a client key so a retry is a no-op instead of a duplicate."
+   }
+  ]
+ }
+}

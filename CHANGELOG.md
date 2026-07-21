@@ -4,6 +4,13 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [1.25.0] — 2026-07-20 · Batch 3: the canonical products
+### Added
+- Six more worked Deconstructs — **Rate limiter, Search typeahead, Ride matching, Ticket booking, Payment ledger, Photo store** — the first six of the ten canonical interview products. The library reaches 19.
+- Each drills into the primitives it's built from (e.g. Ticket booking → Distributed cache, Message queue; Photo store → Object storage, CDN, News feed), all resolving offline.
+### Notes
+- Four of the batch (real-time chat, web crawler, job scheduler, collaborative editor) hit an authoring session limit and will land in a follow-up; the six that passed validation ship now.
+
 ## [1.24.0] — 2026-07-20 · The Track, progress, and shareable Pulse
 ### Added
 - **The Track** — a curated screen that walks the sample library as an ordered path (foundations first, then the systems built on them), with per-system completion. A study plan, not a toy box.

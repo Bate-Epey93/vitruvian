@@ -1,0 +1,843 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "Payment ledger",
+  "narrowing": "The core money-movement spine: recording balance-changing transactions correctly and durably, and settling them through external providers so the books always balance. Left out are KYC and fraud scoring, FX rate sourcing, the user interface, and reporting; they hang off this ledger but do not shape its correctness.",
+  "ordering_note": "This is not one dated outage but the path a payment ledger walks as it grows from a two-table prototype to a system moving billions. Each layer is forced by the concrete failure the previous state hits next: first conservation and history, then duplicate charges from retries, then the money that lives outside your database, then transfers spanning two providers, then the drift between your books and the bank, then the single-node and hot-account ceilings. history_confidence is medium because the mechanisms and their failure modes are canonical and checkable, not because a specific named incident is being retold.",
+  "history_confidence": "medium",
+  "domain": "software"
+ },
+ "essence": {
+  "text": "A payment ledger is the system of record for money in motion: its entire job is to move value between accounts and never, under any failure, create or lose a cent. It looks like two balance updates in a database. It is not. Networks retry, so the same transfer arrives twice; processes crash between the debit and the credit; the money actually moves through banks and card networks you cannot lock or roll back. The whole discipline lives in making a balance the provable sum of an immutable history, and in getting exactly-once behavior out of a world that only offers at-least-once.",
+  "beginner": "A payment ledger keeps track of money moving between accounts. Its one job is to make sure that when you send money, it leaves once, arrives once, and is never accidentally created or destroyed, even when computers crash or the network hiccups and sends the same request twice.",
+  "deep_facts": [
+   "Double-entry bookkeeping is over 500 years old (codified by Luca Pacioli in 1494), and modern ledgers still run on its core rule: every entry's debits equal its credits, so the books always sum to zero.",
+   "A balance is not stored, it is derived: the sum of an immutable list of postings. The current balance is a cache of history, and any wrong balance can be recomputed from the log.",
+   "A request that times out has three possible truths at once (never sent, applied, or applied but the acknowledgement was lost), and the client cannot tell which, which is why an idempotency key is mandatory rather than optional.",
+   "Exactly-once delivery is provably impossible over a lossy network. Real systems get exactly-once effect by combining at-least-once retries with idempotent, deduplicated writes.",
+   "There is no two-phase commit a bank and a card network will both join, so a transfer spanning two providers must be a saga of compensatable steps, not a distributed transaction.",
+   "Reconciliation exists because your ledger and each provider's ledger are independent records that drift; large payment shops book unresolved discrepancies into a suspense account until they clear."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Record every movement of money between accounts correctly and permanently, and move funds through outside providers, so the books always balance and every cent is traceable.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Payer",
+    "want": "Money leaves my account exactly once, for the amount I authorized, and never twice"
+   },
+   {
+    "id": "a2",
+    "name": "Payee",
+    "want": "To be credited exactly what was sent, once, and to know when the money is really mine"
+   },
+   {
+    "id": "a3",
+    "name": "Operator",
+    "want": "Serve transfers cheaply at scale while the books always balance and no cent is ever created or lost"
+   },
+   {
+    "id": "a4",
+    "name": "Auditor",
+    "want": "Reconstruct any balance from history and prove no money was created or destroyed"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "Conservation: every transaction's debits equal its credits. Money is only moved, never created or destroyed, and the books always sum to zero."
+   },
+   {
+    "id": "inv2",
+    "text": "Exactly-once: a single authorized transfer posts exactly once. Retries never double-charge, and a failure never silently drops it."
+   },
+   {
+    "id": "inv3",
+    "text": "Immutable audit trail: a posted entry is never altered or deleted, and any balance can be reconstructed from the full history of postings."
+   },
+   {
+    "id": "inv4",
+    "text": "Cross-provider atomicity: a transfer that touches two providers either completes on both or is fully compensated. No money is left stranded in between."
+   },
+   {
+    "id": "inv5",
+    "text": "The ledger matches reality: every posted movement corresponds to a real provider settlement, and the two never silently diverge."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Account",
+    "note": "A holder of value; its balance is a derived sum of postings, not a stored mutable number"
+   },
+   {
+    "id": "en2",
+    "name": "Journal entry",
+    "note": "One transfer as a set of balanced postings, debits equal to credits, immutable once written"
+   },
+   {
+    "id": "en3",
+    "name": "Posting",
+    "note": "A single debit or credit line against one account; the atomic unit of movement"
+   },
+   {
+    "id": "en4",
+    "name": "Idempotency key",
+    "note": "A client-supplied id naming one intended transfer, so retries dedup to one effect"
+   },
+   {
+    "id": "en5",
+    "name": "Provider transfer",
+    "note": "The external leg at a bank, card network, or PSP, called over the network and not lockable"
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Transfer: an authorized amount posts as a balanced entry, then settles through one or more external providers."
+   },
+   {
+    "id": "f2",
+    "text": "Reconciliation: provider statements flow back and are matched against the ledger, and breaks are corrected."
+   }
+  ],
+  "constraints": [
+   "Money is real: a lost or duplicated cent is a real loss or a real liability, not a rounding error.",
+   "Networks are unreliable: any request can time out with the outcome unknown, so retries are inevitable and duplicates are guaranteed.",
+   "External providers are independent systems you cannot lock: you cannot hold one transaction open across a bank and a card network.",
+   "Regulation demands you can prove every movement years later, so history cannot be edited away."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "people",
+    "label": "Parties"
+   },
+   {
+    "id": "service",
+    "label": "Service"
+   },
+   {
+    "id": "ledger",
+    "label": "Ledger"
+   },
+   {
+    "id": "settlement",
+    "label": "Settlement"
+   },
+   {
+    "id": "control",
+    "label": "Control"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "payer",
+    "label": "Payer",
+    "kind": "actor",
+    "lane": "people",
+    "order": 0
+   },
+   {
+    "id": "payee",
+    "label": "Payee",
+    "kind": "actor",
+    "lane": "people",
+    "order": 4
+   },
+   {
+    "id": "app",
+    "label": "Ledger service",
+    "kind": "process",
+    "lane": "service",
+    "order": 1
+   },
+   {
+    "id": "balances",
+    "label": "Balances DB",
+    "kind": "store",
+    "lane": "ledger",
+    "order": 2
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_pay",
+    "from": "payer",
+    "to": "app",
+    "kind": "payload",
+    "label": "pay $X"
+   },
+   {
+    "id": "e_upd",
+    "from": "app",
+    "to": "balances",
+    "kind": "control",
+    "label": "update 2 rows"
+   },
+   {
+    "id": "e_credit",
+    "from": "app",
+    "to": "payee",
+    "kind": "money",
+    "label": "credited"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "Double-Entry: The Balance Is the History",
+   "problem": {
+    "statement": "The naive ledger keeps one mutable number per account and moves money by editing two of them: subtract fifty from Alice, add fifty to Bob. Two failures arrive together. If the process dies between the two writes, the fifty is destroyed (debited, never credited) or conjured (credited, never debited), and conservation is silently broken. And a mutable balance has no memory: it cannot answer why it holds the value it does, and a single wrong write is unrecoverable because the previous value is gone.",
+    "beginner": "The first idea is to store one number for each person's balance and change two of them per transfer. But if the computer crashes halfway, one side changes and the other does not, so money appears or disappears. And because you only kept the latest number, you can never check how it got there or undo a mistake.",
+    "model": {
+     "id": "single-source-of-truth",
+     "application": "Make an append-only journal of balanced postings the one authoritative record, and derive every balance by summing it, so a balance can never disagree with its own history."
+    }
+   },
+   "gate": {
+    "question": "You must move money between two accounts so that a crash can never leave the books unbalanced, and so any balance can be re-derived and any error traced. What do you actually store, if not the balances themselves?",
+    "hint": "What if the balance were not a number you overwrite, but the running total of a list you only ever append to?"
+   },
+   "solution": "Record every transfer as a journal entry: a set of postings that debit one account and credit another for the same amount, written in one atomic database transaction, and enforce that the postings sum to zero so an unbalanced entry cannot be stored. Never update a balance in place. A balance becomes a derived quantity, the sum of all postings against an account. The journal is append-only and immutable, so conservation holds by construction and the entire history is the audit trail.",
+   "user_lens": {
+    "gives": "Books that always balance and always explain themselves: every balance is the provable sum of dated movements, and any figure can be recomputed from the log.",
+    "costs": "You store far more than a balance (every movement, forever), and reading a balance now means summing history rather than reading one row, a cost the scaling layer has to buy back."
+   },
+   "tech_lens": {
+    "mechanism": "An append-only postings table, each transfer inserting balanced debit and credit rows inside a single ACID transaction with a check that they net to zero; balances are aggregates over that table, not stored state.",
+    "principle": "Do not store derived state you can compute. Keep the immutable movements as the source of truth and fold them into balances, so correctness is structural and history is never lost."
+   },
+   "tradeoff": "You trade cheap single-row balance reads and small storage for an ever-growing immutable log and aggregate reads, betting that provable correctness is worth recomputing balances.",
+   "at_scale": "The journal is append-only, which is the friendliest possible write pattern: inserts never contend on the same row the way in-place balance updates do, so a single node absorbs a high insert rate. The cost that grows is the balance read, summing millions of postings per account, which is why heavy accounts eventually need periodic balance snapshots and, past one node's write ceiling, sharding, both introduced in the final layer.",
+   "defends": [
+    "inv1",
+    "inv3"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "append-only journal of balanced postings",
+      "software_concept": "event sourcing: state is a fold over an immutable event log, not a mutable row"
+     },
+     {
+      "mechanism": "debits-equal-credits check in one transaction",
+      "software_concept": "an invariant enforced inside an ACID transaction, so an unbalanced write cannot commit"
+     }
+    ],
+    "interview_probes": [
+     "Why do serious ledgers store immutable postings and derive balances, instead of keeping a mutable balance column?",
+     "A crash lands between the debit and the credit. Explain how a single atomic balanced entry makes that failure impossible."
+    ],
+    "approach": "Model a postings table (entry_id, account, amount, sign) and insert both legs of a transfer in one DB transaction, with a constraint or check that the entry's amounts sum to zero. Compute balance as SUM(amount) over an account, and never issue an UPDATE against a balance.",
+    "vocab": [
+     "event-sourcing",
+     "relational-db"
+    ]
+   },
+   "beginner_analogy": "Like a chequebook register instead of a sticky note with your balance on it. You write down every deposit and withdrawal and add them up, so you can always see how you got here and catch a mistake, instead of scribbling over one number and hoping.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "journal",
+      "label": "Journal",
+      "kind": "store",
+      "lane": "ledger",
+      "order": 1
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_post",
+      "from": "app",
+      "to": "journal",
+      "kind": "payload",
+      "label": "post entry"
+     },
+     {
+      "id": "e_derive",
+      "from": "journal",
+      "to": "balances",
+      "kind": "control",
+      "label": "derive balance"
+     }
+    ],
+    "highlight": [
+     "balances",
+     "e_upd"
+    ],
+    "remove": [
+     "e_upd"
+    ]
+   }
+  },
+  {
+   "index": 2,
+   "name": "The Retry Doubles the Money",
+   "problem": {
+    "statement": "The atomic journal makes each write correct, but says nothing about a write that happens twice. A client sends 'transfer fifty' and the response times out. The client cannot tell whether the transfer posted, the network dropped the request, or it posted and only the acknowledgement was lost. So it does the only safe thing and retries, and now fifty moves twice. Over a real network every state-changing request will eventually be sent more than once; at-least-once delivery is the only kind you can get.",
+    "beginner": "You send a transfer, but the reply gets lost, so you do not know if it worked. Naturally you try again. Without protection, the system now runs the transfer twice and moves double the money. On a real network this is not rare, it is guaranteed to happen eventually.",
+    "model": {
+     "id": "idempotency",
+     "application": "Attach a stable key to each intended transfer and record which keys have been applied, so a retried request lands the money exactly once no matter how many times it arrives."
+    }
+   },
+   "gate": {
+    "question": "The same transfer request can honestly arrive two, five, ten times, and you cannot tell a retry from a fresh request by looking at its contents. How do you make the second and every later copy do nothing, without losing a genuinely new transfer?",
+    "hint": "Let the caller name the transfer once, with an id it reuses on every retry. What could you store, in the same breath as posting the entry, that makes a repeat a no-op?"
+   },
+   "solution": "Require the client to attach an idempotency key, a unique id for the intended transfer that it reuses on every retry. Store the key with a uniqueness constraint, and insert the key in the same atomic transaction that posts the journal entry. The first request posts the entry and records the key; any later request carrying the same key hits the constraint, skips the posting, and returns the original result. Delivery is still at-least-once, but the effect is exactly-once.",
+   "user_lens": {
+    "gives": "Safe retries: the client can hammer the endpoint until it gets an answer, knowing the money moves once. A timeout stops being a dangerous ambiguity.",
+    "costs": "The client now carries responsibility, it must generate and reuse a stable key per transfer, and the ledger must store every key it has seen and decide how long to remember them, since a key retried after it is forgotten would double-post."
+   },
+   "tech_lens": {
+    "mechanism": "A unique index on the idempotency key; the key row and the journal entry are inserted in one transaction, so either both commit or neither does, and a duplicate key collides instead of posting again.",
+    "principle": "You cannot get exactly-once delivery, so buy exactly-once effect instead: make the operation idempotent by deduplicating on a client-supplied key inside the same transaction that performs it."
+   },
+   "tradeoff": "You push work and discipline onto the caller and take on a growing store of seen keys with a retention policy, in exchange for making the single most common payment bug, the double charge, structurally impossible.",
+   "at_scale": "The dedup is one indexed lookup and insert, so it costs almost nothing per transfer and scales with the store. What grows is the key set: at millions of transfers a day you cannot keep keys forever, so you expire them on a window longer than any client will retry, and the uniqueness check must live on the same shard as the account (final layer) so it stays a local, atomic operation rather than a distributed one.",
+   "defends": [
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "client-supplied idempotency key",
+      "software_concept": "idempotency key stored under a unique constraint; retries collide instead of repeating"
+     },
+     {
+      "mechanism": "key and entry in one transaction",
+      "software_concept": "dedup and effect committed atomically, so a retry can never post a second entry"
+     }
+    ],
+    "interview_probes": [
+     "A create-payment request times out. Walk through why a blind retry double-charges and exactly what an idempotency key changes.",
+     "Why must the idempotency key be written in the same transaction as the ledger entry, and how long do you keep keys?"
+    ],
+    "approach": "Add an idempotency_keys table with a unique index on the key. On a transfer, INSERT the key and the balanced journal entry in one transaction; on a unique-violation, roll back the post and return the result stored under that key. Set a retention window longer than any client's maximum retry horizon.",
+    "vocab": [
+     "idempotency-keys"
+    ]
+   },
+   "beginner_analogy": "Like writing a cheque number on every request. If the bank sees a cheque number it has already cashed, it does not pay again; it just tells you the outcome of the first time. Retry all you like, the numbered cheque clears once.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "idem",
+      "label": "Key registry",
+      "kind": "store",
+      "lane": "control",
+      "order": 0
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_idem",
+      "from": "app",
+      "to": "idem",
+      "kind": "control",
+      "label": "dedup key"
+     }
+    ],
+    "highlight": [
+     "app",
+     "e_pay"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 3,
+   "name": "The Money Is Not in Your Database",
+   "problem": {
+    "statement": "Everything so far pretended the money lives in your own tables, where a transaction can guarantee it. It does not. A real transfer moves through a bank or card network, an external system you call over the network and cannot enrol in your database transaction. Two failures follow. If you post the ledger entry and then the provider call fails, your books claim money moved that never left. If you call the provider first and then crash before posting, money left with no record. And you cannot hold a database transaction open across an HTTP call to a bank; there is nothing to commit together.",
+    "beginner": "Your database can promise your own rows change together, but the real money moves at an outside bank you can only phone up. If you update your books and the bank call fails, your records lie. If the bank moves money and then your app crashes, you have no record of it. The two can never be made to happen as one guaranteed step.",
+    "model": {
+     "id": "separation-of-concerns",
+     "application": "Split recording the transfer (synchronous, inside the ledger transaction) from making it happen at the provider (asynchronous, retried by a worker), so an external call never has to be atomic with a database write."
+    }
+   },
+   "gate": {
+    "question": "You must both record a transfer and make an outside provider actually move the funds, but the two cannot be one atomic step. How do you guarantee that a recorded transfer always eventually settles, and a settlement is always recorded, despite crashes on either side?",
+    "hint": "What if you first durably wrote down the intent to settle, in the same transaction as the ledger entry, and let a separate worker read that intent and drive the provider, retrying until it confirms?"
+   },
+   "solution": "Split the transfer into two stages that each cross a clean boundary. Stage one, synchronous: inside the ledger transaction, post the entry as pending and durably record the intent to settle (a row a relay will publish). Stage two, asynchronous: the relay publishes pending settlements to a durable queue, and a settlement worker consumes each job, calls the provider with its own idempotency key, and on confirmation posts the settled entry that credits the payee. If the worker crashes, the job is still on the queue and is retried; because the provider call is idempotent, a retry after a lost acknowledgement settles once. This is the transactional outbox: the intent is committed with the data, never as a separate step that can be lost.",
+   "user_lens": {
+    "gives": "A transfer that, once accepted, is guaranteed to settle exactly once even across crashes, and a payee credited only when the money has actually moved, not before.",
+    "costs": "Money is no longer instant: a transfer passes through a pending state and settles asynchronously, so the payee waits, and the system takes on a queue, a worker fleet, and the operational weight of jobs that must be retried and monitored."
+   },
+   "tech_lens": {
+    "mechanism": "Transactional outbox: the pending entry and an outbox row commit together; a relay publishes to a durable queue; an idempotent, at-least-once worker settles at the provider and posts the settled entry. The queue decouples recording from settling and absorbs provider slowness and outages.",
+    "principle": "Never make an external side effect and a local write pretend to be atomic. Commit durable intent with your data, then drive the effect from that record with idempotent retries, so neither side can be lost."
+   },
+   "tradeoff": "You give up synchronous, immediately-final transfers and accept eventual settlement, a pending state, and a whole asynchronous pipeline, in exchange for never losing or duplicating a settlement across the boundary you do not control.",
+   "at_scale": "The queue is the shock absorber that lets settlement scale independently of intake: bursts of transfers pile up as durable jobs instead of overwhelming the provider, and you add workers to raise settlement throughput without touching the ledger. Provider outages become backlog, not lost money, bounded by how deep the queue can grow and how fast workers drain it once the provider returns.",
+   "defends": [
+    "inv2",
+    "inv4"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "pending entry plus outbox row in one transaction",
+      "software_concept": "transactional outbox: the event is committed with the data, closing the saved-but-never-sent gap"
+     },
+     {
+      "mechanism": "idempotent settlement worker off a durable queue",
+      "software_concept": "at-least-once consumer with an idempotency key at the provider, yielding once-only settlement"
+     }
+    ],
+    "interview_probes": [
+     "You cannot put an external bank call inside your database transaction. How do you guarantee a recorded transfer always settles and a settlement is always recorded?",
+     "Where does the idempotency key live on the settlement side, and why does the outbox row need to commit in the same transaction as the ledger entry?"
+    ],
+    "approach": "Write the pending journal entry and an outbox row in one transaction. Run a relay that publishes unsent outbox rows to a queue (or polls the outbox), and a worker that calls the provider with a per-transfer idempotency key, then posts the settled entry on confirmation. Make every step safe to retry.",
+    "vocab": [
+     "outbox",
+     "queue",
+     "long-running-tasks"
+    ]
+   },
+   "beginner_analogy": "Like mailing a payment through the post. You write the cheque and note it in your register in one sitting (the durable intent), then hand it to the postal service (the queue), which keeps trying to deliver. You mark it cleared only when the bank confirms, and if a step fails, the noted intent means you always know to send it again, once.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "queue",
+      "label": "Settlement queue",
+      "kind": "channel",
+      "lane": "settlement",
+      "order": 2,
+      "expands_to": "Message queue"
+     },
+     {
+      "id": "worker",
+      "label": "Settlement worker",
+      "kind": "process",
+      "lane": "service",
+      "order": 3
+     },
+     {
+      "id": "provider",
+      "label": "Provider A",
+      "kind": "process",
+      "lane": "settlement",
+      "order": 4
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_relay",
+      "from": "journal",
+      "to": "queue",
+      "kind": "payload",
+      "label": "publish pending"
+     },
+     {
+      "id": "e_deq",
+      "from": "queue",
+      "to": "worker",
+      "kind": "control",
+      "label": "settle job"
+     },
+     {
+      "id": "e_settle",
+      "from": "worker",
+      "to": "provider",
+      "kind": "money",
+      "label": "move funds"
+     },
+     {
+      "id": "e_confirm",
+      "from": "provider",
+      "to": "worker",
+      "kind": "control",
+      "label": "settled"
+     },
+     {
+      "id": "e_land",
+      "from": "worker",
+      "to": "journal",
+      "kind": "payload",
+      "label": "post settled"
+     },
+     {
+      "id": "e_credit2",
+      "from": "journal",
+      "to": "payee",
+      "kind": "money",
+      "label": "credited"
+     }
+    ],
+    "highlight": [
+     "app",
+     "e_credit"
+    ],
+    "remove": [
+     "e_credit"
+    ]
+   }
+  },
+  {
+   "index": 4,
+   "name": "Two Providers, No Lock",
+   "problem": {
+    "statement": "A single transfer can span two providers: debit the source at one bank, credit the destination at another network. Now the pending-then-settle machinery is not enough, because there are two external moves that must both happen or neither. If leg A (the debit) succeeds and leg B (the credit) hard-fails, money has left the source and landed nowhere. And there is no two-phase commit that a bank and a card network will both join, no shared lock you can hold across them; each is an independent system that commits on its own.",
+    "beginner": "Sometimes one transfer touches two different outside companies: take money from one, give it to another. If the first succeeds and the second fails, the money has left but never arrived. And you cannot force two separate banks to agree to complete together, they each act on their own.",
+    "model": {
+     "id": "first-principles",
+     "application": "There is no two-phase commit a bank and a card network will both join, so rebuild cross-provider atomicity from what is possible: a chain of steps, each with a compensating undo."
+    }
+   },
+   "gate": {
+    "question": "A transfer needs a debit at one provider and a credit at another, and either can fail independently. You cannot make them commit together. How do you guarantee the pair is all-or-nothing when a partial failure is not just possible but expected?",
+    "hint": "If you cannot prevent a half-done transfer, can you always undo one? What would the reverse of each step be?"
+   },
+   "solution": "Run the transfer as a saga: an ordered chain of steps, each with a defined compensating action that reverses it. Debit provider A; if the credit at provider B succeeds, the saga is done; if it fails, run A's compensation (refund the debit) so the money returns to the source and the ledger nets to zero. A coordinator drives the chain and, on any step's failure, runs the compensations for the steps already completed, in reverse. Because providers and compensations are called with idempotency keys, a retried or duplicated step is safe. There is no distributed transaction; there is a forward path and a guaranteed unwind.",
+   "user_lens": {
+    "gives": "Cross-provider transfers that are all-or-nothing in effect: either both legs complete, or the whole thing is unwound and the payer is made whole, with no money stranded between two companies.",
+    "costs": "Atomicity is no longer instant or invisible: there is a window where leg A has happened and leg B has not, during which the money is genuinely in flight, and you must design a correct, idempotent inverse for every step, some of which (a fee already taken) are awkward to reverse."
+   },
+   "tech_lens": {
+    "mechanism": "A saga orchestrator persists the transfer's progress step by step; each forward step has a compensating step; on failure it runs the compensations for completed steps in reverse order, all idempotent so retries are safe. Durable saga state means a crashed coordinator resumes rather than forgets.",
+    "principle": "When you cannot hold one transaction across independent parties, replace atomicity with compensation: design the undo for every step before you take it, and drive the chain from durable state so failure unwinds instead of stranding."
+   },
+   "tradeoff": "You give up true isolation and instant atomicity, accepting a visible in-flight window and eventual, compensated consistency, and you take on the hard design work of a correct inverse for every external action.",
+   "at_scale": "Sagas scale because each is independent and holds no cross-provider lock, so millions can be in flight at once without contending; the coordinator is just durable state plus retries and shards like any other work. The ceilings are provider rate limits and the depth of in-flight exposure, the total value sitting in half-completed transfers, which the business bounds rather than the machinery.",
+   "defends": [
+    "inv4",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "chain of steps with compensations",
+      "software_concept": "the saga pattern: a sequence of local transactions each with a compensating action, replacing a distributed transaction"
+     },
+     {
+      "mechanism": "idempotent forward and compensating calls",
+      "software_concept": "idempotency keys on every provider call, so retries and duplicate compensations are safe"
+     }
+    ],
+    "interview_probes": [
+     "You need a debit at one provider and a credit at another to be all-or-nothing, but there is no 2PC across them. What do you build instead?",
+     "Leg A succeeds and leg B fails. Walk through exactly how the saga leaves the ledger balanced, and what happens if the compensation itself fails."
+    ],
+    "approach": "Model the transfer as a saga: persist a state machine (steps pending/done/compensated), drive each forward step, and on failure invoke each completed step's compensation in reverse. Give every provider call an idempotency key, and make compensations safe to run more than once. Use a durable workflow store so a crash resumes.",
+    "vocab": [
+     "saga",
+     "idempotency-keys"
+    ]
+   },
+   "beginner_analogy": "Like booking a flight and a hotel separately for one trip. If the flight books but the hotel is full, you cancel the flight to undo the whole plan. You cannot make two companies commit together, so you make sure every booking has a cancellation, and you use them to back out cleanly.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "saga",
+      "label": "Saga coordinator",
+      "kind": "process",
+      "lane": "control",
+      "order": 1
+     },
+     {
+      "id": "provider2",
+      "label": "Provider B",
+      "kind": "process",
+      "lane": "settlement",
+      "order": 5
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_saga",
+      "from": "worker",
+      "to": "saga",
+      "kind": "control",
+      "label": "multi-leg"
+     },
+     {
+      "id": "e_legA",
+      "from": "saga",
+      "to": "provider",
+      "kind": "money",
+      "label": "leg A debit"
+     },
+     {
+      "id": "e_legB",
+      "from": "saga",
+      "to": "provider2",
+      "kind": "money",
+      "label": "leg B credit"
+     },
+     {
+      "id": "e_comp",
+      "from": "saga",
+      "to": "provider",
+      "kind": "control",
+      "label": "compensate"
+     }
+    ],
+    "highlight": [
+     "worker",
+     "e_settle",
+     "provider"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 5,
+   "name": "The Books Disagree with the Bank",
+   "problem": {
+    "statement": "Even with pending settlement and sagas, your ledger's belief and the provider's actual records drift. A settlement you marked posted was reversed by the bank as a chargeback and the webhook was lost. A fee was deducted that you never booked. A provider retried and moved money twice on their side. Each is a place where your single source of truth and the outside world's single source of truth silently disagree, and left alone the gap compounds until the books are quietly wrong.",
+    "beginner": "Your records and the bank's records are kept separately, and they slowly drift apart: a refund you missed, a fee you did not record, a payment the bank processed twice. If nobody checks, small differences pile up until your books no longer match reality.",
+    "model": {
+     "id": "feedback-loop",
+     "application": "Treat the gap between your ledger and the provider's records as an error signal, and run a loop that measures it and books it back to zero."
+    }
+   },
+   "gate": {
+    "question": "Your ledger and each provider are two independent records of the same money, and they will disagree. You cannot prevent every missed message or provider-side reversal. How do you keep your books true to the outside world without ever editing history?",
+    "hint": "Pull the provider's own statement and compare it, line by line, to yours. When they differ, what entry do you add rather than which row do you change?"
+   },
+   "solution": "Run reconciliation as a control loop. Periodically pull each provider's statement of what actually happened and match it, transaction by transaction, against the ledger. Every break, a settlement they show and you do not, a reversal you missed, an unbooked fee, is measured and resolved by posting a new correcting entry (often into a suspense account until it clears), never by editing the original. The loop drives the gap between your books and reality toward zero, and unmatched items are flagged for a human when the machine cannot resolve them.",
+   "user_lens": {
+    "gives": "Books that are provably true to the outside world, with every discrepancy caught, explained, and corrected, and an audit trail that shows both the error and its fix.",
+    "costs": "Truth now lags: a break is only caught on the next reconciliation cycle, so there is a window where the ledger is knowingly behind reality, and you carry the cost of ingesting statements, matching millions of lines, and staffing the exceptions the machine cannot close."
+   },
+   "tech_lens": {
+    "mechanism": "A scheduled matcher joins provider statement lines to ledger postings on a shared reference; matched pairs clear, breaks are classified and either auto-corrected with a new posting or queued for manual review. Corrections are always new immutable entries, keeping the audit trail whole.",
+    "principle": "Two independent systems of record always drift, so close the loop: measure the gap against the outside world continuously and book it back to zero, and repair with append-only corrections, never edits."
+   },
+   "tradeoff": "You accept a reconciliation lag and the ongoing operational cost of matching and exception handling, in exchange for catching the errors that no amount of upstream care prevents, the missed webhook, the provider-side reversal, the surprise fee.",
+   "at_scale": "Reconciliation is embarrassingly parallel: statements partition by provider and account and match independently, so it scales horizontally with the ledger. The pressure is volume and timing, matching billions of lines forces the join onto indexes and batch windows run off-peak against replicas, and the tighter you want the lag, the more often you must pull and match, trading freshness for cost.",
+   "defends": [
+    "inv5",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "statement-to-ledger matching loop",
+      "software_concept": "reconciliation: an anti-entropy pass that compares two records of the same truth and repairs the drift"
+     },
+     {
+      "mechanism": "correcting entries into a suspense account",
+      "software_concept": "append-only compensation of discrepancies, preserving the audit trail instead of mutating it"
+     }
+    ],
+    "interview_probes": [
+     "Your ledger says a payment settled; the bank later reversed it and you missed the webhook. How do you detect and correct that without editing history?",
+     "How do you reconcile millions of provider lines against your ledger nightly, and what do you do with the breaks the matcher cannot resolve?"
+    ],
+    "approach": "Ingest each provider's statement and match lines to ledger postings on a shared reference id (a batch join on an indexed key). For breaks, post a correcting journal entry into a suspense account and clear it when resolved; route unmatchable items to a review queue. Never UPDATE an existing entry.",
+    "vocab": [
+     "eventual-consistency"
+    ]
+   },
+   "beginner_analogy": "Like balancing your chequebook against the bank statement each month. You do not erase your register; you find the charges you forgot, add them in, and keep going until your total matches the bank's, with a note explaining each fix.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "recon",
+      "label": "Reconciler",
+      "kind": "process",
+      "lane": "control",
+      "order": 2
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_pull",
+      "from": "recon",
+      "to": "provider",
+      "kind": "control",
+      "label": "fetch statement"
+     },
+     {
+      "id": "e_pull2",
+      "from": "recon",
+      "to": "provider2",
+      "kind": "control",
+      "label": "fetch statement"
+     },
+     {
+      "id": "e_compare",
+      "from": "recon",
+      "to": "journal",
+      "kind": "payload",
+      "label": "post breaks"
+     }
+    ],
+    "highlight": [
+     "journal",
+     "provider",
+     "provider2"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 6,
+   "name": "Billions of Entries, One Hot Account",
+   "problem": {
+    "statement": "Everything so far assumed one ledger database. At scale it breaks three ways. The journal outgrows a single node's write throughput and disk. Deriving a balance by summing an account's entire history becomes unaffordable once an account has millions of postings. And traffic is not uniform: a large merchant's receivable is touched by every one of its customers' transfers at once, a hot account that serializes writes and becomes the bottleneck the whole system waits on. One machine can no longer hold the ledger, sum it fast, or absorb the hottest account.",
+    "beginner": "One database cannot hold billions of entries or handle all the writes. Adding up an account's whole history to get its balance gets too slow. And some accounts are far busier than others: a big store's account is hit by every customer at once, jamming up the one machine that holds it while the rest sit idle.",
+    "model": {
+     "id": "bottleneck",
+     "application": "Find the ceilings (single-node write throughput, the cost of summing history, and the hottest account) and route around each by sharding the journal, snapshotting balances, and isolating the hot account."
+    }
+   },
+   "gate": {
+    "question": "One database cannot store the whole journal, sum a huge account fast, or survive one account that every transfer touches at once. How do you spread the ledger, read a balance without replaying all of history, and keep the busiest account from becoming the chokepoint?",
+    "hint": "Shard by account. Snapshot a running balance so you only sum recent postings. And for the one account everyone hits, batch or partition its writes so they do not all serialize on one row."
+   },
+   "solution": "Shard the journal by account so no node holds it all, and route each posting to the shard that owns its account. Maintain periodic balance snapshots (a checkpoint of the summed balance up to a point) so a balance read is the last snapshot plus the few postings since, not a fold over all history, a read model kept alongside the journal. For the hot account, batch many incoming postings into fewer larger writes and give it its own partition so its traffic does not starve everyone else. Transfers whose two accounts live on different shards reuse the pending-and-compensate machinery, since a single cross-shard transaction is no longer available, keeping debits equal to credits across shards.",
+   "user_lens": {
+    "gives": "A ledger that grows by adding machines rather than hitting a wall, balances read in near-constant time, and a viral merchant account that no longer freezes the system.",
+    "costs": "Operational complexity multiplies: resharding, snapshot maintenance that must never drift from the journal, and cross-shard transfers that lose the simplicity of one atomic write and inherit the saga's in-flight window."
+   },
+   "tech_lens": {
+    "mechanism": "Hash or range sharding on the account id; a snapshot table holding periodic summed balances as a read model; batching and dedicated partitioning for hot accounts; cross-shard transfers coordinated by the same pending-plus-compensation flow rather than a single transaction.",
+    "principle": "Scale by partitioning on the key every operation already carries, cache the expensive derived read as a checkpoint, and treat the hottest key as its own problem, because the average hides the one account that will take you down."
+   },
+   "tradeoff": "Sharding trades one simple, atomically-consistent ledger for a distributed one with snapshots to keep honest, hot partitions to tend, and cross-shard transfers that must be sagas, buying throughput and constant-time balances with coordination the single node never needed.",
+   "at_scale": "This is the architecture that actually reaches billions of entries: capacity and write throughput scale horizontally with shards, balance reads stay flat because snapshots bound the postings summed, and the hot account is contained by batching and isolation rather than by praying. The residual ceiling is the single hottest account at its busiest instant, which batching and a dedicated partition absorb; conservation across shards rests on the same compensating flow that spans providers.",
+   "defends": [
+    "inv1",
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "shard the journal by account",
+      "software_concept": "partitioning on the key every posting carries, so writes spread and lookups avoid scatter-gather"
+     },
+     {
+      "mechanism": "balance snapshots as a read model",
+      "software_concept": "CQRS / materialized checkpoint: precompute the balance so a read sums only recent postings"
+     },
+     {
+      "mechanism": "batching and isolation for a hot account",
+      "software_concept": "hot-key mitigation: coalesce writes and give the busy key its own partition"
+     }
+    ],
+    "interview_probes": [
+     "Why is the account id a good shard key, and what breaks when a transfer's two accounts land on different shards?",
+     "An account has fifty million postings. How do you read its balance in near-constant time, and how do you keep the snapshot from ever disagreeing with the journal?"
+    ],
+    "approach": "Shard the postings table by account id (hash or range) and route writes through a thin layer. Maintain a snapshot row per account (balance as of entry N), updated by a background job, and compute balance as snapshot plus SUM of postings after N. For cross-shard transfers, reuse the pending-and-compensate flow; for hot accounts, batch postings and give them a dedicated partition.",
+    "vocab": [
+     "sharding",
+     "cqrs",
+     "hot-key"
+    ]
+   },
+   "beginner_analogy": "Like a national bank splitting its accounts across many branches so no branch is overloaded, keeping a running balance on each passbook so nobody re-adds every transaction, and giving the one hugely busy corporate account its own dedicated teller so it does not hold up the queue.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "router",
+      "label": "Ledger router",
+      "kind": "process",
+      "lane": "service",
+      "order": 2
+     },
+     {
+      "id": "snapshot",
+      "label": "Balance snapshots",
+      "kind": "store",
+      "lane": "ledger",
+      "order": 4
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_route",
+      "from": "app",
+      "to": "router",
+      "kind": "control",
+      "label": "by account"
+     },
+     {
+      "id": "e_shard",
+      "from": "router",
+      "to": "journal",
+      "kind": "control",
+      "label": "shard write"
+     },
+     {
+      "id": "e_snap",
+      "from": "journal",
+      "to": "snapshot",
+      "kind": "control",
+      "label": "checkpoint"
+     },
+     {
+      "id": "e_readbal",
+      "from": "snapshot",
+      "to": "app",
+      "kind": "payload",
+      "label": "fast balance"
+     }
+    ],
+    "highlight": [
+     "journal",
+     "balances"
+    ],
+    "remove": []
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "The retry storm and the duplicate webhook",
+   "scenario": "A client's create-transfer request times out, so it retries five times in a second. Separately, the provider's settlement webhook is delivered twice.",
+   "reveal": "Both duplications collapse to one effect. The idempotency key makes the five client retries hit the uniqueness constraint, so exactly one journal entry posts and the rest return its stored result. On the settlement side the provider call and the webhook handler are keyed too, so the second webhook is recognized and ignored. inv2 holds; delivery was at-least-once on both sides, but the money moved once, at the cost of storing and checking the keys."
+  },
+  {
+   "id": "st2",
+   "title": "Provider B fails after Provider A debited",
+   "scenario": "A cross-provider transfer debits the source at Provider A, then the credit at Provider B hard-fails and keeps failing.",
+   "reveal": "The saga runs A's compensation, refunding the debit, so the money returns to the source and the ledger nets to zero, no funds stranded between two companies. inv4 and inv1 hold. If the compensation itself fails, the transfer sits in a needs-intervention state and reconciliation flags the break, because the compensating call is idempotent it can be retried safely until it lands. The cost is a visible in-flight window while the unwind completes."
+  },
+  {
+   "id": "st3",
+   "title": "The bank reverses a settlement you already booked",
+   "scenario": "Your ledger marked a payment settled, but weeks later the bank charges it back and the notifying webhook is lost, so your books and the bank's now disagree.",
+   "reveal": "Nightly reconciliation pulls the provider statement, matches it line by line, and finds a reversal the ledger never recorded. It posts a correcting entry (into a suspense account until resolved), never editing the original settlement, so the audit trail shows both the booking and its reversal. inv5 and inv1 are restored. The cost is the reconciliation lag: the books were knowingly behind reality until the cycle ran."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "Never store a balance; store the movements and derive the balance, so every number has a provenance and any error is recomputable.",
+   "Make retries free: give every state-changing request a client-supplied key and dedup on it, because over a real network every request will eventually be sent twice.",
+   "You cannot make an external side effect and a local write atomic; record durable intent first, then drive the effect idempotently from that record.",
+   "When you cannot hold one transaction across independent parties, replace it with a chain of compensatable steps: design the undo for every step before you take it.",
+   "Two independent records of the same truth always drift; run a control loop that measures the gap against the outside world and books it to zero, rather than assuming your books are right.",
+   "Correctness is append-only: fix a wrong entry with a new reversing entry, never by editing history, so the audit trail stays whole."
+  ],
+  "mappings": [
+   {
+    "mechanism": "double-entry journal",
+    "elsewhere": "Accounting since 1494, event-sourced systems, and blockchains all record immutable balanced movements and derive state by folding the log."
+   },
+   {
+    "mechanism": "idempotency key",
+    "elsewhere": "Payment APIs, message consumers, and HTTP PUT all dedup a retried operation on a stable key so at-least-once delivery yields once-only effect."
+   },
+   {
+    "mechanism": "saga with compensations",
+    "elsewhere": "Travel booking (flight plus hotel plus car), order fulfilment, and any workflow spanning services that cannot share a transaction unwind with compensating actions."
+   },
+   {
+    "mechanism": "reconciliation loop",
+    "elsewhere": "Bank statement matching, inventory cycle counts, and replica anti-entropy all compare two records of the same truth and repair the drift."
+   }
+  ]
+ }
+}

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "vitruvian-v1.24.0";  // bump on EVERY deploy, including content edits
+const CACHE_VERSION = "vitruvian-v1.25.0";  // bump on EVERY deploy, including content edits
 const SHELL = [
   "./",
   "./index.html",
@@ -27,6 +27,12 @@ const SHELL = [
   "./flagships/message-queue.json",
   "./flagships/notification-system.json",
   "./flagships/unique-id-generator.json",
+  "./flagships/rate-limiter.json",
+  "./flagships/search-typeahead.json",
+  "./flagships/ride-matching.json",
+  "./flagships/ticket-booking.json",
+  "./flagships/payment-ledger.json",
+  "./flagships/photo-store.json",
   "./assets/enso-gate.svg",
   "./assets/enso-complete.svg",
   "./fonts/BricolageGrotesque.woff2",

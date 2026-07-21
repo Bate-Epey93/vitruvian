@@ -1,0 +1,851 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "Real-time chat",
+  "narrowing": "The real-time message fabric: everything between one connected device sending a message and every recipient's devices holding it, in order and exactly once, whether they are online, offline, or one of a hundred thousand in a group. Presence, ordering, group fan-out, receipts, and offline queueing are in scope. End-to-end encryption, media storage, and voice/video are not; they hang off this spine but do not shape it.",
+  "ordering_note": "This is not one dated outage but the canonical path a chat backend walks from a weekend prototype to billions of messages a day. Each layer is forced by the concrete failure the previous state hits next: first the latency-versus-cost trap of polling, then routing across a fleet, then delivering to the absent, then imposing order, then surviving the fattest group, then keeping receipts from drowning the chat. history_confidence is medium because the mechanisms and their failure modes are canonical and checkable, not because a specific named incident is being retold.",
+  "history_confidence": "medium",
+  "domain": "software"
+ },
+ "essence": {
+  "text": "A real-time chat backend is a machine that holds hundreds of millions of connections open at once, mostly doing nothing, so that a few hundred bytes can cross the planet in the time a thumb lifts off the screen. The message is trivial. The hard part is everything around it: knowing who is online, agreeing on one order when messages travel a dozen paths, delivering to a phone asleep in a pocket, and fanning one tap out to a hundred thousand people without melting a server. The whole discipline hides inside a green dot and two grey ticks.",
+  "beginner": "Real-time chat lets you send a message and have it appear on someone else's phone almost instantly. The trick is not the message itself. It is doing this for hundreds of millions of people at once, showing who is online, keeping messages in the right order, delivering to phones that are switched off, and handling giant group chats, all without ever losing a message or showing it twice.",
+  "deep_facts": [
+   "A phone's chat connection is idle almost all the time, so the scarce resource is not bandwidth but memory: a server pays for every open socket whether or not a single message ever flows through it.",
+   "The famous engineering milestone in chat is holding idle connections cheaply. WhatsApp reported serving on the order of two million concurrent connections per server on tuned Erlang and FreeBSD around 2012.",
+   "TCP orders bytes within one connection and guarantees nothing more. Two messages sent over two connections, or one message replayed after a reconnect, have no inherent order, so the server must impose one.",
+   "Read receipts in an N-person group are an O(N squared) problem: every member reading every message can generate a receipt back to every sender, so naive receipts can cost more traffic than the messages they describe.",
+   "The last hop to a sleeping phone is not yours. A closed app has no live socket, so delivery hands a wake-up to Apple's APNs or Google's FCM, and the final step of real-time chat runs on infrastructure you do not control."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Carry a message from one connected person to every recipient's devices, in order and exactly once, within a heartbeat, whether the recipient is online, offline, or one of a hundred thousand in a group.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Sender",
+    "want": "The message to arrive instantly, and honest confirmation that it was delivered and read"
+   },
+   {
+    "id": "a2",
+    "name": "Recipient",
+    "want": "Every message meant for them, in the same order as everyone else, with no duplicates, even after being offline"
+   },
+   {
+    "id": "a3",
+    "name": "Operator",
+    "want": "To hold hundreds of millions of idle connections and move billions of messages a day for fractions of a cent, without ever losing or reordering one"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "Delivery: every message accepted from a sender is eventually delivered to every intended recipient device, or the sender is told the truth about its status. No silent loss."
+   },
+   {
+    "id": "inv2",
+    "text": "Order: within a conversation, all participants see messages in the same order, and that order never contradicts itself."
+   },
+   {
+    "id": "inv3",
+    "text": "Exactly-once effect: a recipient sees each message once. Retries and reconnects never produce a duplicate on screen."
+   },
+   {
+    "id": "inv4",
+    "text": "Presence truth: a user shown online has a live connection right now. Presence reflects reality within seconds and never strands a message because it guessed wrong."
+   },
+   {
+    "id": "inv5",
+    "text": "Liveness: an online recipient receives within about a second under normal load, and the delivery path stays available when one conversation or group goes viral."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Message",
+    "note": "A small, immutable record: id, conversation, sender, body, time; bytes to a couple of kilobytes"
+   },
+   {
+    "id": "en2",
+    "name": "Conversation",
+    "note": "The ordered stream of messages among two or N participants; the unit of ordering"
+   },
+   {
+    "id": "en3",
+    "name": "Connection",
+    "note": "A persistent socket from one device to one gateway; the scarce, memory-hungry resource"
+   },
+   {
+    "id": "en4",
+    "name": "Presence",
+    "note": "A user's live connection state (online, last-seen); soft, fast-changing, derived not stored authoritatively"
+   },
+   {
+    "id": "en5",
+    "name": "Receipt",
+    "note": "A tiny acknowledgment (delivered, read) that flows backward from recipient to sender"
+   },
+   {
+    "id": "en6",
+    "name": "Inbox",
+    "note": "The per-device durable queue of messages not yet acknowledged by that device"
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Send: a message flows from the sender's device up its connection into the fabric, where it is accepted and sequenced."
+   },
+   {
+    "id": "f2",
+    "text": "Deliver: the message flows down to every recipient device that is online, and waits in a durable inbox for those that are not."
+   },
+   {
+    "id": "f3",
+    "text": "Acknowledge: receipts and presence flow backward, from recipients to senders, in summarized form."
+   }
+  ],
+  "constraints": [
+   "An open connection costs memory whether idle or busy, so holding hundreds of millions of them, mostly idle, is the dominant cost of the system.",
+   "The network is unreliable: connections drop mid-message and phones sleep, so any message can be delivered twice or not at all unless the design forces otherwise.",
+   "Recipients are frequently offline, so delivery cannot assume the recipient is reachable at the moment of sending.",
+   "The last hop to a sleeping phone belongs to the OS push services (APNs, FCM); you cannot keep your own background socket alive, and you cannot make theirs faster.",
+   "The speed of light and mobile radios set a hard latency floor: a cross-continent round trip costs well over 100 ms before any of your code runs."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "people",
+    "label": "People"
+   },
+   {
+    "id": "conn",
+    "label": "Connections"
+   },
+   {
+    "id": "service",
+    "label": "Service"
+   },
+   {
+    "id": "storage",
+    "label": "Storage"
+   },
+   {
+    "id": "control",
+    "label": "Control"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "sender",
+    "label": "Sender",
+    "kind": "actor",
+    "lane": "people",
+    "order": 0
+   },
+   {
+    "id": "recipient",
+    "label": "Recipient",
+    "kind": "actor",
+    "lane": "people",
+    "order": 2
+   },
+   {
+    "id": "app",
+    "label": "Chat server",
+    "kind": "process",
+    "lane": "service",
+    "order": 1
+   },
+   {
+    "id": "db",
+    "label": "Message store",
+    "kind": "store",
+    "lane": "storage",
+    "order": 2
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_send",
+    "from": "sender",
+    "to": "app",
+    "kind": "payload",
+    "label": "send msg"
+   },
+   {
+    "id": "e_store",
+    "from": "app",
+    "to": "db",
+    "kind": "payload",
+    "label": "store"
+   },
+   {
+    "id": "e_poll",
+    "from": "recipient",
+    "to": "app",
+    "kind": "control",
+    "label": "poll?"
+   },
+   {
+    "id": "e_deliver",
+    "from": "app",
+    "to": "recipient",
+    "kind": "payload",
+    "label": "new msgs"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "The Held-Open Line: Push, Not Poll",
+   "problem": {
+    "statement": "The naive chat is a web form. The sender POSTs a message, the server stores it, and the recipient's app asks 'anything new?' on a timer. Now pick the timer and lose either way. Poll every second and a million idle clients hammer the server with mostly-empty requests, burning CPU to answer 'no.' Poll every thirty seconds and the chat feels dead. There is no interval that is both instant and cheap, because the client is asking a question only the server can answer, and only the server knows when the answer changes.",
+    "beginner": "The simple version has your phone ask the server 'any new messages?' over and over. Ask too often and you flood the server with pointless questions. Ask rarely and messages show up late. Either way it is wrong, because your phone has no way to know when a message has actually arrived.",
+    "model": {
+     "id": "first-principles",
+     "application": "HTTP assumes the client always speaks first. Strip that inherited assumption: a chat needs the server to reach a client that is not asking, so hold the connection open and let the server push."
+    }
+   },
+   "gate": {
+    "question": "Your phone cannot know when a message arrives, yet asking on a timer is either wasteful or slow. How does the server reach a client that is not currently asking it anything?",
+    "hint": "What if the client asked exactly one question, 'tell me when there is news,' and simply left the line open for the answer?"
+   },
+   "solution": "Replace polling with a persistent, bidirectional connection. Each device opens one long-lived WebSocket to a gateway and keeps it open. The client stops asking; the moment a message exists, the gateway writes it straight down the open socket. One connection, held for the life of the app session, carries messages both ways with no per-message request overhead, kept warm by periodic pings.",
+   "user_lens": {
+    "gives": "Messages appear the instant they are sent, and the phone stops burning battery and data on empty polls.",
+    "costs": "The device must keep a connection alive with heartbeats and reconnection logic, and the OS may kill the socket when the app backgrounds. The server now holds a socket for every user, busy or not."
+   },
+   "tech_lens": {
+    "mechanism": "A long-lived WebSocket per device, kept alive with periodic pings; the server writes into the socket when an event occurs rather than answering a poll. I/O is event-driven so one process holds many idle sockets.",
+    "principle": "When only the producer knows when news exists, invert the direction of contact: hold the channel open and push, instead of paying over and over to ask."
+   },
+   "tradeoff": "You trade cheap, stateless HTTP requests for expensive, stateful connections. The server's main job becomes holding millions of mostly-idle sockets, and every socket it holds is memory it cannot reclaim.",
+   "at_scale": "The ceiling is no longer requests per second, it is concurrent connections per box, bounded by memory per socket, not CPU. A tuned server holds on the order of a million idle connections; you scale by adding connection servers and by making each socket cheaper (small buffers, efficient event loops). Idle-but-open is the real cost, which is exactly why the next layer has to spread those connections across a fleet.",
+   "defends": [
+    "inv5"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "persistent WebSocket push",
+      "software_concept": "server-initiated push over a held-open connection instead of client polling; event-driven, non-blocking I/O"
+     },
+     {
+      "mechanism": "heartbeat pings",
+      "software_concept": "keepalive and liveness detection on a long-lived socket; drop the connection on a missed pong"
+     }
+    ],
+    "interview_probes": [
+     "Polling at one second versus a persistent connection: where does each break as clients grow into the millions, and what resource is actually scarce?",
+     "A WebSocket looks free when idle. What does one idle connection actually cost your server, and how many can a single box realistically hold?"
+    ],
+    "approach": "Terminate WebSockets on an event-driven server (epoll or kqueue, or a runtime like Erlang or Go) so one process holds many sockets. Register each connection in an in-memory map keyed by device, write to that socket on an event, and send periodic pings, dropping the connection when a pong is missed.",
+    "vocab": [
+     "realtime-updates",
+     "communication-protocols"
+    ]
+   },
+   "beginner_analogy": "Like the difference between a child asking 'are we there yet?' every minute and a parent saying 'I will tell you when we arrive.' One wastes everyone's breath; the other stays quiet until there is genuinely something to say.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "gateway",
+      "label": "Gateway",
+      "kind": "process",
+      "lane": "conn",
+      "order": 1
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_conn",
+      "from": "recipient",
+      "to": "gateway",
+      "kind": "control",
+      "label": "opens ws"
+     },
+     {
+      "id": "e_push",
+      "from": "gateway",
+      "to": "recipient",
+      "kind": "payload",
+      "label": "push"
+     },
+     {
+      "id": "e_appg",
+      "from": "app",
+      "to": "gateway",
+      "kind": "payload",
+      "label": "emit"
+     }
+    ],
+    "highlight": [
+     "recipient",
+     "app",
+     "e_poll"
+    ],
+    "remove": [
+     "e_poll",
+     "e_deliver"
+    ]
+   }
+  },
+  {
+   "index": 2,
+   "name": "Finding Each Other: Gateways, Presence, and the Bus",
+   "problem": {
+    "statement": "One server holding every socket was a fiction. At scale you need thousands of connection servers, and the wall appears at once. The sender's message lands on gateway 12, but the recipient's socket is held by gateway 4000, and gateway 12 has no idea. Worse, nothing knows who is even online: presence, the little green dot, has no source. A message to an offline user should not be pushed at all, but the fabric cannot tell online from offline. You have a room full of switchboards and no directory.",
+    "beginner": "Real chat runs on thousands of servers, not one. Your message arrives at one server, but your friend's phone is connected to a different server, and the first server does not know which. Nothing even keeps track of who is online. So messages have nowhere to go, and the 'online' dot means nothing.",
+    "model": {
+     "id": "separation-of-concerns",
+     "application": "Split holding a connection from routing a message. Make gateways dumb socket-holders, and put a shared registry and a message bus between them, so any gateway can reach any user without knowing where they sit."
+    }
+   },
+   "gate": {
+    "question": "The sender is on one of thousands of connection servers; the recipient is on another. Neither knows about the other. How does a message find the one server, out of thousands, that holds the recipient right now, and how do you even know the recipient is connected?",
+    "hint": "You need two things: a directory that says which server holds each user, and a way for any server to hand a message to any other. What writes the directory, and when?"
+   },
+   "solution": "Make the gateways stateless carriers and add two shared pieces. A session registry records, for every connected device, which gateway holds it: written when a socket opens, cleared or expired by heartbeat when it closes. Presence is just a read of this registry. A pub/sub bus lets any server publish a message addressed to a user, and the gateway holding that user's socket, subscribed on their behalf, receives it and pushes it down. To deliver, the chat server publishes to the recipient's channel and the bus carries it to the right gateway.",
+   "user_lens": {
+    "gives": "Messages reach you on whichever server you happen to be connected to, and presence (online, last-seen) finally reflects a real connection instead of a guess.",
+    "costs": "Presence is soft and racy: a phone that drops off a subway loses its socket without a goodbye, so 'online' can be a few seconds stale until a heartbeat expires. The registry becomes a hot, fast-changing store that every connect and disconnect must write."
+   },
+   "tech_lens": {
+    "mechanism": "A distributed session registry keyed by user and device to gateway, updated on connect and disconnect and reaped by heartbeat TTL; a pub/sub backbone that routes a published message to the subscriber holding the target socket. Presence is derived state, read from the registry.",
+    "principle": "Separate the thing that holds state (a connection) from the thing that routes (a message). A shared directory plus a bus turns 'find one server among thousands' into a single publish."
+   },
+   "tradeoff": "You add two pieces of always-on infrastructure whose availability now gates every message, and presence becomes eventually consistent: fast, but occasionally wrong for a few seconds.",
+   "at_scale": "Connections scale horizontally, thousands of gateways each holding a slice, and the bus fans a publish to only the gateway that needs it. The pressure moves to the registry, which takes a write on every connect and disconnect, so under churn (subways, flaky mobile) it turns write-heavy and is sharded by user and kept in memory with short TTLs. Presence at very large scale is deliberately coarsened, batched or sampled, because precise per-second presence for hundreds of millions costs more than it is worth.",
+   "defends": [
+    "inv4",
+    "inv5"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "session registry, user to gateway",
+      "software_concept": "a routing table for live connections; presence modeled as a TTL key refreshed by heartbeats"
+     },
+     {
+      "mechanism": "pub/sub delivery to the owning gateway",
+      "software_concept": "a channel per user, subscribed by the gateway holding the socket; publish instead of point-to-point routing"
+     }
+    ],
+    "interview_probes": [
+     "A message arrives on gateway A but the recipient is on gateway B. Walk through how it gets there, and what data structure tells you B is the right server.",
+     "How do you compute presence for 300 million users without a write storm, and why is the green dot allowed to be a few seconds wrong?"
+    ],
+    "approach": "Keep a sharded in-memory registry (Redis) mapping device to gateway with a heartbeat TTL, written on connect and refreshed by pings. Route with pub/sub: each gateway subscribes to a channel per connected user, the chat server publishes the message to that channel, and the owning gateway delivers it down the socket.",
+    "vocab": [
+     "realtime-updates",
+     "eventual-consistency"
+    ]
+   },
+   "beginner_analogy": "Like a huge office with thousands of receptionists. To pass a note you do not run the halls looking for someone; you check a central directory for which desk they are at and drop it in the internal mail that reaches that desk. The same directory shows who has badged in today.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "registry",
+      "label": "Session registry",
+      "kind": "store",
+      "lane": "control",
+      "order": 0
+     },
+     {
+      "id": "bus",
+      "label": "Pub/sub bus",
+      "kind": "channel",
+      "lane": "control",
+      "order": 1
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_present",
+      "from": "gateway",
+      "to": "registry",
+      "kind": "control",
+      "label": "register conn"
+     },
+     {
+      "id": "e_lookup",
+      "from": "app",
+      "to": "registry",
+      "kind": "control",
+      "label": "where is user?"
+     },
+     {
+      "id": "e_pub",
+      "from": "app",
+      "to": "bus",
+      "kind": "payload",
+      "label": "publish"
+     },
+     {
+      "id": "e_sub",
+      "from": "bus",
+      "to": "gateway",
+      "kind": "payload",
+      "label": "to gateway"
+     }
+    ],
+    "highlight": [
+     "app",
+     "gateway",
+     "e_appg"
+    ],
+    "remove": [
+     "e_appg"
+    ]
+   }
+  },
+  {
+   "index": 3,
+   "name": "The Durable Inbox: Delivering to the Absent",
+   "problem": {
+    "statement": "Push works beautifully for people who are online, and most people are not. A message pushed to a socket that just dropped, or to a phone asleep in a pocket, simply evaporates: the bus delivered it to a gateway, the gateway wrote it to a dead socket, and it is gone, with no record that the recipient never got it. Two failures ride together. A message can be lost the instant a connection blinks, and a fully offline device (app closed, no socket at all) cannot be reached by any socket you hold, because the OS killed your background connection.",
+    "beginner": "Push only works if the other phone is connected right now, and most of the time it is not. If you push a message to a phone that just went offline, it disappears with no trace. And if the app is fully closed, you have no connection to it at all, so there is nothing to push through.",
+    "model": {
+     "id": "queue-and-buffer",
+     "application": "Do not push and hope. Put a durable per-recipient inbox between sender and recipient, so a message waits safely until the device connects and pulls it, and hand a wake-up to the OS push service when there is no socket at all."
+    }
+   },
+   "gate": {
+    "question": "Most recipients are offline when you send, and a push to a dropped socket vanishes without a trace. Where does a message live between 'sent' and 'the recipient's phone is actually holding it,' and how do you wake a phone whose app is closed?",
+    "hint": "Give every device a mailbox that outlives its connection. And remember the last hop to a sleeping phone is not yours; it belongs to Apple and Google."
+   },
+   "solution": "Give every device a durable inbox: a persistent, ordered queue of messages it has not yet acknowledged. On send, the message is appended to each recipient's inbox and only then counted as accepted. If the device is online it is also pushed immediately, but either way the message stays in the inbox until the device acknowledges it, so a dropped connection just means redelivery on reconnect. For a device with no live socket, the fabric asks the OS push service (APNs on iOS, FCM on Android) to wake the app, which then connects and drains its inbox. Delivery becomes at-least-once: store first, deliver until acked.",
+   "user_lens": {
+    "gives": "Messages survive being offline, a dead subway, or a crashed app. When the phone comes back, everything meant for it is waiting, in order, and a closed app still buzzes.",
+    "costs": "The system now stores a copy of every undelivered message per recipient, written before 'sent' and cleaned up after 'acked,' and the last hop depends on APNs and FCM, third parties you neither own nor can speed up. At-least-once also means a message can arrive twice, a duplicate the next layer must absorb."
+   },
+   "tech_lens": {
+    "mechanism": "A durable per-device queue (the inbox): append on send, deliver on connect, delete on acknowledgment; a fallback to OS push services to wake apps that hold no socket. Acceptance is defined as 'written to every recipient inbox,' not 'pushed.'",
+    "principle": "Decouple producer from consumer with a durable buffer so the recipient need not be present when the sender acts. Persist before you deliver, and let the consumer's acknowledgment, not your optimism, retire the message."
+   },
+   "tradeoff": "You accept storage and bookkeeping for every in-flight message, plus a hard dependency on push services you do not own, in exchange for never losing a message to a blinking connection. And you inherit duplicates, the standing price of at-least-once.",
+   "at_scale": "The inbox is the write path's real load: every message is a durable write per recipient, so a busy user or a large group multiplies writes fast, and inboxes are sharded per user and trimmed aggressively once acked. Push-service fan-out is rate-limited by APNs and FCM, so at scale you batch and collapse notifications (one '3 new messages' instead of three) to stay under their ceilings and to avoid buzzing a phone to death.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "durable per-device inbox",
+      "software_concept": "a persistent message queue per consumer; at-least-once delivery retired by an ack cursor"
+     },
+     {
+      "mechanism": "OS push wake-up",
+      "software_concept": "handoff to a notification provider (APNs, FCM) when no live socket exists"
+     }
+    ],
+    "interview_probes": [
+     "You push a message and the socket dies in the same millisecond. How do you guarantee the recipient still gets it, and what defines 'delivered' if not 'pushed'?",
+     "The recipient's app is fully closed. What actually reaches the phone, who owns that hop, and how do you keep from waking it a hundred times a minute?"
+    ],
+    "approach": "Model each device's inbox as an append-only queue (a per-user partition in a durable store or log). Write the message to every recipient's inbox in the send path, push if connected, and delete on an ack offset. For no-socket devices, call APNs or FCM to wake the app, then let it reconnect and drain from its last acked position.",
+    "vocab": [
+     "queue",
+     "eventual-consistency"
+    ]
+   },
+   "beginner_analogy": "Like an apartment mailroom. If you are home, the courier hands you the parcel; if not, it sits in your locked mailbox until you come down for it, and a slip is pushed under your door so you know to check. Nothing is left on the step to blow away.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "inbox",
+      "label": "Durable inbox",
+      "kind": "store",
+      "lane": "storage",
+      "order": 1,
+      "expands_to": "Message queue"
+     },
+     {
+      "id": "pushgw",
+      "label": "Push service",
+      "kind": "process",
+      "lane": "service",
+      "order": 3,
+      "expands_to": "Notification system"
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_enq",
+      "from": "app",
+      "to": "inbox",
+      "kind": "payload",
+      "label": "enqueue"
+     },
+     {
+      "id": "e_flush",
+      "from": "inbox",
+      "to": "gateway",
+      "kind": "payload",
+      "label": "on reconnect"
+     },
+     {
+      "id": "e_notify",
+      "from": "app",
+      "to": "pushgw",
+      "kind": "control",
+      "label": "wake"
+     },
+     {
+      "id": "e_apns",
+      "from": "pushgw",
+      "to": "recipient",
+      "kind": "payload",
+      "label": "push notif"
+     }
+    ],
+    "highlight": [
+     "recipient",
+     "e_push",
+     "gateway"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 4,
+   "name": "One True Order",
+   "problem": {
+    "statement": "Now messages are durable and they arrive, but they arrive in a muddle. TCP orders bytes within one connection and nothing more. A sender's two messages can straddle a reconnect and land swapped. A group message routed through the bus can overtake an earlier one that took a different path. Redelivery after a dropped ack can show a message twice. So two people in the same conversation see different sequences, a reply appears above the thing it answers, and duplicates surface. Order and uniqueness were never guaranteed; they have to be built.",
+    "beginner": "Messages now arrive, but not always in the right order, and sometimes twice. Your network might deliver a later message first, or resend one you already have. Two people in the same chat can end up seeing the conversation in different orders, which makes replies look nonsensical.",
+    "model": {
+     "id": "single-source-of-truth",
+     "application": "Do not let each device or network path decide order. Give every conversation one authority that stamps each message with the next number in a single sequence, and let every device sort and de-duplicate by that number."
+    }
+   },
+   "gate": {
+    "question": "Two messages in one conversation travel different paths and arrive out of order, and a retry delivers one of them twice. Without trusting any single connection's ordering, how do you make every participant agree on one order and see each message exactly once?",
+    "hint": "If order cannot come from the network, it must come from one place that hands out positions. What could that place give each message that a device can both sort by and dedupe on?"
+   },
+   "solution": "Route every message in a conversation through one sequencer that assigns a strictly increasing per-conversation sequence number before the message is stored or fanned out. The conversation's messages are appended to its log in that order, and every message also carries a stable, client-generated message id. Devices render by sequence number, not arrival time, and drop any message id they have already seen. One conversation, one monotonic counter, one order everyone shares; the message id makes redelivery a no-op.",
+   "user_lens": {
+    "gives": "Every participant sees the same conversation in the same order, replies sit under what they answer, and a message shown once stays once no matter how many times the network redelivers it.",
+    "costs": "Each conversation now funnels through a single ordering point, so a very hot conversation serializes on it, and a message cannot always be shown the instant it arrives: if an earlier-numbered one is still missing, the device must wait a beat to fill the gap."
+   },
+   "tech_lens": {
+    "mechanism": "A per-conversation monotonic sequence assigned by a single owner (a sequencer, or the partition that owns the conversation), an append-only per-conversation log in that order, and client-side dedup by message id. Order is imposed at one point, not inferred from arrival.",
+    "principle": "When independent paths cannot agree on order, mint order from one authority and carry it with the data. Pair it with an idempotency key so exactly-once display survives at-least-once delivery."
+   },
+   "tradeoff": "You give up per-message parallelism within a conversation and accept that one sequencer per conversation is a small serialization point, in exchange for a single agreed order and duplicate-proof rendering.",
+   "at_scale": "Ordering shards perfectly by conversation: each conversation is independent, so millions of them spread across many sequencer partitions with no coordination between them. The only hot spot is a single enormous conversation whose sequencer is a lone writer, which is the same big-group pressure the next layer confronts. Dedup stays O(1) per message with a seen-id set bounded by a window, so it costs almost nothing as volume grows.",
+   "defends": [
+    "inv2",
+    "inv3"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "per-conversation sequence number",
+      "software_concept": "a monotonic logical clock owned by one partition; total order per key"
+     },
+     {
+      "mechanism": "dedup by message id",
+      "software_concept": "an idempotency key; a bounded seen-set (or last-seen offset) drops replays"
+     }
+    ],
+    "interview_probes": [
+     "TCP already orders bytes. Why is that not enough for message order in a chat, and where does the real order have to come from?",
+     "At-least-once delivery means duplicates. What makes showing a message twice impossible, and how large does your 'seen' set actually need to be?"
+    ],
+    "approach": "Own each conversation on one partition and assign a per-conversation sequence with an atomic increment, appending to a per-conversation log in that order. On the client, buffer by sequence number to fill gaps before rendering, and keep a bounded set (or a last-seen high-water mark) of message ids to drop duplicates.",
+    "vocab": [
+     "idempotency-keys",
+     "event-sourcing"
+    ]
+   },
+   "beginner_analogy": "Like a deli counter. Nobody argues about who is next, because everyone took a numbered ticket from one dispenser; you are served in ticket order, and if you already hold ticket 41 and someone hands you another 41, you ignore it.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "seq",
+      "label": "Sequencer",
+      "kind": "process",
+      "lane": "service",
+      "order": 2
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_assign",
+      "from": "app",
+      "to": "seq",
+      "kind": "control",
+      "label": "get seq#"
+     },
+     {
+      "id": "e_append",
+      "from": "seq",
+      "to": "db",
+      "kind": "payload",
+      "label": "append log"
+     }
+    ],
+    "highlight": [
+     "db",
+     "inbox",
+     "e_enq"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 5,
+   "name": "Fan-out and the Big Group",
+   "problem": {
+    "statement": "A one-to-one message is one delivery. A message to a group is one for every member, and groups are not small. Send to a 100,000-member community and the naive fabric, on the sender's own path, must write 100,000 inboxes, publish to as many gateways, and fire tens of thousands of push wake-ups, all triggered by one tap. That single message becomes a storm that saturates whichever servers happen to own those recipients, and a handful of huge, active groups (or a celebrity broadcast) become permanent hot spots that dwarf every private chat combined. The average message is cheap; the fattest group is what melts a server.",
+    "beginner": "Sending to a big group is not one delivery, it is one per member. A message to a hundred-thousand-person group means a hundred thousand copies, all set off by a single tap. A few giant, busy groups can generate more work than all the small chats put together, and they overwhelm the servers unlucky enough to hold those members.",
+    "model": {
+     "id": "bottleneck",
+     "application": "The fattest group governs the whole system's throughput. Move fan-out off the sender's path into a dedicated service, and for the largest groups switch from copying to everyone (fan-out on write) to letting members pull from one shared log (fan-out on read)."
+    }
+   },
+   "gate": {
+    "question": "One tap in a 100,000-member group asks the fabric to make 100,000 deliveries at once. How do you keep that single message from melting the servers that hold those members, and how do you serve a group so large that copying to everyone is itself the problem?",
+    "hint": "Two moves. Take the fan-out off the sender's request, and question whether you must copy to everyone at all. What if huge groups pulled from one place instead of being pushed to individually?"
+   },
+   "solution": "Split fan-out into its own asynchronous service. The sender's message is accepted and sequenced immediately (one fast write), then handed to a fan-out service that expands the group membership and delivers in parallel, sharded across workers, so no single server carries a whole group. For ordinary groups this is fan-out on write: a copy into each member's inbox. For very large or celebrity-scale groups, flip to fan-out on read: write the message once to a shared group log and let members pull it when they open the conversation, so a million members cost one write, not a million. The system picks per group by size and activity.",
+   "user_lens": {
+    "gives": "A message to a huge group sends as fast as a message to one friend, because the sender is done the moment it is accepted; the heavy delivery happens behind the scenes without stalling anyone.",
+    "costs": "Delivery to a giant group is no longer perfectly instant for everyone: fan-out on read means some members see the message only when they open the group, and fan-out on write to millions takes real time to complete, so the last member can lag the first by seconds."
+   },
+   "tech_lens": {
+    "mechanism": "An asynchronous fan-out service fed from the message stream, sharded by recipient, that either copies into per-member inboxes (fan-out on write) or appends once to a shared group log that members pull (fan-out on read), chosen by group size. The sender's path does one write and returns.",
+    "principle": "Do not do O(N) work on the critical path; accept once, then fan out asynchronously. When N is huge, stop copying and let readers pull from one source, trading write amplification for read work."
+   },
+   "tradeoff": "You give up uniform, immediate delivery to every group member and take on a fan-out tier with two delivery modes to build, tune, and switch between, plus the judgment of when a group is big enough to flip.",
+   "at_scale": "This is what makes billions of group messages a day survivable: fan-out is horizontal, sharded by recipient, so you add workers to add throughput, and the write-versus-read choice caps the worst case. The residual bottleneck is the single hottest group at its busiest instant; fan-out on read plus caching the group log is what keeps that one group from becoming the whole system's ceiling, exactly the celebrity-key problem feeds and timelines face.",
+   "defends": [
+    "inv5",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "asynchronous sharded fan-out",
+      "software_concept": "take O(N) work off the request path; a fan-out worker pool fed by a stream"
+     },
+     {
+      "mechanism": "fan-out on write vs read by group size",
+      "software_concept": "push into inboxes versus pull from a shared log; the timeline fan-out tradeoff, flipped for large groups"
+     }
+    ],
+    "interview_probes": [
+     "A 100k-member group gets one message. Walk through the work it triggers and where you would take it off the sender's request path.",
+     "When do you copy a message into every member's inbox versus write it once and let members pull, and what determines the cutover?"
+    ],
+    "approach": "Consume accepted messages from a stream and fan out in a sharded worker pool, batching inbox writes per shard. Tag each group with a size threshold: below it, write to every member's inbox; above it, append once to a group log keyed by conversation and have clients pull from their last-read offset on open.",
+    "vocab": [
+     "fanout",
+     "hot-key"
+    ]
+   },
+   "beginner_analogy": "Like sending news to a town. For a small club you post a letter to each member. For the whole town you do not print a million letters; you pin one notice on the board and let people read it as they pass. Copying to everyone only makes sense until the list gets huge.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "fanout",
+      "label": "Fan-out service",
+      "kind": "process",
+      "lane": "service",
+      "order": 4
+     },
+     {
+      "id": "group",
+      "label": "Group log",
+      "kind": "store",
+      "lane": "storage",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_fan",
+      "from": "app",
+      "to": "fanout",
+      "kind": "payload",
+      "label": "fan-out"
+     },
+     {
+      "id": "e_fanenq",
+      "from": "fanout",
+      "to": "inbox",
+      "kind": "payload",
+      "label": "N-way enqueue"
+     },
+     {
+      "id": "e_grouplog",
+      "from": "fanout",
+      "to": "group",
+      "kind": "payload",
+      "label": "write once"
+     },
+     {
+      "id": "e_pull",
+      "from": "recipient",
+      "to": "group",
+      "kind": "control",
+      "label": "pull on view"
+     }
+    ],
+    "highlight": [
+     "inbox",
+     "app",
+     "e_enq"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 6,
+   "name": "Receipts Without Drowning",
+   "problem": {
+    "statement": "The sender wants to know the message was delivered and read: the second tick and the blue tick. Each is a tiny signal flowing backward, and backward from a group is where it turns vicious. In a 100,000-member group, one message can generate up to 100,000 'delivered' and 100,000 'read' signals, each a message in its own right, so receipts alone can outweigh the conversation they describe. Tracking who has read what is worse: full read state is a matrix of every member against every message, O(N squared) and growing with every send. Naive receipts do not just cost traffic; they leak presence and reading habits the sender was never promised.",
+    "beginner": "People want to see when a message was delivered and read, the little ticks. In a one-to-one chat that is cheap. In a big group it is brutal: one message can trigger a hundred thousand 'read' signals coming back, more traffic than the messages themselves, and tracking exactly who read what grows impossibly fast.",
+    "model": {
+     "id": "feedback-loop",
+     "application": "Receipts are the backward loop that tells a sender their message landed. Summarize and collapse that loop, batch acknowledgments and track a single high-water mark per reader, so the feedback stays useful without amplifying into a storm."
+    }
+   },
+   "gate": {
+    "question": "A message to a big group can trigger as many 'delivered' and 'read' receipts as there are members, each a message back to the sender. How do you give senders honest delivery and read status without the receipts costing more than the chat?",
+    "hint": "You do not need every receipt as a separate event, and you do not need a full grid of who-read-what. What single number per reader captures everything you need to show?"
+   },
+   "solution": "Collapse and batch the backward channel. Each device sends receipts lazily and in bulk: instead of one signal per message, it reports a single high-water mark, the highest sequence number it has received or read, which stands in for every message at or below it. A receipt collector aggregates these per conversation. In one-to-one and small groups the sender sees precise delivered and read ticks; in large groups per-member read receipts are suppressed or reduced to a count, because a matrix of everyone against everything is neither affordable nor wanted. Read state becomes one cursor per participant, not a grid.",
+   "user_lens": {
+    "gives": "Honest ticks: delivered and read status that reflects reality, cheaply, and a system that does not fall over when a receipt-heavy group gets busy.",
+    "costs": "In big groups you lose per-person read detail, sometimes read receipts entirely, and receipts are slightly delayed by batching, so the blue tick can lag the actual read by a moment. Read receipts also expose that you read a message, a privacy cost some users would rather not pay."
+   },
+   "tech_lens": {
+    "mechanism": "A high-water-mark cursor per participant per conversation (the highest sequence number delivered or read), reported in batches and aggregated by a receipt collector; read state stored as one cursor per reader rather than a per-message matrix; per-member read receipts degraded to counts or suppressed above a group-size threshold.",
+    "principle": "A feedback signal must be summarized, not streamed one-for-one, or it drowns the thing it reports on. Collapse a set of acknowledgments into a single monotonic marker and batch its delivery."
+   },
+   "tradeoff": "You trade precise, immediate, per-message receipts for cheap, slightly delayed, summarized ones, and you accept that at group scale 'who read this' is a question the system deliberately stops answering exactly.",
+   "at_scale": "Because read state is one cursor per reader, its cost is O(participants), not O(participants times messages), which is what makes receipts survivable in large groups. Batching collapses a burst of per-message acks into periodic high-water updates, cutting receipt traffic by orders of magnitude, and suppressing per-member receipts above a threshold caps the worst case so a giant group's receipts never rival its messages.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "high-water-mark read cursor",
+      "software_concept": "a single monotonic offset per reader, like a consumer offset in a log"
+     },
+     {
+      "mechanism": "batched, aggregated receipts",
+      "software_concept": "coalescing many acks into periodic summaries; degrade to counts above a size threshold"
+     }
+    ],
+    "interview_probes": [
+     "Read receipts in a 100k group are O(N squared). What single value per reader collapses that, and what detail do you lose by using it?",
+     "How do you keep receipt traffic from exceeding message traffic in a large, active group, and what do you stop promising at that size?"
+    ],
+    "approach": "Store one read cursor (highest read sequence number) per participant per conversation, updated by batched high-water reports from each device. Aggregate in a collector, and above a membership threshold stop materializing per-member read receipts, showing a delivered and read count instead.",
+    "vocab": [
+     "load-shedding",
+     "eventual-consistency"
+    ]
+   },
+   "beginner_analogy": "Like a teacher taking attendance by asking 'everyone past page 40, raise a hand' instead of collecting a signed slip from each student for every page. One number, 'I am up to page 40,' replaces a stack of receipts, and for a hall of a thousand you just count hands instead of naming everyone.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "receipts",
+      "label": "Receipt collector",
+      "kind": "process",
+      "lane": "service",
+      "order": 5
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_ack",
+      "from": "recipient",
+      "to": "receipts",
+      "kind": "control",
+      "label": "delivered/read"
+     },
+     {
+      "id": "e_hwm",
+      "from": "receipts",
+      "to": "db",
+      "kind": "control",
+      "label": "read cursor"
+     },
+     {
+      "id": "e_notifysender",
+      "from": "receipts",
+      "to": "sender",
+      "kind": "control",
+      "label": "ticks"
+     }
+    ],
+    "highlight": [
+     "recipient",
+     "sender",
+     "e_fanenq"
+    ],
+    "remove": []
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "The whole city reconnects at once",
+   "scenario": "A mobile network blip drops a million connections in the same instant, and all of them try to reconnect within a few seconds.",
+   "reveal": "The durable inbox means nothing queued during the gap was lost; each device resumes delivery from its own ack cursor. The pressure lands on the session registry, which absorbs a million disconnect-and-reconnect writes, which is exactly why it is sharded and reaped by TTL rather than held in one place. Presence briefly lies (everyone shows offline until their socket is re-registered), so inv4 degrades gracefully for a few seconds while inv1 holds absolutely: no message is dropped."
+  },
+  {
+   "id": "st2",
+   "title": "A celebrity posts to a 5-million-member broadcast",
+   "scenario": "One account sends a single message to a five-million-member broadcast group at peak hour.",
+   "reveal": "Fan-out on read saves it. The message is one sequenced write to the shared group log; members pull it when they open the conversation instead of the system minting five million inbox copies and five million pushes. Per-member read receipts are suppressed and collapsed to a count, and the hot group log is cached and replicated so the pull load spreads. inv5 holds because the sender's path did one write and returned; the honest cost is that distant members see it only when they next open the group. This is the bottleneck and hot-key defense in action."
+  },
+  {
+   "id": "st3",
+   "title": "Delivered, ack lost, phone reconnects",
+   "scenario": "A message is delivered to a device, but the acknowledgment is lost on the way back, and moments later the phone reconnects.",
+   "reveal": "At-least-once redelivery kicks in: the inbox still holds the un-acked message and pushes it again. The client recognizes the message id it already has and drops it by dedup, and it orders the message by its sequence number regardless of when it arrived. inv3 holds (no duplicate on screen) and inv2 holds (order preserved). This is precisely why every message carries both a stable id and a per-conversation sequence number."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "When only the producer knows when news exists, hold the channel open and push; polling forces a losing choice between wasteful and slow.",
+   "Separate holding a connection from routing a message; a shared directory plus a bus turns 'find one server among thousands' into a single publish.",
+   "Persist before you deliver and let the consumer's acknowledgment retire the message, so a dropped connection costs a redelivery, not a loss.",
+   "When independent paths cannot agree on order, mint order from one authority and carry it with the data; pair it with an idempotency key so exactly-once display survives at-least-once delivery.",
+   "Keep O(N) work off the critical path: accept once, fan out asynchronously, and when N is huge let readers pull from one source instead of copying to all.",
+   "Summarize a feedback signal instead of streaming it one-for-one; collapse many acknowledgments into a single monotonic marker before it drowns what it reports."
+  ],
+  "mappings": [
+   {
+    "mechanism": "persistent connection with server push",
+    "elsewhere": "Live dashboards, multiplayer games, collaborative editors, and stock tickers all hold a socket open and push rather than let clients poll."
+   },
+   {
+    "mechanism": "durable per-consumer inbox with acks",
+    "elsewhere": "Message queues, email servers, and push-notification pipelines all store-and-forward so the recipient need not be present when the sender acts."
+   },
+   {
+    "mechanism": "per-key sequence number for total order",
+    "elsewhere": "Kafka partitions, database replication logs, and Lamport or vector clocks all impose an agreed order on events that arrive by many paths."
+   },
+   {
+    "mechanism": "fan-out on write versus read",
+    "elsewhere": "News feeds, timelines, and mailing lists all choose between copying to every recipient and letting recipients pull from one shared source, flipping the choice for celebrities."
+   },
+   {
+    "mechanism": "high-water-mark cursor",
+    "elsewhere": "Log consumers, sync protocols, and read-tracking everywhere collapse 'everything up to here' into one offset instead of a per-item grid."
+   }
+  ]
+ }
+}
