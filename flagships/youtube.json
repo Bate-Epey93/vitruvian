@@ -259,7 +259,8 @@
       "label": "Transcoder fleet",
       "kind": "process",
       "lane": "content",
-      "order": 1
+      "order": 1,
+      "expands_to": "Video transcoding pipeline"
      },
      {
       "id": "renditions",
@@ -482,7 +483,8 @@
       "label": "Edge caches (CDN)",
       "kind": "store",
       "lane": "content",
-      "order": 6
+      "order": 6,
+      "expands_to": "Content delivery network"
      }
     ],
     "add_edges": [
@@ -572,7 +574,8 @@
       "label": "Ranking loop",
       "kind": "process",
       "lane": "control",
-      "order": 5
+      "order": 5,
+      "expands_to": "Recommendation feed"
      }
     ],
     "add_edges": [

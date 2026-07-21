@@ -109,6 +109,10 @@ var Schema = (() => {
       if (!NODE_KINDS.includes(n.kind)) err(`${where} "${n.id}": kind must be ${NODE_KINDS.join("|")}`);
       if (!laneIds.has(n.lane)) err(`${where} "${n.id}": lane "${n.lane}" does not exist`);
       if (!Number.isInteger(n.order) || n.order < 0 || n.order > B.orderMax) err(`${where} "${n.id}": order must be an integer 0-${B.orderMax}`);
+      // optional: a node that is itself a system worth its own Deconstruct can
+      // name that sub-system, enabling semantic zoom (drill into a nested study)
+      if (n.expands_to != null && (!isFullStr(n.expands_to) || n.expands_to.length > 60))
+        err(`${where} "${n.id}": expands_to must be a non-empty string ≤60 chars`);
       liveNodes.set(n.id, n);
       totalNodes++;
     }

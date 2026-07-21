@@ -24,8 +24,8 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.21.1",
-  flagshipVersion: 6,                    // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
+  appVersion: "1.22.0",
+  flagshipVersion: 7,                    // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   flagshipNames: ["railway", "whatsapp", "youtube"],   // library slugs: seeding, #/study/<slug> deep links, share pages
   siteUrl: "https://bate-epey93.github.io/vitruvian/",
   repoUrl: "https://github.com/Bate-Epey93/vitruvian"
@@ -629,6 +629,7 @@ var COPY = {
         ["The red pulse", "At a gate, or when you tap the problem card, the parts about to break pulse red. You see the failure before the fix."],
         ["Spotlight", "Tap a card to light its parts and dim the rest: the problem card lights what breaks (red), the solution card lights what's added (teal), and Under load traces the path load travels (gold)."],
         ["Trace a part", "Tap any node to light it and every edge touching it; the rest dims, so you can follow one part's whole reach. Tap it again to clear."],
+        ["Zoom in ⊕", "Some nodes are whole systems in their own right and carry a ⊕ badge. Tap it to open that sub-system as its own Deconstruct, and follow the breadcrumb back up. Systems nest as deep as the library goes."],
         ["Pan & scrub", "Dense diagrams pan sideways. Drag the scrubber (0…N) under the diagram to sweep it from the naive baseline to the finished system."]
       ]
     },

@@ -260,11 +260,19 @@ var Diagram = (() => {
     layout.lanes.forEach(l => { laneLabelById[l.id] = l.label; });
     let shownIds = new Set();
     let lastState = null, lastHl = new Set();         // the sim reads the shown state
-    let traced = null, freshTimer = null, raceOn = false;
+    let traced = null, freshTimer = null, raceOn = false, onDrillCb = null;
 
     /* trace: tap a node to light it + every edge touching it and dim the
        rest — follow one part's responsibilities. Tap again to clear. */
     svg.addEventListener("click", ev => {
+      // semantic zoom takes priority: a tap on the ⊕ badge drills into the
+      // node's nested Deconstruct rather than tracing or faulting it
+      const badge = ev.target.closest && ev.target.closest(".dg-drill-badge");
+      if (badge) {
+        const dg = badge.closest(".dg-node");
+        const sub = dg && dg.getAttribute("data-expand");
+        if (sub && onDrillCb) { ev.stopPropagation(); onDrillCb(sub, dg.getAttribute("data-id")); return; }
+      }
       const g = ev.target.closest && ev.target.closest(".dg-node");
       if (!g || !svg.contains(g) || !lastState) return;
       const id = g.getAttribute("data-id");
@@ -346,6 +354,19 @@ var Diagram = (() => {
         const p = pos[n.id];
         const g = el("g", { transform: `translate(${p.x} ${p.y})`, "data-id": n.id }, nodesG);
         drawNode(g, n, laneColor(n.lane));
+        // semantic zoom: a node that is a system in its own right gets a drill
+        // badge (⊕) at its top-right corner; tapping it opens the nested study
+        if (typeof n.expands_to === "string" && n.expands_to.trim()) {
+          g.classList.add("dg-drillable");
+          g.setAttribute("data-expand", n.expands_to.trim());
+          const bx = (n.kind === "actor" ? ACTOR_R : NODE_W / 2) - 3;
+          const by = -(n.kind === "actor" ? ACTOR_R : NODE_H / 2) + 3;
+          const badge = el("g", { class: "dg-drill-badge", transform: `translate(${bx} ${by})` }, g);
+          txt(el("title", {}, badge), `Zoom into "${n.expands_to.trim()}"`);
+          el("circle", { r: 7.5, class: "dg-drill-disc" }, badge).style.fill = laneColor(n.lane);
+          el("line", { x1: -3.2, y1: 0, x2: 3.2, y2: 0, class: "dg-drill-plus" }, badge);
+          el("line", { x1: 0, y1: -3.2, x2: 0, y2: 3.2, class: "dg-drill-plus" }, badge);
+        }
         txt(el("title", {}, g), `${n.label} · ${laneLabelById[n.lane] || n.lane} · ${n.kind}`);
         if (hl.has(n.id)) g.classList.add("dg-broken");
         if (ghostSet.has(n.id)) g.classList.add("dg-ghost");
@@ -831,7 +852,7 @@ var Diagram = (() => {
       };
     })();
 
-    return { show, spotlight, focus, layout, laneColor, sim, zoom: zoomCtl, raceSpotlight, contendedIds, stateAt: u => stateAt(doc, u), doc };
+    return { show, spotlight, focus, layout, laneColor, sim, zoom: zoomCtl, raceSpotlight, contendedIds, stateAt: u => stateAt(doc, u), doc, onDrill(fn) { onDrillCb = fn; } };
   }
 
   /* ── Legend: a compact always-visible key under the diagram (brings the

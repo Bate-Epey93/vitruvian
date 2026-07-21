@@ -34,6 +34,12 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 - Technology tags are gated to systems that are actually software — a railway may be described with patterns and concepts as honest analogies, but never with a technology. Layers with no honest match are left untagged rather than mislabeled.
 - All three flagships retrofitted with vocabulary tags (`flagshipVersion` 5 re-seeds existing installs, attempts preserved).
 
+## [1.22.0] — 2026-07-20 · Semantic zoom
+### Added
+- **Nested Deconstructs.** A node that is a system in its own right now carries a ⊕ badge; tapping it opens that sub-system as its own Deconstruct, with a breadcrumb (System › Sub-system) to climb back up. Depth comes from nesting, not from crowding a single diagram, so every level stays a clean, comparable rebuild.
+- Optional `visual.nodes[].expands_to` in the schema (lenient); generation may mark 2–3 genuine sub-systems per study.
+- YouTube's transcoder, CDN and ranking nodes are tagged; drilling resolves to a matching library Deconstruct, or offers to generate one.
+
 ## [1.19.0] — 2026-07-19 · Simulation & diagram polish
 ### Added
 - Payload tokens now carry a small **directional arrowhead** that rotates to the path tangent — extra at-a-glance cue for which way flow moves.

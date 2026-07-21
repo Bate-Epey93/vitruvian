@@ -586,11 +586,55 @@ function toast(msg) {
 }
 
 /* ═══ Reader ═══ */
-async function openReader(id, layerIndex) {
+let drillStack = [];   // semantic-zoom breadcrumb: [{id, system}, …], parent → child
+
+/* the breadcrumb shown while nested: System › Sub-system › … , each crumb
+   pops the stack back to that level. */
+function drillCrumb() {
+  const bar = h("div", "reader-crumb");
+  drillStack.forEach((entry, i) => {
+    if (i) bar.appendChild(h("span", "rc-sep", "›"));
+    if (i === drillStack.length - 1) {
+      bar.appendChild(h("span", "rc-here", entry.system));
+    } else {
+      const b = h("button", "rc-link", entry.system);
+      b.onclick = () => { drillStack = drillStack.slice(0, i + 1); openReader(entry.id, null, { keepStack: true }); };
+      bar.appendChild(b);
+    }
+  });
+  return bar;
+}
+
+/* semantic zoom: a node's ⊕ badge drilled into sub-system `sub`. If a
+   Deconstruct for it already exists (a flagship or one you've generated),
+   open it nested under the current one; otherwise offer to deconstruct it. */
+async function drillInto(sub) {
+  const want = sub.trim().toLowerCase();
+  const all = await Store.getBreakdowns();
+  // prefer an exact system-name match; flagships first, then your own studies
+  const match = all.filter(b => (b.system || "").trim().toLowerCase() === want)
+                   .sort((a, b) => (a.source === "flagship" ? -1 : 1) - (b.source === "flagship" ? -1 : 1))[0];
+  if (match) {
+    if (!drillStack.some(e => e.id === match.id)) drillStack.push({ id: match.id, system: match.system });
+    openReader(match.id, null, { keepStack: true });
+    return;
+  }
+  // nothing yet — offer to generate it (BYOK), opening as its own study
+  if (!meta.apiKey) { toast(`No Deconstruct of "${sub}" yet — add an API key to generate one`); return; }
+  if (confirm(`No Deconstruct of "${sub}" yet. Deconstruct it now?`)) {
+    renderGenerate(sub);
+    show("generate");
+  }
+}
+
+async function openReader(id, layerIndex, opts = {}) {
   const rec = await Store.getBreakdown(id);
   if (!rec) return;
   if (currentView) currentView.destroy();   // re-open (e.g. from Models index) skips show()'s teardown
   currentRec = rec;
+  // a plain open (library, Models, deep link) starts a fresh breadcrumb; a
+  // drill keeps the stack the caller already pushed onto
+  if (!opts.keepStack) drillStack = [{ id: rec.id, system: rec.system }];
   rec.lastOpen = Date.now();
   await Store.saveBreakdownLight(rec);
   await Store.saveMeta({ lastOpenBreakdown: id });
@@ -627,9 +671,12 @@ async function openReader(id, layerIndex) {
   dpane.append(dscroll, hud, caption, Diagram.legend(), scrubEl, dcap);   // legend: the tutorial's grammar, always in view
   const docPane = h("div", "doc-pane");
   wrap.append(dpane, docPane);
+  // breadcrumb: only while nested (drilled at least one level deep)
+  if (drillStack.length > 1) pane.appendChild(drillCrumb());
   pane.appendChild(wrap);
 
   const diagram = Diagram.mount(dscroll, rec.doc);
+  diagram.onDrill((sub) => drillInto(sub));
 
   /* flow simulation controls — instant response on press; any state change
      stops the sim (via diagram.show) and this resets the buttons */

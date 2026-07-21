@@ -77,6 +77,8 @@ button{font:inherit;color:inherit;}   /* card buttons must inherit --ink, not UA
    [hidden]-visible. Without this they auto-place into implicit
    content-height rows and overflow the viewport instead of scrolling. */
 .app > .screen,.app > #screen-reader{grid-row:2;grid-column:1;min-height:0;min-width:0;}
+#screen-reader{display:flex;flex-direction:column;}          /* breadcrumb (optional) + reader */
+#screen-reader > .reader{flex:1;min-height:0;}
 
 /* ── Topbar ── */
 .topbar{
@@ -1033,6 +1035,24 @@ html,body{overscroll-behavior:none;}
    ═══════════════════════════════════════════════════════════════ */
 
 /* ── flow tokens ── */
+/* semantic-zoom breadcrumb, above the reader while nested */
+.reader-crumb{display:flex; align-items:center; flex-wrap:wrap; gap:6px 8px;
+  padding:8px 16px; border-bottom:1px solid var(--line);
+  background:var(--canvas); font-family:var(--mono); font-size:11px;}
+.reader-crumb .rc-link{background:none; border:none; cursor:pointer; padding:2px 3px;
+  font-family:var(--mono); font-size:11px; color:var(--accent); letter-spacing:.2px;}
+.reader-crumb .rc-link:hover{color:var(--accent-deep); text-decoration:underline;}
+.reader-crumb .rc-sep{color:var(--muted);}
+.reader-crumb .rc-here{color:var(--ink); font-weight:600; letter-spacing:.2px;}
+
+/* semantic-zoom drill badge (⊕ at a node's corner) */
+.dg-drill-badge{cursor:zoom-in;}
+.dg-drill-disc{opacity:.9; stroke:var(--diagram-halo); stroke-width:1.4; transition:transform .12s;}
+.dg-drill-plus{stroke:var(--diagram-halo); stroke-width:1.5; stroke-linecap:round;}
+.dg-drill-badge:hover .dg-drill-disc{transform:scale(1.18);}
+.dg-drillable .dg-shape{stroke-dasharray:none;}
+@media (prefers-reduced-motion:reduce){.dg-drill-badge:hover .dg-drill-disc{transform:none;}}
+
 .dg-token{will-change:transform;}
 .dg-token-body{stroke:var(--diagram-halo);stroke-width:1;}
 .dg-token-arrow{stroke:var(--diagram-halo);stroke-width:.5;stroke-linejoin:round;}
