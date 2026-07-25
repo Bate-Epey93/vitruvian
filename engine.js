@@ -1923,16 +1923,16 @@ function renderSettings(banner) {
   mb.appendChild(h("p", "note", COPY.modelCostNote));
   const mi = h("input");
   mi.type = "text";
-  mi.value = meta.modelId || "claude-sonnet-5";
+  mi.value = meta.modelId || CONFIG.defaultModel;
   const mrow = h("div", "set-row");
-  ["claude-sonnet-5", "claude-opus-4-8", "claude-fable-5", "claude-haiku-4-5-20251001"].forEach(preset => {
+  ["claude-opus-5", "claude-opus-4-8", "claude-fable-5", "claude-haiku-4-5-20251001"].forEach(preset => {
     const b = h("button", "gbtn", preset.replace("claude-", "").replace("-20251001", ""));
     b.onclick = () => { mi.value = preset; msave.click(); };
     mrow.appendChild(b);
   });
   const msave = h("button", "gbtn primary", "Save");
   msave.onclick = async () => {
-    meta.modelId = mi.value.trim() || "claude-sonnet-5";
+    meta.modelId = mi.value.trim() || CONFIG.defaultModel;
     await Store.saveMeta({ modelId: meta.modelId });
     toast("Model: " + meta.modelId);
   };

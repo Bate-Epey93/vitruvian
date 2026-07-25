@@ -31,7 +31,12 @@ var Generator = (() => {
     return { output_config: { effort: speed === "fast" ? "low" : "medium" } };
   }
 
-  const FABLE = /fable|mythos/;
+  // Fable and Opus 5 both run safety classifiers that can decline a benign
+  // request with a 200 + stop_reason "refusal". "fallbacks: default" reruns the
+  // same request on Anthropic's recommended substitute (cyber declines route to
+  // Opus 4.8) in one round trip, instead of failing — and needs no maintenance
+  // when the recommended target changes.
+  const GUARDED = /fable|mythos|opus-5/;
   function headers(apiKey, modelId) {
     const h = {
       "content-type": "application/json",
@@ -39,15 +44,12 @@ var Generator = (() => {
       "anthropic-version": "2023-06-01",
       "anthropic-dangerous-direct-browser-access": "true"
     };
-    // Fable runs safety classifiers that can decline benign requests with a
-    // 200 + stop_reason "refusal"; the server-side fallback beta reruns the
-    // same request on Opus 4.8 in one round trip instead of failing.
-    if (FABLE.test(modelId || "")) h["anthropic-beta"] = "server-side-fallback-2026-06-01";
+    if (GUARDED.test(modelId || "")) h["anthropic-beta"] = "server-side-fallback-2026-07-01";
     return h;
   }
 
   function fallbackFor(modelId) {
-    return FABLE.test(modelId) ? { fallbacks: [{ model: "claude-opus-4-8" }] } : {};
+    return GUARDED.test(modelId) ? { fallbacks: "default" } : {};
   }
 
   function fail(kind, message, raw, errors) { const e = new Error(message); e.kind = kind; e.raw = raw; e.errors = errors; return e; }

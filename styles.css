@@ -270,7 +270,12 @@ h1.title{font-family:var(--display);font-weight:800;font-size:clamp(28px,4vw,40p
 .fact::before{content:'◆';color:var(--accent);font-size:11px;margin-top:3px;}
 .sd-block{margin:22px 0;}
 .sd-block h3{font-family:var(--display);font-weight:700;font-size:19px;letter-spacing:-.01em;margin-bottom:10px;}
-.sd-purpose{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:0 7px 7px 0;padding:14px 18px;font-size:15px;}
+.sd-purpose{
+  --tint:var(--accent);
+  background:color-mix(in srgb, var(--tint) 13%, var(--glass));
+  border:1px solid color-mix(in srgb, var(--tint) 30%, transparent);
+  border-radius:12px;padding:14px 18px;font-size:15px;
+}
 .sd-list{display:flex;flex-direction:column;gap:7px;}
 .sd-item{background:var(--panel);border:1px solid var(--line-soft);border-radius:7px;padding:10px 14px;font-size:14px;color:var(--ink-soft);display:flex;gap:10px;align-items:baseline;}
 .sd-item b{color:var(--ink);font-weight:600;}
@@ -278,7 +283,12 @@ h1.title{font-family:var(--display);font-weight:800;font-size:clamp(28px,4vw,40p
   font-family:var(--mono);font-size:10px;font-weight:700;color:#fff;background:var(--accent);
   border-radius:3px;padding:2px 7px;flex-shrink:0;
 }
-.sd-item.inv{border-left:3px solid var(--accent);border-radius:0 7px 7px 0;}
+.sd-item.inv{
+  --tint:var(--accent);
+  background:color-mix(in srgb, var(--tint) 13%, var(--glass));
+  border:1px solid color-mix(in srgb, var(--tint) 30%, transparent);
+  border-radius:9px;color:var(--ink);
+}
 
 /* layer stepper */
 .stepper{
@@ -442,7 +452,12 @@ details.analogy-fold summary{font-family:var(--mono);font-size:10px;letter-spaci
 .gen-tokens{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:1px;}
 .gen-bar{height:5px;background:var(--line-soft);border-radius:3px;overflow:hidden;margin:16px 0;}
 .gen-bar div{height:100%;width:0%;background:var(--accent);transition:width .8s;}
-.gen-error{background:var(--failure-wash);border:1px solid #e6c4c4;border-left:3px solid var(--failure);border-radius:0 8px 8px 0;padding:16px 20px;margin:18px 0;}
+.gen-error{
+  --tint:var(--failure);
+  background:color-mix(in srgb, var(--tint) 15%, var(--glass));
+  border:1px solid color-mix(in srgb, var(--tint) 32%, transparent);
+  border-radius:12px;padding:16px 20px;margin:18px 0;
+}
 .gen-error h3{font-family:var(--display);font-size:17px;margin-bottom:6px;color:var(--failure);}
 .gen-error p{font-size:14px;color:#5e2626;margin-bottom:10px;}
 .focus-row{margin:14px 0;}
@@ -696,13 +711,13 @@ html,body{overscroll-behavior:none;}
 }
 /* liquid glass: the translucent-tinted layer cards blur what's behind them */
 .problem-card,.solution-card,.scale-band,.analogy-box,.gate-hint,.lens-box,
-.your-answer,.verdict-card{
+.your-answer,.verdict-card,.sd-purpose,.gen-error{
   -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(150%);
   backdrop-filter:blur(var(--glass-blur)) saturate(150%);
 }
 @media(prefers-reduced-transparency:reduce){
   .problem-card,.solution-card,.scale-band,.analogy-box,.gate-hint,.lens-box,
-  .your-answer,.verdict-card{-webkit-backdrop-filter:none;backdrop-filter:none;}
+  .your-answer,.verdict-card,.sd-purpose,.gen-error{-webkit-backdrop-filter:none;backdrop-filter:none;}
 }
 .problem-card{
   background-image:linear-gradient(172deg,var(--gloss-soft),rgba(255,255,255,0) 36%);
@@ -957,7 +972,7 @@ html,body{overscroll-behavior:none;}
 
 /* ── medium material: cards ── */
 .bd-card,.ml-card,.set-block,.landing-card,.gate-card,.stress-card,.lens-box,
-.ml-use,.empty-panel,.tut-card,.solution-card,.your-answer,.sd-purpose,.sd-item{
+.ml-use,.empty-panel,.tut-card,.solution-card,.your-answer,.sd-item{
   background-color:var(--glass);
   -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(160%);
   backdrop-filter:blur(var(--glass-blur)) saturate(160%);

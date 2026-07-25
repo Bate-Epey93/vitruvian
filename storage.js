@@ -89,7 +89,7 @@ var Store = (() => {
           audienceMode: "enthusiast",
           challengeModeDefault: false,   // full deconstruct by default; gates are opt-in
           genSpeed: "balanced",          // generation thinking depth: balanced | fast
-          modelId: "claude-sonnet-5"
+          modelId: CONFIG.defaultModel
         });
       }
       return getMetaMap();

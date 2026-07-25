@@ -4,6 +4,12 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [1.26.0] — 2026-07-25 · Opus 5, and cards that carry their own colour
+### Changed
+- **Opus 5 is the default model.** Sonnet 5 retired from the presets. One source of truth (`CONFIG.defaultModel`) now feeds Settings, the storage seed, and the reset fallback, so there is one place to change it next time.
+- **Opus 4.8 catches the declines.** Fable 5 and Opus 5 both run safety classifiers that can decline a benign request; both now send `fallbacks: "default"`, which reruns the request on Anthropic's recommended substitute (cyber declines route to Opus 4.8) in the same round trip.
+- **Tinted cards are tinted all the way through.** "The purpose", the invariant (INV) items, and generation errors were accent-coloured on one edge only; they now carry the colour across the whole card as a light liquid-gloss wash, matching the problem, solution, gate, and scale cards. Text contrast checked in both themes.
+
 ## [1.25.0] — 2026-07-20 · Batch 3: the canonical products
 ### Added
 - Six more worked Deconstructs — **Rate limiter, Search typeahead, Ride matching, Ticket booking, Payment ledger, Photo store** — the first six of the ten canonical interview products. The library reaches 19.
