@@ -4,6 +4,13 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [1.27.0] — 2026-07-25 · Labels that stop hiding, and hover to isolate
+### Fixed
+- **Edge labels no longer bury each other.** The placer only searched vertically at a fixed midpoint, so two edges meeting near the same point had nowhere to go — and burying one label under another was priced at a quarter of what hiding behind a node cost, so the placer often chose it. Labels now search in two dimensions, sampling candidate positions along the edge they name, and a collision with a sibling label costs nearly as much as a collision with a box. Where no clear slot exists at all, the label truncates and keeps its full text on hover rather than drawing something unreadable.
+- Measured across the whole library — 19 systems, 130 layer states, 1282 labels: labels buried under another label fell from **51 to 6**, labels behind a node box from **28 to 12**, and affected layer states from **39 to 12**. 15 labels now truncate.
+### Added
+- **Hover to isolate.** On a pointer that can hover, passing over a node lights it and every edge touching it and drops the rest back — "what talks to this?" without committing to a click. Touch keeps tap-to-trace; an explicit click-trace outranks the hover preview.
+
 ## [1.26.0] — 2026-07-25 · Opus 5, and cards that carry their own colour
 ### Changed
 - **Opus 5 is the default model.** Sonnet 5 retired from the presets. One source of truth (`CONFIG.defaultModel`) now feeds Settings, the storage seed, and the reset fallback, so there is one place to change it next time.

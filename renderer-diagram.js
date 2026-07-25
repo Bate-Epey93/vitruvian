@@ -287,6 +287,41 @@ var Diagram = (() => {
       traced = id;
     });
 
+    /* Hover isolation: on a pointer that can hover, passing over a node
+       previews its trace — everything it doesn't touch drops back. Answers
+       "what talks to this?" without committing to a click, which matters most
+       in the dense late layers. Touch devices have no hover, so the tap-trace
+       above stays their only path in; a click-trace outranks the preview. */
+    const canHover = typeof matchMedia === "function" && matchMedia("(hover:hover)").matches;
+    if (canHover) {
+      let hovered = null;
+      const relate = id => {
+        const ids = [id];
+        lastState.edges.forEach(e => { if (e.from === id || e.to === id) ids.push(e.id); });
+        return ids;
+      };
+      svg.addEventListener("pointerover", ev => {
+        if (traced || sim.running || !lastState) return;
+        const g = ev.target.closest && ev.target.closest(".dg-node");
+        const id = g && g.getAttribute("data-id");
+        if (!id || id === hovered) return;
+        hovered = id;
+        spotlight(relate(id), "trace");
+      });
+      svg.addEventListener("pointerout", ev => {
+        if (traced || !hovered) return;
+        // ignore moves between children of the SAME node group; leaving for
+        // anything else (including bare canvas, where both resolve to null)
+        // must clear
+        const from = ev.target.closest && ev.target.closest(".dg-node");
+        const to = ev.relatedTarget;
+        const toNode = to && to.closest && to.closest(".dg-node");
+        if (from && toNode === from) return;
+        hovered = null;
+        spotlight(null);
+      });
+    }
+
     function show(upto, opts = {}) {
       sim.stop();                            // a state change invalidates in-flight tokens
       const { highlight = [], animate = false, ghost = [], stress = [] } = opts;
@@ -344,7 +379,7 @@ var Diagram = (() => {
           // same-lane edges: lift the label into the band's clear upper strip
           const cx = p.sameLane ? (pos[e.from].x + pos[e.to].x) / 2 : p.mx;
           const cy = p.sameLane ? layout.laneY[from.lane] + 13 : p.my;
-          labelJobs.push({ e, cx, cy, color: broken ? "#c22f2f" : LANE_COLORS[li % LANE_COLORS.length] });
+          labelJobs.push({ e, g, cx, cy, path, sameLane: p.sameLane, x0: pos[e.from].x, x1: pos[e.to].x, color: broken ? "#c22f2f" : LANE_COLORS[li % LANE_COLORS.length] });
         }
       });
 
@@ -378,31 +413,72 @@ var Diagram = (() => {
         nodeRects.push({ x0: p.x - hw, y0: p.y - hh, x1: p.x + hw, y1: p.y + hh });
       });
 
-      // labels last, on top. For each, sample a fine vertical range around
-      // its anchor and pick the LEAST-overlapping slot — box overlap weighted
-      // heavily, ties broken toward the anchor. Guarantees the best available
-      // position (and a truly clear one whenever it exists), so a label is
-      // never hidden behind a shape.
+      // Labels last, on top. A label may sit ANYWHERE along the edge it names,
+      // so the search is 2-D: candidate anchors sampled along the path itself,
+      // each swept through a small vertical range. Score = box overlap (worst),
+      // then label-on-label, then drift from the edge's midpoint. Searching
+      // only vertically at a fixed midpoint x — the old behaviour — left
+      // crowded edges with nowhere to go, and burying one label under another
+      // was nearly free, so the placer picked it. Both are priced in now.
       const placed = [];
       const olArea = (a, b, pad) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) + pad) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) + pad);
-      labelJobs.forEach(job => {
-        const w = job.e.label.length * 5.3 + 6, hh = 6.5;
-        let fy = job.cy, bestScore = Infinity;
-        // search a TIGHT window so a label stays pinned to the edge it names —
-        // it may nudge aside to clear a box, but never drift off into space
-        for (let off = -30; off <= 30; off += 5) {
-          const y = job.cy + off;
-          if (y < 8 || y > layout.height - 6) continue;
-          const box = { x0: job.cx - w / 2, y0: y - hh, x1: job.cx + w / 2, y1: y + hh };
-          let score = Math.abs(off) * 0.14;                          // firm pull toward the edge
-          nodeRects.forEach(r => { score += olArea(box, r, 2) * 4; });  // hiding behind a box is worst
-          placed.forEach(r => { score += olArea(box, r, 1); });
-          if (score < bestScore) { bestScore = score; fy = y; }
+
+      // anchors along the edge: same-lane labels ride the band's clear upper
+      // strip, so they slide horizontally between the two nodes; every other
+      // label samples the real path geometry
+      function anchorsFor(job) {
+        const out = [];
+        const ts = [0.5, 0.38, 0.62, 0.28, 0.72];
+        if (job.sameLane) {
+          ts.forEach(t => out.push({ x: job.x0 + (job.x1 - job.x0) * t, y: job.cy, t }));
+          return out;
         }
-        placed.push({ x0: job.cx - w / 2, y0: fy - hh, x1: job.cx + w / 2, y1: fy + hh });
-        const t = el("text", { x: job.cx, y: fy + 3, "text-anchor": "middle", class: "dg-elabel", "data-id": job.e.id }, labelsG);
+        let len = 0;
+        try { len = job.path.getTotalLength(); } catch (_) { len = 0; }
+        if (!len) return [{ x: job.cx, y: job.cy, t: 0.5 }];
+        ts.forEach(t => {
+          try { const pt = job.path.getPointAtLength(len * t); out.push({ x: pt.x, y: pt.y, t }); }
+          catch (_) { /* degenerate path — the midpoint anchor below still applies */ }
+        });
+        return out.length ? out : [{ x: job.cx, y: job.cy, t: 0.5 }];
+      }
+
+      function place(job, text, anchors) {
+        const w = text.length * 5.3 + 6, hh = 6.5;
+        let best = { x: job.cx, y: job.cy, score: Infinity };
+        anchors.forEach(a => {
+          for (let off = -26; off <= 26; off += 4) {
+            const y = a.y + off;
+            if (y < 8 || y > layout.height - 6) continue;
+            const box = { x0: a.x - w / 2, y0: y - hh, x1: a.x + w / 2, y1: y + hh };
+            let score = Math.abs(off) * 0.14 + Math.abs(a.t - 0.5) * 22;   // stay near the edge, and near its middle
+            nodeRects.forEach(r => { score += olArea(box, r, 2) * 4; });   // hiding behind a box is worst
+            placed.forEach(r => { score += olArea(box, r, 1) * 3; });      // burying a sibling label is nearly as bad
+            if (score < best.score) best = { x: a.x, y, score };
+          }
+        });
+        return { ...best, w, hh };
+      }
+
+      labelJobs.forEach(job => {
+        const full = job.e.label;
+        const anchors = anchorsFor(job);
+        let text = full, fit = place(job, full, anchors);
+        // Nothing clear anywhere: a shorter label collides with less, so retry
+        // truncated rather than draw an unreadable full-length one. The whole
+        // string stays reachable in the tooltip.
+        if (fit.score > 240 && full.length > 10) {
+          const short = full.slice(0, Math.max(8, Math.round(full.length * 0.6))).trim() + "…";
+          const alt = place(job, short, anchors);
+          if (alt.score < fit.score) { text = short; fit = alt; }
+        }
+        placed.push({ x0: fit.x - fit.w / 2, y0: fit.y - fit.hh, x1: fit.x + fit.w / 2, y1: fit.y + fit.hh });
+        const t = el("text", { x: fit.x, y: fit.y + 3, "text-anchor": "middle", class: "dg-elabel", "data-id": job.e.id }, labelsG);
         t.style.fill = job.color;
-        txt(t, job.e.label);
+        // the untruncated text hangs off the EDGE, not the <text> — a <title>
+        // child inside an SVG <text> renders as part of the string
+        if (text !== full) txt(el("title", {}, job.g), full);
+        txt(t, text);
       });
 
       // aesthetic 7: proposal edges sketch themselves — a blueprint being drawn —
