@@ -259,7 +259,7 @@ var Diagram = (() => {
     const laneLabelById = {};
     layout.lanes.forEach(l => { laneLabelById[l.id] = l.label; });
     let shownIds = new Set();
-    let lastState = null, lastHl = new Set();         // the sim reads the shown state
+    let lastState = null, lastPos = {}, lastHl = new Set();   // the sim reads the shown state
     let traced = null, freshTimer = null, raceOn = false, onDrillCb = null;
 
     /* trace: tap a node to light it + every edge touching it and dim the
@@ -513,6 +513,7 @@ var Diagram = (() => {
       }
       shownIds = new Set([...st.nodes.keys(), ...st.edges.keys()]);
       lastState = st;
+      lastPos = pos;            // the sim draws store fill meters at node positions
       lastHl = hl;
       if (raceOn) raceSpotlight(true);   // re-ring contention points on the new state
     }
@@ -681,6 +682,7 @@ var Diagram = (() => {
       let running = false, load = false, mode = "free", raf = null, last = 0, spawnAcc = 0;
       let tokens = [], onStopCb = null, onCrashCb = null, replayCrashed = 0;
       let onStatsCb = null, crashed = 0, delivered = 0, deliveredTimes = [], faulted = new Set();
+      let fills = {}, fillBars = {}, readAcc = {};    // per-store level, its meter, and its read timer
       const SPAWN_MS = () => (load ? 240 : 1050);
       const SPEED = () => (load ? 125 : 85);          // px/s along the path
       function emitStats(now) {
@@ -753,6 +755,56 @@ var Diagram = (() => {
         const edges = src && graph.out[src];
         if (!edges || !edges.length) return;
         makeToken(edges[Math.floor(Math.random() * edges.length)]);
+        // an ACTOR doesn't arrive on a metronome — people cluster. A burst now
+        // and a gap after is what makes a queue form at all; smooth arrivals
+        // at the same average rate would never back anything up.
+        if (kindOf(src) === "actor" && Math.random() < 0.34) {
+          const extra = 1 + Math.floor(Math.random() * 2);
+          for (let i = 0; i < extra; i++) {
+            const t = makeToken(edges[Math.floor(Math.random() * edges.length)]);
+            if (t) t.delay = 0.05 + i * 0.06;
+          }
+        }
+      }
+
+      /* ── How load moves depends on WHAT it moves through. Every token used to
+         behave identically no matter what it passed through, which made the
+         four kinds decorative. Each now has its own physics:
+           actor    emits — bursty arrivals (above)
+           store    retains — absorbs writes into a level, serves reads back out
+           process  transforms — costs time; the token dwells before departing
+           channel  conveys — has capacity; it bunches sooner than anything else
+         ── */
+      function kindOf(id) {
+        const n = lastState && lastState.nodes.get(id);
+        return n ? n.kind : "process";
+      }
+      const STORE_CAP = 8;
+      function dwellFor(kind) {
+        if (kind === "process") return 0.2 + Math.random() * 0.26;   // work takes time
+        if (kind === "channel") return 0.05;                          // transit only
+        return 0;
+      }
+      /* A store's fill meter: writes raise it, reads drain it. Drawn in the sim
+         layer (nodes are rebuilt on every layer change; tokens are not). */
+      function drawFill(id, level) {
+        let bar = fillBars[id];
+        const p = lastPos[id];
+        if (!p) return;
+        if (!bar) {
+          bar = el("g", { class: "dg-meter" }, simG);
+          el("rect", { x: -24, y: 11, width: 48, height: 3.6, rx: 1.8, class: "dg-meter-track" }, bar);
+          const lvl = el("rect", { x: -24, y: 11, width: 0, height: 3.6, rx: 1.8, class: "dg-meter-level" }, bar);
+          bar.__lvl = lvl;
+          fillBars[id] = bar;
+        }
+        bar.setAttribute("transform", `translate(${p.x} ${p.y})`);
+        bar.__lvl.setAttribute("width", (48 * Math.min(1, level / STORE_CAP)).toFixed(1));
+        bar.classList.toggle("dg-meter-full", level >= STORE_CAP);
+      }
+      function clearFills() {
+        Object.values(fillBars).forEach(b => b.remove());
+        fillBars = {}; fills = {}; readAcc = {};
       }
       function splatter(x, y, color) {
         for (let i = 0; i < 6; i++) {
@@ -800,9 +852,24 @@ var Diagram = (() => {
           advance(tok, e);
           return;
         }
+        // A STORE doesn't pass work along — it keeps it. The write lands, the
+        // level rises, and the token's journey ends there; what leaves a store
+        // is a READ, emitted separately below. This is the whole difference
+        // between a store and a process, and it used to be invisible.
+        if (kindOf(tok.e.to) === "store") {
+          const id = tok.e.to;
+          // a full store cannot take the write — it's dropped, and dropping it
+          // silently would be the one thing a diagram of this must not do
+          if ((fills[id] || 0) >= STORE_CAP) { kill(tok, "dg-token-crash", 400); return; }
+          fills[id] = (fills[id] || 0) + 1;
+          kill(tok, "dg-token-exit", 300);
+          return;
+        }
         const next = graph.out[tok.e.to];
         if (!next || !next.length) { kill(tok, "dg-token-exit", 300); return; }   // journey complete
-        advance(tok, next[Math.floor(Math.random() * next.length)]);
+        const e = next[Math.floor(Math.random() * next.length)];
+        advance(tok, e);
+        tok.wait = dwellFor(kindOf(e.from));      // a process costs time before it lets go
       }
       function frame(now) {
         if (!running) return;
@@ -856,6 +923,27 @@ var Diagram = (() => {
           const g = nodesG.querySelector(`[data-id="${CSS.escape(id)}"]`);
           if (g) g.classList.add("dg-saturated");
         });
+
+        /* ── Stores serve reads. A store that holds something emits it onward
+           on its own cadence, draining the level it built up — so a store
+           visibly buffers between a fast writer and a slow reader instead of
+           being a pass-through box. Nothing held, nothing served. ── */
+        if (mode === "free") Object.keys(fills).forEach(id => {
+          if (fills[id] <= 0 || faulted.has(id) || lastHl.has(id)) return;
+          readAcc[id] = (readAcc[id] || 0) + dt * 1000;
+          // a fuller store serves faster — without that the level only ever
+          // climbs, pegs, and stops telling you anything
+          const every = (load ? 850 : 1800) / (1 + fills[id] * 0.25);
+          if (readAcc[id] < every) return;
+          readAcc[id] -= every;
+          const outs = (graph.out[id] || []).filter(e => lastState.nodes.has(e.to));
+          // a store with somewhere to send serves a READ onward; one with
+          // nowhere to send still drains, off-diagram. Either way the level
+          // has to fall, or a terminal store just pegs red and says nothing.
+          if (outs.length && !makeToken(outs[Math.floor(Math.random() * outs.length)])) return;
+          fills[id]--;
+        });
+        Object.keys(fills).forEach(id => drawFill(id, fills[id]));
         tokens.forEach(tok => {
           if (tok.dead) return;
           if (tok.delay > 0) { tok.delay -= dt; tok.el.style.opacity = 0; return; }
@@ -873,8 +961,10 @@ var Diagram = (() => {
           if (tok.wait > 0) { tok.wait -= dt; return; }
           const crowd = perEdge[tok.e.id] || 1;
           // congestion = local resistance; backpressure = resistance inherited
-          // from a saturated node further down the path
-          const resist = (crowd >= 3 ? 0.4 : 1) * (bpEdges.has(tok.e.id) ? 0.55 : 1);
+          // from a saturated node further down the path. A CHANNEL has finite
+          // capacity, so it bunches a token sooner than anything else does.
+          const cap = kindOf(tok.e.from) === "channel" ? 2 : 3;
+          const resist = (crowd >= cap ? 0.4 : 1) * (bpEdges.has(tok.e.id) ? 0.55 : 1);
           tok.t += (SPEED() * resist * dt) / tok.len;
           if (lastHl.has(tok.e.id) && tok.t > 0.55) { kill(tok, "dg-token-crash", 400); return; }
           if (tok.t >= 1) { hop(tok, graph); if (tok.dead) return; }
@@ -919,6 +1009,7 @@ var Diagram = (() => {
         edgesG.querySelectorAll(".dg-congested").forEach(p => p.classList.remove("dg-congested"));
         edgesG.querySelectorAll(".dg-backpressure").forEach(p => p.classList.remove("dg-backpressure"));
         nodesG.querySelectorAll(".dg-saturated").forEach(g => g.classList.remove("dg-saturated"));
+        clearFills();
         if (was && onStopCb) onStopCb();
       }
       /* scripted incident: two tokens run the payload chain into the highlighted

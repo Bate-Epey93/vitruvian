@@ -4,6 +4,14 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [1.29.0] — 2026-07-25 · Each kind moves load its own way
+### Added
+- **Per-kind flow physics.** Every token used to behave identically no matter what it passed through, which made the four kinds decorative. Now each one moves load its own way:
+  - **actor** *emits* — arrivals come in bursts, not on a metronome. Smooth arrivals at the same average rate would never form a queue.
+  - **store** *retains* — a write lands and ends there, raising a fill meter on the box; what leaves a store is a read, served back out on its own cadence. A store now visibly buffers between a fast writer and a slow reader. A full store drops the write, and drops it visibly.
+  - **process** *transforms* — costs time. The token dwells at the node before departing.
+  - **channel** *conveys* — has capacity, so it bunches a token sooner than anything else does.
+
 ## [1.28.0] — 2026-07-25 · Payloads that carry their origin, and jams that travel
 ### Added
 - **A payload takes the shape of what emitted it.** Colour still says *where* a token came from (its source's lane); shape now says *what* — circle from an actor, square from a store, diamond from a process, capsule from a channel, mirroring the node glyphs. Colour was already carrying the lane legend, so tinting tokens by kind would have put two colour languages in one frame; shape was free. Only the arrowhead rotates to the path now, so a square never reads as a diamond.

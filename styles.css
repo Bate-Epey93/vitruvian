@@ -1114,6 +1114,11 @@ html,body{overscroll-behavior:none;}
 @keyframes dg-bp{to{stroke-dashoffset:-21.2;}}
 .dg-saturated .dg-shape,.dg-saturated .dg-open{stroke:var(--money)!important;stroke-width:3!important;}
 .dg-saturated{filter:drop-shadow(0 0 4px color-mix(in srgb, var(--money) 55%, transparent));}
+/* store fill meter: writes raise the level, reads drain it — a store buffering
+   between a fast writer and a slow reader, which a pass-through box can't show */
+.dg-meter-track{fill:color-mix(in srgb, var(--diagram-ink) 14%, transparent);}
+.dg-meter-level{fill:var(--accent);transition:width .18s linear;}
+.dg-meter-full .dg-meter-level{fill:var(--failure);}
 /* ink streak behind each token */
 .dg-trail{stroke-width:2.6;stroke-linecap:round;opacity:.3;}
 /* crash burst: six droplets fly out and dry */
