@@ -1093,16 +1093,27 @@ html,body{overscroll-behavior:none;}
 .dg-token{will-change:transform;}
 .dg-token-body{stroke:var(--diagram-halo);stroke-width:1;}
 .dg-token-arrow{stroke:var(--diagram-halo);stroke-width:.5;stroke-linejoin:round;}
-/* crash/exit burst animates the inner dot's radius (the group keeps its
-   translate+rotate); the arrowhead just fades so only the dot bursts */
+/* crash/exit burst scales the body about its own centre (the group keeps its
+   translate; only .dg-token-rot rotates); the arrowhead just fades so only
+   the body bursts. Scale, not r — the body is a circle, square, diamond or
+   capsule depending on the kind that emitted it, and r moves none of those. */
+.dg-token-body{transform-box:fill-box;transform-origin:center;}
 .dg-token-crash .dg-token-body{fill:var(--failure)!important;animation:tok-crash .4s ease-out forwards;}
 .dg-token-crash .dg-token-arrow{opacity:0;}
-@keyframes tok-crash{0%{r:3.2;opacity:1;}100%{r:12;opacity:0;}}
+@keyframes tok-crash{0%{scale:1;opacity:1;}100%{scale:3.75;opacity:0;}}
 .dg-token-exit .dg-token-body{animation:tok-exit .3s ease-out forwards;}
 .dg-token-exit .dg-token-arrow{opacity:0;}
-@keyframes tok-exit{to{r:1;opacity:0;}}
+@keyframes tok-exit{to{scale:.32;opacity:0;}}
 .dg-congested{stroke:var(--money)!important;stroke-width:3.2!important;
   filter:drop-shadow(0 0 3px color-mix(in srgb, var(--money) 65%, transparent));}
+/* backpressure: a saturated node pushes resistance UPSTREAM. Congestion is
+   one edge going amber; backpressure is the red marching jam creeping back
+   toward the source, two hops at a time. */
+.dg-backpressure{stroke:var(--failure)!important;stroke-width:2.9!important;opacity:.92;
+  stroke-dasharray:7 3.6;animation:dg-bp 1.05s linear infinite;}
+@keyframes dg-bp{to{stroke-dashoffset:-21.2;}}
+.dg-saturated .dg-shape,.dg-saturated .dg-open{stroke:var(--money)!important;stroke-width:3!important;}
+.dg-saturated{filter:drop-shadow(0 0 4px color-mix(in srgb, var(--money) 55%, transparent));}
 /* ink streak behind each token */
 .dg-trail{stroke-width:2.6;stroke-linecap:round;opacity:.3;}
 /* crash burst: six droplets fly out and dry */
@@ -1506,5 +1517,6 @@ html,body{overscroll-behavior:none;}
   .splash-seal{animation:none;opacity:1;transform:scale(1) rotate(2deg);}
   .splash-name{animation:none;opacity:1;letter-spacing:.02em;}
   .splash-sub{animation:none;opacity:.9;}
-  .dg-stress,.dg-ghost,.dg-ghost .dg-epath,.vf-stamp-in,.dg-absorb .dg-shape{animation:none;}
+  .dg-stress,.dg-ghost,.dg-ghost .dg-epath,.vf-stamp-in,.dg-absorb .dg-shape,
+  .dg-backpressure{animation:none;}
 }

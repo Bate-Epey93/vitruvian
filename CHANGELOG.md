@@ -4,6 +4,12 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [1.28.0] — 2026-07-25 · Payloads that carry their origin, and jams that travel
+### Added
+- **A payload takes the shape of what emitted it.** Colour still says *where* a token came from (its source's lane); shape now says *what* — circle from an actor, square from a store, diamond from a process, capsule from a channel, mirroring the node glyphs. Colour was already carrying the lane legend, so tinting tokens by kind would have put two colour languages in one frame; shape was free. Only the arrowhead rotates to the path now, so a square never reads as a diamond.
+- **Backpressure.** Congestion was local: one edge, one colour. A node taking on more than it can clear now pushes resistance *backward* — the edges feeding it stiffen into a red marching jam and their tokens slow, two hops upstream. Killing a node backs up everything behind it the same way. This is why one slow component browns out everything upstream of it, and it was previously invisible.
+- Legend gains a backpressure key and a note that payloads carry their source's shape.
+
 ## [1.27.0] — 2026-07-25 · Labels that stop hiding, and hover to isolate
 ### Fixed
 - **Edge labels no longer bury each other.** The placer only searched vertically at a fixed midpoint, so two edges meeting near the same point had nowhere to go — and burying one label under another was priced at a quarter of what hiding behind a node cost, so the placer often chose it. Labels now search in two dimensions, sampling candidate positions along the edge they name, and a collision with a sibling label costs nearly as much as a collision with a box. Where no clear slot exists at all, the label truncates and keeps its full text on hover rather than drawing something unreadable.

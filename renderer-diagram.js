@@ -717,21 +717,34 @@ var Diagram = (() => {
       function pathFor(edgeId) {
         return edgesG.querySelector(`[data-id="${CSS.escape(edgeId)}"] .dg-epath`);
       }
+      /* Token body by source kind — the same four glyphs the nodes wear, so
+         the shape in flight matches the shape it left. All drawn upright and
+         axis-aligned so square and diamond stay distinguishable. */
+      function tokenBody(kind) {
+        if (kind === "store")   return el("rect", { x: -3.1, y: -3.1, width: 6.2, height: 6.2, rx: 1, class: "dg-token-body" });
+        if (kind === "process") return el("path", { d: "M 0 -4 L 4 0 L 0 4 L -4 0 Z", class: "dg-token-body" });
+        if (kind === "channel") return el("rect", { x: -4.6, y: -2.1, width: 9.2, height: 4.2, rx: 2.1, class: "dg-token-body" });
+        return el("circle", { r: 3.2, class: "dg-token-body" });    // actor
+      }
       function makeToken(e) {
         const p = pathFor(e.id);
         const from = lastState.nodes.get(e.from);
         if (!p || !from) return null;
         const color = laneColor(from.lane);
-        // token = a payload dot + a small arrowhead that points where it's going
-        // (extra directional cue). A <g> so it can rotate to the path tangent;
-        // the crash/exit burst animates the inner dot's radius, not the group.
-        const g = el("g", { class: "dg-token" }, simG);
+        // token = a payload body + a small arrowhead pointing where it's going.
+        // COLOUR still says WHERE it came from (the source's lane); SHAPE now
+        // says WHAT it came from, mirroring the node glyphs — so a token in
+        // flight re-teaches the kind legend. Only the arrow rotates to the
+        // tangent; the body stays upright, or a rotating square would read as
+        // a diamond and the two kinds would collapse into each other.
+        const g = el("g", { class: "dg-token dg-tok-" + from.kind }, simG);
         g.style.fill = color;
-        el("circle", { r: 3.2, class: "dg-token-body" }, g);
-        el("path", { d: "M 2 -2.4 L 6.8 0 L 2 2.4 Z", class: "dg-token-arrow" }, g);
+        const rot = el("g", { class: "dg-token-rot" }, g);
+        el("path", { d: "M 2 -2.4 L 6.8 0 L 2 2.4 Z", class: "dg-token-arrow" }, rot);
+        g.appendChild(tokenBody(from.kind));
         const trail = el("line", { class: "dg-trail" }, simG);
         trail.style.stroke = color;
-        const tok = { e, p, len: Math.max(1, p.getTotalLength()), t: 0, el: g, trail, prev: null, ang: 0 };
+        const tok = { e, p, len: Math.max(1, p.getTotalLength()), t: 0, el: g, rotEl: rot, trail, prev: null, ang: 0 };
         tokens.push(tok);
         return tok;
       }
@@ -810,6 +823,39 @@ var Diagram = (() => {
         Object.entries(perEdge).forEach(([id, n]) => {
           if (n >= 3) { const p = pathFor(id); if (p) p.classList.add("dg-congested"); }
         });
+
+        /* ── Backpressure. Congestion above is LOCAL: one edge, one colour.
+           Real queues don't stay local. A node taking more than it can clear
+           pushes resistance BACKWARD, so the edges feeding it stiffen, their
+           tokens slow, and the jam creeps toward the source — which is why a
+           single slow component browns out everything upstream of it. Two
+           hops back, so the propagation reads without painting the diagram. ── */
+        const inbound = {};
+        tokens.forEach(t => { if (!t.dead) inbound[t.e.to] = (inbound[t.e.to] || 0) + 1; });
+        const SAT = load ? 4 : 3;
+        const saturated = new Set(Object.keys(inbound).filter(id => inbound[id] >= SAT));
+        faulted.forEach(id => saturated.add(id));      // a killed node backs up everything behind it
+        const inEdges = {};
+        if (lastState) lastState.edges.forEach(e => {
+          if (e.kind === "payload" && e.from !== e.to) (inEdges[e.to] = inEdges[e.to] || []).push(e);
+        });
+        const bpEdges = new Set();
+        let wave = [...saturated], seenBp = new Set(saturated);
+        for (let depth = 0; depth < 2 && wave.length; depth++) {
+          const next = [];
+          wave.forEach(id => (inEdges[id] || []).forEach(e => {
+            bpEdges.add(e.id);
+            if (!seenBp.has(e.from)) { seenBp.add(e.from); next.push(e.from); }
+          }));
+          wave = next;
+        }
+        edgesG.querySelectorAll(".dg-backpressure").forEach(p => p.classList.remove("dg-backpressure"));
+        bpEdges.forEach(id => { const p = pathFor(id); if (p) p.classList.add("dg-backpressure"); });
+        nodesG.querySelectorAll(".dg-saturated").forEach(g => g.classList.remove("dg-saturated"));
+        saturated.forEach(id => {
+          const g = nodesG.querySelector(`[data-id="${CSS.escape(id)}"]`);
+          if (g) g.classList.add("dg-saturated");
+        });
         tokens.forEach(tok => {
           if (tok.dead) return;
           if (tok.delay > 0) { tok.delay -= dt; tok.el.style.opacity = 0; return; }
@@ -826,7 +872,10 @@ var Diagram = (() => {
           }
           if (tok.wait > 0) { tok.wait -= dt; return; }
           const crowd = perEdge[tok.e.id] || 1;
-          tok.t += (SPEED() * (crowd >= 3 ? 0.4 : 1) * dt) / tok.len;   // congestion = continuous resistance
+          // congestion = local resistance; backpressure = resistance inherited
+          // from a saturated node further down the path
+          const resist = (crowd >= 3 ? 0.4 : 1) * (bpEdges.has(tok.e.id) ? 0.55 : 1);
+          tok.t += (SPEED() * resist * dt) / tok.len;
           if (lastHl.has(tok.e.id) && tok.t > 0.55) { kill(tok, "dg-token-crash", 400); return; }
           if (tok.t >= 1) { hop(tok, graph); if (tok.dead) return; }
           let pt;
@@ -839,7 +888,8 @@ var Diagram = (() => {
             const ah = tok.p.getPointAtLength(Math.min(tok.len, at + 4));
             if (Math.hypot(ah.x - pt.x, ah.y - pt.y) > 0.5) tok.ang = Math.atan2(ah.y - pt.y, ah.x - pt.x) * 180 / Math.PI;
           } catch (err) { /* keep last angle */ }
-          tok.el.setAttribute("transform", `translate(${pt.x} ${pt.y}) rotate(${tok.ang})`);
+          tok.el.setAttribute("transform", `translate(${pt.x} ${pt.y})`);
+          tok.rotEl.setAttribute("transform", `rotate(${tok.ang})`);
           if (tok.trail) {
             // draw the ink streak only between two CLOSE consecutive points;
             // on a hop/teleport (or first frame) hide the whole line, else a
@@ -867,6 +917,8 @@ var Diagram = (() => {
         faulted.forEach(id => faultNode(id, false));
         faulted.clear();
         edgesG.querySelectorAll(".dg-congested").forEach(p => p.classList.remove("dg-congested"));
+        edgesG.querySelectorAll(".dg-backpressure").forEach(p => p.classList.remove("dg-backpressure"));
+        nodesG.querySelectorAll(".dg-saturated").forEach(g => g.classList.remove("dg-saturated"));
         if (was && onStopCb) onStopCb();
       }
       /* scripted incident: two tokens run the payload chain into the highlighted
@@ -968,9 +1020,11 @@ var Diagram = (() => {
     item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line", "stroke-dasharray": "1.5 3" }, s), "money");
     // failure pulse
     item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line dgl-broken", "stroke-width": 2 }, s), "breaks next");
+    // under Pulse: a jam creeping back upstream from a node that can't keep up
+    item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line dgl-broken", "stroke-width": 2, "stroke-dasharray": "5 2.6" }, s), "backpressure");
     const note = document.createElement("span");
     note.className = "dgl-note";
-    note.textContent = "colour = lane";
+    note.textContent = "colour = lane · payload takes its source's shape";
     wrap.appendChild(note);
     return wrap;
   }
