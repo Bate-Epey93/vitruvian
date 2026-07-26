@@ -520,6 +520,9 @@ a{color:var(--accent);}
 .dg-ekind-control .dg-epath{stroke-dasharray:5 4;}
 .dg-ekind-money .dg-epath{stroke-dasharray:1.5 3.5;}
 .dg-elabel{font-size:9px;letter-spacing:.3px;paint-order:stroke;stroke:var(--diagram-halo);stroke-width:3.5px;stroke-linejoin:round;}
+/* leader: a hairline tying a label parked in clear paper back to the edge it
+   names. Faint on purpose — it's a tether, not a line in the diagram. */
+.dg-leader{stroke-width:.7;opacity:.4;stroke-dasharray:2 2;}
 /* failure pulse must beat the inline layer color */
 .dg-broken .dg-shape,.dg-broken .dg-open{stroke:var(--failure)!important;animation:dg-pulse 1.1s ease-in-out infinite;}
 .dg-broken .dg-epath{stroke:var(--failure)!important;animation:dg-pulse 1.1s ease-in-out infinite;}

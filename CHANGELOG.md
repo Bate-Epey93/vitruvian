@@ -4,6 +4,12 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [1.31.0] — 2026-07-26 · Leader lines: no label left in the scrum
+### Changed
+- **A label with nowhere to sit now moves out to clear paper and runs a hairline back to the edge it names.** Before, a crowded label had two options: overlap something, or truncate. It has a third now, and it's the better one — a whole label parked in the margin beats a shortened one in the middle of the traffic.
+- Truncation is still there as the last resort, but it no longer fires anywhere in the library. **Every edge label in every sample now renders in full.**
+- Measured across the same 19 systems, 130 layer states and 1282 labels as the previous two passes: labels buried under another label **6 → 0**, labels behind a node box **12 → 3**, truncated labels **15 → 0**, affected layer states **12 → 3**. 32 labels use a leader. Against the original baseline three versions ago, that is 51 → 0 and 28 → 3.
+
 ## [1.30.0] — 2026-07-26 · The spine, and what would take it out
 ### Added
 - **⌁ spine — the critical path.** One tap traces the heaviest chain of payload edges from an entry to a delivery: what a request actually waits on. Everything off it dims, because shortening anything off the spine changes nothing. Structural, so it reads standing still, on any layer, and it survives the PNG export.

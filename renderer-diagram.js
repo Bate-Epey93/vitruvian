@@ -443,36 +443,56 @@ var Diagram = (() => {
         return out.length ? out : [{ x: job.cx, y: job.cy, t: 0.5 }];
       }
 
-      function place(job, text, anchors) {
+      // span/drift are how far the label may roam and how hard it's pulled
+      // back. The tight pass keeps a label sitting on its edge; the wide pass
+      // is the last resort that goes looking for genuinely empty paper.
+      function place(job, text, anchors, span, step, drift) {
         const w = text.length * 5.3 + 6, hh = 6.5;
-        let best = { x: job.cx, y: job.cy, score: Infinity };
+        let best = { x: job.cx, y: job.cy, ax: job.cx, ay: job.cy, score: Infinity };
         anchors.forEach(a => {
-          for (let off = -26; off <= 26; off += 4) {
+          for (let off = -span; off <= span; off += step) {
             const y = a.y + off;
             if (y < 8 || y > layout.height - 6) continue;
             const box = { x0: a.x - w / 2, y0: y - hh, x1: a.x + w / 2, y1: y + hh };
-            let score = Math.abs(off) * 0.14 + Math.abs(a.t - 0.5) * 22;   // stay near the edge, and near its middle
-            nodeRects.forEach(r => { score += olArea(box, r, 2) * 4; });   // hiding behind a box is worst
-            placed.forEach(r => { score += olArea(box, r, 1) * 3; });      // burying a sibling label is nearly as bad
-            if (score < best.score) best = { x: a.x, y, score };
+            let score = Math.abs(off) * drift + Math.abs(a.t - 0.5) * 22;   // stay near the edge, and near its middle
+            nodeRects.forEach(r => { score += olArea(box, r, 2) * 4; });    // hiding behind a box is worst
+            placed.forEach(r => { score += olArea(box, r, 1) * 3; });       // burying a sibling label is nearly as bad
+            if (score < best.score) best = { x: a.x, y, ax: a.x, ay: a.y, score };
           }
         });
         return { ...best, w, hh };
       }
+      const CLEAR = 12;      // below this, nothing meaningful is being overlapped
 
       labelJobs.forEach(job => {
         const full = job.e.label;
         const anchors = anchorsFor(job);
-        let text = full, fit = place(job, full, anchors);
-        // Nothing clear anywhere: a shorter label collides with less, so retry
-        // truncated rather than draw an unreadable full-length one. The whole
-        // string stays reachable in the tooltip.
-        if (fit.score > 240 && full.length > 10) {
-          const short = full.slice(0, Math.max(8, Math.round(full.length * 0.6))).trim() + "…";
-          const alt = place(job, short, anchors);
-          if (alt.score < fit.score) { text = short; fit = alt; }
+        let text = full, lead = false;
+        let fit = place(job, full, anchors, 26, 4, 0.14);
+        if (fit.score > CLEAR) {
+          // Nothing clear beside the edge. Before shortening the label, look
+          // further out for empty paper and run a leader back to it — a whole
+          // label parked in the margin beats a truncated one in the scrum.
+          const far = place(job, full, anchors, 78, 6, 0.045);
+          if (far.score <= CLEAR) { fit = far; lead = true; }
+          else if (full.length > 10) {
+            // still nowhere: a shorter label collides with less. Try it both
+            // beside the edge and out in the margin, take whichever wins. The
+            // whole string stays reachable from the edge's tooltip.
+            const short = full.slice(0, Math.max(8, Math.round(full.length * 0.6))).trim() + "…";
+            const near = place(job, short, anchors, 26, 4, 0.14);
+            const away = place(job, short, anchors, 78, 6, 0.045);
+            const alt = away.score < near.score ? away : near;
+            if (alt.score < fit.score) { text = short; fit = alt; lead = alt === away; }
+          }
         }
         placed.push({ x0: fit.x - fit.w / 2, y0: fit.y - fit.hh, x1: fit.x + fit.w / 2, y1: fit.y + fit.hh });
+        // the leader only earns its ink once the label has actually travelled
+        if (lead && Math.abs(fit.y - fit.ay) > 20) {
+          const y0 = fit.ay > fit.y ? fit.y + fit.hh + 1 : fit.y - fit.hh - 1;
+          const ln = el("line", { x1: fit.x, y1: y0, x2: fit.ax, y2: fit.ay, class: "dg-leader" }, labelsG);
+          ln.style.stroke = job.color;
+        }
         const t = el("text", { x: fit.x, y: fit.y + 3, "text-anchor": "middle", class: "dg-elabel", "data-id": job.e.id }, labelsG);
         t.style.fill = job.color;
         // the untruncated text hangs off the EDGE, not the <text> — a <title>
