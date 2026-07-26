@@ -4,6 +4,13 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [1.30.0] — 2026-07-26 · The spine, and what would take it out
+### Added
+- **⌁ spine — the critical path.** One tap traces the heaviest chain of payload edges from an entry to a delivery: what a request actually waits on. Everything off it dims, because shortening anything off the spine changes nothing. Structural, so it reads standing still, on any layer, and it survives the PNG export.
+- **Single points of failure.** Nodes whose removal leaves no entry able to reach any delivery get a red ring. Slow and fatal are different facts, so they get different marks. Pure reachability, tested by removal rather than approximated — the railway's chokepoint is the shared track, which is the whole story of that system in one ring.
+- **What the layers cost.** The toast reports the spine against layer 0: YouTube's request path ends up 2.9× the cost it started at, recommendation feed 3.2×. Every layer added to survive a failure also added something the request has to wait for, and until now nothing in the app said so out loud.
+- Weights come from the same per-kind costs the Pulse simulation uses, so the spine explains the animation rather than contradicting it. They are modelled, not measured, so the readout stays unitless — printing milliseconds nobody measured would be the one dishonest thing this could do.
+
 ## [1.29.0] — 2026-07-25 · Each kind moves load its own way
 ### Added
 - **Per-kind flow physics.** Every token used to behave identically no matter what it passed through, which made the four kinds decorative. Now each one moves load its own way:

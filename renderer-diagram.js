@@ -260,7 +260,7 @@ var Diagram = (() => {
     layout.lanes.forEach(l => { laneLabelById[l.id] = l.label; });
     let shownIds = new Set();
     let lastState = null, lastPos = {}, lastHl = new Set();   // the sim reads the shown state
-    let traced = null, freshTimer = null, raceOn = false, onDrillCb = null;
+    let traced = null, freshTimer = null, raceOn = false, spineOn = false, onDrillCb = null;
 
     /* trace: tap a node to light it + every edge touching it and dim the
        rest — follow one part's responsibilities. Tap again to clear. */
@@ -516,6 +516,7 @@ var Diagram = (() => {
       lastPos = pos;            // the sim draws store fill meters at node positions
       lastHl = hl;
       if (raceOn) raceSpotlight(true);   // re-ring contention points on the new state
+      if (spineOn) spineSpotlight(true); // and re-trace the spine, which moves layer to layer
     }
 
     /* spotlight: dim everything, then light the given ids (nodes/edges + their
@@ -558,6 +559,152 @@ var Diagram = (() => {
         if (g) g.classList.add("dg-contended");
       });
       return ids.length;
+    }
+
+    /* ══ Critical path. Two questions the diagram can answer standing still.
+       SPINE — the heaviest chain of payload edges from an entry to a terminal:
+       what a request actually waits on. Shortening anything OFF the spine
+       changes nothing, which is the whole point of knowing where it runs.
+       Weights are the same per-kind costs the Pulse simulation uses (a process
+       dwells, a store takes a write and serves a read, a channel only
+       transits), so the spine explains the animation instead of contradicting
+       it — but they are MODELLED, not measured, so the numbers stay unitless.
+       Printing milliseconds we never measured would be the one dishonest thing
+       this feature could do.
+       CHOKEPOINTS — nodes whose removal disconnects every entry from every
+       terminal. What kills the system, as opposed to what slows it. Pure
+       reachability, no weights, and exact: these graphs are small enough to
+       test by removal rather than approximate. ══ */
+    const KIND_COST = { process: 3.3, store: 2.2, channel: 1.2, actor: 0.6 };
+    const costOf = n => KIND_COST[n && n.kind] || 1;
+
+    function payloadAdj(st) {
+      const out = {}, indeg = {}, ids = [];
+      st.nodes.forEach((n, id) => { ids.push(id); out[id] = []; indeg[id] = 0; });
+      const edges = [];
+      st.edges.forEach(e => {
+        if (e.kind !== "payload" || e.from === e.to) return;
+        if (!st.nodes.has(e.from) || !st.nodes.has(e.to)) return;
+        out[e.from].push(e); indeg[e.to]++; edges.push(e);
+      });
+      const emits = id => out[id].length > 0;
+      const isActor = id => (st.nodes.get(id) || {}).kind === "actor";
+      // An entry is anything nothing feeds (indegree 0) OR a person who starts
+      // something. Requiring indegree 0 alone threw away every read path that
+      // loops back to the reader — which is most read paths, and exactly the
+      // one a user waits on.
+      const sources = ids.filter(id => emits(id) && (indeg[id] === 0 || isActor(id)));
+      // A delivery is anything that forwards nothing, OR a person receiving
+      // something: arriving at a human IS the request completing.
+      const sinks = ids.filter(id => indeg[id] > 0 && (!emits(id) || isActor(id)));
+      // a fully cyclic payload graph with no people — fall back to any emitter
+      return { out, edges, ids, sinks, sources: sources.length ? sources : ids.filter(emits) };
+    }
+
+    /* Longest weighted path by bounded relaxation — the same trick the sequence
+       view uses. Feedback cycles make "longest" unbounded, so the round cap
+       stops it deepening instead of looping forever. */
+    function spineOf(st) {
+      const g = payloadAdj(st);
+      if (!g.sources.length) return { edges: [], nodes: [], cost: 0, hops: 0 };
+      const sinkSet = new Set(g.sinks);
+      let win = null;
+      // One relaxation per entry, with that entry PINNED — nothing may relax
+      // back into it. A person is both an entry and a delivery (you ask, you
+      // get served), so without the pin the read loop would keep feeding itself
+      // and the cost would climb with every round instead of converging.
+      g.sources.forEach(src => {
+        const dist = {}, pred = {};
+        g.ids.forEach(id => { dist[id] = -Infinity; });
+        dist[src] = costOf(st.nodes.get(src));
+        for (let round = 0; round < g.ids.length; round++) {
+          let changed = false;
+          g.edges.forEach(e => {
+            if (e.to === src || dist[e.from] === -Infinity) return;
+            const c = dist[e.from] + costOf(st.nodes.get(e.to));
+            if (c > dist[e.to] + 1e-9) { dist[e.to] = c; pred[e.to] = e; changed = true; }
+          });
+          if (!changed) break;
+        }
+        // measure to a DELIVERY, not to whatever happens to be furthest
+        let end = null;
+        g.ids.forEach(id => {
+          if (id === src || dist[id] === -Infinity) return;
+          if (!sinkSet.has(id)) return;
+          if (end === null || dist[id] > dist[end]) end = id;
+        });
+        if (end === null) g.ids.forEach(id => {      // no delivery reachable from here
+          if (id !== src && dist[id] > -Infinity && (end === null || dist[id] > dist[end])) end = id;
+        });
+        if (end === null) return;
+        if (!win || dist[end] > win.cost) win = { cost: dist[end], end, pred };
+      });
+      if (!win) return { edges: [], nodes: [], cost: 0, hops: 0 };
+      const edges = [], nodes = [win.end], seen = new Set([win.end]);
+      let cur = win.end;
+      while (win.pred[cur]) {
+        const e = win.pred[cur];
+        edges.unshift(e.id);
+        if (seen.has(e.from)) break;          // relaxation touched a cycle; stop walking
+        seen.add(e.from); nodes.unshift(e.from);
+        cur = e.from;
+      }
+      // Cost is summed over the path we actually drew, NOT over the relaxation's
+      // dist. Around a feedback loop dist keeps climbing while the pred walk
+      // stops at the first repeat, so the two disagree — and dist is the one
+      // that's wrong. Reporting it would have put a fabricated number on screen.
+      const cost = nodes.reduce((sum, id) => sum + costOf(st.nodes.get(id)), 0);
+      return { edges, nodes, cost, hops: edges.length };
+    }
+
+    /* A node is a chokepoint when taking it out leaves no entry able to reach
+       any terminal at all. Entries and terminals are excluded — "the system
+       stops if you delete the only door" is not an insight. */
+    function chokepointsOf(st) {
+      const g = payloadAdj(st);
+      if (!g.sources.length || !g.sinks.length) return [];
+      const sinkSet = new Set(g.sinks);
+      const anyDelivery = blocked => {
+        const seen = new Set(), queue = g.sources.filter(s => s !== blocked);
+        queue.forEach(s => seen.add(s));
+        while (queue.length) {
+          const id = queue.shift();
+          if (sinkSet.has(id) && id !== blocked) return true;
+          for (const e of g.out[id] || []) {
+            if (e.to === blocked || seen.has(e.to)) continue;
+            seen.add(e.to); queue.push(e.to);
+          }
+        }
+        return false;
+      };
+      if (!anyDelivery(null)) return [];        // nothing gets delivered even intact
+      const skip = new Set([...g.sources, ...g.sinks]);
+      return g.ids.filter(id => !skip.has(id) && !anyDelivery(id));
+    }
+
+    /* The reading that makes this worth a button: how much longer the spine got
+       as the layers piled on. Every layer added to survive failure also added
+       something the request has to wait for. */
+    function spineSpotlight(on) {
+      spineOn = on;
+      svg.querySelectorAll(".dg-choke").forEach(e => e.classList.remove("dg-choke"));
+      if (!on || !lastState) { spotlight(null); return null; }
+      const s = spineOf(lastState);
+      if (!s.hops) { spotlight(null); return { hops: 0, chokes: 0, ratio: 1 }; }
+      const chokes = chokepointsOf(lastState);
+      const onSpine = new Set(s.nodes);
+      spotlight([...s.edges, ...s.nodes], "spine");
+      chokes.forEach(id => {
+        const g = nodesG.querySelector(`[data-id="${CSS.escape(id)}"]`);
+        if (g) g.classList.add("dg-choke");
+      });
+      const base = spineOf(stateAt(doc, 0)).cost;
+      return {
+        hops: s.hops,
+        chokes: chokes.length,
+        onSpine: chokes.filter(id => onSpine.has(id)).length,
+        ratio: base > 0 ? s.cost / base : 1
+      };
     }
 
     /* ── Follow-the-story auto-pan: center the given element ids in the
@@ -1071,7 +1218,7 @@ var Diagram = (() => {
       };
     })();
 
-    return { show, spotlight, focus, layout, laneColor, sim, zoom: zoomCtl, raceSpotlight, contendedIds, stateAt: u => stateAt(doc, u), doc, onDrill(fn) { onDrillCb = fn; } };
+    return { show, spotlight, focus, layout, laneColor, sim, zoom: zoomCtl, raceSpotlight, contendedIds, spineSpotlight, stateAt: u => stateAt(doc, u), doc, onDrill(fn) { onDrillCb = fn; } };
   }
 
   /* ── Legend: a compact always-visible key under the diagram (brings the

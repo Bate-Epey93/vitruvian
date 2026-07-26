@@ -659,10 +659,12 @@ async function openReader(id, layerIndex, opts = {}) {
   const replayBtn = h("button", "gbtn sim-btn", "⟲ replay");
   const raceBtn = h("button", "gbtn sim-btn", "⇉ races");
   raceBtn.title = "Highlight nodes with two or more concurrent writers — where races can happen";
+  const spineBtn = h("button", "gbtn sim-btn", "⌁ spine");
+  spineBtn.title = "Trace the critical path — what a request waits on — and ring the nodes that would take the whole system down";
   const gifBtn = h("button", "gbtn sim-btn", "⚏ gif");
   gifBtn.title = "Record the running Pulse as a looping GIF to share";
   loadBtn.hidden = true;
-  dcap.append(capState, playBtn, loadBtn, replayBtn, raceBtn, gifBtn, capToggle);
+  dcap.append(capState, playBtn, loadBtn, replayBtn, raceBtn, spineBtn, gifBtn, capToggle);
   const scrubEl = h("div", "scrub-wrap");
   const caption = h("div", "dg-caption");
   caption.hidden = true;
@@ -725,6 +727,25 @@ async function openReader(id, layerIndex, opts = {}) {
     const n = diagram.raceSpotlight(raceOn);
     raceBtn.classList.toggle("race-on", raceOn);
     if (raceOn) toast(n ? `${n} contention point${n > 1 ? "s" : ""} — ≥2 concurrent writers` : "No contention at this state — one writer per node");
+  };
+  // critical path: the chain a request waits on, plus the nodes whose loss
+  // takes delivery with them. Structural, so it reads standing still — and the
+  // spine grows layer by layer, which is the price of every fix in the ladder.
+  let spineOn = false;
+  spineBtn.onclick = () => {
+    spineOn = !spineOn;
+    const s = diagram.spineSpotlight(spineOn);
+    spineBtn.classList.toggle("spine-on", spineOn);
+    if (!spineOn) return;
+    if (!s || !s.hops) { toast("No end-to-end path at this state"); return; }
+    const parts = [`Spine: ${s.hops} hop${s.hops > 1 ? "s" : ""}`];
+    // the layer-0 comparison is the point of the button: what surviving cost
+    if (s.ratio > 1.05) parts.push(`${s.ratio.toFixed(1)}× layer 0`);
+    else if (s.ratio < 0.95) parts.push(`shorter than layer 0`);
+    if (!s.chokes) parts.push("no single point of failure");
+    else parts.push(`${s.chokes} single point${s.chokes > 1 ? "s" : ""} of failure` +
+                    (s.onSpine < s.chokes ? ` (${s.onSpine} on the spine)` : ""));
+    toast(parts.join(" · "));
   };
   // scripted incident: two tokens run into the gate's failure, seconds apart.
   // The caption tells the reader what history they just watched.

@@ -1170,6 +1170,15 @@ html,body{overscroll-behavior:none;}
 @keyframes dg-race{0%,100%{opacity:1;}50%{opacity:.5;}}
 .sim-btn.race-on{color:#c77f16;border-color:#c77f16;}
 
+/* ── critical path: the spine a request waits on, drawn as one heavy stroke;
+   chokepoints on it ringed red, because slow and fatal are different facts ── */
+.dg-spot-spine .dg-shape,.dg-spot-spine .dg-open{stroke:var(--accent-deep,#1f5546)!important;stroke-width:3;}
+.dg-spot-spine .dg-epath{stroke:var(--accent-deep,#1f5546)!important;stroke-width:3.4;}
+.dg-elabel.dg-spot-spine{fill:var(--accent-deep,#1f5546)!important;font-weight:700;}
+.dg-choke .dg-shape,.dg-choke .dg-open{stroke:var(--failure)!important;stroke-width:3.4;}
+.dg-choke{filter:drop-shadow(0 0 4px color-mix(in srgb, var(--failure) 45%, transparent));}
+.sim-btn.spine-on{color:var(--accent-deep,#1f5546);border-color:var(--accent-deep,#1f5546);}
+
 /* ── sequence view: derived interaction timeline (behavioural) ── */
 /* Sequence view: a floating liquid-glass card over a dimmed, blurred scrim —
    reads as a distinct panel, not an edge-to-edge sheet. */
