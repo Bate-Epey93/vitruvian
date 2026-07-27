@@ -157,6 +157,122 @@ var Ink3D = (function () {
     return finalize(v, f, opt.wires);
   }
 
+  /* sweep — run a closed 2D profile (flat [x,y,…], CCW) along a 3D path
+     (flat [x,y,z,…]). Everything a lathe and an extruder cannot make lives
+     here: springs, threads, chains, belts, hoses, tapered and twisted blades.
+
+     The section frame is parallel-transported rather than rebuilt from a
+     fixed up-vector, so a path that turns through vertical does not flip
+     the section inside out halfway along. On a closed path the transported
+     frame generally does not meet itself; the residual is measured and
+     spread over the loop so the seam closes.
+
+     opt.closed    — join last station to first (belts, chain loops)
+     opt.twist     — total radians of section rotation across the path
+     opt.scale     — number, per-station array, or fn(u, k) — tapers
+     opt.up        — preferred section normal at the first station
+     opt.openCaps  — leave the ends open
+     opt.sideTier  — LOD tier for the wall (default 0: the wall is the part) */
+  function sweep(profile, path, opt) {
+    opt = opt || {};
+    var np = profile.length / 2, m = path.length / 3;
+    if (np < 3 || m < 2) return finalize([], []);
+    var closed = !!opt.closed;
+    var v = [], f = [], i, j, k;
+
+    function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+    function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+    function unit(a) { var L = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / L, a[1] / L, a[2] / L]; }
+    /* Rodrigues: turn n about unit axis u by ang */
+    function spinAbout(n, u, ang) {
+      var c = Math.cos(ang), s = Math.sin(ang), d = dot(u, n), cr = cross(u, n);
+      return [n[0] * c + cr[0] * s + u[0] * d * (1 - c),
+              n[1] * c + cr[1] * s + u[1] * d * (1 - c),
+              n[2] * c + cr[2] * s + u[2] * d * (1 - c)];
+    }
+    /* the minimal rotation carrying tangent a onto tangent b, applied to n */
+    function carry(n, a, b) {
+      var ax = cross(a, b), s = Math.hypot(ax[0], ax[1], ax[2]);
+      if (s > 1e-9) n = spinAbout(n, [ax[0] / s, ax[1] / s, ax[2] / s], Math.atan2(s, dot(a, b)));
+      var d = dot(n, b);
+      return unit([n[0] - b[0] * d, n[1] - b[1] * d, n[2] - b[2] * d]);
+    }
+
+    /* tangents: central difference inside, one-sided at open ends */
+    var T = [], a0, b0;
+    for (k = 0; k < m; k++) {
+      if (closed) { a0 = (k - 1 + m) % m; b0 = (k + 1) % m; }
+      else { a0 = k === 0 ? 0 : k - 1; b0 = k === m - 1 ? m - 1 : k + 1; }
+      T.push(unit([path[b0 * 3] - path[a0 * 3],
+                   path[b0 * 3 + 1] - path[a0 * 3 + 1],
+                   path[b0 * 3 + 2] - path[a0 * 3 + 2]]));
+    }
+
+    /* seed a section normal perpendicular to the first tangent */
+    var seed = opt.up ? unit(opt.up) : null;
+    if (!seed || Math.abs(dot(seed, T[0])) > 0.98) {
+      var t0 = T[0], ax0 = Math.abs(t0[0]), ay0 = Math.abs(t0[1]), az0 = Math.abs(t0[2]);
+      seed = (ax0 <= ay0 && ax0 <= az0) ? [1, 0, 0] : (ay0 <= az0 ? [0, 1, 0] : [0, 0, 1]);
+    }
+    var sd = dot(seed, T[0]);
+    var N = [unit([seed[0] - T[0][0] * sd, seed[1] - T[0][1] * sd, seed[2] - T[0][2] * sd])];
+    for (k = 1; k < m; k++) N.push(carry(N[k - 1], T[k - 1], T[k]));
+
+    /* what the frame failed to close by, spread over the loop */
+    var resid = 0;
+    if (closed) {
+      var back = carry(N[m - 1], T[m - 1], T[0]);
+      resid = Math.atan2(dot(cross(back, N[0]), T[0]), dot(back, N[0]));
+    }
+
+    var twist = opt.twist || 0, sc = opt.scale;
+    for (k = 0; k < m; k++) {
+      var u = closed ? k / m : (m > 1 ? k / (m - 1) : 0);
+      var ang = twist * u + resid * (closed ? k / m : 0);
+      var ca = Math.cos(ang), sa = Math.sin(ang);
+      var s = sc == null ? 1 : (typeof sc === "function" ? sc(u, k) : (sc.length ? sc[k] : sc));
+      var nk = N[k], tk = T[k], bk = cross(nk, tk);   // N × B = −T, matching prism
+      var cx = path[k * 3], cy = path[k * 3 + 1], cz = path[k * 3 + 2];
+      for (i = 0; i < np; i++) {
+        var px = profile[i * 2] * s, py = profile[i * 2 + 1] * s;
+        var qx = px * ca - py * sa, qy = px * sa + py * ca;
+        v.push(cx + nk[0] * qx + bk[0] * qy,
+               cy + nk[1] * qx + bk[1] * qy,
+               cz + nk[2] * qx + bk[2] * qy);
+      }
+    }
+
+    var tier = opt.sideTier == null ? 0 : opt.sideTier;
+    var last = closed ? m : m - 1;
+    for (k = 0; k < last; k++) {
+      var k2 = (k + 1) % m;
+      for (i = 0; i < np; i++) {
+        j = (i + 1) % np;
+        f.push({ i: [k * np + i, k2 * np + i, k2 * np + j, k * np + j], t: tier });
+      }
+    }
+    if (!closed && !opt.openCaps) {
+      var c0 = [], c1 = [];
+      for (i = 0; i < np; i++) c0.push(i);
+      for (i = 0; i < np; i++) c1.push((m - 1) * np + i);
+      f.push({ i: c0, t: 0 });
+      f.push({ i: c1.reverse(), t: 0 });
+    }
+    return finalize(v, f, opt.wires);
+  }
+
+  /* the path a coil spring, a thread or a helical flute runs on */
+  function helixPath(r, pitch, turns, segsPerTurn, opt) {
+    opt = opt || {};
+    var n = Math.max(2, Math.round((segsPerTurn || 16) * turns)), p = [], i, u, a;
+    for (i = 0; i <= n; i++) {
+      u = i / n;
+      a = u * turns * Math.PI * 2 + (opt.phase || 0);
+      p.push(Math.cos(a) * r, Math.sin(a) * r, (opt.z0 || 0) + u * turns * pitch);
+    }
+    return p;
+  }
+
   /* merge — combine meshes, optionally moving one into place first */
   function merge(a, b, offset) {
     var base = a.v.length / 3, i, j;
@@ -590,6 +706,17 @@ var Ink3D = (function () {
       for (q = 0; q < n; q++) s += pts[q * 2] * pts[((q + 1) % n) * 2 + 1] - pts[((q + 1) % n) * 2] * pts[q * 2 + 1];
       return s;
     }
+    function ringBox(pts) {
+      var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, q;
+      for (q = 0; q < pts.length; q += 2) {
+        if (pts[q] < x0) x0 = pts[q];
+        if (pts[q] > x1) x1 = pts[q];
+        if (pts[q + 1] < y0) y0 = pts[q + 1];
+        if (pts[q + 1] > y1) y1 = pts[q + 1];
+      }
+      return [x0, y0, x1, y1];
+    }
+    function boxInside(a, b) { return a[0] >= b[0] && a[1] >= b[1] && a[2] <= b[2] && a[3] <= b[3]; }
 
     for (pi = 0; pi < this.parts.length; pi++) {
       p = this.parts[pi];
@@ -675,13 +802,31 @@ var Ink3D = (function () {
         else q.push({ k: 0, d: projDepth, p: p, pts: pts, pal: pal, band: band, flat: this._cutBack });
       }
 
-      /* fill the ring the cut exposes, so a sliced solid reads as solid */
+      /* Fill the rings the cut exposes, so a sliced solid reads as solid.
+         A part can cross the plane many times — a spring crosses at every
+         coil — so each ring sorts on its own depth, and a ring enclosed by
+         another is treated as its bore and punched out of it rather than
+         drawn as a separate face. */
       if (cut && !ghost) {
         var rings = sectionRings(p.mesh, wx, wy, wz, clip);
         if (rings) {
-          var capPts = [], capD = 0;
-          for (i = 0; i < rings.length; i++) { capPts.push(projRing(rings[i])); capD += projDepth; }
-          q.push({ k: 3, d: capD / rings.length - 1.5, p: p, rings: capPts, pal: pal, hand: pi & 1 });
+          var isl = [];
+          for (i = 0; i < rings.length; i++) {
+            var rp = projRing(rings[i]), bb = ringBox(rp);
+            isl.push({ pts: rp, box: bb, d: projDepth, area: (bb[2] - bb[0]) * (bb[3] - bb[1]), used: false });
+          }
+          isl.sort(function (A, B) { return B.area - A.area; });
+          for (i = 0; i < isl.length; i++) {
+            if (isl[i].used) continue;
+            isl[i].used = true;
+            var group = [isl[i].pts];
+            for (j = i + 1; j < isl.length; j++) {
+              if (isl[j].used || !boxInside(isl[j].box, isl[i].box)) continue;
+              isl[j].used = true;
+              group.push(isl[j].pts);
+            }
+            q.push({ k: 3, d: isl[i].d - 1.5, p: p, rings: group, pal: pal, hand: pi & 1 });
+          }
         }
       }
 
@@ -863,6 +1008,8 @@ var Ink3D = (function () {
     scene: function (canvas) { return new Scene(canvas); },
     prism: prism,
     revolve: revolve,
+    sweep: sweep,
+    helixPath: helixPath,
     merge: merge,
     xform: xform,
     gearMesh: gearMesh,

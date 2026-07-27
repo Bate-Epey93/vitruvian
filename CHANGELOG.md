@@ -4,6 +4,14 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [1.33.0] — 2026-07-27 · Sweep: the shapes a lathe cannot make
+### Added
+- **`Ink3D.sweep(profile, path)`** — runs a closed 2D section along an arbitrary 3D path. Between them, `revolve` and `prism` cover solids of revolution and constant-section extrusions; everything else a machine is made of lives here — springs, threads, chains, belts, hoses, and blades that taper and twist. The section frame is parallel-transported rather than rebuilt from a fixed up-vector, so a path that turns through vertical does not flip the section inside out halfway along; on a closed path the residual the frame fails to close by is measured and spread over the loop, so the seam meets itself. Options for closing the loop, total twist, per-station taper, and open ends. `Ink3D.helixPath` supplies the path a coil spring or a thread runs on.
+- Verified closed and manifold on straight, helical, half-turn and closed-loop paths: zero open edges, zero non-manifold edges, every wall normal facing outward and both end caps facing along the path.
+
+### Fixed
+- **A part that crosses the cut plane more than once now sections correctly.** Every hub, sleeve and clutch body cut through its axis exposes two rings, one either side of the shaft; they were being filled as a single even-odd path at one averaged depth, so rings that overlapped on screen cancelled each other into holes and the whole group sorted at the wrong distance. Each ring now carries its own depth, and a ring enclosed by another is punched out of it as its bore rather than drawn as a second face.
+
 ## [1.32.0] — 2026-07-27 · Field studies: a gearbox you can turn over
 ### Added
 - **The Gear Change** — the first field study, at `lab/transmission.html`. A five-speed manual gearbox drawn in three dimensions, walked through the same failure ladder the rest of the library uses: sliding-gear crash box → constant mesh and dog clutches → synchromesh → selector interlock → reverse, the deliberate throwback → the whole shift, shiftable yourself through a live H-gate.
