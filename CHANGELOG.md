@@ -4,6 +4,16 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [1.32.0] — 2026-07-27 · Field studies: a gearbox you can turn over
+### Added
+- **The Gear Change** — the first field study, at `lab/transmission.html`. A five-speed manual gearbox drawn in three dimensions, walked through the same failure ladder the rest of the library uses: sliding-gear crash box → constant mesh and dog clutches → synchromesh → selector interlock → reverse, the deliberate throwback → the whole shift, shiftable yourself through a live H-gate.
+- **Ink3D** (`lab/ink3d.js`) — a ~700-line 3D engine written for this and nothing else. Canvas 2D, painter-sorted, three quantised paper washes with diagonal hatching on the darkest and ink outlines over the top: a technical plate rather than a render. Colours come from the app's own custom properties, so dark mode costs nothing. No library, no CDN, no build step — the page loads under the same `script-src 'self'` as everything else.
+- **The gears actually mesh.** Only the input shaft and the mainshaft carry an integrated angle; every other gear's angle is derived from the gear driving it, so the train cannot drift out of phase no matter how long it runs. Verified by sweeping all seven meshes for polygon interference: zero clashes, ~0.8 units of visible backlash throughout.
+- **Cutaway is a real section, not a hidden half.** The plane clips each polygon where it crosses, the crossing segments stitch back into rings, and those rings are filled and hatched — so a sliced shaft reads as solid metal with the far wall visible behind it, and the cut edge is a straight line instead of a sawtooth of dropped faces. Neighbouring parts get opposite hatch angles, the way a drawn section distinguishes them, and while the cut is open hatching means one thing only: the plane passes through here.
+- **Exploded opens the stack the way it was assembled** — along the shaft first, so assembly order is legible, then off the shaft by how deep in the stack each part sits. The shafts hold still, the countershaft train drops clear of the mainshaft, and the reverse idler leaves along its own centre line, the one direction that clears both.
+- **1930 mode takes the synchromesh out rather than describing its absence.** The blocker rings leave the bench, and any synchronised shift on any layer becomes the shift that preceded them: dogs meeting at different speeds, a clash, and the lever back where it started. It is the reader's setting, so it survives walking between layers.
+- Reduced motion is a first-class path, not a fallback: nothing autoplays, and the scrubber drives the identical timeline the animation does.
+
 ## [1.31.0] — 2026-07-26 · Leader lines: no label left in the scrum
 ### Changed
 - **A label with nowhere to sit now moves out to clear paper and runs a hairline back to the edge it names.** Before, a crowded label had two options: overlap something, or truncate. It has a third now, and it's the better one — a whole label parked in the margin beats a shortened one in the middle of the traffic.

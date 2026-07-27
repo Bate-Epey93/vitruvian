@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.31.0",
+  appVersion: "1.32.0",
   flagshipVersion: 10,                   // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   // foundations first, then the systems built on them — YouTube last, the capstone that drills into everything
   flagshipNames: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue", "notification-system", "rate-limiter", "search-typeahead", "url-shortener", "ride-matching", "ticket-booking", "content-delivery-network", "recommendation-feed", "payment-ledger", "video-transcoding", "news-feed", "photo-store", "whatsapp", "youtube", "railway"],
@@ -521,6 +521,10 @@ var COPY = {
   sampleNote: "Worked examples that set the bar for a Deconstruct — and the path in Track walks them in order.",
   yoursHeading: "Your Deconstructs",
   yoursEmpty: "Nothing here yet. Name any system above and Vitruvian will take it apart, failure by failure.",
+  labHeading: "Field studies",
+  labNote: "Machines you can turn over in your hands. Same failure ladder, drawn in three dimensions.",
+  labCardName: "The Gear Change",
+  labCardSub: "A manual gearbox, and the six failures that built it",
   deconstructPlaceholder: "Name a system to deconstruct…",
   deconstructBtn: "Deconstruct",
   ownDesignLink: "Building something? Dissect your design →",

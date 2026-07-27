@@ -519,6 +519,23 @@ async function renderLibrary() {
   root.appendChild(sectionHead(COPY.sampleHeading, null));
   root.appendChild(h("p", "lib-note", COPY.sampleNote));
   root.appendChild(cardGrid(flagships));
+
+  // Field studies: self-contained lab pages rather than schema documents,
+  // so they live outside the breakdown store and link out as plain pages.
+  root.appendChild(sectionHead(COPY.labHeading, "1 study"));
+  root.appendChild(h("p", "lib-note", COPY.labNote));
+  const labGrid = h("div", "card-grid");
+  const lab = h("a", "bd-card lab-card");
+  lab.href = "lab/transmission.html";
+  lab.appendChild(h("div", "bd-name", COPY.labCardName));
+  const labMeta = h("div", "bd-meta");
+  labMeta.appendChild(h("span", "chip flagship", "field study"));
+  labMeta.appendChild(h("span", "chip", "6 layers"));
+  labMeta.appendChild(h("span", "chip", "3D"));
+  lab.appendChild(labMeta);
+  lab.appendChild(h("div", "bd-last", COPY.labCardSub));
+  labGrid.appendChild(lab);
+  root.appendChild(labGrid);
   if (!yours.length) {
     const empty = h("div", "empty-panel");
     empty.appendChild(h("div", "mono-label", COPY.yoursHeading));

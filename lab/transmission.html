@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'">
+<title>The Gear Change · Vitruvian</title>
+<meta name="description" content="A manual gearbox in three dimensions: six ways of failing to put a spinning shaft into a spinning gear, and the mechanisms each failure forced into existence.">
+<meta name="theme-color" content="#141416">
+<link rel="icon" href="../icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+<script src="../splash.js"></script>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="transmission.css">
+<script src="transmission-copy.js" defer></script>
+<script src="ink3d.js" defer></script>
+<script src="transmission-scene.js" defer></script>
+<script src="transmission-page.js" defer></script>
+</head>
+<body>
+
+<div class="lab-shell">
+
+  <div class="lab-top">
+    <a class="lab-back" href="../" aria-label="Back to Vitruvian">‹</a>
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <div>
+        <div class="brand-name">Vitruvian<span>·</span></div>
+        <div class="brand-sub">Field study · the gear change</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <button class="tbtn icon-only" id="themeBtn" aria-label="Toggle dark mode">☾</button>
+  </div>
+
+  <div class="lab-main">
+    <div class="lab-stage" id="stageWrap">
+      <canvas id="stage" role="img" aria-label="Three-dimensional drawing of a five-speed manual gearbox"></canvas>
+      <div id="tip" aria-hidden="true"></div>
+      <div id="hint">Drag to orbit · scroll to zoom · double-click to reset</div>
+    </div>
+    <div class="lab-doc">
+      <div class="lab-doc-inner" id="docInner"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="sr-only" id="live" aria-live="polite" role="status"></div>
+
+<noscript>
+  <p style="padding:40px;max-width:640px;margin:0 auto">This field study is an interactive 3D drawing and needs JavaScript.
+  The rest of Vitruvian works without it — <a href="../">go back to the library</a>.</p>
+</noscript>
+
+</body>
+</html>
