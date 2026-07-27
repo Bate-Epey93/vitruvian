@@ -45,6 +45,7 @@ const SHELL = [
   "./lab/transmission.html",
   "./lab/transmission.css",
   "./lab/ink3d.js",
+  "./lab/lab-page.js",
   "./lab/transmission-scene.js",
   "./lab/transmission-copy.js",
   "./lab/transmission-page.js"

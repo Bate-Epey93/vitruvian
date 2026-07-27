@@ -16,6 +16,23 @@ var TX_COPY = {
   hint: "Drag to orbit · scroll to zoom · double-click to reset",
   cutawayNote: "Dog teeth and cones are drawn coarse and oversized — a real synchro hides this in a few millimetres.",
 
+  /* the four headings every layer card carries, in order */
+  bands: {
+    problem: "The failure",
+    solution: "What was built",
+    tradeoff: "What it costs",
+    atScale: "Under load"
+  },
+  /* phases that mean something went wrong, so the readout can say so */
+  badPhases: ["crash", "grind", "blocked"],
+  /* shown on layers the reader can drive themselves */
+  freeNote: {
+    label: "Free shift",
+    text: "The gate is live. Click a slot, or press 1-5, R, N."
+  },
+  /* the optional third stage toggle, and the two scene modes it flips */
+  altMode: { label: "1930 mode", on: "1930", off: "modern" },
+
   layers: [
     {
       name: "The crash box",
@@ -106,7 +123,7 @@ var TX_COPY = {
   hud: { engine: "Engine", road: "Mainshaft", delta: "Difference", gear: "Gear", clutch: "Clutch" },
   controls: {
     play: "Play", replay: "Replay", pause: "Pause", restart: "Back to start",
-    explode: "Exploded", cutaway: "Cutaway", oldMode: "1930 mode",
+    explode: "Exploded", cutaway: "Cutaway",
     reset: "Reset view", scrubLabel: "Scrub the shift"
   },
   a11y: {

@@ -626,6 +626,16 @@ var TXScene = (function () {
         emit("shift", { from: S.from, to: to, profile: S.profile });
         return true;
       },
+      /* run a layer's own demo. The shell hands over the layer's demo
+         block untouched — putting the gear where the demo starts, and
+         deciding what the current mode does to the shift, are both
+         things only the machine knows. */
+      beginDemo: function (demo) {
+        if (!demo) return false;
+        S.gear = demo.from;
+        return this.beginShift(demo.to, demo.profile);
+      },
+
       seek: function (u) {
         S.t = clamp01(u);
         S.playing = false;
