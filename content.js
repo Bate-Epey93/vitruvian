@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.35.0",
+  appVersion: "1.36.0",
   flagshipVersion: 10,                   // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   // foundations first, then the systems built on them — YouTube last, the capstone that drills into everything
   flagshipNames: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue", "notification-system", "rate-limiter", "search-typeahead", "url-shortener", "ride-matching", "ticket-booking", "content-delivery-network", "recommendation-feed", "payment-ledger", "video-transcoding", "news-feed", "photo-store", "whatsapp", "youtube", "railway"],
@@ -198,7 +198,7 @@ var VOCAB_LIBRARY = [
     models: ["mutual-exclusion"] },
   { id: "scaling-reads", tier: "pattern", name: "Scaling reads",
     one_liner: "Reads outnumber writes 100:1; serve them from copies.",
-    appears: "Feeds, catalogues, profiles, anything popular. Indexes, denormalization, replicas, then caches and CDNs — each trading freshness for speed.",
+    appears: "Feeds, catalogues, profiles, anything popular. Indexes, denormalization, replicas, then caches and CDNs, each trading freshness for speed.",
     models: ["locality-and-caching", "bottleneck"] },
   { id: "scaling-writes", tier: "pattern", name: "Scaling writes",
     one_liner: "One writer node becomes the ceiling; split the work.",
@@ -214,7 +214,7 @@ var VOCAB_LIBRARY = [
     models: ["single-source-of-truth", "idempotency"] },
   { id: "proximity-services", tier: "pattern", name: "Proximity-based services",
     one_liner: "Find the nearby things, fast.",
-    appears: "Ride hailing, delivery, store locators, matchmaking. Needs a geospatial index — a plain latitude/longitude scan does not scale.",
+    appears: "Ride hailing, delivery, store locators, matchmaking. Needs a geospatial index. A plain latitude/longitude scan does not scale.",
     models: ["locality-and-caching"] },
   { id: "saga", tier: "pattern", name: "Saga",
     one_liner: "No distributed transaction; a chain of undoable steps.",
@@ -226,7 +226,7 @@ var VOCAB_LIBRARY = [
     models: ["single-source-of-truth", "idempotency"] },
   { id: "cqrs", tier: "pattern", name: "CQRS",
     one_liner: "Separate the write model from the read model.",
-    appears: "When reads and writes want opposite shapes — normalized for correctness, denormalized for speed. Two models, kept in sync.",
+    appears: "When reads and writes want opposite shapes: normalized for correctness, denormalized for speed. Two models, kept in sync.",
     models: ["separation-of-concerns"] },
   { id: "event-sourcing", tier: "pattern", name: "Event sourcing",
     one_liner: "Store the events, derive the state.",
@@ -275,7 +275,7 @@ var VOCAB_LIBRARY = [
     appears: "Every client boundary. Cursor pagination beats offset at scale; rate limits and auth belong at the edge, not in each service.",
     models: ["separation-of-concerns", "trust-boundary"] },
   { id: "communication-protocols", tier: "concept", name: "Communication protocols",
-    one_liner: "HTTP, WebSockets, SSE, or gRPC — pick by direction.",
+    one_liner: "HTTP, WebSockets, SSE, or gRPC. Pick by direction.",
     appears: "Request/response is HTTP. Server-push one way is SSE; both ways is WebSockets; internal service-to-service is often gRPC.",
     models: ["queue-and-buffer", "separation-of-concerns"] },
   { id: "idempotency-keys", tier: "concept", name: "Idempotency keys",
@@ -304,7 +304,7 @@ var VOCAB_LIBRARY = [
     models: ["queue-and-buffer", "feedback-loop"] },
   { id: "circuit-breaker", tier: "concept", name: "Circuit breaker",
     one_liner: "Stop calling a service that is already failing.",
-    appears: "Service-to-service calls. Trips open after repeated failures, fails fast for a cooldown, then probes — stops one outage cascading.",
+    appears: "Service-to-service calls. Trips open after repeated failures, fails fast for a cooldown, then probes, so one outage does not cascade.",
     models: ["graceful-degradation", "feedback-loop"] },
   { id: "bulkhead", tier: "concept", name: "Bulkhead isolation",
     one_liner: "Separate pools so one flood cannot sink the ship.",
@@ -320,7 +320,7 @@ var VOCAB_LIBRARY = [
     models: ["bottleneck", "locality-and-caching"] },
   { id: "optimistic-concurrency", tier: "concept", name: "Optimistic concurrency control",
     one_liner: "Assume no conflict; check a version at commit.",
-    appears: "Low-contention writes. Cheap when conflicts are rare, wasteful when they are common — then you want a real lock.",
+    appears: "Low-contention writes. Cheap when conflicts are rare, wasteful when they are common, where you want a real lock instead.",
     models: ["mutual-exclusion"] },
   { id: "pessimistic-locking", tier: "concept", name: "Pessimistic locking",
     one_liner: "Take the lock first; nobody else may touch it.",
@@ -345,19 +345,19 @@ var VOCAB_LIBRARY = [
 
   /* ── technologies: things you actually deploy (software systems only) ── */
   { id: "relational-db", tier: "technology", name: "Relational database", software_only: true,
-    one_liner: "Postgres, MySQL — tables, joins, transactions.",
+    one_liner: "Postgres, MySQL: tables, joins, transactions.",
     appears: "The correct default. ACID transactions and constraints make whole classes of bug impossible; reach elsewhere only with a reason.",
     models: ["single-source-of-truth", "mutual-exclusion"] },
   { id: "nosql-db", tier: "technology", name: "NoSQL database", software_only: true,
-    one_liner: "DynamoDB, Cassandra — flexible schema, horizontal scale.",
+    one_liner: "DynamoDB, Cassandra: flexible schema, horizontal scale.",
     appears: "Huge volume, known access patterns, no need for cross-entity transactions. You design the table around the query, not the entity.",
     models: ["separation-of-concerns", "redundancy"] },
   { id: "blob-storage", tier: "technology", name: "Blob storage", software_only: true,
-    one_liner: "S3, GCS — put bytes in, get a URL back.",
+    one_liner: "S3, GCS: put bytes in, get a URL back.",
     appears: "Images, video, documents, backups. Cheap, durable, and the only sane home for anything measured in megabytes.",
     models: ["separation-of-concerns"] },
   { id: "search-db", tier: "technology", name: "Search-optimized database", software_only: true,
-    one_liner: "Elasticsearch — an inverted index over your text.",
+    one_liner: "Elasticsearch: an inverted index over your text.",
     appears: "Full-text search, faceting, fuzzy matching. Kept in sync with the source of truth rather than replacing it.",
     models: ["locality-and-caching", "separation-of-concerns"] },
   { id: "api-gateway", tier: "technology", name: "API gateway", software_only: true,
@@ -365,35 +365,35 @@ var VOCAB_LIBRARY = [
     appears: "In front of microservices, so cross-cutting concerns live in one place instead of being reimplemented per service.",
     models: ["trust-boundary", "separation-of-concerns"] },
   { id: "load-balancer", tier: "technology", name: "Load balancer", software_only: true,
-    one_liner: "NGINX, ALB — spread requests across machines.",
+    one_liner: "NGINX, ALB: spread requests across machines.",
     appears: "Any time more than one server answers the same request. Also where health checks pull dead instances out of rotation.",
     models: ["redundancy", "bottleneck"] },
   { id: "queue", tier: "technology", name: "Queue", software_only: true,
-    one_liner: "SQS, RabbitMQ — buffer work, consume once.",
+    one_liner: "SQS, RabbitMQ: buffer work, consume once.",
     appears: "Bursty or slow work that can happen later. Poor fit under about 500 ms of required latency, where the hop costs more than it saves.",
     models: ["queue-and-buffer", "separation-of-concerns"] },
   { id: "stream", tier: "technology", name: "Stream", software_only: true,
-    one_liner: "Kafka, Kinesis, Flink — a retained, replayable log.",
+    one_liner: "Kafka, Kinesis, Flink: a retained, replayable log.",
     appears: "Many independent consumers of the same events, replay after a bug, or real-time processing. A queue forgets; a stream remembers.",
     models: ["queue-and-buffer", "single-source-of-truth"] },
   { id: "distributed-lock", tier: "technology", name: "Distributed lock", software_only: true,
-    one_liner: "Redis, ZooKeeper, etcd — one holder at a time.",
+    one_liner: "Redis, ZooKeeper, etcd: one holder at a time.",
     appears: "Seat holds, scheduled jobs, auctions. Always take a lease with a timeout; a lock held by a crashed process is a stuck system.",
     models: ["mutual-exclusion"] },
   { id: "distributed-cache", tier: "technology", name: "Distributed cache", software_only: true,
-    one_liner: "Redis, Memcached — shared memory across your fleet.",
+    one_liner: "Redis, Memcached: shared memory across your fleet.",
     appears: "Hot query results, sessions, computed aggregates, rate-limit counters. Fast, and deliberately allowed to lose data.",
     models: ["locality-and-caching"] },
   { id: "cdn", tier: "technology", name: "CDN", software_only: true,
-    one_liner: "CloudFront, Cloudflare — copies near the user.",
+    one_liner: "CloudFront, Cloudflare: copies near the user.",
     appears: "Static assets, media, and any cacheable response. Turns a cross-continent request into a same-city one.",
     models: ["locality-and-caching", "bottleneck"] },
   { id: "workflow-engine", tier: "technology", name: "Durable workflow engine", software_only: true,
-    one_liner: "Temporal, Step Functions — code that survives crashes.",
+    one_liner: "Temporal, Step Functions: code that survives crashes.",
     appears: "Multi-step business processes. The engine persists progress, so a restart resumes at the failed step rather than the beginning.",
     models: ["single-source-of-truth", "idempotency"] },
   { id: "geospatial-index", tier: "technology", name: "Geospatial index", software_only: true,
-    one_liner: "PostGIS, Redis GEO, S2 — space you can query.",
+    one_liner: "PostGIS, Redis GEO, S2: space you can query.",
     appears: "Nearest-N and radius searches. Divides the world into cells so a query touches a neighbourhood rather than every row.",
     models: ["locality-and-caching"] }
 ];
@@ -551,7 +551,7 @@ var NUMBERS_LIBRARY = [
 var COPY = {
   libraryTitle: "Library",
   sampleHeading: "Sample Deconstructs",
-  sampleNote: "Worked examples that set the bar for a Deconstruct — and the path in Track walks them in order.",
+  sampleNote: "Worked examples that set the bar for a Deconstruct. Track walks them in order.",
   yoursHeading: "Your Deconstructs",
   yoursEmpty: "Nothing here yet. Name any system above and Vitruvian will take it apart, failure by failure.",
   labHeading: "Field studies",
@@ -589,7 +589,7 @@ var COPY = {
   whatifVerdicts: { improves: "The graft takes: the system improves", mixed: "It takes, with scars: a real tradeoff", harmful: "Rejected: works against the system" },
   gateCompareOffline: "AI comparison needs a connection and an API key (Settings). Your answer is saved, so you can compare it against the reveal yourself.",
   keyNotice: "Your key is stored on this device only and sent only to Anthropic.",
-  costNote: "A Deconstruct typically costs a few cents to a few tens of cents of API usage, depending on the model.",
+  costNote: "A Deconstruct usually costs somewhere between a few cents and about a dollar in API usage, depending on the model.",
   modelCostNote: "Rough cost per Deconstruct: haiku-4-5 ≈ $0.10 · opus-4-8 ≈ $0.55 · opus-5 ≈ $0.55 · fable-5 ≈ $1.20. Opus 5 is the default; it and Fable fall back automatically if a request is declined.",
   pricingUrl: "https://www.anthropic.com/pricing",
   privacyNote: "Everything lives on this device. Deconstructs, attempts, and your key are never sent anywhere except your own calls to Anthropic.",
@@ -604,7 +604,7 @@ var COPY = {
   /* ---------- LANDING (first-run explainer) ---------- */
   landing: {
     kicker: "Welcome to Vitruvian",
-    headline: "Take anything apart.\nPut it back together. Now you get it.",
+    headline: "Take anything apart.\nPut it back together, and it makes sense.",
     lede: "Everyday systems, deconstructed one failure at a time.",
     sections: [
       { icon: "whatItIs", title: "What it is",
@@ -617,22 +617,22 @@ var COPY = {
         body: "Start with a sample Deconstruct. Add your Anthropic API key in Settings to deconstruct anything you name, or submit your own design and see where it breaks first. Works offline; installs to your home screen." }
     ],
     cta: "Start deconstructing →",
-    footnote: "No account. No cloud. Your Deconstructs stay on this device."
+    footnote: "No account and no cloud. Your Deconstructs stay on this device."
   },
 
   /* ---------- TUTORIAL — 'How to read a Deconstruct' (visitable anytime) ---------- */
   tutorial: {
     kicker: "How to read a Deconstruct",
     headline: "Every Deconstruct is the same shape.",
-    lede: "A Vitruvian Deconstruct rebuilds a system from nothing, one failure at a time. Here's how to read the pieces, and, for developers, how to lift a technical spec out of one.",
+    lede: "A Vitruvian Deconstruct rebuilds a system from nothing, one failure at a time. The pieces come in the same order every time, and developers can lift a technical spec straight out of one.",
     reading: {
       title: "The path through a Deconstruct",
       steps: [
         ["Essence", "The system in one breath, plus a few surprising, checkable facts."],
-        ["The Skeleton", "The irreducible core: who wants what, the invariants (what must never be false), the pieces, the flows, and the hard constraints physics and economics impose."],
-        ["The rebuild", "4–7 layers, the heart of it. Each layer is forced by a concrete failure of the version before it, often a real, dated disaster. You watch the design become necessary, not just described."],
+        ["The Skeleton", "What the system cannot do without: who wants what, the invariants (the things that must never be false), the pieces, the flows, and the limits physics and economics impose."],
+        ["The rebuild", "Four to seven layers, and the heart of the whole thing. Each one is forced by a concrete failure of the version before it, often a real disaster with a date attached. The design becomes necessary in front of you instead of being described to you."],
         ["Stress tests", "Push the finished system somewhere nasty and see how it copes, or where it honestly breaks."],
-        ["Transfer", "The system-neutral principles, and where the same shapes recur in other systems."]
+        ["Transfer", "The principles that outlive this particular system, and where the same shapes turn up elsewhere."]
       ]
     },
     cards: {
@@ -646,7 +646,7 @@ var COPY = {
         ["tradeoff", "The tradeoff", "What this layer sacrifices. Safety costs capacity; caching costs freshness."],
         ["scale", "Under load", "How the mechanism holds as load grows: its scaling property, its ceiling, or the sharding it forces. Tap to trace the load path in gold."],
         ["defends", "Defends", "Which invariants from the strip-down this layer protects, by number. Tap a chip to light the mechanism on the diagram that defends it."],
-        ["dev", "For engineers", "Opens with 'Start here' — a concrete coding approach (the data structure, algorithm, or pattern) to begin solving the layer's problem. Then maps each mechanism to its software concept, plus interview probes. In Developer mode this reads as spec material."],
+        ["dev", "For engineers", "Opens with 'Start here', a concrete coding approach (the data structure, algorithm, or pattern) for the layer's problem. Then it maps each mechanism to its software concept and adds interview probes. In Developer mode this reads as spec material."],
         ["analogy", "In everyday terms", "One plain analogy, for when an idea needs grounding."]
       ]
     },
@@ -665,41 +665,44 @@ var COPY = {
         ["money", "Money", "value changing hands (gold, dotted)."]
       ],
       extra: [
-        ["Lanes & colour", "Horizontal bands are semantic roles (People, Service, Control, Money), each with its own colour. An arrow wears the colour of the lane it comes from, so you can see who drives what."],
+        ["Lanes & colour", "Horizontal bands group parts by the role they play (People, Service, Control, Money), each with its own colour. An arrow wears the colour of the lane it comes from, so you can see who drives what."],
         ["The red pulse", "At a gate, or when you tap the problem card, the parts about to break pulse red. You see the failure before the fix."],
         ["Spotlight", "Tap a card to light its parts and dim the rest: the problem card lights what breaks (red), the solution card lights what's added (teal), and Under load traces the path load travels (gold)."],
         ["Trace a part", "Tap any node to light it and every edge touching it; the rest dims, so you can follow one part's whole reach. Tap it again to clear."],
         ["Zoom in ⊕", "Some nodes are whole systems in their own right and carry a ⊕ badge. Tap it to open that sub-system as its own Deconstruct, and follow the breadcrumb back up. Systems nest as deep as the library goes."],
+        ["Payload shapes", "During a Pulse, every payload wears the shape of the kind that sent it: a dot from an actor, a square from a store, a diamond from a process, a bar from a channel. Colour still tells you which lane it came from, so shape and colour answer two different questions at once."],
+        ["Backpressure", "When a node takes in more than it can clear, the edges feeding it stiffen and their traffic slows down. The jam creeps back toward the source rather than staying put, which is how one slow component ends up browning out everything upstream of it."],
         ["Pan & scrub", "Dense diagrams pan sideways. Drag the scrubber (0…N) under the diagram to sweep it from the naive baseline to the finished system."]
       ]
     },
     controls: {
       title: "Controls",
       items: [
-        ["Audience: B / E / D", "Three registers of the same Deconstruct: Beginner (plain language, everyday analogies), Enthusiast (the default), and Developer (adds the engineer mappings and interview probes). Switch anytime; your place is kept."],
+        ["Audience: B / E / D", "Three reading levels of the same Deconstruct: Beginner (plain language and everyday analogies), Enthusiast (the default), and Developer (adds the engineer mappings and interview probes). Switch anytime and you keep your place."],
         ["Step & scrub", "Move layer by layer with Prev / Next, or drag the scrubber to sweep the diagram across every state."],
         ["Challenge mode", "Off by default. Turn it on from the ⋯ menu to hide each solution behind a design-it-first gate: you predict the fix, then compare."]
       ]
     },
     explore: {
       title: "Go deeper: simulate & interrogate",
-      note: "Buttons under the diagram, plus more in the ⋯ menu. This is where a Deconstruct stops being a picture and starts behaving like the system.",
+      note: "Buttons under the diagram, plus more in the ⋯ menu. These let you run the system instead of only reading it.",
       items: [
         ["Pulse ▶ / ⟲ replay", "Send live traffic through the current state. Payloads travel the flow path, crash red into whatever's broken, and (under ◉ load) congest where the system saturates. ⟲ replay re-enacts the exact historical failure, arrival by arrival."],
-        ["Fault injection", "While a pulse is running, tap any node to kill it. Traffic piles up behind the dead node and everything downstream starves — chaos engineering as a toy. Tap it again to revive it."],
-        ["Live HUD", "While traffic flows, a small readout shows throughput (delivered/min), how many payloads are in flight, and crashes. Under load, watch delivered plateau while in-flight climbs: saturation you can count, not just see."],
-        ["Race spotlight ⇉", "Rings every node with two or more concurrent writers — the places two flows can arrive at once and race. The count tells you how many contention points the design carries."],
-        ["Sequence view", "In the ⋯ menu: the same state as an interaction timeline — who sends what to whom, top to bottom, in the order it happens. The diagram shows structure; this shows behaviour."],
-        ["Probe a layer", "Ask one bounded question of any layer; the answer is grounded in that layer's own mechanism. Needs your Anthropic API key (Settings)."],
-        ["Graft a change", "In the ⋯ menu: propose a change and see it ghosted onto the architecture — dashed blueprint ink — with an honest verdict (improves · mixed · harmful) argued from the system's own invariants. Pulse runs through the graft too."],
-        ["Known as… (the engineering vocabulary)", "In Developer mode, each layer names what the profession calls what it does: patterns (problem shapes), concepts (mechanisms), technologies (things you deploy). Tap a chip to climb the ladder — from the timeless thinking model that forces the layer, down to the component you'd actually deploy — and to see where the same force recurs across your other Deconstructs. Browse them all from Models → The engineering vocabulary."],
-        ["Also called…", "Every thinking model has a different name in every field. A layer's model card shows what this system's own profession calls it — and, folded underneath, what marketers, engineers, biologists, economists and institutions call the same force. Frequency capping is rate limiting; attribution is telemetry. That recurrence is the whole point of taking systems apart."],
-        ["Not yet addressed", "When you Dissect your own design, the overview names the concerns your description hasn't answered yet — contention, scaling reads, idempotency — each with a sentence on why it will bite and roughly when. A to-do list, not a scolding."]
+        ["Fault injection", "While a pulse is running, tap any node to kill it. Traffic piles up behind the dead node and everything downstream starves. Chaos engineering, in miniature. Tap it again to revive it."],
+        ["Live HUD", "While traffic flows, a small readout shows throughput (delivered/min), how many payloads are in flight, and crashes. Under load, delivered flattens off while in-flight keeps climbing. That gap is saturation, in numbers you can read."],
+        ["Race spotlight ⇉", "Rings every node with two or more concurrent writers, the places where two flows can arrive at once and race. The count tells you how many contention points the design carries."],
+        ["Critical path ⌁ spine", "Traces the chain a request actually waits on and dims everything off it. Shortening anything off the spine changes nothing, which is why it helps to know where it runs. Nodes whose loss would stop delivery altogether get a red ring. The readout also compares the spine against layer 0, so you can see what surviving all those failures cost you in extra steps."],
+        ["Sequence view", "In the ⋯ menu: the same state as an interaction timeline. Who sends what to whom, top to bottom, in the order it happens. The diagram shows structure and this shows behaviour."],
+        ["Probe a layer", "Ask one focused question about any layer. The answer stays grounded in that layer's own mechanism. Needs your Anthropic API key (Settings)."],
+        ["Graft a change", "In the ⋯ menu: propose a change and see it ghosted onto the architecture in dashed blueprint ink, with an honest verdict (improves, mixed, or harmful) argued from the system's own invariants. Pulse runs through the graft too."],
+        ["Known as… (the engineering vocabulary)", "In Developer mode, each layer names what the profession calls what it does: patterns (problem shapes), concepts (mechanisms), technologies (things you deploy). Tap a chip to climb the ladder, from the timeless thinking model that forces the layer down to the component you would actually deploy, and to see where the same force turns up in your other Deconstructs. Browse them all from Models, under The engineering vocabulary."],
+        ["Also called…", "Every thinking model has a different name in every field. A layer's model card shows what this system's own profession calls it, and folded underneath, what marketers, engineers, biologists, economists and institutions call the same force. Frequency capping is rate limiting. Attribution is telemetry. Spotting that repetition is most of what taking systems apart is for."],
+        ["Not yet addressed", "When you Dissect your own design, the overview names the concerns your description has not answered yet, such as contention, scaling reads, and idempotency, each with a sentence on why it will bite and roughly when. Treat it as a to-do list."]
       ]
     },
     forDev: {
       title: "For developers: reading a Deconstruct as a spec",
-      intro: "A Deconstruct is already shaped like a design document. Switch to Developer mode first (it surfaces the mappings and probes the other registers tuck away), then lift it across:",
+      intro: "A Deconstruct is already shaped like a design document. Switch to Developer mode first, since it surfaces the mappings and probes that the other reading levels tuck away, then lift it across:",
       map: [
         ["The Skeleton", "system context: actors, invariants (your correctness guarantees), entities, data flows, and hard constraints."],
         ["Each layer's mechanism + principle", "an architecture decision record: what you built and the rule it encodes."],

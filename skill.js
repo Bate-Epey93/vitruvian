@@ -163,7 +163,12 @@ VOICE - applies to every string field:
 - Write like a sharp human editor: concrete, direct, precise. No filler ("essentially", "crucially", "in essence"), no empty aphorisms, no drama the facts don't earn.
 - NEVER use an em dash (—) anywhere. Use a period, comma, colon, semicolon, or parentheses instead.
 - Prefer short sentences. Cut any clause that restates the previous one in fancier words. Every sentence must carry a fact, a mechanism, or a consequence.
-- Keep the registers apart: beginner fields are plain speech a non-technical reader follows in one pass; enthusiast fields are vivid but exact; developer fields are technical and dry.
+- Keep the reading levels apart: beginner fields are plain speech a non-technical reader follows in one pass; enthusiast fields are vivid but exact; developer fields are technical and dry.
+- Audience first. Open on the reader's situation or the concrete failure, then name the mechanism. Never open on the mechanism and work backwards to why it matters.
+- Use the profession's exact term, never a softened paraphrase of it. In beginner and enthusiast fields, gloss the term in plain words the first time it appears ("the invariants, the things that must never be false"). In developer fields, use it bare. Precision and simplicity are not in tension here: the fix for a hard word is a short gloss, not a vaguer word.
+- No tailing negations. Write "treat it as a to-do list", not "a to-do list, not a scolding"; "saturation in numbers you can read", not "saturation you can count, not just see".
+- No aphorism closers. Do not end a passage on a quotable line that restates it more grandly ("X stops being a picture and starts behaving like the system"). Stop when the fact is delivered.
+- Avoid stacking short fragments for drama. One short sentence for emphasis is fine; four in a row is a tell.
 
 HARD RULES:
 - Output ONLY the JSON document. No prose before or after, no code fences, no markdown inside string fields.
