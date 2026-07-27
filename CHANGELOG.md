@@ -4,6 +4,12 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [1.34.0] — 2026-07-27 · The shell, separated from the machine
+### Changed
+- **A field study is now four files and a mount call.** The walkthrough, demo transport, stage toggles, camera, theme and accessibility plumbing moved out of the gearbox page into `lab/lab-page.js`, which knows nothing about any mechanism. A study supplies a copy object and a scene module; whatever readouts its machine needs — a gauge, a selector gate — it supplies as its own instruments, and the shell gives them a place to live and a frame to paint on. The gearbox page keeps only what is actually about a gearbox and drops from 428 lines to 166.
+- Two boundaries moved to where the knowledge is. Putting the machine where a demo starts is something only the machine knows, so the shell now hands a layer's demo block over untouched instead of reaching into its state. And the third stage toggle is declared by the copy — its label and the two scene modes it flips — rather than the shell knowing what "1930 mode" means.
+- Prose stranded in the page file — the four card headings, the free-shift note, the list of phases that count as failures, the stage hint — moved to the copy file, which is where this project keeps prose. Nothing visible changed: all twelve layer and mode combinations, gate enablement, and both replay outcomes verified identical to before the split.
+
 ## [1.33.0] — 2026-07-27 · Sweep: the shapes a lathe cannot make
 ### Added
 - **`Ink3D.sweep(profile, path)`** — runs a closed 2D section along an arbitrary 3D path. Between them, `revolve` and `prism` cover solids of revolution and constant-section extrusions; everything else a machine is made of lives here — springs, threads, chains, belts, hoses, and blades that taper and twist. The section frame is parallel-transported rather than rebuilt from a fixed up-vector, so a path that turns through vertical does not flip the section inside out halfway along; on a closed path the residual the frame fails to close by is measured and spread over the loop, so the seam meets itself. Options for closing the loop, total twist, per-station taper, and open ends. `Ink3D.helixPath` supplies the path a coil spring or a thread runs on.

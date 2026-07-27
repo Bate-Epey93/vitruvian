@@ -309,6 +309,7 @@ var LabPage = (function () {
     else window.addEventListener("resize", fit);
 
     /* ═══ boot ═══ */
+    if (C.hint) $("hint").textContent = C.hint;
     if (opts.instruments) opts.instruments.build($("stageWrap"), api);
     buildStageControls($("stageWrap"));
     buildDoc($("docInner"));
