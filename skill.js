@@ -161,7 +161,7 @@ THE DIAGRAM. You are drawing on a fixed grid, not a canvas:
 
 VOICE - applies to every string field:
 - Write like a sharp human editor: concrete, direct, precise. No filler ("essentially", "crucially", "in essence"), no empty aphorisms, no drama the facts don't earn.
-- NEVER use an em dash (—) anywhere. Use a period, comma, colon, semicolon, or parentheses instead.
+- Em dashes: default to a period, comma, colon, semicolon, or parentheses. The one case that earns a dash is a parenthetical aside that itself contains commas and is followed by more sentence, where commas would read as soup and parentheses would drop the voice too low. At most one pair per string, and never as a substitute for a colon before a plain explanation. If you are not certain the sentence needs it, it does not.
 - Prefer short sentences. Cut any clause that restates the previous one in fancier words. Every sentence must carry a fact, a mechanism, or a consequence.
 - Keep the reading levels apart: beginner fields are plain speech a non-technical reader follows in one pass; enthusiast fields are vivid but exact; developer fields are technical and dry.
 - Audience first. Open on the reader's situation or the concrete failure, then name the mechanism. Never open on the mechanism and work backwards to why it matters.
