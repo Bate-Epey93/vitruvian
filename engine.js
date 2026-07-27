@@ -446,6 +446,8 @@ function cardGrid(recs) {
     const chipLabel = rec.source === "flagship" ? "sample" : (rec.source === "design" ? "your design" : "your deconstruct");
     metaRow.appendChild(h("span", "chip" + chipCls, chipLabel));
     metaRow.appendChild(h("span", "chip", rec.doc.layers.length + " layers"));
+    // this subject also exists as a machine you can turn over
+    if (fieldStudyFor(rec.system)) metaRow.appendChild(h("span", "chip lab-chip", COPY.labChip));
     card.appendChild(metaRow);
     const foot = h("div", "bd-foot");
     const n = rec.doc.layers.length;
@@ -522,19 +524,21 @@ async function renderLibrary() {
 
   // Field studies: self-contained lab pages rather than schema documents,
   // so they live outside the breakdown store and link out as plain pages.
-  root.appendChild(sectionHead(COPY.labHeading, "1 study"));
+  const n = FIELD_STUDIES.length;
+  root.appendChild(sectionHead(COPY.labHeading, n + (n === 1 ? " study" : " studies")));
   root.appendChild(h("p", "lib-note", COPY.labNote));
   const labGrid = h("div", "card-grid");
-  const lab = h("a", "bd-card lab-card");
-  lab.href = "lab/transmission.html";
-  lab.appendChild(h("div", "bd-name", COPY.labCardName));
-  const labMeta = h("div", "bd-meta");
-  labMeta.appendChild(h("span", "chip flagship", "field study"));
-  labMeta.appendChild(h("span", "chip", "6 layers"));
-  labMeta.appendChild(h("span", "chip", "3D"));
-  lab.appendChild(labMeta);
-  lab.appendChild(h("div", "bd-last", COPY.labCardSub));
-  labGrid.appendChild(lab);
+  FIELD_STUDIES.forEach(st => {
+    const lab = h("a", "bd-card lab-card");
+    lab.href = st.href;
+    lab.appendChild(h("div", "bd-name", st.name));
+    const labMeta = h("div", "bd-meta");
+    labMeta.appendChild(h("span", "chip flagship", "field study"));
+    labMeta.appendChild(h("span", "chip", COPY.labChip));
+    lab.appendChild(labMeta);
+    lab.appendChild(h("div", "bd-last", st.sub));
+    labGrid.appendChild(lab);
+  });
   root.appendChild(labGrid);
   if (!yours.length) {
     const empty = h("div", "empty-panel");

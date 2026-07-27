@@ -196,6 +196,19 @@ var DocView = (() => {
       doc.essence.deep_facts.forEach(f => facts.appendChild(h("div", "fact", f)));
       root.appendChild(facts);
 
+      // Some subjects are not only diagrams. Offered here, after the reader
+      // knows what the system is and before the ladder starts, because it is
+      // a second way through the same argument rather than a detour out of it.
+      const study = fieldStudyFor(doc.meta.system);
+      if (study) {
+        const box = h("a", "lab-offer");
+        box.href = study.href;
+        box.appendChild(h("div", "mono-label", COPY.labKicker));
+        box.appendChild(h("p", "lab-offer-text", study.blurb));
+        box.appendChild(h("span", "lab-offer-cta", COPY.labOpen));
+        root.appendChild(box);
+      }
+
       const sd = doc.strip_down;
       root.appendChild(h("h2", "section-head", "The Skeleton"));
       const block = (title, build) => {

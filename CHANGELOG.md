@@ -4,6 +4,13 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [1.35.0] — 2026-07-27 · Some subjects are also machines
+### Added
+- **A Deconstruct whose subject exists as a field study now says so.** Open one and the offer sits between the essence and the failure ladder — after you know what the system is, before the argument starts, because it is a second way through the same argument rather than a detour out of it. Matching Deconstructs also carry a **3D study** chip in the library.
+- The match is on unambiguous phrases only. Bare "transmission" is also what TCP does and "gear" alone catches half the industrial world, so neither qualifies; "manual transmission", "gearbox", "synchromesh" and their kin do. Verified against the false-positive cases that matter — *TCP data transmission*, *video transcoding* and *gear pump* all correctly decline.
+- Only **built** studies are registered. An offer to open something that does not exist is worse than no offer, so the registry in `content.js` carries what ships and nothing else; the Field studies section of the library now renders from it rather than from a hardcoded card.
+- `lab/CANDIDATES.md` — the systems worth building next, judged against what the engine can actually draw and what makes a mechanism worth drawing at all. Twelve strong candidates, seven reachable with hand-built geometry, and a list of what is deliberately out of scope, of which the first line is every software system in the library: a message queue has no axis of revolution, and 3D would buy occlusion at the cost of legibility.
+
 ## [1.34.0] — 2026-07-27 · The shell, separated from the machine
 ### Changed
 - **A field study is now four files and a mount call.** The walkthrough, demo transport, stage toggles, camera, theme and accessibility plumbing moved out of the gearbox page into `lab/lab-page.js`, which knows nothing about any mechanism. A study supplies a copy object and a scene module; whatever readouts its machine needs — a gauge, a selector gate — it supplies as its own instruments, and the shell gives them a place to live and a frame to paint on. The gearbox page keeps only what is actually about a gearbox and drops from 428 lines to 166.
