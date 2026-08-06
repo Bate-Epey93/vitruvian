@@ -26,7 +26,7 @@ var Generator = (() => {
      The model field is free text; unknown ids just get no effort param. */
   function effortFor(modelId, speed) {
     const m = (modelId || "").toLowerCase();
-    const supportsEffort = /sonnet-5|opus-4-6|opus-4-7|opus-4-8|fable|mythos/.test(m);
+    const supportsEffort = /sonnet-5|opus-5|opus-4-6|opus-4-7|opus-4-8|fable|mythos/.test(m);
     if (!supportsEffort) return {};
     return { output_config: { effort: speed === "fast" ? "low" : "medium" } };
   }
@@ -134,11 +134,12 @@ var Generator = (() => {
     const userMsg = (mode === "design"
       ? `Review and deconstruct this design I'm building:\n\n${system}`
       : `Deconstruct this system: ${system}`) + (focus ? `\n\nFocus note from the reader: ${focus}` : "");
-    // 32k ceiling: a full breakdown runs ~8-15k tokens of JSON, and adaptive
-    // thinking shares the same budget — 16k truncated real generations.
-    // Streaming is already on, so a large ceiling is safe (billed per token
-    // actually generated, not per the cap).
-    const base = { max_tokens: 32000, ...effortFor(modelId, speed), system: sys, messages: [{ role: "user", content: userMsg }] };
+    // 64k ceiling: a full breakdown runs ~8-15k tokens of JSON, and thinking
+    // shares the same budget — 16k truncated real generations, and 32k
+    // truncated a sprawling one on Opus 5, which thinks by default and thinks
+    // hardest on systems with no canonical shape. Streaming is already on, so
+    // a large ceiling is safe (billed per token generated, not per the cap).
+    const base = { max_tokens: 64000, ...effortFor(modelId, speed), system: sys, messages: [{ role: "user", content: userMsg }] };
 
     if (onProgress) onProgress({ phase: "start", tokens: 0 });
     const seen = new Set();                                 // shared across both calls: no phase replays on repair
