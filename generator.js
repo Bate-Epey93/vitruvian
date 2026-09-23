@@ -23,7 +23,9 @@ var Generator = (() => {
      reasoning, so the ceiling must leave room for both. output_config.effort
      caps that thinking spend (faster + cheaper) — but it 400s on models that
      don't support it (haiku-4-5, sonnet-4-5 and older), so gate by family.
-     The model field is free text; unknown ids just get no effort param. */
+     The model field is free text; unknown ids just get no effort param.
+     "opus-5" is a prefix on purpose: it covers opus-5 and opus-5-5 alike, so
+     a point release needs no edit here. Don't anchor these patterns. */
   function effortFor(modelId, speed) {
     const m = (modelId || "").toLowerCase();
     const supportsEffort = /sonnet-5|opus-5|opus-4-6|opus-4-7|opus-4-8|fable|mythos/.test(m);
@@ -31,11 +33,13 @@ var Generator = (() => {
     return { output_config: { effort: speed === "fast" ? "low" : "medium" } };
   }
 
-  // Fable and Opus 5 both run safety classifiers that can decline a benign
-  // request with a 200 + stop_reason "refusal". "fallbacks: default" reruns the
-  // same request on Anthropic's recommended substitute (cyber declines route to
-  // Opus 4.8) in one round trip, instead of failing — and needs no maintenance
-  // when the recommended target changes.
+  // The Opus 5 line and Fable both run safety classifiers that can decline a
+  // benign request with a 200 + stop_reason "refusal". "fallbacks: default"
+  // reruns the same request on Anthropic's recommended substitute (cyber
+  // declines route to Opus 4.8) in one round trip, instead of failing — and
+  // needs no maintenance when the recommended target changes. Prefix match
+  // again: "opus-5" covers 5 and 5.5. Opus 4.8 is absent because it is the
+  // substitute, not a model that needs one.
   const GUARDED = /fable|mythos|opus-5/;
   function headers(apiKey, modelId) {
     const h = {

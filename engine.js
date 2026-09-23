@@ -1967,8 +1967,8 @@ function renderSettings(banner) {
   mi.type = "text";
   mi.value = meta.modelId || CONFIG.defaultModel;
   const mrow = h("div", "set-row");
-  ["claude-opus-5", "claude-opus-4-8", "claude-fable-5", "claude-haiku-4-5-20251001"].forEach(preset => {
-    const b = h("button", "gbtn", preset.replace("claude-", "").replace("-20251001", ""));
+  ["claude-opus-5-5", "claude-opus-5", "claude-opus-4-8"].forEach(preset => {
+    const b = h("button", "gbtn", preset.replace("claude-", ""));
     b.onclick = () => { mi.value = preset; msave.click(); };
     mrow.appendChild(b);
   });

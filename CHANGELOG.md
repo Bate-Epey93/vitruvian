@@ -4,6 +4,24 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [1.39.0] — 2026-09-23 · Opus 5.5 in, Haiku and Fable out
+### Added
+- **Claude Opus 5.5 (`claude-opus-5-5`) is the new default.** It is both the most capable of the three and the cheapest: $4 in / $20 out per million tokens, against Opus 5's $5 / $25. A Deconstruct lands around $0.45 instead of $0.55.
+- Thinking is always on for this model and the default effort level is `medium`, which is what Vitruvian already asks for on a balanced run. Nothing had to change in the request to suit it.
+
+### Removed
+- **Haiku 4.5 and Fable 5 are gone from the model picker.** Haiku was the one option that could not take an effort cap, and Fable cost more than twice the new default for work this app does not need it for. The field is still free text, so any model id can be typed.
+- **An install already sitting on a retired model moves to the default on next load.** Taking the button away does not unpick the model for anyone already on it, and someone left on Fable would have gone on paying Fable rates with no way back short of retyping the id. Matching is exact: `claude-fable-5-1` is a current model and is left alone, and Sonnet 5 is deliberately not migrated because it is cheaper than the default and moving anyone off it would raise their bill uninvited.
+
+## [1.38.0] — 2026-07-26 · Opus 5 was thinking without a ceiling
+### Fixed
+- The effort cap is gated by a model-family pattern, and that pattern was never updated when Opus 5 became the default. Opus 5 was the one preset that both thinks by default and had no cap, so on a system with no canonical shape the thinking ate the whole token budget, the JSON truncated, and the run failed with the raw output attached. Reported against a book launch campaign, which is exactly that shape.
+- Raised the output ceiling from 32k to 64k. Thinking and response text share one budget, and streaming is already on, so this bills per token generated rather than per the cap.
+
+## [1.37.0] — 2026-07-26 · Five em dashes put back
+### Changed
+- A blanket ban on em dashes was a style bet, not a correctness fix, and it cost five sentences. They are back where no other mark does the job: an aside that carries its own commas mid-sentence, or an abrupt recast. Five of 206 strings, each one deliberate.
+
 ## [1.35.0] — 2026-07-27 · Some subjects are also machines
 ### Added
 - **A Deconstruct whose subject exists as a field study now says so.** Open one and the offer sits between the essence and the failure ladder — after you know what the system is, before the argument starts, because it is a second way through the same argument rather than a detour out of it. Matching Deconstructs also carry a **3D study** chip in the library.

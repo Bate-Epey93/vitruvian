@@ -18,6 +18,13 @@
 var Store = (() => {
   const DB_NAME = "sdc-" + CONFIG.storageKey;
   const DB_VERSION = 1;
+
+  /* Model ids this app once offered as a preset and no longer does. Matched
+     whole, never as a prefix: claude-fable-5 must not catch claude-fable-5-1,
+     which is a current model and a legitimate thing to type. Sonnet 5 is
+     deliberately absent — it was dropped from the buttons but is cheaper than
+     the default, so moving anyone off it would raise their bill uninvited. */
+  const RETIRED_MODELS = /^(claude-fable-5|claude-haiku-4-5(-20251001)?)$/;
   const SCHEMA_VERSION = 1;                 // backup file format
   const LOCAL_ONLY_META = ["apiKey", "visits", "iosHintDismissed", "persistAsked", "flagshipsSeeded"];
   let db = null;
@@ -91,6 +98,15 @@ var Store = (() => {
           genSpeed: "balanced",          // generation thinking depth: balanced | fast
           modelId: CONFIG.defaultModel
         });
+      }
+      // Retiring a model from the Settings buttons doesn't unpick it for anyone
+      // already on it: modelId is saved, so a install sitting on Fable would
+      // keep billing at Fable rates with no way back short of retyping the id.
+      // Move those installs to the default once. Only ids this app itself
+      // offered are matched — a model typed by hand is a deliberate choice and
+      // is left alone.
+      else if (RETIRED_MODELS.test(meta.modelId || "")) {
+        await this.saveMeta({ modelId: CONFIG.defaultModel });
       }
       return getMetaMap();
     },

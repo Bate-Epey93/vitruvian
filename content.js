@@ -24,13 +24,13 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.38.0",
+  appVersion: "1.39.0",
   flagshipVersion: 10,                   // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   // foundations first, then the systems built on them — YouTube last, the capstone that drills into everything
   flagshipNames: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue", "notification-system", "rate-limiter", "search-typeahead", "url-shortener", "ride-matching", "ticket-booking", "content-delivery-network", "recommendation-feed", "payment-ledger", "video-transcoding", "news-feed", "photo-store", "whatsapp", "youtube", "railway"],
   siteUrl: "https://bate-epey93.github.io/vitruvian/",
   repoUrl: "https://github.com/Bate-Epey93/vitruvian",
-  defaultModel: "claude-opus-5"           // one source of truth: Settings, storage seed, and the reset fallback
+  defaultModel: "claude-opus-5-5"         // one source of truth: Settings, storage seed, and the reset fallback
 };
 
 /* ---------- ENSO_ICONS — brush marks for the landing cards ----------
@@ -590,7 +590,7 @@ var COPY = {
   gateCompareOffline: "AI comparison needs a connection and an API key (Settings). Your answer is saved, so you can compare it against the reveal yourself.",
   keyNotice: "Your key is stored on this device only and sent only to Anthropic.",
   costNote: "A Deconstruct usually costs somewhere between a few cents and about a dollar in API usage, depending on the model.",
-  modelCostNote: "Rough cost per Deconstruct: haiku-4-5 ≈ $0.10 · opus-4-8 ≈ $0.55 · opus-5 ≈ $0.55 · fable-5 ≈ $1.20. Opus 5 is the default; it and Fable fall back automatically if a request is declined.",
+  modelCostNote: "Rough cost per Deconstruct: opus-5-5 ≈ $0.45 · opus-5 ≈ $0.55 · opus-4-8 ≈ $0.55. Opus 5.5 is both the cheapest and the most capable, so it is the default; it and Opus 5 fall back to Opus 4.8 on their own if a request is declined.",
   pricingUrl: "https://www.anthropic.com/pricing",
   privacyNote: "Everything lives on this device. Deconstructs, attempts, and your key are never sent anywhere except your own calls to Anthropic.",
   offlineGenNote: "Generation needs a connection. Reading never does.",
