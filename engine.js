@@ -931,12 +931,6 @@ async function openReader(id, layerIndex, opts = {}) {
   gifBtn.title = "Record the running Pulse as a looping GIF to share";
   loadBtn.hidden = true;
   const capSep = () => h("span", "cap-sep");
-  // labels: by default only this layer's new connections carry one; this
-  // shows every connection's label at once (remembered on this device)
-  const labelsBtn = setFace(h("button", "gbtn sim-btn"), "tag", "Labels");
-  labelsBtn.title = "Show every connection's label";
-  let allLabels = false;
-  try { allLabels = localStorage.getItem("vitruvian_all_labels") === "1"; } catch (e) {}
   // Before: in the fix step, flip the diagram to the state this layer replaced
   const beforeBtn = setFace(h("button", "gbtn sim-btn"), "compare", "Before");
   beforeBtn.title = "Show the system before this fix (or hold B)";
@@ -951,7 +945,6 @@ async function openReader(id, layerIndex, opts = {}) {
   labMenu.setAttribute("role", "menu");
   [[raceBtn, "Ring the parts where two flows can arrive at once."],
    [spineBtn, "Trace what a request waits on, and what would stop everything."],
-   [labelsBtn, "Label every connection, not just the new ones."],
    [gifBtn, "Record a running Pulse as a looping GIF."]].forEach(([btn, desc]) => {
     const item = h("div", "lab-item");
     item.append(btn, h("p", "lab-desc", desc));
@@ -993,18 +986,6 @@ async function openReader(id, layerIndex, opts = {}) {
 
   const diagram = Diagram.mount(dscroll, rec.doc);
   diagram.onDrill((sub) => drillInto(sub));
-  const paintLabels = () => {
-    diagram.labels(allLabels);
-    labelsBtn.classList.toggle("on", allLabels);
-    labelsBtn.setAttribute("aria-pressed", String(allLabels));
-    labelsBtn.title = allLabels ? "Label only what's new in this layer" : "Show every connection's label";
-  };
-  paintLabels();
-  labelsBtn.onclick = () => {
-    allLabels = !allLabels;
-    try { localStorage.setItem("vitruvian_all_labels", allLabels ? "1" : "0"); } catch (e) {}
-    paintLabels();
-  };
 
   /* flow simulation controls — instant response on press; any state change
      stops the sim (via diagram.show) and this resets the buttons */
@@ -1148,7 +1129,7 @@ async function openReader(id, layerIndex, opts = {}) {
    mark and URL in a footer bar, so every shared screenshot carries the brand.
    The SVG's classed styles live in styles.css, which a serialized SVG can't
    see — so computed styles are inlined onto a clone first. Fonts inside an
-   SVG-as-image never load; labels get Helvetica, draw.io's own face. ═══ */
+   SVG-as-image never load; labels get a system mono stack instead. ═══ */
 async function exportDiagramPNG(rec) {
   const svgEl = document.querySelector("#screen-reader .dg-svg");
   if (!svgEl) { toast("Open the diagram first"); return; }
@@ -1160,12 +1141,10 @@ async function exportDiagramPNG(rec) {
     const cs = getComputedStyle(el);
     PROPS.forEach(p => { const v = cs.getPropertyValue(p); if (v) dst[i].style.setProperty(p, v); });
     if (el.tagName === "text" || el.tagName === "tspan")
-      dst[i].style.fontFamily = "Helvetica, Arial, sans-serif";
+      dst[i].style.fontFamily = "ui-monospace, Menlo, Consolas, monospace";
   });
   clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
   clone.style.width = ""; clone.style.minWidth = "";
-  const heads = clone.querySelector(".dg-lane-heads");      // the export starts at the left edge, not the scroll position
-  if (heads) { heads.removeAttribute("transform"); heads.style.filter = "none"; }
 
   const vb = svgEl.viewBox.baseVal;
   const SCALE = 2, FOOT = 30 * SCALE;
@@ -2145,12 +2124,10 @@ async function exportPulseGIF(diagram, onProgress) {
   src.forEach((el, i) => {
     const cs = getComputedStyle(el);
     PROPS.forEach(p => { const v = cs.getPropertyValue(p); if (v) dst[i].style.setProperty(p, v); });
-    if (el.tagName === "text" || el.tagName === "tspan") dst[i].style.fontFamily = "Helvetica, Arial, sans-serif";
+    if (el.tagName === "text" || el.tagName === "tspan") dst[i].style.fontFamily = "ui-monospace, Menlo, monospace";
   });
   clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
   clone.style.width = W + "px"; clone.style.minWidth = "0"; clone.setAttribute("width", W); clone.setAttribute("height", H);
-  const heads = clone.querySelector(".dg-lane-heads");
-  if (heads) { heads.removeAttribute("transform"); heads.style.filter = "none"; }
   const cloneSim = clone.querySelector(".dg-sim");
   const liveSim = svgEl.querySelector(".dg-sim");
 

@@ -3,19 +3,13 @@
    ───────────────────────────────────────────────────────────────
    Deterministic lane layout — no graph auto-layout, ever. The AI
    assigns lane + order; this file does arithmetic:
-   · lanes = draw.io-style swimlanes, order = column, kind = shape
-     (UML actor, cylinder store, rounded process, pipe channel).
-   · Each lane has a draw.io palette pair; it colours the lane's
-     header, its band, and the Pulse tokens it emits. Nodes stay
-     white and connectors stay grey, so colour on a box or a line
-     always means STATE: red breaks next, teal is new this layer.
-     Edge KIND stays in the dash pattern (payload solid · control
-     dashed · money dotted).
-   · Lane headers are pinned: they slide with horizontal scroll so
-     a wide system never loses its lane names.
-   · Labels: this layer's new connections (and anything broken or
-     proposed) are labelled; the rest reveal on hover, tap, trace or
-     spotlight, or all at once with labels(true).
+   · lanes = horizontal bands, order = column, kind = glyph.
+   · COLOR ENCODES LANE (People, Trains&track, Control, Money…):
+     each lane has a hue; a node wears its lane's color, and an
+     EDGE wears the color of the lane its INPUT comes from (its
+     source node's lane). Edge KIND stays in the dash pattern
+     (payload solid · control dashed · money dotted). Lane bands
+     and left-edge labels are tinted to serve as the legend.
    · viewBox is computed from the FINAL state so the diagram never
      jumps or rescales between layers.
    · Edge labels render in a TOP layer and are placed to avoid the
@@ -30,16 +24,14 @@
 
 var Diagram = (() => {
   const NS = "http://www.w3.org/2000/svg";
-  const NODE_W = 112, NODE_H = 44, ACTOR_HW = 13, ACTOR_HH = 21;
+  const NODE_W = 110, NODE_H = 44, ACTOR_R = 20;
   const LANE_H = 100, COL_W = 132, GUTTER = 18, PAD_TOP = 8, PAD_BOTTOM = 12;
-  const HEADER_W = 30;    // swimlane header strip on the left, pinned on scroll
   const CELL_GAP = 6;   // vertical gap between co-located nodes in one lane+order cell
 
-  /* Lane palette — draw.io's stroke colours, assigned by lane order
-     (blue, green, orange, purple, yellow). draw.io's red pair is left
-     out on purpose: red is reserved for what breaks. The matching
-     fills live in styles.css as --lane0..4 tokens so they theme. */
-  const LANE_COLORS = ["#6c8ebf", "#82b366", "#d79b00", "#9673a6", "#d6b656"];
+  /* Lane palette — assigned by lane order. Distinct hues, all legible
+     as 1.8px strokes and 9px labels on warm paper, and distinct from
+     the failure red used for the "what breaks" pulse. */
+  const LANE_COLORS = ["#2f6f5e", "#b5651d", "#3a5bb0", "#9a3f6f", "#5f7d2e"];
 
   function el(tag, attrs, parent) {
     const e = document.createElementNS(NS, tag);
@@ -50,6 +42,60 @@ var Diagram = (() => {
   function txt(node, s) { node.appendChild(document.createTextNode(s)); return node; }
   function overlap(a, b, pad) {
     return !(a.x0 > b.x1 + pad || a.x1 < b.x0 - pad || a.y0 > b.y1 + pad || a.y1 < b.y0 - pad);
+  }
+
+  /* ── Sketch pass ──
+     Rough.js is the engine Excalidraw draws with. It takes path data, roughens
+     the geometry, and hands back ordinary path data — so nothing about the
+     document changes. Every element keeps its tag, its classes and its
+     data-id, which is what lets the flow simulation go on measuring an edge
+     with getPointAtLength, the arrowhead markers go on sitting at the ends,
+     and the spine, congestion and spotlight classes go on landing where they
+     did. The diagram is still laid out by arithmetic; only the ink wobbles.
+
+     Three settings carry it:
+     · preserveVertices pins the endpoints, so an edge still meets its node's
+       port exactly and an arrowhead cannot drift off the line it belongs to.
+     · disableMultiStroke keeps each shape ONE path. Rough's default is two
+       overlapping strokes, which would have turned a single .dg-epath into a
+       group and broken every lookup above.
+     · The seed comes from the element's own id, so the wobble is the same on
+       every render. Without that the whole diagram would reshuffle its jitter
+       each time you moved the layer scrubber, and shimmer while you scrubbed. */
+  const SKETCH = { roughness: 0.9, bowing: 0.85, disableMultiStroke: true, preserveVertices: true };
+  const roughGen = (typeof rough !== "undefined" && rough.generator) ? rough.generator() : null;
+  const sketchCache = new Map();
+  function seedOf(id) {                       // FNV-1a: small, stable, no deps
+    let h = 2166136261;
+    for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return Math.abs(h) % 2147483647;
+  }
+  /* d → roughened d. Falls back to the exact geometry whenever rough is
+     missing or chokes, so a failure here costs the look and nothing else. */
+  function sketch(d, id) {
+    if (!roughGen || !d) return d;
+    const key = id + "|" + d;
+    const hit = sketchCache.get(key);
+    if (hit) return hit;
+    let out = d;
+    try {
+      const paths = roughGen.toPaths(roughGen.path(d, Object.assign({ seed: seedOf(id) }, SKETCH)));
+      if (paths.length && paths[0].d) out = paths.map(p => p.d).join(" ");
+    } catch (err) { /* keep the exact path */ }
+    if (sketchCache.size > 4000) sketchCache.clear();   // bounded: ids × positions
+    sketchCache.set(key, out);
+    return out;
+  }
+  function roundRectD(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    if (r <= 0) return `M ${x} ${y} h ${w} v ${h} h ${-w} Z`;
+    return `M ${x + r} ${y} h ${w - 2 * r} a ${r} ${r} 0 0 1 ${r} ${r}`
+         + ` v ${h - 2 * r} a ${r} ${r} 0 0 1 ${-r} ${r}`
+         + ` h ${-(w - 2 * r)} a ${r} ${r} 0 0 1 ${-r} ${-r}`
+         + ` v ${-(h - 2 * r)} a ${r} ${r} 0 0 1 ${r} ${-r} Z`;
+  }
+  function circleD(cx, cy, r) {
+    return `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${r * 2} 0 a ${r} ${r} 0 1 0 ${-r * 2} 0 Z`;
   }
 
   /* ── Layout: column x + lane-center y, sized to the union of every
@@ -66,12 +112,12 @@ var Diagram = (() => {
     let maxOrder = 0;
     allNodes.forEach(n => { if (n.order > maxOrder) maxOrder = n.order; });
 
-    const width = HEADER_W + GUTTER + (maxOrder + 1) * COL_W + GUTTER;
+    const width = GUTTER + (maxOrder + 1) * COL_W + GUTTER;
     const height = PAD_TOP + lanes.length * LANE_H + PAD_BOTTOM;
 
     const pos = {};
     allNodes.forEach(n => {
-      pos[n.id] = { x: HEADER_W + GUTTER + n.order * COL_W + COL_W / 2, y: laneY[n.lane] + LANE_H / 2 };
+      pos[n.id] = { x: GUTTER + n.order * COL_W + COL_W / 2, y: laneY[n.lane] + LANE_H / 2 };
     });
     return { lanes, laneY, laneIndex, pos, width, height, maxOrder };
   }
@@ -114,61 +160,22 @@ var Diagram = (() => {
     }
     return d + ` L ${pts[pts.length - 1].x} ${pts[pts.length - 1].y}`;
   }
-  function halfW(n) { return n.kind === "actor" ? ACTOR_HW : NODE_W / 2; }
-  function halfH(n) { return n.kind === "actor" ? ACTOR_HH : NODE_H / 2; }
-
-  /* ── Ports. Several connections leaving or entering the same side of a
-     box used to share one point and run on top of each other. Each side now
-     hands out its own attachment points, spread evenly and ordered by where
-     the other end sits, so lines fan out instead of stacking. ── */
-  function sidesFor(e, pos) {
-    const a = pos[e.from], b = pos[e.to];
-    if (Math.abs(b.x - a.x) < 6) {
-      const down = b.y > a.y;
-      return { from: down ? "bottom" : "top", to: down ? "top" : "bottom" };
-    }
-    return b.x > a.x ? { from: "right", to: "left" } : { from: "left", to: "right" };
-  }
-  function assignPorts(edges, nodes, pos) {
-    const bySide = {};
-    edges.forEach(e => {
-      const sd = sidesFor(e, pos);
-      [["from", e.from, e.to], ["to", e.to, e.from]].forEach(([end, me, other]) => {
-        const k = me + "|" + sd[end];
-        (bySide[k] = bySide[k] || []).push({ e, end, other });
-      });
-    });
-    const port = {};
-    Object.keys(bySide).forEach(k => {
-      const list = bySide[k], [id, side] = k.split("|"), n = nodes.get(id);
-      const vertical = side === "left" || side === "right";
-      list.sort((p, q) => vertical ? pos[p.other].y - pos[q.other].y : pos[p.other].x - pos[q.other].x);
-      const room = vertical ? halfH(n) - 6 : halfW(n) - 8;
-      const step = list.length > 1 ? Math.min(vertical ? 9 : 14, (2 * room) / (list.length - 1)) : 0;
-      list.forEach((item, i) => { port[item.e.id + ":" + item.end] = (i - (list.length - 1) / 2) * step; });
-    });
-    return port;
-  }
-
+  function halfW(n) { return n.kind === "actor" ? ACTOR_R : NODE_W / 2; }
+  function halfH(n) { return n.kind === "actor" ? ACTOR_R : NODE_H / 2; }
   function edgePath(e, pos, ctx) {
     const A = ctx.nodes.get(e.from), B = ctx.nodes.get(e.to);
     const a = pos[e.from], b = pos[e.to];
     const dx = b.x - a.x;
-    const pf = ctx.port[e.id + ":from"] || 0, pt = ctx.port[e.id + ":to"] || 0;
 
-    if (Math.abs(dx) < 6) {                               // same column → vertical, jog if the ports differ
+    if (Math.abs(dx) < 6) {                               // same column → vertical
       const down = b.y > a.y ? 1 : -1;
       const y1 = a.y + down * (halfH(A) + 2), y2 = b.y - down * (halfH(B) + 6);
-      const x1 = a.x + pf, x2 = b.x + pt;
-      if (Math.abs(x1 - x2) < 1) return { d: `M ${x1} ${y1} L ${x1} ${y2}`, mx: x1 + 3, my: (y1 + y2) / 2, sameLane: false };
-      const ym = (y1 + y2) / 2;
-      return { d: roundedPath([{ x: x1, y: y1 }, { x: x1, y: ym }, { x: x2, y: ym }, { x: x2, y: y2 }]), mx: (x1 + x2) / 2, my: ym, sameLane: false };
+      return { d: `M ${a.x} ${y1} L ${a.x} ${y2}`, mx: a.x + 3, my: (y1 + y2) / 2, sameLane: false };
     }
 
     const dir = dx > 0 ? 1 : -1;
     const x1 = a.x + dir * (halfW(A) + 2);                // exit port
     const x2 = b.x - dir * (halfW(B) + 6);                // entry port (arrow inset)
-    const ay = a.y + pf, by = b.y + pt;
 
     // a horizontal blocker between the ports at this height?
     const blockedAt = y => {
@@ -183,16 +190,12 @@ var Diagram = (() => {
     };
 
     if (Math.abs(a.y - b.y) < 6) {                        // same band → horizontal
-      if (!blockedAt(a.y)) {
-        if (Math.abs(ay - by) < 1)
-          return { d: `M ${x1} ${ay} L ${x2} ${by}`, mx: (x1 + x2) / 2, my: ay - 7, sameLane: true };
-        const xm = (x1 + x2) / 2;
-        return { d: roundedPath([{ x: x1, y: ay }, { x: xm, y: ay }, { x: xm, y: by }, { x: x2, y: by }]), mx: xm, my: Math.min(ay, by) - 7, sameLane: true };
-      }
+      if (!blockedAt(a.y))
+        return { d: `M ${x1} ${a.y} L ${x2} ${b.y}`, mx: (x1 + x2) / 2, my: a.y - 7, sameLane: true };
       // detour through the band's clear upper strip instead of cutting a node
-      const yTop = ctx.laneY[A.lane] + 14 + (ctx.strips[A.lane] = (ctx.strips[A.lane] || 0) + 1) * 4;
-      return { d: roundedPath([{ x: x1, y: ay }, { x: x1 + dir * 12, y: ay }, { x: x1 + dir * 12, y: yTop },
-                               { x: x2 - dir * 12, y: yTop }, { x: x2 - dir * 12, y: by }, { x: x2, y: by }]),
+      const yTop = ctx.laneY[A.lane] + 16;
+      return { d: roundedPath([{ x: x1, y: a.y }, { x: x1 + dir * 12, y: a.y }, { x: x1 + dir * 12, y: yTop },
+                               { x: x2 - dir * 12, y: yTop }, { x: x2 - dir * 12, y: b.y }, { x: x2, y: b.y }]),
                mx: (x1 + x2) / 2, my: yTop - 6, sameLane: false };
     }
 
@@ -200,53 +203,55 @@ var Diagram = (() => {
     // channel before the target column. Fan parallel verticals apart.
     const chKey = dir + ":" + Math.round((b.x - dir * COL_W / 2) / 10);
     const nUse = (ctx.channels[chKey] = (ctx.channels[chKey] || 0) + 1);
-    const OFFS = [0, -5, 5, -9, 9, -13, 13];
+    const OFFS = [0, -5, 5, -9, 9];
     let chX = b.x - dir * COL_W / 2 + OFFS[(nUse - 1) % OFFS.length];
     chX = Math.max(Math.min(x1, x2) + 3, Math.min(Math.max(x1, x2) - 3, chX));
-    const pts = [{ x: x1, y: ay }];
-    if (blockedAt(ay) && Math.abs(chX - x1) > 30) {       // long run through occupied cells → lift into the strip
-      const yTop = ctx.laneY[A.lane] + 14 + (ctx.strips[A.lane] = (ctx.strips[A.lane] || 0) + 1) * 4;
-      pts.push({ x: x1 + dir * 12, y: ay }, { x: x1 + dir * 12, y: yTop }, { x: chX, y: yTop });
+    const pts = [{ x: x1, y: a.y }];
+    if (blockedAt(a.y) && Math.abs(chX - x1) > 30) {      // long run through occupied cells → lift into the strip
+      const yTop = ctx.laneY[A.lane] + 16;
+      pts.push({ x: x1 + dir * 12, y: a.y }, { x: x1 + dir * 12, y: yTop }, { x: chX, y: yTop });
     } else {
-      pts.push({ x: chX, y: ay });
+      pts.push({ x: chX, y: a.y });
     }
-    pts.push({ x: chX, y: by }, { x: x2, y: by });
-    return { d: roundedPath(pts), mx: chX, my: (ay + by) / 2, sameLane: false };
+    pts.push({ x: chX, y: b.y }, { x: x2, y: b.y });
+    return { d: roundedPath(pts), mx: chX, my: (a.y + b.y) / 2, sameLane: false };
   }
 
-  /* ── Node shapes, after draw.io's general and UML libraries: a stick
-     actor for people, a cylinder for stores, a rounded box for processes,
-     a pipe lying on its side for channels. White fill, one ink stroke. The
-     shape carries the kind, so no extra mark sits inside the box. ── */
-  function drawNode(g, n) {
+  /* ── Node glyphs by kind; stroke tinted by lane color. A small corner
+     mark repeats the kind INSIDE the box — shape alone vanishes when
+     you're deep in a dense diagram; the mark keeps kind readable. ── */
+  function kindMark(g, kind, x, y, color) {
+    let d;
+    if (kind === "store") d = `M ${x + 7} ${y + 7} h 9 M ${x + 7} ${y + 11} h 9`;                      // shelves
+    else if (kind === "channel") d = `M ${x + 11} -4 l 5 4 l -5 4`;                                    // through-arrow, on the pill's midline
+    else d = `M ${x + 8} ${y + 6} l 7 7 M ${x + 15} ${y + 6} l -7 7`;                                  // process: work
+    const m = el("path", { d, class: "dg-kmark", fill: "none" }, g);
+    m.style.stroke = color;
+  }
+  function drawNode(g, n, color) {
     g.setAttribute("class", `dg-node dg-kind-${n.kind}`);
     const w = NODE_W, h = NODE_H, x = -w / 2, y = -h / 2;
+    // Each kind draws twice: a clean solid underneath (.dg-fill) and the
+    // roughened outline on top (.dg-shape). Filling the sketchy path itself
+    // would ravel the edge of the fill; keeping them apart gives a crisp
+    // shape with a hand-drawn line around it.
     if (n.kind === "actor") {
-      // hit area first so the thin figure is easy to tap
-      el("rect", { x: -ACTOR_HW - 4, y: -ACTOR_HH - 2, width: 2 * ACTOR_HW + 8, height: 2 * ACTOR_HH + 4, class: "dg-hit" }, g);
-      el("circle", { cx: 0, cy: -ACTOR_HH + 6, r: 6, class: "dg-shape" }, g);
-      el("path", {
-        d: `M 0 ${-ACTOR_HH + 12} V ${4} M ${-ACTOR_HW} ${-ACTOR_HH + 17} H ${ACTOR_HW} M 0 4 L ${-ACTOR_HW + 2} ${ACTOR_HH} M 0 4 L ${ACTOR_HW - 2} ${ACTOR_HH}`,
-        class: "dg-open dg-figure", fill: "none"
-      }, g);
+      el("circle", { r: ACTOR_R, class: "dg-fill" }, g);
+      el("path", { d: sketch(circleD(0, 0, ACTOR_R), n.id), class: "dg-shape" }, g).style.stroke = color;
       labelBelow(g, n.label);
       return;
     }
-    if (n.kind === "store") {                             // cylinder
-      const ry = 6;
-      el("path", { d: `M ${x} ${y + ry} A ${w / 2} ${ry} 0 0 1 ${x + w} ${y + ry} V ${y + h - ry} A ${w / 2} ${ry} 0 0 1 ${x} ${y + h - ry} Z`, class: "dg-shape" }, g);
-      el("path", { d: `M ${x} ${y + ry} A ${w / 2} ${ry} 0 0 0 ${x + w} ${y + ry}`, class: "dg-open dg-rim", fill: "none" }, g);
-      labelInside(g, n.label, 3);
-      return;
+    if (n.kind === "store") {                             // open-topped rect: 3 sides
+      el("rect", { x, y, width: w, height: h, class: "dg-fill" }, g);
+      el("path", { d: sketch(`M ${x} ${y} L ${x} ${y + h} L ${x + w} ${y + h} L ${x + w} ${y}`, n.id), class: "dg-shape dg-open" }, g).style.stroke = color;
+    } else if (n.kind === "channel") {
+      el("rect", { x, y, width: w, height: h, rx: h / 2, class: "dg-fill" }, g);
+      el("path", { d: sketch(roundRectD(x, y, w, h, h / 2), n.id), class: "dg-shape" }, g).style.stroke = color;
+    } else {                                              // process
+      el("rect", { x, y, width: w, height: h, rx: 3, class: "dg-fill" }, g);
+      el("path", { d: sketch(roundRectD(x, y, w, h, 3), n.id), class: "dg-shape" }, g).style.stroke = color;
     }
-    if (n.kind === "channel") {                           // pipe on its side, open end on the right
-      const rx = 8;
-      el("path", { d: `M ${x + rx} ${y} H ${x + w - rx} A ${rx} ${h / 2} 0 0 1 ${x + w - rx} ${y + h} H ${x + rx} A ${rx} ${h / 2} 0 0 1 ${x + rx} ${y} Z`, class: "dg-shape" }, g);
-      el("path", { d: `M ${x + w - rx} ${y} A ${rx} ${h / 2} 0 0 0 ${x + w - rx} ${y + h}`, class: "dg-open dg-rim", fill: "none" }, g);
-      labelInside(g, n.label, 0, -3);
-      return;
-    }
-    el("rect", { x, y, width: w, height: h, rx: 6, class: "dg-shape" }, g);   // process
+    kindMark(g, n.kind, x, y, color);
     labelInside(g, n.label);
   }
 
@@ -261,18 +266,17 @@ var Diagram = (() => {
     });
     return lines.length > 2 ? [lines[0], lines[1].replace(/.$/, "…")] : lines;
   }
-  function labelInside(g, label, dy = 0, dx = 0) {
-    const lines = splitLabel(label, 17);
-    const t = el("text", { class: "dg-label", "text-anchor": "middle", x: dx, y: (lines.length > 1 ? -2.5 : 4) + dy }, g);
-    lines.forEach((ln, i) => txt(el("tspan", { x: dx, dy: i ? 12.5 : 0 }, t), ln));
+  function labelInside(g, label) {
+    const lines = splitLabel(label, 14);
+    const t = el("text", { class: "dg-label", "text-anchor": "middle", y: lines.length > 1 ? -3 : 4 }, g);
+    lines.forEach((ln, i) => txt(el("tspan", { x: 0, dy: i ? 12 : 0 }, t), ln));
   }
   function labelBelow(g, label) {
-    const t = el("text", { class: "dg-label", "text-anchor": "middle", y: ACTOR_HH + 13 }, g);
+    const t = el("text", { class: "dg-label", "text-anchor": "middle", y: ACTOR_R + 13 }, g);
     txt(t, label);
   }
 
   /* ── Mount ── */
-  let mountSeq = 0;
   function mount(container, doc) {
     const layout = computeLayout(doc);
     const laneColor = id => LANE_COLORS[(layout.laneIndex[id] || 0) % LANE_COLORS.length];
@@ -286,67 +290,33 @@ var Diagram = (() => {
     // the pane scrolls horizontally, rather than squishing everything to fit
     svg.style.minWidth = layout.width + "px";
 
-    // arrowheads: draw.io's "classic" notched head, one per state. Marker ids
-    // are per-mount so two diagrams on a page never borrow each other's defs.
+    // one arrowhead marker per lane color + the failure marker
     const defs = el("defs", {}, svg);
-    const uid = "dg" + (++mountSeq);
-    const ARR = "M 0.6 1.2 L 9 5 L 0.6 8.8 L 2.8 5 Z";
-    const mk = (id, cls) => {
-      const m = el("marker", { id: uid + "-" + id, viewBox: "0 0 10 10", refX: 7.6, refY: 5, markerWidth: 7.5, markerHeight: 7.5, orient: "auto-start-reverse" }, defs);
-      el("path", { d: ARR, class: cls, "stroke-linejoin": "round" }, m);
+    // solid triangle (no concave tail): the thin edge line tucks into the base
+    // with generous overlap, so the head never reads as detached at the node.
+    const ARR = "M 0.4 1.5 L 8.6 5 L 0.4 8.5 Z";
+    const mk = (id, fill) => {
+      const m = el("marker", { id, viewBox: "0 0 10 10", refX: 7.3, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, defs);
+      el("path", { d: ARR, fill, "stroke-linejoin": "round" }, m);
     };
-    mk("arr", "dg-arrow");
-    mk("arr-new", "dg-arrow dg-arrow-new");
-    mk("arr-broken", "dg-arrow dg-arrow-broken");
-    const arrow = id => `url(#${uid}-${id})`;
+    layout.lanes.forEach((l, i) => mk("arr-lane" + i, LANE_COLORS[i % LANE_COLORS.length]));
+    mk("arr-broken", "#c22f2f");
 
-    // swimlane bodies: one tinted band per lane, a hairline between lanes
-    const bandsG = el("g", { class: "dg-lanes" }, svg);
-    const top0 = layout.laneY[layout.lanes[0].id], poolH = layout.lanes.length * LANE_H;
+    // lane bands (tinted by lane color = built-in legend) + labels
+    const bandsG = el("g", {}, svg);
     layout.lanes.forEach((l, i) => {
-      const y = layout.laneY[l.id];
-      el("rect", { x: HEADER_W, y, width: layout.width - HEADER_W, height: LANE_H, class: `dg-lane-b dg-lane-i${i % LANE_COLORS.length}` }, bandsG);
-      if (i) el("line", { x1: HEADER_W, y1: y, x2: layout.width, y2: y, class: "dg-lane-line" }, bandsG);
+      const y = layout.laneY[l.id], color = LANE_COLORS[i % LANE_COLORS.length];
+      el("rect", { x: 0, y, width: layout.width, height: LANE_H, fill: color, "fill-opacity": 0.05 }, bandsG);
+      if (i) el("line", { x1: 0, y1: y, x2: layout.width, y2: y, class: "dg-lane-line" }, bandsG);
+      const lab = el("text", { x: 7, y: y + 14, class: "dg-lane-label" }, bandsG);
+      lab.style.fill = color;
+      txt(lab, l.label.toUpperCase());
     });
-    el("rect", { x: 0.5, y: top0 + 0.5, width: layout.width - 1, height: poolH - 1, class: "dg-pool" }, bandsG);
 
     const edgesG = el("g", {}, svg);
     const nodesG = el("g", {}, svg);
     const labelsG = el("g", {}, svg);       // labels on TOP — never hidden by a box
     const simG = el("g", { class: "dg-sim" }, svg);   // flow tokens above everything
-
-    // swimlane headers, drawn last so the content scrolls UNDER them while
-    // they stay pinned to the pane's left edge (see pinHeads)
-    const headsG = el("g", { class: "dg-lane-heads" }, svg);
-    layout.lanes.forEach((l, i) => {
-      const y = layout.laneY[l.id];
-      el("rect", { x: 0, y, width: HEADER_W, height: LANE_H, class: `dg-lane-h dg-lane-i${i % LANE_COLORS.length}` }, headsG);
-      const words = splitLabel(l.label, 15);
-      const t = el("text", { class: "dg-lane-label", "text-anchor": "middle", transform: `translate(${HEADER_W / 2 + (words.length > 1 ? -5 : 0) + 4} ${y + LANE_H / 2}) rotate(-90)` }, headsG);
-      words.forEach((w, k) => txt(el("tspan", { x: 0, dy: k ? 11 : 0 }, t), w));
-    });
-    el("line", { x1: HEADER_W, y1: top0, x2: HEADER_W, y2: top0 + poolH, class: "dg-lane-sep" }, headsG);
-    function pinHeads() {
-      const z = (svg.getBoundingClientRect().width || layout.width) / layout.width || 1;
-      const sl = container.scrollLeft || 0;
-      headsG.setAttribute("transform", sl > 0 ? `translate(${(sl / z).toFixed(1)} 0)` : "");
-      headsG.classList.toggle("dg-pinned", sl > 0);
-    }
-    container.addEventListener("scroll", pinHeads, { passive: true });
-
-    // edge labels: reveal one on hover or tap, all of them with labels(true)
-    let peeked = null;
-    function peek(id) {
-      if (peeked === id) return;
-      labelsG.querySelectorAll(".dg-peek").forEach(e => e.classList.remove("dg-peek"));
-      peeked = id;
-      if (id) labelsG.querySelectorAll(`[data-id="${CSS.escape(id)}"]`).forEach(e => e.classList.add("dg-peek"));
-    }
-    svg.addEventListener("pointerover", ev => {
-      const eg = ev.target.closest && ev.target.closest(".dg-edge");
-      peek(eg ? eg.getAttribute("data-id") : null);
-    });
-    svg.addEventListener("pointerleave", () => peek(null));
     const laneLabelById = {};
     layout.lanes.forEach(l => { laneLabelById[l.id] = l.label; });
     let shownIds = new Set();
@@ -448,30 +418,20 @@ var Diagram = (() => {
         pos[n.id] = { x: b.x, y: b.y + dy };
       });
 
-      // what this state added over the one before it: drawn in teal and
-      // labelled. Off at a gate (red owns that moment) and in a what-if,
-      // where violet marks the proposal instead.
-      const added = new Set();
-      if (upto > 0 && !hl.size && !ghostSet.size && opts.fresh !== false) {
-        const before = stateAt(doc, upto - 1);
-        st.nodes.forEach((n, id) => { if (!before.nodes.has(id)) added.add(id); });
-        st.edges.forEach((e, id) => { if (!before.edges.has(id)) added.add(id); });
-      }
-
-      // edges: neutral ink, kind in the dash, state in the colour
-      const live = [...st.edges.values()].filter(e => st.nodes.has(e.from) && st.nodes.has(e.to));
-      const routeCtx = { nodes: st.nodes, channels: {}, strips: {}, laneY: layout.laneY, port: assignPorts(live, st.nodes, pos) };
+      // edges (paths only — colored by the SOURCE lane, the input's origin)
+      const routeCtx = { nodes: st.nodes, channels: {}, laneY: layout.laneY };
       const labelJobs = [];
       const ghostPaths = [];        // proposal edges that will sketch themselves in
-      live.forEach(e => {
+      st.edges.forEach(e => {
+        if (!st.nodes.has(e.from) || !st.nodes.has(e.to)) return;
         const from = st.nodes.get(e.from);
-        const broken = hl.has(e.id), fresh = added.has(e.id);
+        const broken = hl.has(e.id);
+        const li = layout.laneIndex[from.lane] || 0;
         const g = el("g", { class: `dg-edge dg-ekind-${e.kind}`, "data-id": e.id }, edgesG);
         const p = edgePath(e, pos, routeCtx);
-        el("path", { d: p.d, class: "dg-ehit" }, g);          // wide invisible stroke: easy to hover or tap
-        const path = el("path", { d: p.d, fill: "none", class: "dg-epath", "marker-end": arrow(broken ? "arr-broken" : fresh ? "arr-new" : "arr") }, g);
+        const path = el("path", { d: sketch(p.d, e.id), fill: "none", class: "dg-epath", "marker-end": `url(#${broken ? "arr-broken" : "arr-lane" + li})` }, g);
+        path.style.stroke = broken ? "#c22f2f" : LANE_COLORS[li % LANE_COLORS.length];
         if (broken) g.classList.add("dg-broken");
-        if (fresh) g.classList.add("dg-new");
         if (ghostSet.has(e.id)) { g.classList.add("dg-ghost"); ghostPaths.push(path); }
         if (stressSet.has(e.id)) g.classList.add("dg-stress");
         if (animate && !prev.has(e.id)) g.classList.add("dg-enter");
@@ -480,8 +440,7 @@ var Diagram = (() => {
           // same-lane edges: lift the label into the band's clear upper strip
           const cx = p.sameLane ? (pos[e.from].x + pos[e.to].x) / 2 : p.mx;
           const cy = p.sameLane ? layout.laneY[from.lane] + 13 : p.my;
-          const loud = upto === 0 || fresh || broken || ghostSet.has(e.id) || stressSet.has(e.id);
-          labelJobs.push({ e, g, cx, cy, path, sameLane: p.sameLane, x0: pos[e.from].x, x1: pos[e.to].x, loud, tone: broken ? "is-broken" : fresh ? "is-new" : ghostSet.has(e.id) ? "is-ghost" : "" });
+          labelJobs.push({ e, g, cx, cy, path, sameLane: p.sameLane, x0: pos[e.from].x, x1: pos[e.to].x, color: broken ? "#c22f2f" : LANE_COLORS[li % LANE_COLORS.length] });
         }
       });
 
@@ -490,20 +449,19 @@ var Diagram = (() => {
       st.nodes.forEach(n => {
         const p = pos[n.id];
         const g = el("g", { transform: `translate(${p.x} ${p.y})`, "data-id": n.id }, nodesG);
-        drawNode(g, n);
-        if (added.has(n.id)) g.classList.add("dg-new");
+        drawNode(g, n, laneColor(n.lane));
         // semantic zoom: a node that is a system in its own right gets a drill
         // badge (⊕) at its top-right corner; tapping it opens the nested study
         if (typeof n.expands_to === "string" && n.expands_to.trim()) {
           g.classList.add("dg-drillable");
           g.setAttribute("data-expand", n.expands_to.trim());
-          // draw.io's expand control: a small square with a plus, on the corner
-          const bx = halfW(n) - 2, by = -halfH(n) + 2;
+          const bx = (n.kind === "actor" ? ACTOR_R : NODE_W / 2) - 3;
+          const by = -(n.kind === "actor" ? ACTOR_R : NODE_H / 2) + 3;
           const badge = el("g", { class: "dg-drill-badge", transform: `translate(${bx} ${by})` }, g);
           txt(el("title", {}, badge), `Zoom into "${n.expands_to.trim()}"`);
-          el("rect", { x: -7, y: -7, width: 14, height: 14, rx: 3, class: "dg-drill-disc" }, badge);
-          el("line", { x1: -3.5, y1: 0, x2: 3.5, y2: 0, class: "dg-drill-plus" }, badge);
-          el("line", { x1: 0, y1: -3.5, x2: 0, y2: 3.5, class: "dg-drill-plus" }, badge);
+          el("circle", { r: 7.5, class: "dg-drill-disc" }, badge).style.fill = laneColor(n.lane);
+          el("line", { x1: -3.2, y1: 0, x2: 3.2, y2: 0, class: "dg-drill-plus" }, badge);
+          el("line", { x1: 0, y1: -3.2, x2: 0, y2: 3.2, class: "dg-drill-plus" }, badge);
         }
         txt(el("title", {}, g), `${n.label} · ${laneLabelById[n.lane] || n.lane} · ${n.kind}`);
         if (hl.has(n.id)) g.classList.add("dg-broken");
@@ -511,8 +469,9 @@ var Diagram = (() => {
         if (stressSet.has(n.id)) g.classList.add("dg-stress");
         if (animate && !prev.has(n.id)) g.classList.add("dg-enter");
         else if (animate) g.classList.add("dg-prior");
-        const hw = halfW(n), hh = halfH(n) + (n.kind === "actor" ? 16 : 0);   // an actor's name sits below it
-        nodeRects.push({ x0: p.x - hw, y0: p.y - halfH(n), x1: p.x + hw, y1: p.y + hh });
+        const hw = n.kind === "actor" ? ACTOR_R : NODE_W / 2;
+        const hh = n.kind === "actor" ? ACTOR_R : NODE_H / 2;
+        nodeRects.push({ x0: p.x - hw, y0: p.y - hh, x1: p.x + hw, y1: p.y + hh });
       });
 
       // Labels last, on top. A label may sit ANYWHERE along the edge it names,
@@ -549,7 +508,7 @@ var Diagram = (() => {
       // back. The tight pass keeps a label sitting on its edge; the wide pass
       // is the last resort that goes looking for genuinely empty paper.
       function place(job, text, anchors, span, step, drift) {
-        const w = text.length * 5.6 + 10, hh = 7.5;
+        const w = text.length * 5.3 + 6, hh = 6.5;
         let best = { x: job.cx, y: job.cy, ax: job.cx, ay: job.cy, score: Infinity };
         anchors.forEach(a => {
           for (let off = -span; off <= span; off += step) {
@@ -566,9 +525,6 @@ var Diagram = (() => {
       }
       const CLEAR = 12;      // below this, nothing meaningful is being overlapped
 
-      // labelled connections claim their places first; the quiet ones (shown
-      // on hover, trace or labels(true)) fit around them
-      labelJobs.sort((p, q) => (q.loud ? 1 : 0) - (p.loud ? 1 : 0));
       labelJobs.forEach(job => {
         const full = job.e.label;
         const anchors = anchorsFor(job);
@@ -593,14 +549,13 @@ var Diagram = (() => {
         }
         placed.push({ x0: fit.x - fit.w / 2, y0: fit.y - fit.hh, x1: fit.x + fit.w / 2, y1: fit.y + fit.hh });
         // the leader only earns its ink once the label has actually travelled
-        const quiet = job.loud ? "" : " dg-quiet";
         if (lead && Math.abs(fit.y - fit.ay) > 20) {
           const y0 = fit.ay > fit.y ? fit.y + fit.hh + 1 : fit.y - fit.hh - 1;
-          el("line", { x1: fit.x, y1: y0, x2: fit.ax, y2: fit.ay, class: "dg-leader" + quiet, "data-id": job.e.id }, labelsG);
+          const ln = el("line", { x1: fit.x, y1: y0, x2: fit.ax, y2: fit.ay, class: "dg-leader" }, labelsG);
+          ln.style.stroke = job.color;
         }
-        // draw.io puts a label on a small white chip over its line
-        el("rect", { x: fit.x - fit.w / 2, y: fit.y - fit.hh, width: fit.w, height: fit.hh * 2, rx: 3, class: "dg-elabel-bg" + quiet, "data-id": job.e.id }, labelsG);
-        const t = el("text", { x: fit.x, y: fit.y + 3.4, "text-anchor": "middle", class: ("dg-elabel " + job.tone).trim() + quiet, "data-id": job.e.id }, labelsG);
+        const t = el("text", { x: fit.x, y: fit.y + 3, "text-anchor": "middle", class: "dg-elabel", "data-id": job.e.id }, labelsG);
+        t.style.fill = job.color;
         // the untruncated text hangs off the EDGE, not the <text> — a <title>
         // child inside an SVG <text> renders as part of the string
         if (text !== full) txt(el("title", {}, job.g), full);
@@ -638,8 +593,6 @@ var Diagram = (() => {
         freshTimer = setTimeout(() => svg.classList.remove("dg-fresh"), 1500);
       }
       shownIds = new Set([...st.nodes.keys(), ...st.edges.keys()]);
-      peeked = null;
-      pinHeads();
       lastState = st;
       lastPos = pos;            // the sim draws store fill meters at node positions
       lastHl = hl;
@@ -882,7 +835,6 @@ var Diagram = (() => {
         svg.style.width = (layout.width * nz) + "px";
         container.scrollLeft = contentX * nz - cx;
         container.scrollTop = contentY * nz - cy;
-        pinHeads();
         return nz;
       }
       function animateTo(target, cx, cy, ms = 160) {
@@ -1347,10 +1299,7 @@ var Diagram = (() => {
       };
     })();
 
-    /* every connection labelled at once, or only the ones that matter now */
-    function labels(all) { svg.classList.toggle("dg-all-labels", !!all); return !!all; }
-
-    return { show, spotlight, focus, layout, laneColor, sim, zoom: zoomCtl, raceSpotlight, contendedIds, spineSpotlight, labels, stateAt: u => stateAt(doc, u), doc, onDrill(fn) { onDrillCb = fn; } };
+    return { show, spotlight, focus, layout, laneColor, sim, zoom: zoomCtl, raceSpotlight, contendedIds, spineSpotlight, stateAt: u => stateAt(doc, u), doc, onDrill(fn) { onDrillCb = fn; } };
   }
 
   /* ── Legend: a compact always-visible key under the diagram (brings the
@@ -1379,23 +1328,22 @@ var Diagram = (() => {
       it.appendChild(t);
       wrap.appendChild(it);
     };
-    // node kinds, drawn the way the diagram draws them
-    item(s => { el("circle", { cx: 15, cy: 3.6, r: 2.4, class: "dgl-shape" }, s); el("path", { d: "M 15 6 V 10 M 11 7.5 H 19 M 15 10 L 12 14.5 M 15 10 L 18 14.5", class: "dgl-line" }, s); }, "actor");
-    item(s => { el("path", { d: "M 7 4.5 A 8 2 0 0 1 23 4.5 V 11.5 A 8 2 0 0 1 7 11.5 Z", class: "dgl-shape" }, s); el("path", { d: "M 7 4.5 A 8 2 0 0 0 23 4.5", class: "dgl-line" }, s); }, "store");
-    item(s => el("rect", { x: 6, y: 3, width: 18, height: 10, rx: 2.5, class: "dgl-shape" }, s), "process");
-    item(s => { el("path", { d: "M 9 3 H 21 A 3 5 0 0 1 21 13 H 9 A 3 5 0 0 1 9 3 Z", class: "dgl-shape" }, s); el("path", { d: "M 21 3 A 3 5 0 0 0 21 13", class: "dgl-line" }, s); }, "channel");
-    // edge kinds: the dash carries the kind, the line stays grey
-    item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line", "stroke-width": 1.8 }, s), "flow");
+    // node kinds
+    item(s => el("circle", { cx: 15, cy: 8, r: 5.5, class: "dgl-shape" }, s), "actor");
+    item(s => el("path", { d: "M 6 3 L 6 13 L 24 13 L 24 3", fill: "none", class: "dgl-shape" }, s), "storage");
+    item(s => el("rect", { x: 6, y: 3, width: 18, height: 10, rx: 1.5, class: "dgl-shape" }, s), "process");
+    item(s => el("rect", { x: 6, y: 3, width: 18, height: 10, rx: 5, class: "dgl-shape" }, s), "channel");
+    // edge kinds (pattern = kind; colour follows the source lane)
+    item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line", "stroke-width": 2 }, s), "flow");
     item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line", "stroke-dasharray": "4 3" }, s), "control");
     item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line", "stroke-dasharray": "1.5 3" }, s), "money");
-    // state colours
-    item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line dgl-new", "stroke-width": 2 }, s), "new this layer");
+    // failure pulse
     item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line dgl-broken", "stroke-width": 2 }, s), "breaks next");
     // under Pulse: a jam creeping back upstream from a node that can't keep up
     item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line dgl-broken", "stroke-width": 2, "stroke-dasharray": "5 2.6" }, s), "backpressure");
     const note = document.createElement("span");
     note.className = "dgl-note";
-    note.textContent = "hover or tap a line for its label";
+    note.textContent = "colour = lane · payload takes its source's shape";
     wrap.appendChild(note);
     return wrap;
   }
