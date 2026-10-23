@@ -550,8 +550,16 @@ var NUMBERS_LIBRARY = [
 /* ---------- UI COPY ---------- */
 var COPY = {
   libraryTitle: "Library",
+  // the path grouped into units, in the shipped order. Names are a first draft.
+  pathUnits: [
+    { name: "Building blocks", systems: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue"] },
+    { name: "Serving a lot of people", systems: ["notification-system", "rate-limiter", "search-typeahead", "url-shortener"] },
+    { name: "Contention, edges and money", systems: ["ride-matching", "ticket-booking", "content-delivery-network", "recommendation-feed", "payment-ledger"] },
+    { name: "Media pipelines", systems: ["video-transcoding", "news-feed", "photo-store"] },
+    { name: "Capstones", systems: ["whatsapp", "youtube", "railway"] }
+  ],
   sampleHeading: "Sample Deconstructs",
-  sampleNote: "Worked examples that set the bar for a Deconstruct. Track walks them in order.",
+  sampleNote: "Worked examples that set the bar for a Deconstruct. Your path walks them in order.",
   yoursHeading: "Your Deconstructs",
   yoursEmpty: "Nothing here yet. Name any system above and Vitruvian will take it apart, failure by failure.",
   labHeading: "Field studies",

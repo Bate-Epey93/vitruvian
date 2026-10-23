@@ -257,6 +257,7 @@ function wireTopbar() {
   $("modelsBtn").onclick = () => { renderModels(); show("models"); };
   $("trackBtn").onclick = () => { renderTrack(); show("track"); };
   $("drillBtn").onclick = () => { renderDrill(); show("drill"); };
+  refreshReviewBadge();
   $("settingsBtn").onclick = () => { renderSettings(); show("settings"); };
   $("themeBtn").onclick = () => toggleTheme();
   $("seqBtn").onclick = () => { if (currentRec) openSequence(currentRec); };
@@ -589,9 +590,84 @@ function cardGrid(recs) {
   return grid;
 }
 
+/* ═══ Home: what to do next comes first. Continue where you left off,
+   the cards due in Review, and your place on the path; the library sits
+   below. A first-time visitor gets Start here instead of Continue. ═══ */
+async function homeTop(root) {
+  const p = await computeProgress();
+  const started = p.recs.filter(r => r.lastOpen && (r.progress.position > 0 || p.readCount(r) > 0));
+  const last = started.sort((x, y) => y.lastOpen - x.lastOpen)[0];
+  const top = h("section", "home-top");
+
+  const cont = h("div", "home-card home-continue");
+  const target = last || p.path[0];
+  if (target) {
+    const thumb = h("div", "home-thumb");
+    cont.appendChild(thumb);
+    const txt = h("div", "home-cont-text");
+    const N = target.doc.layers.length, pos = target.progress.position || 0;
+    const where = !last ? `${N} layers · about ${N * 4} minutes`
+      : pos === 0 ? "Meet the system" : pos > N ? (pos === N + 1 ? "Trials" : "Transfer")
+      : `Layer ${pos} of ${N} · ${["It breaks", "Your move", "The fix", "The price"][(target.progress.step || 1) - 1]}`;
+    txt.append(h("div", "eyebrow-sm", last ? "Continue" : "Start here"), h("h2", "home-sys", target.system), h("div", "home-where", where));
+    const strata = h("div", "bd-strata");
+    target.doc.layers.forEach(L => strata.appendChild(h("span", target.attempts[L.index] && target.attempts[L.index].revealed ? "on" : null)));
+    txt.appendChild(strata);
+    const go = ctaButton(last ? "Resume" : "Start");
+    go.onclick = () => openReader(target.id);
+    txt.appendChild(go);
+    cont.appendChild(txt);
+    top.appendChild(cont);
+    try {
+      const dg = Diagram.mount(thumb, target.doc);
+      dg.show(Math.max(0, Math.min(N, pos > N ? N : pos - ((target.progress.step || 1) <= 2 && pos > 0 ? 1 : 0))), { fresh: false });
+    } catch (e) { thumb.remove(); }
+  }
+
+  const rv = h("div", "home-card home-review");
+  rv.appendChild(h("div", "eyebrow-sm", "Review"));
+  if (p.review.due) {
+    rv.appendChild(h("h2", "home-sys", `${p.review.due} due today`));
+    rv.appendChild(h("div", "home-where", `About ${Math.max(1, Math.round(Math.min(10, p.review.due) * 25 / 60))} minute${p.review.due > 2 ? "s" : ""}`));
+    const b = h("button", "gbtn", "Start review");
+    b.onclick = () => { renderDrill(); show("drill"); };
+    rv.appendChild(b);
+  } else if (p.review.cards) {
+    rv.appendChild(h("h2", "home-sys", "All caught up"));
+    rv.appendChild(h("div", "home-where", `${p.review.cards} card${p.review.cards > 1 ? "s" : ""} in your deck` + (p.review.nextDue ? `, next ${Review.inDays(p.review.nextDue)}` : "")));
+  } else {
+    rv.appendChild(h("h2", "home-sys", "Nothing yet"));
+    rv.appendChild(h("div", "home-where", "Read a layer to its fix and it comes back here to test you."));
+  }
+  top.appendChild(rv);
+  root.appendChild(top);
+
+  // your path: one dot per system, in order
+  const path = h("section", "home-path");
+  const ph = h("div", "home-path-head");
+  ph.append(h("h2", "lib-section-title", "Your path"), h("span", "lib-section-sub", `${p.pathDone} of ${p.pathTotal} systems done`));
+  const all = h("button", "gbtn ghost", "See the whole path");
+  all.onclick = () => { renderTrack(); show("track"); };
+  ph.appendChild(all);
+  path.appendChild(ph);
+  const track = h("div", "path-track");
+  p.path.forEach((r, i) => {
+    const done = p.isDone(r), cur = p.current && p.current.id === r.id;
+    const dot = h("button", "path-dot" + (done ? " done" : "") + (cur ? " cur" : ""));
+    dot.setAttribute("aria-label", `${i + 1}. ${r.system}${done ? ", done" : cur ? ", you are here" : ""}`);
+    dot.title = r.system;
+    dot.onclick = () => openReader(r.id);
+    if (cur || i === 0 || i === p.path.length - 1) dot.appendChild(h("span", "path-label", r.system));
+    track.appendChild(dot);
+  });
+  path.appendChild(track);
+  root.appendChild(path);
+}
+
 async function renderLibrary() {
   const root = $("screen-library").firstElementChild;
   root.textContent = "";
+  await homeTop(root);
   const head = h("header", "lib-hero");
   head.appendChild(h("h1", "title", "What do you want to understand?"));
   head.appendChild(h("p", "subtitle", COPY.libraryLede));
@@ -989,6 +1065,17 @@ async function openReader(id, layerIndex, opts = {}) {
     setFace(beforeBtn, "compare", before ? "After" : "Before");
   };
 
+  // for the recap: models met in other systems, and what comes next on the path
+  const others = (await Store.getBreakdowns()).filter(r => r.id !== rec.id);
+  const modelsElsewhere = new Set();
+  others.forEach(r => r.doc.layers.forEach(L => { const at = r.attempts[L.index]; if (at && at.revealed) modelsElsewhere.add(L.problem.model.id); }));
+  const pathIds = CONFIG.flagshipNames.map(n => "flagship-" + n);
+  const finished = r => r.doc.layers.every(L => r.attempts[L.index] && r.attempts[L.index].revealed);
+  const byId = {}; others.forEach(r => { byId[r.id] = r; });
+  const here = pathIds.indexOf(rec.id);
+  const nextId = pathIds.slice(here + 1).concat(pathIds.slice(0, Math.max(0, here))).find(id => byId[id] && !finished(byId[id]));
+  const nextOnPath = nextId ? { id: nextId, system: byId[nextId].system } : null;
+
   // gates are opt-in: on only if this breakdown enabled them, or the user set the default on
   const challengeOn = rec.challengeMode != null ? rec.challengeMode : meta.challengeModeDefault === true;
 
@@ -1000,6 +1087,8 @@ async function openReader(id, layerIndex, opts = {}) {
     canReplay: diagram.sim.available,
     onReplay: runReplay,
     onTools,
+    modelsElsewhere, nextOnPath,
+    async onOpen(id) { await flushSaves(); openReader(id); },
     async onFinish() { await flushSaves(); await renderLibrary(); show("library"); },
     onSave(r) { Store.saveBreakdownLight(r); },
     canCompare() {
@@ -1713,7 +1802,6 @@ async function renderModels(detailId) {
    Gates you have revealed become drillable, oldest practice first;
    interview probes from revealed layers deal as a cross-library deck.
    Fully offline; grades write back to the attempt record. */
-let drillState = null;
 
 /* ═══ Track — the curated path through the library + your progress ═══ */
 async function computeProgress() {
@@ -1730,8 +1818,19 @@ async function computeProgress() {
     const a = r.attempts[L.index];
     if (a && a.revealed) { gates++; if (L.problem && L.problem.model) seenModels.add(L.problem.model.id); }
   }));
+  // which thinking models each path system introduces for the first time
+  const introduces = {}, seen = new Set();
+  path.forEach(r => {
+    introduces[r.id] = [];
+    r.doc.layers.forEach(L => { const m = L.problem.model.id; if (!seen.has(m)) { seen.add(m); introduces[r.id].push(m); } });
+  });
+  const readCount = r => r.doc.layers.filter(L => r.attempts[L.index] && r.attempts[L.index].revealed).length;
+  // where you are: the most recently opened path system that isn't finished,
+  // else the first unfinished one in order
+  const open = path.filter(r => r.lastOpen && !isDone(r)).sort((x, y) => y.lastOpen - x.lastOpen)[0];
+  const current = open || path.find(r => !isDone(r)) || null;
   return {
-    recs, path, byId, isDone,
+    recs, path, byId, isDone, introduces, readCount, current, review: Review.stats(recs),
     pathDone, pathTotal: path.length,
     models: seenModels.size, modelsTotal: MODEL_LIBRARY.length,
     gates,
@@ -1744,12 +1843,13 @@ async function renderTrack() {
   const root = $("screen-track").firstElementChild;
   root.textContent = "";
   const p = await computeProgress();
+  const modelName = id => (MODEL_LIBRARY.find(m => m.id === id) || {}).name || id;
 
   root.appendChild(h("div", "kicker", "Your path through the anatomy"));
-  root.appendChild(h("h1", "title", "The Track"));
-  root.appendChild(h("p", "subtitle", "Foundations first, then the systems built on them, ending with YouTube: the capstone that drills into nearly everything before it. Work through them in order, or jump to whatever you need."));
+  root.appendChild(h("h1", "title", "Your path"));
+  root.appendChild(h("p", "subtitle", `${p.pathTotal} systems in ${COPY.pathUnits.length} units. Each one builds on ideas from the ones before it, so the order matters, but you can jump to whatever you need.`));
 
-  // progress tiles
+  // stats you can trust: finished systems, collected models, how well reviews go
   const stats = h("div", "trk-stats");
   const tile = (n, of, label) => {
     const t = h("div", "trk-tile");
@@ -1760,46 +1860,52 @@ async function renderTrack() {
     t.appendChild(h("div", "trk-l", label));
     stats.appendChild(t);
   };
-  tile(p.pathDone, p.pathTotal, "systems on the path");
+  tile(p.pathDone, p.pathTotal, "systems finished");
   tile(p.models, p.modelsTotal, "thinking models collected");
-  tile(p.gates, null, "layers rebuilt");
+  if (p.review.accuracy != null) tile(p.review.accuracy + "%", null, `review cards right, last 30 days (${p.review.total})`);
+  else tile(p.review.cards, null, "cards in your Review deck");
   if (p.yours) tile(p.yoursDone, p.yours, "your own designs");
   root.appendChild(stats);
-
-  // overall bar
-  const barWrap = h("div", "trk-bar");
-  const fill = h("div", "trk-bar-fill");
-  fill.style.width = Math.round(100 * p.pathDone / Math.max(1, p.pathTotal)) + "%";
-  barWrap.appendChild(fill);
-  root.appendChild(barWrap);
-
-  const exp = h("button", "gbtn", "◱ Export progress card");
-  exp.style.margin = "4px 0 26px";
+  const exp = h("button", "gbtn", "Export progress card");
+  exp.style.margin = "4px 0 12px";
   exp.onclick = () => exportProgressCard(p);
   root.appendChild(exp);
 
-  // the ordered path
-  root.appendChild(h("h2", "section-head", "The path"));
-  const list = h("div", "trk-path");
-  p.path.forEach((rec, i) => {
-    const done = p.isDone(rec);
-    const n = rec.doc.layers.length;
-    const revealed = rec.doc.layers.filter(L => rec.attempts[L.index] && rec.attempts[L.index].revealed).length;
-    const row = h("button", "trk-row" + (done ? " done" : ""));
-    row.appendChild(h("span", "trk-idx", done ? "✓" : String(i + 1)));
-    const mid = h("div", "trk-mid");
-    mid.appendChild(h("div", "trk-name", rec.system));
-    mid.appendChild(h("div", "trk-sub", done ? "complete · " + n + " layers" : revealed + " of " + n + " layers"));
-    row.appendChild(mid);
-    const ring = h("div", "ring trk-ring");
-    const pct = Math.round(100 * revealed / n);
-    ring.style.background = `conic-gradient(var(--accent) ${pct * 3.6}deg, var(--line-soft) 0deg)`;
-    ring.appendChild(h("span", null, pct + ""));
-    row.appendChild(ring);
-    row.onclick = () => openReader(rec.id);
-    list.appendChild(row);
+  let n = 0;
+  COPY.pathUnits.forEach((u, ui) => {
+    const recs = u.systems.map(sl => p.byId["flagship-" + sl]).filter(Boolean);
+    const done = recs.filter(p.isDone).length;
+    const unit = h("section", "unit");
+    const head = h("div", "unit-head");
+    head.append(h("span", "unit-n", "Unit " + (ui + 1)), h("h2", "unit-name", u.name), h("span", "unit-count", `${done} of ${recs.length}`));
+    unit.appendChild(head);
+    const list = h("div", "trk-path");
+    recs.forEach(rec => {
+      n++;
+      const isDone = p.isDone(rec), read = p.readCount(rec), L = rec.doc.layers.length;
+      const isCur = p.current && p.current.id === rec.id;
+      const row = h("button", "trk-row" + (isDone ? " done" : "") + (isCur ? " current" : ""));
+      row.appendChild(h("span", "trk-idx", isDone ? "✓" : String(n)));
+      const mid = h("div", "trk-mid");
+      mid.appendChild(h("div", "trk-name", rec.system));
+      mid.appendChild(h("div", "trk-sub", `${L} layers · about ${L * 4} min` + (read && !isDone ? ` · ${read} read` : "")));
+      const intro = p.introduces[rec.id] || [];
+      if (intro.length) mid.appendChild(h("div", "trk-new", (intro.length > 1 ? "New models: " : "New model: ") + intro.map(modelName).join(", ")));
+      row.appendChild(mid);
+      row.appendChild(h("span", "trk-go", isDone ? "Revisit" : isCur ? (read ? "Continue" : "Start") : ""));
+      row.onclick = () => openReader(rec.id);
+      list.appendChild(row);
+    });
+    unit.appendChild(list);
+    // a short mixed check across the unit's systems, once there's something to check
+    const cards = recs.reduce((k, r) => k + p.readCount(r), 0);
+    const chk = h("button", "unit-check");
+    chk.append(h("b", null, "Unit check"), h("span", null, cards ? `${Math.min(8, cards)} cards across these systems` : "Opens once you've read a layer in this unit"));
+    chk.disabled = !cards;
+    chk.onclick = () => { renderDrill({ practice: true, systems: new Set(recs.map(r => r.id)), label: `Unit ${ui + 1} check · ${u.name}` }); show("drill"); };
+    unit.appendChild(chk);
+    root.appendChild(unit);
   });
-  root.appendChild(list);
 }
 
 /* branded, shareable progress card (light washi always — reads on any feed) */
@@ -1995,134 +2101,160 @@ async function exportPulseGIF(diagram, onProgress) {
   toast("Pulse GIF exported");
 }
 
-async function renderDrill(keep) {
+/* ═══ Review: spaced recall of the layers you've rebuilt (review.js) ═══
+   A short session of due cards. Model and rule cards grade themselves;
+   fix, cost and probe cards ask you to recall first, then rate yourself.
+   Every answer sets when that card comes back. */
+let reviewState = null;
+async function renderDrill(opts = {}) {
   const root = $("screen-drill").firstElementChild;
   root.textContent = "";
   const recs = await Store.getBreakdowns();
-  const gates = [], probes = [];
-  recs.forEach(rec => {
-    rec.doc.layers.forEach(L => {
-      const a = rec.attempts[L.index];
-      if (a && a.revealed) {
-        gates.push({ rec, L, a });
-        L.developer.interview_probes.forEach(p => probes.push({ rec, L, p }));
-      }
-    });
-  });
-  gates.sort((x, y) => (x.a.lastDrill || x.a.ts || 0) - (y.a.lastDrill || y.a.ts || 0));
-  if (!drillState || !keep) drillState = { tab: "gates", gi: 0, done: 0 };
-  drillState.gates = gates;
-  drillState.probes = probes;
-
-  root.appendChild(h("div", "kicker", "Practice: re-earn what you've read"));
-  root.appendChild(h("h1", "title", "Drill"));
-
-  const seg = h("div", "seg");
-  [["gates", "Gates · " + gates.length], ["probes", "Probes · " + probes.length]].forEach(([id, label]) => {
-    const b = h("button", drillState.tab === id ? "on" : "", label);
-    b.onclick = () => { drillState.tab = id; drillState.gi = 0; renderDrill(true); };
-    seg.appendChild(b);
-  });
-  root.appendChild(seg);
-
-  const body = h("div");
-  body.style.marginTop = "22px";
-  root.appendChild(body);
-
-  if (drillState.tab === "gates") renderGateDrill(body);
-  else renderProbeDrill(body);
-}
-
-function renderGateDrill(body) {
-  const { gates } = drillState;
-  if (!gates.length) {
-    body.appendChild(h("p", "lib-note", "Nothing to drill yet. Read a layer through to its fix and it lands here, ready to test you later."));
-    return;
-  }
-  const item = gates[drillState.gi % gates.length];
-  const { rec, L, a } = item;
-
-  body.appendChild(h("p", "mono-label", `card ${(drillState.gi % gates.length) + 1} / ${gates.length} · ${drillState.done} graded this session`));
-
-  const card = h("div", "gate-card");
-  const metaRow = h("div", "bd-meta");
-  metaRow.style.marginBottom = "10px";
-  metaRow.appendChild(h("span", "chip flagship", rec.system));
-  metaRow.appendChild(h("span", "chip", "layer " + L.index));
-  metaRow.appendChild(h("span", "chip", a.lastDrill ? "last drilled " + timeAgo(a.lastDrill) : "never drilled"));
-  card.appendChild(metaRow);
-
-  card.appendChild(h("p", "st-scenario", L.problem.statement));
-  card.appendChild(h("div", "gate-q", L.gate.question));
-  const ta = h("textarea");
-  ta.placeholder = "Answer from memory, then check yourself.";
-  card.appendChild(ta);
-
-  const actions = h("div", "gate-actions");
-  const revealBtn = h("button", "gbtn primary", "Check my answer");
-  actions.appendChild(revealBtn);
-  const skipBtn = h("button", "gbtn", "Skip ›");
-  skipBtn.onclick = () => { drillState.gi++; renderDrill(true); };
-  actions.appendChild(skipBtn);
-  card.appendChild(actions);
-
-  revealBtn.onclick = () => {
-    actions.remove();
-    const sol = h("div", "solution-card");
-    sol.appendChild(h("div", "sc-label", "The canonical solution"));
-    sol.appendChild(h("p", null, L.solution));
-    card.appendChild(sol);
-    if (a.answer && a.answer.trim()) {
-      const ya = h("div", "your-answer");
-      ya.appendChild(h("div", "ya-label", "Your original gate answer"));
-      ya.appendChild(h("p", null, a.answer));
-      card.appendChild(ya);
-    }
-    const grade = h("div", "gate-actions");
-    const good = h("button", "gbtn primary", "✓ Got it");
-    const again = h("button", "gbtn", "↻ Again soon");
-    const finish = ok => {
-      a.lastDrill = Date.now();
-      a.drillGrade = ok ? "good" : "again";
-      Store.saveBreakdownLight(rec);
-      drillState.gi++;
-      drillState.done++;
-      renderDrill(true);
+  const audience = meta.audienceMode || "enthusiast";
+  if (!opts.keep || !reviewState) {
+    reviewState = {
+      deck: Review.deck(recs, { practice: !!opts.practice, systems: opts.systems || null, audience, max: opts.systems ? 8 : 10 }),
+      i: 0, right: 0, graded: 0, label: opts.label || null, practice: !!opts.practice
     };
-    good.onclick = () => finish(true);
-    again.onclick = () => finish(false);
-    grade.append(good, again);
-    card.appendChild(grade);
-  };
+  }
+  const st = reviewState, stats = Review.stats(recs);
+  root.appendChild(h("div", "kicker", st.label || "Review"));
+  root.appendChild(h("h1", "title", st.label ? st.label : "Review"));
 
-  body.appendChild(card);
-}
-
-function renderProbeDrill(body) {
-  const { probes } = drillState;
-  if (!probes.length) {
-    body.appendChild(h("p", "lib-note", "No probes yet. They unlock as you reveal layers."));
+  if (!st.deck.length) {
+    if (!stats.cards) {
+      root.appendChild(h("p", "subtitle", "Nothing to review yet. Read a layer through to its fix and it lands here, ready to test you later."));
+      const go = ctaButton("Go to your path");
+      go.onclick = () => { renderTrack(); show("track"); };
+      root.appendChild(go);
+      return;
+    }
+    root.appendChild(h("p", "subtitle", `You're up to date. ${stats.cards} card${stats.cards > 1 ? "s" : ""} in your deck` +
+      (stats.nextDue ? `; the next one comes back ${Review.inDays(stats.nextDue)}.` : ".")));
+    const row = h("div", "rv-actions");
+    const more = h("button", "gbtn", "Practise anyway");
+    more.onclick = () => { renderDrill({ practice: true, label: "Practice round" }); };
+    row.appendChild(more);
+    root.appendChild(row);
     return;
   }
-  probes.forEach(({ rec, L, p }) => {
-    const card = h("div", "stress-card");
-    card.appendChild(h("div", "st-scenario", p));
-    const reveal = h("div", "st-reveal");
-    reveal.hidden = true;
-    reveal.appendChild(h("p", null, L.tech_lens.principle));
-    const open = h("button", "gbtn", `Open ${rec.system} · layer ${L.index}`);
-    open.style.marginTop = "8px";
-    open.onclick = () => openReader(rec.id, L.index);
-    reveal.appendChild(open);
-    const btn = h("button", "gbtn", "What is it probing?");
-    btn.onclick = () => { reveal.hidden = false; btn.remove(); };
-    card.appendChild(btn);
-    card.appendChild(reveal);
-    body.appendChild(card);
-  });
+  if (st.i >= st.deck.length) return reviewDone(root, st, stats);
+
+  root.appendChild(h("p", "subtitle", `${st.deck.length - st.i} card${st.deck.length - st.i > 1 ? "s" : ""} left · about ${Math.max(1, Math.round((st.deck.length - st.i) * 25 / 60))} minute${st.deck.length - st.i > 2 ? "s" : ""}`));
+  const bar = h("div", "rv-progress");
+  st.deck.forEach((_, k) => bar.appendChild(h("span", k < st.i ? "done" : k === st.i ? "on" : "")));
+  root.appendChild(bar);
+  reviewCard(root, st.deck[st.i], audience);
 }
 
-/* ═══ Settings (§11.5) ═══ */
+function reviewCard(root, c, audience) {
+  const { rec, L, a } = c;
+  const card = h("div", "rv-card");
+  card.appendChild(h("div", "rv-type", c.label));
+  card.appendChild(h("div", "rv-where", `${rec.system} · layer ${L.index}`));
+  const finish = g => {
+    const days = Review.grade(a, g);
+    Store.saveBreakdownLight(rec);
+    reviewState.graded++;
+    if (g !== "again") reviewState.right++;
+    return days;
+  };
+  const next = () => { reviewState.i++; renderDrill({ keep: true }); };
+  const nextBtn = label => { const b = ctaButton(label || "Next card"); b.onclick = next; return b; };
+  const problem = audience === "beginner" ? L.problem.beginner : L.problem.statement;
+  const model = MODEL_LIBRARY.find(m => m.id === L.problem.model.id);
+
+  if (c.type === "model" || c.type === "rule") {
+    card.appendChild(h("p", "rv-prompt", problem));
+    const list = h("div", "rule-list");
+    const ruleN = {}; rec.doc.strip_down.invariants.forEach((iv, k) => { ruleN[iv.id] = k + 1; });
+    const feedback = h("div");
+    c.options.forEach(o => {
+      const btn = h("button", "rule-opt");
+      if (c.type === "model") {
+        const m = MODEL_LIBRARY.find(x => x.id === o.id);
+        btn.append(h("span", "rule-n", "Model"), h("span", "rule-t", m ? m.name : o.id));
+      } else {
+        const iv = rec.doc.strip_down.invariants.find(x => x.id === o.id);
+        btn.append(h("span", "rule-n", "Rule " + ruleN[o.id]), h("span", "rule-t", iv ? iv.text : o.id));
+      }
+      btn.onclick = () => {
+        list.querySelectorAll("button").forEach(x => { x.disabled = true; });
+        c.options.forEach((o2, k) => { if (o2.right) list.children[k].classList.add(o2 === o ? "hit" : "answer"); });
+        if (!o.right) btn.classList.add("miss");
+        const days = finish(o.right ? "good" : "again");
+        const fb = h("div", "rv-feedback " + (o.right ? "ok" : "no"));
+        fb.appendChild(h("b", null, o.right ? "Right. " : "Not this time. "));
+        if (c.type === "model") fb.appendChild(document.createTextNode(`${model ? model.name + ": " + model.one_liner : ""} ${L.problem.model.application}`));
+        else fb.appendChild(document.createTextNode("This failure attacks " + L.defends.map(d => "Rule " + ruleN[d]).join(" and ") + "."));
+        feedback.append(fb, h("p", "rv-when", `Back ${Review.inDays(Date.now() + days * Review.DAY)}.`), nextBtn());
+      };
+      list.appendChild(btn);
+    });
+    card.append(list, feedback);
+  } else {
+    // recall first, then compare and rate yourself
+    let question, answer;
+    if (c.type === "fix") { card.appendChild(h("p", "rv-prompt", problem)); question = L.gate.question; answer = L.solution; }
+    else if (c.type === "cost") { card.appendChild(h("p", "rv-prompt", L.solution)); question = "What did this fix cost, and who pays for it?"; answer = L.tradeoff; }
+    else { card.appendChild(h("p", "rv-prompt", `${L.name}. ${L.tech_lens.mechanism}`)); question = c.probe; answer = L.tech_lens.principle; }
+    card.appendChild(h("p", "rv-q", question));
+    const ta = h("textarea", "move-sketch");
+    ta.placeholder = "Answer from memory first. A few words is enough.";
+    ta.setAttribute("aria-label", "Your answer");
+    card.appendChild(ta);
+    const reveal = ctaButton("Show the answer");
+    const after = h("div");
+    reveal.onclick = () => {
+      reveal.remove();
+      ta.readOnly = true;
+      const box = h("div", "solution-card");
+      box.appendChild(h("div", "sc-label", c.type === "fix" ? "What was actually built" : c.type === "cost" ? "The tradeoff" : "The principle to check against"));
+      box.appendChild(h("p", null, answer));
+      after.appendChild(box);
+      after.appendChild(h("p", "rv-q", "How well did you know it?"));
+      const rate = h("div", "rv-rate");
+      [["again", "Again"], ["good", "Good"], ["easy", "Easy"]].forEach(([g, lab]) => {
+        const b = h("button", "rv-rate-btn");
+        b.append(h("b", null, lab), h("span", null, Review.inDays(Date.now() + Review.nextDays(a, g) * Review.DAY)));
+        b.onclick = () => { finish(g); next(); };
+        rate.appendChild(b);
+      });
+      after.appendChild(rate);
+    };
+    card.append(reveal, after);
+  }
+  const open = h("button", "gbtn ghost rv-open", "Open this layer");
+  open.onclick = () => openReader(rec.id, L.index);
+  card.appendChild(open);
+  root.appendChild(card);
+}
+
+function reviewDone(root, st, stats) {
+  root.appendChild(h("p", "subtitle", `${st.graded} card${st.graded === 1 ? "" : "s"} reviewed, ${st.right} right first time.` +
+    (stats.nextDue ? ` The next one comes back ${Review.inDays(stats.nextDue)}.` : "")));
+  const row = h("div", "rv-actions");
+  const home = ctaButton("Back home");
+  home.onclick = async () => { await renderLibrary(); show("library"); };
+  const more = h("button", "gbtn", "Practise a few more");
+  more.onclick = () => renderDrill({ practice: true, label: "Practice round" });
+  row.append(home, more);
+  root.appendChild(row);
+  refreshReviewBadge();
+}
+
+/* the count on the Review tab: how many cards are due right now */
+async function refreshReviewBadge() {
+  const btn = $("drillBtn");
+  if (!btn) return;
+  const n = Review.stats(await Store.getBreakdowns()).due;
+  let badge = btn.querySelector(".nav-badge");
+  if (!n) { if (badge) badge.remove(); btn.setAttribute("aria-label", "Review"); return; }
+  if (!badge) { badge = h("span", "nav-badge"); btn.appendChild(badge); }
+  badge.textContent = n > 99 ? "99+" : String(n);
+  btn.setAttribute("aria-label", `Review, ${n} due`);
+}
+
 function renderSettings(banner) {
   const root = $("screen-settings").firstElementChild;
   root.textContent = "";

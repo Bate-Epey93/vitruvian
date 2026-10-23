@@ -444,6 +444,7 @@ var DocView = (() => {
       if (a.revealed) return;
       a.revealed = true;
       a.ts = a.ts || Date.now();
+      if (typeof Review !== "undefined") Review.ensure(a);   // joins Review: first back tomorrow
       persist();
     }
 
@@ -920,7 +921,7 @@ var DocView = (() => {
       fold("For engineers", b => b.appendChild(devBox(L)), audience === "developer");
       fold(COPY.askTitle, b => b.appendChild(qaBlock(L, a)), (a.qa || []).length > 0);
       root.appendChild(deeper);
-      root.appendChild(h("p", "done-note", "Layer rebuilt. It's in your Drill deck now, ready to test you later."));
+      root.appendChild(h("p", "done-note", "Layer rebuilt. It joins your Review deck and comes back tomorrow."));
       const last = L.index === N;
       root.appendChild(footer(
         { label: last ? "Push it: the trials" : `Next failure · Layer ${L.index + 1}`, fn: () => goTo(L.index + 1, 1) },
@@ -946,9 +947,38 @@ var DocView = (() => {
     }
 
     /* ── transfer (position N+2) ── */
+    /* The recap: what you rebuilt, layer by layer, with the thinking model
+       each one used. Models you hadn't met in any other system are marked new. */
+    function renderRecap(root) {
+      root.appendChild(h("div", "kicker", "Transfer"));
+      root.appendChild(h("h1", "title", "You rebuilt " + doc.meta.system.replace(/^The /, "the ")));
+      const elsewhere = opts.modelsElsewhere || new Set();
+      const list = h("div", "recap-list");
+      const models = new Set(), fresh = new Set();
+      doc.layers.forEach(L => {
+        const m = modelById(L.problem.model.id);
+        const read = attemptFor(L.index).revealed;
+        const isNew = read && !elsewhere.has(L.problem.model.id);
+        if (read) { models.add(L.problem.model.id); if (isNew) fresh.add(L.problem.model.id); }
+        const row = h("button", "recap-row" + (read ? "" : " unread"));
+        row.append(h("span", "recap-n", String(L.index)), h("span", "recap-name", read ? L.name.split(":")[0] : failurePart(L)),
+          h("span", "chip" + (isNew ? " flagship" : ""), (m ? m.name : L.problem.model.id) + (isNew ? " · new" : "")));
+        row.onclick = () => goTo(L.index, read ? 3 : 1);
+        list.appendChild(row);
+      });
+      root.appendChild(list);
+      const read = doc.layers.filter(L => attemptFor(L.index).revealed).length;
+      const tiles = h("div", "recap-tiles");
+      const tile = (n, label, sub) => { const t = h("div", "trk-tile"); t.append(h("div", "trk-n", String(n)), h("div", "trk-l", label)); if (sub) t.appendChild(h("div", "trk-l recap-sub", sub)); tiles.appendChild(t); };
+      tile(models.size, `thinking model${models.size === 1 ? "" : "s"} used here`, fresh.size ? `${fresh.size} new to you` : null);
+      tile(read + " / " + N, "layers rebuilt", read ? `${read} card${read === 1 ? "" : "s"} in your Review deck` : null);
+      root.appendChild(tiles);
+      if (read < N) root.appendChild(h("p", "lib-note", `${N - read} layer${N - read === 1 ? "" : "s"} still to read. Tap one above to go straight there.`));
+    }
+
     function renderTransfer(root) {
-      root.appendChild(h("div", "kicker", "Take it with you"));
-      root.appendChild(h("h1", "title", "Transfer"));
+      renderRecap(root);
+      root.appendChild(h("h2", "section-head", "Take it with you"));
       const pr = h("div", "principles");
       doc.transfer.principles.forEach(p => pr.appendChild(h("div", "principle", p)));
       root.appendChild(pr);
@@ -985,7 +1015,10 @@ var DocView = (() => {
         body.appendChild(footer({ label: "Take it with you", fn: () => goTo(N + 2, 1) }, { label: "Back to layer " + N, fn: () => goTo(N, 4) }));
       } else {
         renderTransfer(body);
-        body.appendChild(footer(opts.onFinish ? { label: "Back to the library", fn: () => opts.onFinish() } : null,
+        const nx = opts.nextOnPath;
+        body.appendChild(footer(
+          nx && opts.onOpen ? { label: "Next on your path: " + nx.system, fn: () => opts.onOpen(nx.id) }
+            : opts.onFinish ? { label: "Back home", fn: () => opts.onFinish() } : null,
           { label: "Back to the trials", fn: () => goTo(N + 1, 1) }));
       }
       inner.appendChild(body);
