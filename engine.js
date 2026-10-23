@@ -54,7 +54,8 @@ const ICONS = {
   sparkle: ["M10 3v4M10 13v4M3 10h4M13 10h4", "M5.6 5.6l1.8 1.8M12.6 12.6l1.8 1.8M5.6 14.4l1.8-1.8M12.6 7.4l1.8-1.8"],
   layers: ["M10 3l7 3.6-7 3.6-7-3.6z", "M3 10.4l7 3.6 7-3.6", "M3 13.8l7 3.6 7-3.6"],
   pencil: ["M12.8 4.2l3 3L7.6 15.4 4 16l.6-3.6z"],
-  cube: ["M10 2.8l6.4 3.6v7.2L10 17.2l-6.4-3.6V6.4z", "M3.6 6.4L10 10l6.4-3.6", "M10 10v7.2"]
+  cube: ["M10 2.8l6.4 3.6v7.2L10 17.2l-6.4-3.6V6.4z", "M3.6 6.4L10 10l6.4-3.6", "M10 10v7.2"],
+  tag: ["M3.5 10.4V4.6c0-.6.5-1.1 1.1-1.1h5.8l6.1 6.1-6.9 6.9z", "M7.2 6.6v.2"]
 };
 function icon(name, cls) {
   const NS = "http://www.w3.org/2000/svg";
@@ -388,24 +389,21 @@ function svgNS(tag, attrs) {
 }
 function nodeSwatch(kind) {                       // mini shape echoing the diagram's node kinds
   const s = svgNS("svg", { viewBox: "0 0 46 30", class: "tut-swatch" });
-  const stroke = "#2f6f5e";
-  if (kind === "actor") { const c = svgNS("circle", { cx: 23, cy: 15, r: 10, fill: "var(--node-fill)" }); c.style.stroke = stroke; c.style.strokeWidth = 1.6; s.appendChild(c); }
-  else if (kind === "store") {
-    s.appendChild(svgNS("rect", { x: 7, y: 6, width: 32, height: 18, fill: "var(--node-fill)", stroke: "none" }));
-    const p = svgNS("path", { d: "M7 6 L7 24 L39 24 L39 6", fill: "none" }); p.style.stroke = stroke; p.style.strokeWidth = 1.6; s.appendChild(p);
-  } else if (kind === "channel") { const r = svgNS("rect", { x: 7, y: 6, width: 32, height: 18, rx: 9, fill: "var(--node-fill)" }); r.style.stroke = stroke; r.style.strokeWidth = 1.6; s.appendChild(r); }
-  else { const r = svgNS("rect", { x: 7, y: 6, width: 32, height: 18, rx: 2, fill: "var(--node-fill)" }); r.style.stroke = stroke; r.style.strokeWidth = 1.6; s.appendChild(r); }
+  const shape = d => { const p = svgNS("path", { d, class: "dgl-shape" }); s.appendChild(p); };
+  const line = d => { const p = svgNS("path", { d, class: "dgl-line", fill: "none" }); s.appendChild(p); };
+  if (kind === "actor") { s.appendChild(svgNS("circle", { cx: 23, cy: 7, r: 4, class: "dgl-shape" })); line("M23 11 V19 M16 14 H30 M23 19 L18 27 M23 19 L28 27"); }
+  else if (kind === "store") { shape("M7 8 A16 3.5 0 0 1 39 8 V22 A16 3.5 0 0 1 7 22 Z"); line("M7 8 A16 3.5 0 0 0 39 8"); }
+  else if (kind === "channel") { shape("M12 6 H34 A5 9 0 0 1 34 24 H12 A5 9 0 0 1 12 6 Z"); line("M34 6 A5 9 0 0 0 34 24"); }
+  else s.appendChild(svgNS("rect", { x: 7, y: 6, width: 32, height: 18, rx: 4, class: "dgl-shape" }));
   return s;
 }
 function edgeSwatch(kind) {                       // mini arrow echoing the diagram's edge kinds
   const s = svgNS("svg", { viewBox: "0 0 50 16", class: "tut-swatch tut-swatch-edge" });
-  const color = kind === "money" ? "#9a6212" : kind === "control" ? "#141416" : "#2f6f5e";
   const dash = kind === "money" ? "1.5 3.5" : kind === "control" ? "5 4" : "0";
-  const ln = svgNS("line", { x1: 3, y1: 8, x2: 40, y2: 8 });
-  ln.style.stroke = color; ln.style.strokeWidth = kind === "payload" ? 2.2 : 1.6; if (dash !== "0") ln.style.strokeDasharray = dash;
+  const ln = svgNS("line", { x1: 3, y1: 8, x2: 40, y2: 8, class: "dgl-line" });
+  ln.style.strokeWidth = kind === "payload" ? 1.9 : 1.5; if (dash !== "0") ln.style.strokeDasharray = dash;
   s.appendChild(ln);
-  const head = svgNS("path", { d: "M40 8 L34 5 L34 11 Z", fill: color });
-  s.appendChild(head);
+  s.appendChild(svgNS("path", { d: "M41 8 L33 4.2 L35 8 L33 11.8 Z", class: "dg-arrow" }));
   return s;
 }
 function renderTutorial(from) {
@@ -800,8 +798,14 @@ async function openReader(id, layerIndex, opts = {}) {
   gifBtn.title = "Record the running Pulse as a looping GIF to share";
   loadBtn.hidden = true;
   const capSep = () => h("span", "cap-sep");
+  // labels: by default only this layer's new connections carry one; this
+  // shows every connection's label at once (remembered on this device)
+  const labelsBtn = setFace(h("button", "gbtn sim-btn"), "tag", "Labels");
+  labelsBtn.title = "Show every connection's label";
+  let allLabels = false;
+  try { allLabels = localStorage.getItem("vitruvian_all_labels") === "1"; } catch (e) {}
   const capTools = h("div", "cap-tools");
-  capTools.append(playBtn, loadBtn, replayBtn, capSep(), raceBtn, spineBtn, capSep(), gifBtn, capToggle);
+  capTools.append(playBtn, loadBtn, replayBtn, capSep(), raceBtn, spineBtn, labelsBtn, capSep(), gifBtn, capToggle);
   dcap.append(capState, capTools);
   const scrubEl = h("div", "scrub-wrap");
   const caption = h("div", "dg-caption");
@@ -820,6 +824,18 @@ async function openReader(id, layerIndex, opts = {}) {
 
   const diagram = Diagram.mount(dscroll, rec.doc);
   diagram.onDrill((sub) => drillInto(sub));
+  const paintLabels = () => {
+    diagram.labels(allLabels);
+    labelsBtn.classList.toggle("on", allLabels);
+    labelsBtn.setAttribute("aria-pressed", String(allLabels));
+    labelsBtn.title = allLabels ? "Label only what's new in this layer" : "Show every connection's label";
+  };
+  paintLabels();
+  labelsBtn.onclick = () => {
+    allLabels = !allLabels;
+    try { localStorage.setItem("vitruvian_all_labels", allLabels ? "1" : "0"); } catch (e) {}
+    paintLabels();
+  };
 
   /* flow simulation controls — instant response on press; any state change
      stops the sim (via diagram.show) and this resets the buttons */
@@ -948,22 +964,24 @@ async function openReader(id, layerIndex, opts = {}) {
    mark and URL in a footer bar, so every shared screenshot carries the brand.
    The SVG's classed styles live in styles.css, which a serialized SVG can't
    see — so computed styles are inlined onto a clone first. Fonts inside an
-   SVG-as-image never load; labels get a system mono stack instead. ═══ */
+   SVG-as-image never load; labels get Helvetica, draw.io's own face. ═══ */
 async function exportDiagramPNG(rec) {
   const svgEl = document.querySelector("#screen-reader .dg-svg");
   if (!svgEl) { toast("Open the diagram first"); return; }
   const clone = svgEl.cloneNode(true);
   const src = [svgEl, ...svgEl.querySelectorAll("*")];
   const dst = [clone, ...clone.querySelectorAll("*")];
-  const PROPS = ["stroke", "stroke-width", "stroke-dasharray", "stroke-linecap", "fill", "fill-opacity", "opacity", "font-size", "font-weight", "letter-spacing", "paint-order"];
+  const PROPS = ["stroke", "stroke-width", "stroke-dasharray", "stroke-linecap", "stroke-linejoin", "fill", "fill-opacity", "opacity", "font-size", "font-weight", "letter-spacing", "paint-order", "display"];
   src.forEach((el, i) => {
     const cs = getComputedStyle(el);
     PROPS.forEach(p => { const v = cs.getPropertyValue(p); if (v) dst[i].style.setProperty(p, v); });
     if (el.tagName === "text" || el.tagName === "tspan")
-      dst[i].style.fontFamily = "ui-monospace, Menlo, Consolas, monospace";
+      dst[i].style.fontFamily = "Helvetica, Arial, sans-serif";
   });
   clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
   clone.style.width = ""; clone.style.minWidth = "";
+  const heads = clone.querySelector(".dg-lane-heads");      // the export starts at the left edge, not the scroll position
+  if (heads) { heads.removeAttribute("transform"); heads.style.filter = "none"; }
 
   const vb = svgEl.viewBox.baseVal;
   const SCALE = 2, FOOT = 30 * SCALE;
@@ -1857,14 +1875,16 @@ async function exportPulseGIF(diagram, onProgress) {
   // static clone with computed styles inlined once
   const clone = svgEl.cloneNode(true);
   const src = [svgEl, ...svgEl.querySelectorAll("*")], dst = [clone, ...clone.querySelectorAll("*")];
-  const PROPS = ["stroke", "stroke-width", "stroke-dasharray", "stroke-linecap", "fill", "fill-opacity", "opacity", "font-size", "font-weight", "letter-spacing", "paint-order"];
+  const PROPS = ["stroke", "stroke-width", "stroke-dasharray", "stroke-linecap", "stroke-linejoin", "fill", "fill-opacity", "opacity", "font-size", "font-weight", "letter-spacing", "paint-order", "display"];
   src.forEach((el, i) => {
     const cs = getComputedStyle(el);
     PROPS.forEach(p => { const v = cs.getPropertyValue(p); if (v) dst[i].style.setProperty(p, v); });
-    if (el.tagName === "text" || el.tagName === "tspan") dst[i].style.fontFamily = "ui-monospace, Menlo, monospace";
+    if (el.tagName === "text" || el.tagName === "tspan") dst[i].style.fontFamily = "Helvetica, Arial, sans-serif";
   });
   clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
   clone.style.width = W + "px"; clone.style.minWidth = "0"; clone.setAttribute("width", W); clone.setAttribute("height", H);
+  const heads = clone.querySelector(".dg-lane-heads");
+  if (heads) { heads.removeAttribute("transform"); heads.style.filter = "none"; }
   const cloneSim = clone.querySelector(".dg-sim");
   const liveSim = svgEl.querySelector(".dg-sim");
 

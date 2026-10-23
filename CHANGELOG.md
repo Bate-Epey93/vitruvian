@@ -13,6 +13,11 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 - **The library opens with a command bar** for naming a system, and each card now carries the system's one-line essence and a strip with one bar per layer that fills as you reveal them.
 - **The diagram's tools sit in one dock** under the diagram: the key, the layer scrubber, and a single toolbar with Pulse, Load, Replay, Races, Spine and GIF.
 - **The layer stepper is a floating pill** that stays pinned over the prose, with a filled Next button so the way forward is obvious.
+- **Diagrams are drawn in draw.io's visual language.** Lanes are swimlanes with a coloured header strip on the left, using draw.io's palette (blue, green, orange, purple, yellow; red stays reserved for failure). People are UML stick figures, stores are cylinders, processes are white rounded boxes, and channels are pipes lying on their side. The small × and = marks that used to sit inside boxes are gone, since the shape now carries the kind.
+- **Colour on the diagram means state.** Boxes stay white and connectors stay grey, with the dash still showing the kind. Teal marks what the current layer added, red what breaks next. Lane colour lives on the lane and on the Pulse tokens a lane sends.
+- **Only this layer's new connections are labelled.** Every other label appears when you hover or tap its line, trace a node, or turn on the new Labels switch under the diagram, which is remembered on the device. Labels sit on small white chips, the way draw.io draws them. Across all 19 samples and 130 layer states, 390 of 1,282 labels show by default; one touches a box and none overlap each other.
+- **Connections get their own ports.** Lines that leave or enter the same side of a box fan out to separate attachment points instead of running on top of each other.
+- **Lane headers stay pinned while you pan**, so a wide system never loses its lane names. PNG and GIF exports reset them to the left edge and keep hidden labels hidden.
 
 ### Fixed
 - A handful of toasts and labels still used em dashes. They now read as plain sentences.

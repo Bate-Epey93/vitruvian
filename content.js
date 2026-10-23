@@ -656,7 +656,7 @@ var COPY = {
     },
     diagram: {
       title: "Reading the diagram",
-      intro: "The diagram grows as the system does; every layer adds to it and nothing re-arranges. Colour means role, shape means kind, arrows show what moves.",
+      intro: "The diagram grows as the system does; every layer adds to it and nothing re-arranges. It uses the shapes you know from draw.io: a stick figure for a person, a cylinder for storage, a box for work, a pipe for a channel. Lane colour shows the role and arrows show what moves.",
       nodeKinds: [
         ["actor", "Actor", "a person or party"],
         ["store", "Store", "where things wait or accumulate"],
@@ -666,16 +666,17 @@ var COPY = {
       edgeKinds: [
         ["payload", "Payload", "the thing the system exists to move (solid line). This is the load path."],
         ["control", "Control", "signals and permissions (dashed), often flowing back against the payload."],
-        ["money", "Money", "value changing hands (gold, dotted)."]
+        ["money", "Money", "value changing hands (dotted)."]
       ],
       extra: [
-        ["Lanes & colour", "Horizontal bands group parts by the role they play (People, Service, Control, Money), each with its own colour. An arrow wears the colour of the lane it comes from, so you can see who drives what."],
+        ["Lanes & colour", "Swimlanes group parts by the role they play (People, Service, Control, Money). Each lane has its own colour, shown on its header on the left, which stays in view as you pan. Boxes and lines stay neutral, so when something turns colour it means something: teal is what this layer added, red is what breaks next."],
         ["The red pulse", "At a gate, or when you tap the problem card, the parts about to break pulse red. You see the failure before the fix."],
         ["Spotlight", "Tap a card to light its parts and dim the rest: the problem card lights what breaks (red), the solution card lights what's added (teal), and Under load traces the path load travels (gold)."],
         ["Trace a part", "Tap any node to light it and every edge touching it; the rest dims, so you can follow one part's whole reach. Tap it again to clear."],
-        ["Zoom in ⊕", "Some nodes are whole systems in their own right and carry a ⊕ badge. Tap it to open that sub-system as its own Deconstruct, and follow the breadcrumb back up. Systems nest as deep as the library goes."],
+        ["Zoom in", "Some nodes are whole systems in their own right and carry a small + badge on their corner. Tap it to open that sub-system as its own Deconstruct, and follow the breadcrumb back up. Systems nest as deep as the library goes."],
         ["Payload shapes", "During a Pulse, every payload wears the shape of the kind that sent it: a dot from an actor, a square from a store, a diamond from a process, a bar from a channel. Colour still tells you which lane it came from, so shape and colour answer two different questions at once."],
         ["Backpressure", "When a node takes in more than it can clear, the edges feeding it stiffen and their traffic slows down. The jam creeps back toward the source rather than staying put, which is how one slow component ends up browning out everything upstream of it."],
+        ["Labels", "Only the connections this layer added carry a label, so the new part of the story reads first. Hover or tap any other line to see its label, or press Labels under the diagram to show them all."],
         ["Pan & scrub", "Dense diagrams pan sideways. Drag the scrubber (0…N) under the diagram to sweep it from the naive baseline to the finished system."]
       ]
     },
