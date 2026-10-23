@@ -34,6 +34,59 @@ function ensoIcon(name) {
   return svg;
 }
 
+/* Line icons for chrome and tools: 20-unit grid, 1.5 stroke, round joins.
+   Same DOM-built, currentColor approach as ensoIcon, so they theme for free. */
+const ICONS = {
+  arrowRight: ["M4.5 10h11", "M11 5.5l4.5 4.5-4.5 4.5"],
+  arrowUpRight: ["M6 14l8-8", "M7.5 6H14v6.5"],
+  chevronLeft: ["M12 15l-5-5 5-5"],
+  chevronDown: ["M5 7.5l5 5 5-5"],
+  chevronUp: ["M5 12.5l5-5 5 5"],
+  play: ["M7 5.2v9.6l7.6-4.8z"],
+  pause: ["M7.5 5v10", "M12.5 5v10"],
+  gauge: ["M3.8 14a6.2 6.2 0 1 1 12.4 0", "M10 14l3.2-4"],
+  replay: ["M4 10a6 6 0 1 0 1.8-4.3", "M4 3.6v3.2h3.2"],
+  races: ["M3 7h11.5", "M12 4.5L14.5 7 12 9.5", "M3 13h11.5", "M12 10.5l2.5 2.5-2.5 2.5"],
+  spine: ["M2.5 10H6l2-5 4 10 2-5h3.5"],
+  record: ["M10 3.6a6.4 6.4 0 1 1 0 12.8a6.4 6.4 0 1 1 0-12.8z", "M10 7.6a2.4 2.4 0 1 1 0 4.8a2.4 2.4 0 1 1 0-4.8z"],
+  upload: ["M10 13V3.8", "M6.2 7.4L10 3.6l3.8 3.8", "M4 16.4h12"],
+  info: ["M10 3.2a6.8 6.8 0 1 1 0 13.6a6.8 6.8 0 1 1 0-13.6z", "M10 9v4.5", "M10 6.5v.2"],
+  sparkle: ["M10 3v4M10 13v4M3 10h4M13 10h4", "M5.6 5.6l1.8 1.8M12.6 12.6l1.8 1.8M5.6 14.4l1.8-1.8M12.6 7.4l1.8-1.8"],
+  layers: ["M10 3l7 3.6-7 3.6-7-3.6z", "M3 10.4l7 3.6 7-3.6", "M3 13.8l7 3.6 7-3.6"],
+  pencil: ["M12.8 4.2l3 3L7.6 15.4 4 16l.6-3.6z"],
+  cube: ["M10 2.8l6.4 3.6v7.2L10 17.2l-6.4-3.6V6.4z", "M3.6 6.4L10 10l6.4-3.6", "M10 10v7.2"]
+};
+function icon(name, cls) {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 20 20");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", "ico" + (cls ? " " + cls : ""));
+  (ICONS[name] || []).forEach(d => {
+    const p = document.createElementNS(NS, "path");
+    p.setAttribute("d", d);
+    svg.appendChild(p);
+  });
+  return svg;
+}
+/* a button's face: optional icon + text label (label hides on narrow chrome) */
+function setFace(btn, name, label) {
+  btn.textContent = "";
+  if (name) btn.appendChild(icon(name));
+  if (label) btn.appendChild(h("span", "btn-label", label));
+  return btn;
+}
+/* primary pill with its arrow in a nested circle; strips any trailing arrow
+   glyph from the copy since the circle now carries it */
+function ctaButton(label, cls, iconName) {
+  const b = h("button", "big-btn" + (cls ? " " + cls : ""));
+  b.appendChild(h("span", "btn-label", String(label).replace(/\s*[→›]\s*$/, "")));
+  const c = h("span", "btn-ico");
+  c.appendChild(icon(iconName || "arrowRight"));
+  b.appendChild(c);
+  return b;
+}
+
 let meta = {};                    // cached meta map
 let currentView = null;           // DocView instance when reading
 let currentRec = null;            // open breakdown record
@@ -52,9 +105,9 @@ function applyTheme(t) {
   document.documentElement.dataset.theme = t;
   try { localStorage.setItem("vitruvian_theme", t); } catch (e) {}   // splash.js reads this pre-paint on the next launch
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", t === "dark" ? "#0d0d10" : "#141416");
+  if (meta) meta.setAttribute("content", t === "dark" ? "#0c0c0e" : "#f6f5f2");
   const btn = $("themeBtn");
-  if (btn) { btn.textContent = t === "dark" ? "☀" : "☾"; btn.setAttribute("aria-label", t === "dark" ? "Switch to light mode" : "Switch to dark mode"); }
+  if (btn) btn.setAttribute("aria-label", t === "dark" ? "Switch to light mode" : "Switch to dark mode");   // the sun/moon swap is CSS, keyed off data-theme
 }
 async function toggleTheme() {
   const next = (document.documentElement.dataset.theme === "dark") ? "light" : "dark";
@@ -75,6 +128,12 @@ function show(screen) {
   ["ctxDiv", "seqBtn", "graftBtn"].forEach(id => { $(id).hidden = screen !== "reader"; });
   $("backBtn").hidden = screen === "library" || screen === "landing";
   $("menuPop").hidden = true;
+  document.querySelectorAll("[data-screen]").forEach(b => {
+    const on = b.dataset.screen === screen;
+    b.classList.toggle("on", on);
+    if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+  });
+  document.body.dataset.screen = screen;
   if (screen !== "reader") {
     if (currentView) currentView.destroy();   // cancel any pending debounce timer
     currentView = null; currentRec = null;
@@ -168,6 +227,8 @@ async function seedFlagships() {
 /* ═══ Topbar ═══ */
 function wireTopbar() {
   $("brand").onclick = async () => { await flushSaves(); await renderLibrary(); show("library"); };
+  $("brand").onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("brand").click(); } };
+  $("libraryBtn").onclick = async () => { await flushSaves(); await renderLibrary(); show("library"); };
   $("backBtn").onclick = async () => { await flushSaves(); await renderLibrary(); show("library"); };
   $("modelsBtn").onclick = () => { renderModels(); show("models"); };
   $("trackBtn").onclick = () => { renderTrack(); show("track"); };
@@ -199,95 +260,123 @@ function renderAudSwitch() {
 
 /* ═══ Landing (first-run explainer, §value-add) ═══ */
 
-/* Deconstructed enso — the landing's living background. The brush ring is
-   taken apart: its arcs drift out from the centre, the Vitruvian square
-   splits into corner brackets, one vermillion dot holds still. Motion is a
-   slow rotation of the exploded parts (the app's own idea: separation you
-   can see), disabled under prefers-reduced-motion. Pure decoration:
-   aria-hidden, pointer-events none, behind the copy. */
-function landingMotif() {
-  const arc = (cx, cy, r, a0, a1, w, spread) => {
-    // arc of a circle, its midpoint pushed OUT from the centre by `spread`
-    const mid = ((a0 + a1) / 2) * Math.PI / 180;
-    const ox = Math.cos(mid) * spread, oy = Math.sin(mid) * spread;
-    const p0 = [cx + ox + r * Math.cos(a0 * Math.PI / 180), cy + oy + r * Math.sin(a0 * Math.PI / 180)];
-    const p1 = [cx + ox + r * Math.cos(a1 * Math.PI / 180), cy + oy + r * Math.sin(a1 * Math.PI / 180)];
-    const path = svgNS("path", {
-      d: `M ${p0[0]} ${p0[1]} A ${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${p1[0]} ${p1[1]}`,
-      fill: "none", "stroke-width": w, "stroke-linecap": "round"
-    });
-    path.style.stroke = "currentColor";
-    return path;
-  };
-  const bracket = (x, y, len, dx, dy) => {           // one pulled-apart square corner
-    const b = svgNS("path", { d: `M ${x + dx * len} ${y + dy} H ${x + dx} V ${y + dy * len}`, fill: "none", "stroke-width": 7, "stroke-linecap": "square" });
-    b.style.stroke = "currentColor";
-    return b;
-  };
-  const svg = svgNS("svg", { class: "landing-motif", viewBox: "0 0 1000 1000", preserveAspectRatio: "xMidYMid slice", "aria-hidden": "true" });
-
-  const big = svgNS("g", { class: "lm-spin" });      // exploded enso, upper right
-  big.appendChild(arc(780, 210, 190, -50, 75, 24, 0));
-  big.appendChild(arc(780, 210, 190, 95, 195, 15, 22));
-  big.appendChild(arc(780, 210, 190, 215, 285, 9, 44));
-  svg.appendChild(big);
-
-  const sq = svgNS("g", { class: "lm-float" });      // the square, split at its corners
-  sq.appendChild(bracket(700, 130, 46, 1, 1));
-  sq.appendChild(bracket(900, 130, 46, -1, 1));
-  sq.appendChild(bracket(700, 330, 46, 1, -1));
-  sq.appendChild(bracket(900, 330, 46, -1, -1));
-  svg.appendChild(sq);
-
-  const seal = svgNS("circle", { cx: 892, cy: 372, r: 11, class: "lm-seal" });
-  svg.appendChild(seal);
-
-  const small = svgNS("g", { class: "lm-spin-counter" });   // quieter echo, lower left
-  small.appendChild(arc(120, 840, 110, 30, 165, 13, 0));
-  small.appendChild(arc(120, 840, 110, 190, 300, 8, 18));
-  svg.appendChild(small);
-
-  return svg;
-}
+/* Landing: an editorial split. Copy on the left; on the right, a real
+   Deconstruct building itself, layer by layer, in a framed stage, because the
+   product explains itself faster than any paragraph about it. */
+let heroTimer = null;
+function stopHero() { if (heroTimer) { clearInterval(heroTimer); heroTimer = null; } }
 
 function renderLanding() {
+  stopHero();
   const root = $("screen-landing").firstElementChild;
   root.textContent = "";
   const L = COPY.landing;
-  root.appendChild(landingMotif());
-  root.appendChild(h("div", "kicker", L.kicker));
+
+  const hero = h("section", "hero");
+  const copy = h("div", "hero-copy reveal");
+  const eyebrow = h("div", "eyebrow");
+  eyebrow.appendChild(h("span", "eyebrow-dot"));
+  eyebrow.appendChild(document.createTextNode(L.kicker));
+  copy.appendChild(eyebrow);
   const head = h("h1", "landing-head");
-  L.headline.split("\n").forEach((line, i) => { if (i) head.appendChild(document.createElement("br")); head.appendChild(document.createTextNode(line)); });
-  root.appendChild(head);
-  root.appendChild(h("p", "landing-lede", L.lede));
-
-  const grid = h("div", "landing-grid");
-  L.sections.forEach(s => {
-    const card = h("div", "landing-card");
-    const hd = h("div", "lc-head");
-    const ic = h("span", "lc-icon");
-    ic.appendChild(ensoIcon(s.icon));
-    hd.appendChild(ic);
-    hd.appendChild(h("span", "lc-title", s.title));
-    card.appendChild(hd);
-    card.appendChild(h("p", null, s.body));
-    grid.appendChild(card);
-  });
-  root.appendChild(grid);
-
-  const cta = h("button", "big-btn landing-cta", L.cta);
+  L.headline.split("\n").forEach((line, i) => { head.appendChild(h("span", i ? "lh-soft" : null, line)); });
+  copy.appendChild(head);
+  copy.appendChild(h("p", "landing-lede", L.lede));
+  const actions = h("div", "hero-actions");
+  const cta = ctaButton(L.cta, "landing-cta");
   cta.onclick = async () => {
+    stopHero();
     await Store.saveMeta({ landingSeen: true });
     meta.landingSeen = true;
     await renderLibrary();
     show("library");
   };
-  root.appendChild(cta);
-  const learn = h("button", "gbtn", "How to read a Deconstruct →");
-  learn.style.marginLeft = "8px";
-  learn.onclick = () => { renderTutorial("landing"); show("tutorial"); };
-  cta.after(learn);
-  root.appendChild(h("p", "landing-foot", L.footnote));
+  const learn = h("button", "gbtn ghost", L.learn);
+  learn.onclick = () => { stopHero(); renderTutorial("landing"); show("tutorial"); };
+  actions.append(cta, learn);
+  copy.appendChild(actions);
+  copy.appendChild(h("p", "landing-foot", L.footnote));
+  hero.appendChild(copy);
+
+  // the stage: shell + core, the core holds a live diagram
+  const stage = h("div", "hero-stage reveal");
+  const core = h("div", "hs-core");
+  const bar = h("div", "hs-bar");
+  const hsTitle = h("span", "hs-title", "");
+  const hsLayer = h("span", "hs-layer", "");
+  bar.append(hsTitle, hsLayer);
+  const dg = h("div", "hs-diagram");
+  const steps = h("div", "hs-steps");
+  const note = h("div", "hs-note", "");
+  core.append(bar, dg, note, steps);
+  stage.appendChild(core);
+  hero.appendChild(stage);
+  root.appendChild(hero);
+
+  // numbers that are true today, read from the library itself
+  const stats = h("div", "landing-stats reveal");
+  [[CONFIG.flagshipNames.length, L.stats[0]], [MODEL_LIBRARY.length, L.stats[1]], [COPY.audienceModes.length, L.stats[2]]].forEach(([n, label]) => {
+    const st = h("div", "ls-item");
+    st.appendChild(h("span", "ls-n", String(n)));
+    st.appendChild(h("span", "ls-l", label));
+    stats.appendChild(st);
+  });
+  root.appendChild(stats);
+
+  const grid = h("div", "landing-grid");
+  L.sections.forEach((s, i) => {
+    const card = h("div", "landing-card reveal" + (i === 0 ? " lc-wide" : ""));
+    const hd = h("div", "lc-head");
+    const ic = h("span", "lc-icon");
+    ic.appendChild(ensoIcon(s.icon));
+    hd.appendChild(ic);
+    hd.appendChild(h("span", "lc-num", "0" + (i + 1)));
+    card.appendChild(hd);
+    card.appendChild(h("h3", "lc-title", s.title));
+    card.appendChild(h("p", null, s.body));
+    grid.appendChild(card);
+  });
+  root.appendChild(grid);
+  revealOnScroll(root);
+  mountHero({ dg, hsTitle, hsLayer, steps, note });
+}
+
+async function mountHero(el) {
+  const rec = (await Store.getBreakdown("flagship-" + COPY.landing.heroSystem).catch(() => null))
+    || (await Store.getBreakdowns()).find(b => b.source === "flagship");
+  if (!rec) return;
+  const doc = rec.doc, N = doc.layers.length;
+  const diagram = Diagram.mount(el.dg, doc);
+  el.hsTitle.textContent = doc.meta.system;
+  const segs = [];
+  for (let i = 0; i <= N; i++) { const sg = h("span", "hs-seg"); el.steps.appendChild(sg); segs.push(sg); }
+  let i = 0;
+  const paint = () => {
+    diagram.show(i, { animate: i > 0 });
+    el.hsLayer.textContent = i === 0 ? "Layer 0 · the naive baseline" : "Layer " + i + " of " + N;
+    el.note.textContent = i === 0 ? doc.meta.system + ", as simple as it can be." : doc.layers[i - 1].name;
+    segs.forEach((sg, k) => { sg.classList.toggle("done", k < i); sg.classList.toggle("on", k === i); });
+  };
+  paint();
+  if (RM_PREF()) { i = N; paint(); return; }    // reduced motion: show the finished system, hold still
+  heroTimer = setInterval(() => {
+    if ($("screen-landing").hidden) { stopHero(); return; }
+    i = (i + 1) % (N + 1);
+    paint();
+  }, 2600);
+}
+
+/* Fade-up on first sight. IntersectionObserver only: no scroll listeners. */
+function revealOnScroll(root) {
+  const els = root.querySelectorAll(".reveal");
+  if (!("IntersectionObserver" in window) || RM_PREF()) { els.forEach(e => e.classList.add("in")); return; }
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(en => { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } });
+  }, { rootMargin: "0px 0px -8% 0px" });
+  // observe a tick later: callers render first and show() the screen after,
+  // and an element observed while its screen is display:none can miss its entry
+  els.forEach((e, k) => e.style.setProperty("--d", (k % 4) * 70 + "ms"));
+  setTimeout(() => els.forEach(e => io.observe(e)), 0);
 }
 
 /* ═══ Tutorial — 'How to read a study' (visitable anytime) ═══ */
@@ -440,31 +529,37 @@ function cardGrid(recs) {
   const grid = h("div", "card-grid");
   recs.forEach(rec => {
     const card = h("button", "bd-card");
-    card.appendChild(h("div", "bd-name", rec.system));
-    const metaRow = h("div", "bd-meta");
-    const chipCls = rec.source === "flagship" ? " flagship" : (rec.source === "design" ? " design" : "");
-    const chipLabel = rec.source === "flagship" ? "sample" : (rec.source === "design" ? "your design" : "your deconstruct");
-    metaRow.appendChild(h("span", "chip" + chipCls, chipLabel));
-    metaRow.appendChild(h("span", "chip", rec.doc.layers.length + " layers"));
-    // this subject also exists as a machine you can turn over
-    if (fieldStudyFor(rec.system)) metaRow.appendChild(h("span", "chip lab-chip", COPY.labChip));
-    card.appendChild(metaRow);
-    const foot = h("div", "bd-foot");
     const n = rec.doc.layers.length;
     const done = rec.doc.layers.filter(L => rec.attempts[L.index] && rec.attempts[L.index].revealed).length;
     const pct = Math.round(100 * done / n);
-    foot.appendChild(h("span", "bd-last", rec.lastOpen ? "opened " + timeAgo(rec.lastOpen) : "new"));
+    const top = h("div", "bd-top");
+    const chipCls = rec.source === "flagship" ? " flagship" : (rec.source === "design" ? " design" : "");
+    const chipLabel = rec.source === "flagship" ? "Sample" : (rec.source === "design" ? "Your design" : "Your Deconstruct");
+    top.appendChild(h("span", "chip" + chipCls, chipLabel));
+    // this subject also exists as a machine you can turn over
+    if (fieldStudyFor(rec.system)) top.appendChild(h("span", "chip lab-chip", COPY.labChip));
+    const go = h("span", "bd-go");
+    go.appendChild(icon("arrowUpRight"));
+    top.appendChild(go);
+    card.appendChild(top);
+    card.appendChild(h("div", "bd-name", rec.system));
+    const es = rec.doc.essence && (rec.doc.essence.beginner || rec.doc.essence.text);
+    if (es) card.appendChild(h("p", "bd-essence", es));
+    // the strata: one bar per layer, filled as layers are revealed
+    const strata = h("div", "bd-strata");
+    for (let k = 1; k <= n; k++) {
+      const a = rec.attempts[k];
+      strata.appendChild(h("span", a && a.revealed ? "on" : null));
+    }
+    const foot = h("div", "bd-foot");
+    foot.appendChild(h("span", "bd-last", n + " layers · " + (rec.lastOpen ? "opened " + timeAgo(rec.lastOpen) : "not started")));
     if (pct === 100) {
       const stamp = h("img", "enso-stamp card-stamp");
       stamp.src = "assets/enso-complete.svg";
       stamp.alt = "Deconstruct complete";
       foot.appendChild(stamp);
-    } else {
-      const ring = h("div", "ring");
-      ring.style.background = `conic-gradient(var(--accent) ${pct * 3.6}deg, var(--line-soft) 0deg)`;
-      ring.appendChild(h("span", null, pct + ""));
-      foot.appendChild(ring);
-    }
+    } else if (pct > 0) foot.appendChild(h("span", "bd-pct", pct + "%"));
+    card.appendChild(strata);
     card.appendChild(foot);
     card.onclick = () => openReader(rec.id);
     grid.appendChild(card);
@@ -475,15 +570,22 @@ function cardGrid(recs) {
 async function renderLibrary() {
   const root = $("screen-library").firstElementChild;
   root.textContent = "";
-  root.appendChild(h("div", "kicker", CONFIG.tagline));
-  root.appendChild(h("h1", "title", "What do you want to understand?"));
+  const head = h("header", "lib-hero");
+  head.appendChild(h("h1", "title", "What do you want to understand?"));
+  head.appendChild(h("p", "subtitle", COPY.libraryLede));
+  root.appendChild(head);
 
   const bar = h("div", "deconstruct-bar");
+  const field = h("label", "db-field");
+  field.appendChild(icon("sparkle", "db-ico"));
   const input = h("input");
   input.id = "deconInput";
   input.placeholder = COPY.deconstructPlaceholder;
   input.maxLength = 120;
-  const go = h("button", "big-btn", COPY.deconstructBtn);
+  input.setAttribute("aria-label", "System to deconstruct");
+  input.autocomplete = "off";
+  field.appendChild(input);
+  const go = ctaButton(COPY.deconstructBtn);
   const launch = () => {
     const name = input.value.trim();
     if (!name) return;
@@ -497,11 +599,12 @@ async function renderLibrary() {
   };
   go.onclick = launch;
   input.onkeydown = e => { if (e.key === "Enter") launch(); };
-  bar.append(input, go);
+  field.appendChild(go);
+  bar.appendChild(field);
   root.appendChild(bar);
 
   // second path: deconstruct a design you're building (not a known system)
-  const ownLink = h("button", "gbtn own-design-btn", COPY.ownDesignLink);
+  const ownLink = setFace(h("button", "gbtn ghost own-design-btn"), "pencil", COPY.ownDesignLink.replace(/\s*→$/, ""));
   ownLink.onclick = () => {
     if (!meta.apiKey) { renderSettings("Add your Anthropic API key to generate Deconstructs."); show("settings"); return; }
     renderGenerate("", "design");
@@ -518,7 +621,7 @@ async function renderLibrary() {
     root.appendChild(sectionHead(COPY.yoursHeading, yours.length + " stud" + (yours.length > 1 ? "ies" : "y")));
     root.appendChild(cardGrid(yours));
   }
-  root.appendChild(sectionHead(COPY.sampleHeading, null));
+  root.appendChild(sectionHead(COPY.sampleHeading, flagships.length + " systems"));
   root.appendChild(h("p", "lib-note", COPY.sampleNote));
   root.appendChild(cardGrid(flagships));
 
@@ -531,12 +634,18 @@ async function renderLibrary() {
   FIELD_STUDIES.forEach(st => {
     const lab = h("a", "bd-card lab-card");
     lab.href = st.href;
+    const top = h("div", "bd-top");
+    top.appendChild(h("span", "chip lab-chip", "Field study"));
+    top.appendChild(h("span", "chip", COPY.labChip));
+    const go = h("span", "bd-go");
+    go.appendChild(icon("arrowUpRight"));
+    top.appendChild(go);
+    lab.appendChild(top);
+    const art = h("span", "lab-art");
+    art.appendChild(icon("cube"));
+    lab.appendChild(art);
     lab.appendChild(h("div", "bd-name", st.name));
-    const labMeta = h("div", "bd-meta");
-    labMeta.appendChild(h("span", "chip flagship", "field study"));
-    labMeta.appendChild(h("span", "chip", COPY.labChip));
-    lab.appendChild(labMeta);
-    lab.appendChild(h("div", "bd-last", st.sub));
+    lab.appendChild(h("p", "bd-essence", st.sub));
     labGrid.appendChild(lab);
   });
   root.appendChild(labGrid);
@@ -548,9 +657,8 @@ async function renderLibrary() {
   }
 
   // quiet foundation of future sharing: single-breakdown import
-  const importRow = h("div", "gate-actions");
-  importRow.style.marginTop = "26px";
-  const imp = h("button", "gbtn", "Import a Deconstruct (.json)");
+  const importRow = h("div", "lib-foot");
+  const imp = setFace(h("button", "gbtn ghost"), "upload", "Import a Deconstruct (.json)");
   imp.onclick = () => pickFile(async file => {
     try {
       const doc = JSON.parse(await file.text());
@@ -566,7 +674,7 @@ async function renderLibrary() {
     } catch (e) { alert("Could not import: " + e.message); }
   });
   importRow.appendChild(imp);
-  const about = h("button", "gbtn", "About Vitruvian");
+  const about = setFace(h("button", "gbtn ghost"), "info", "About Vitruvian");
   about.onclick = () => { renderLanding(); show("landing"); };
   importRow.appendChild(about);
   /* Request-a-system link hidden for now — restore by re-appending req.
@@ -642,7 +750,7 @@ async function drillInto(sub) {
     return;
   }
   // nothing yet — offer to generate it (BYOK), opening as its own study
-  if (!meta.apiKey) { toast(`No Deconstruct of "${sub}" yet — add an API key to generate one`); return; }
+  if (!meta.apiKey) { toast(`No Deconstruct of "${sub}" yet. Add an API key to generate one.`); return; }
   if (confirm(`No Deconstruct of "${sub}" yet. Deconstruct it now?`)) {
     renderGenerate(sub);
     show("generate");
@@ -669,23 +777,32 @@ async function openReader(id, layerIndex, opts = {}) {
   const dscroll = h("div", "diagram-scroll");
   const dcap = h("div", "diagram-cap");
   const capState = h("span", "diagram-cap-state", "");
-  const capToggle = h("button", "gbtn", "hide");
-  capToggle.style.padding = "2px 9px";
+  const capToggle = setFace(h("button", "gbtn sim-btn icon-only cap-toggle"), "chevronDown");
+  capToggle.setAttribute("aria-label", "Hide diagram");
+  capToggle.title = "Hide diagram";
   capToggle.onclick = () => {
-    dpane.classList.toggle("collapsed");
-    capToggle.textContent = dpane.classList.contains("collapsed") ? "show" : "hide";
+    const collapsed = dpane.classList.toggle("collapsed");
+    setFace(capToggle, collapsed ? "chevronUp" : "chevronDown");
+    capToggle.setAttribute("aria-label", collapsed ? "Show diagram" : "Hide diagram");
+    capToggle.title = collapsed ? "Show diagram" : "Hide diagram";
   };
-  const playBtn = h("button", "gbtn sim-btn", "▶ pulse");
-  const loadBtn = h("button", "gbtn sim-btn", "◉ load");
-  const replayBtn = h("button", "gbtn sim-btn", "⟲ replay");
-  const raceBtn = h("button", "gbtn sim-btn", "⇉ races");
-  raceBtn.title = "Highlight nodes with two or more concurrent writers — where races can happen";
-  const spineBtn = h("button", "gbtn sim-btn", "⌁ spine");
-  spineBtn.title = "Trace the critical path — what a request waits on — and ring the nodes that would take the whole system down";
-  const gifBtn = h("button", "gbtn sim-btn", "⚏ gif");
+  const playBtn = setFace(h("button", "gbtn sim-btn sim-primary"), "play", "Pulse");
+  playBtn.title = "Send live traffic through this state";
+  const loadBtn = setFace(h("button", "gbtn sim-btn"), "gauge", "Load");
+  loadBtn.title = "Turn up the traffic until something saturates";
+  const replayBtn = setFace(h("button", "gbtn sim-btn"), "replay", "Replay");
+  replayBtn.title = "Re-enact this layer's historical failure";
+  const raceBtn = setFace(h("button", "gbtn sim-btn"), "races", "Races");
+  raceBtn.title = "Highlight nodes with two or more concurrent writers, where races can happen";
+  const spineBtn = setFace(h("button", "gbtn sim-btn"), "spine", "Spine");
+  spineBtn.title = "Trace the critical path a request waits on, and ring the nodes that would take the whole system down";
+  const gifBtn = setFace(h("button", "gbtn sim-btn"), "record", "GIF");
   gifBtn.title = "Record the running Pulse as a looping GIF to share";
   loadBtn.hidden = true;
-  dcap.append(capState, playBtn, loadBtn, replayBtn, raceBtn, spineBtn, gifBtn, capToggle);
+  const capSep = () => h("span", "cap-sep");
+  const capTools = h("div", "cap-tools");
+  capTools.append(playBtn, loadBtn, replayBtn, capSep(), raceBtn, spineBtn, capSep(), gifBtn, capToggle);
+  dcap.append(capState, capTools);
   const scrubEl = h("div", "scrub-wrap");
   const caption = h("div", "dg-caption");
   caption.hidden = true;
@@ -708,7 +825,8 @@ async function openReader(id, layerIndex, opts = {}) {
      stops the sim (via diagram.show) and this resets the buttons */
   let captionTimer = null;
   const resetSimUI = () => {
-    playBtn.textContent = "▶ pulse";
+    setFace(playBtn, "play", "Pulse");
+    playBtn.classList.remove("on");
     loadBtn.hidden = true;
     loadBtn.classList.remove("on");
     hud.hidden = true;
@@ -724,7 +842,8 @@ async function openReader(id, layerIndex, opts = {}) {
   playBtn.onclick = () => {
     if (diagram.sim.running) { diagram.sim.stop(); }
     else if (diagram.sim.start()) {
-      playBtn.textContent = "⏸ rest";
+      setFace(playBtn, "pause", "Rest");
+      playBtn.classList.add("on");
       loadBtn.hidden = false;
       hud.hidden = false;
     }
@@ -735,9 +854,8 @@ async function openReader(id, layerIndex, opts = {}) {
   gifBtn.onclick = async () => {
     if (gifBtn.disabled) return;
     gifBtn.disabled = true;
-    const label = gifBtn.textContent;
-    try { await exportPulseGIF(diagram, pct => { gifBtn.textContent = "⚏ " + pct + "%"; }); }
-    finally { gifBtn.textContent = label; gifBtn.disabled = false; }
+    try { await exportPulseGIF(diagram, pct => { setFace(gifBtn, "record", pct + "%"); }); }
+    finally { setFace(gifBtn, "record", "GIF"); gifBtn.disabled = false; }
   };
   // race spotlight: ring nodes with ≥2 concurrent payload writers (contention
   // points). Structural — works standing still; under ◉ load you watch tokens
@@ -747,7 +865,7 @@ async function openReader(id, layerIndex, opts = {}) {
     raceOn = !raceOn;
     const n = diagram.raceSpotlight(raceOn);
     raceBtn.classList.toggle("race-on", raceOn);
-    if (raceOn) toast(n ? `${n} contention point${n > 1 ? "s" : ""} — ≥2 concurrent writers` : "No contention at this state — one writer per node");
+    if (raceOn) toast(n ? `${n} contention point${n > 1 ? "s" : ""}: two or more concurrent writers` : "No contention at this state. Each node has one writer.");
   };
   // critical path: the chain a request waits on, plus the nodes whose loss
   // takes delivery with them. Structural, so it reads standing still — and the
@@ -773,7 +891,7 @@ async function openReader(id, layerIndex, opts = {}) {
   diagram.sim.onReplayCrash(() => {
     const p = currentView ? currentView.position : 0;
     const L = rec.doc.layers[p - 1];
-    let text = "The failure, replayed — the second arrival meets the first.";
+    let text = "The failure, replayed. The second arrival meets the first.";
     if (L && L.problem && L.problem.statement) {
       const s = L.problem.statement.split(". ")[0];
       text = (s.length > 150 ? s.slice(0, 147) + "…" : s) + (s.endsWith(".") ? "" : ".");
@@ -790,13 +908,13 @@ async function openReader(id, layerIndex, opts = {}) {
     // lit red — then send history's two payloads into it
     const p = currentView ? currentView.position : 0;
     const L = rec.doc.layers[p - 1];
-    if (!L || !L.diff.highlight.length) { toast("No failure at this position — step into a rebuild layer"); return; }
+    if (!L || !L.diff.highlight.length) { toast("No failure at this position. Step into a rebuild layer."); return; }
     diagram.show(p - 1, { highlight: L.diff.highlight });
     capState.textContent = `Before layer ${p} · the failure, replayed`;
     if (!diagram.sim.replay()) {
       currentView.goToLayer(p);
       toast("No payload path reaches this failure");
-    } else { playBtn.textContent = "⏸ rest"; hud.hidden = false; }
+    } else { setFace(playBtn, "pause", "Rest"); playBtn.classList.add("on"); hud.hidden = false; }
   };
 
   // gates are opt-in: on only if this breakdown enabled them, or the user set the default on
@@ -897,12 +1015,12 @@ function openSequence(rec) {
   // (pos-1 for an un-revealed challenge layer), so the sequence can't spoil a gate
   const shown = currentView && currentView.shownUpto != null ? currentView.shownUpto : (currentView ? currentView.position : 0);
   const upto = Math.max(0, Math.min(shown, N));
-  const label = upto === 0 ? "Baseline — the naive system" : upto >= N ? "Final system · after every layer" : `After layer ${upto} of ${N}`;
+  const label = upto === 0 ? "Baseline · the naive system" : upto >= N ? "Final system · after every layer" : `After layer ${upto} of ${N}`;
 
   const ov = h("div", "seq-overlay");
   const bar = h("div", "seq-bar");
   const titleWrap = h("div");
-  titleWrap.appendChild(h("h2", null, "Sequence — " + rec.system));
+  titleWrap.appendChild(h("h2", null, "Sequence · " + rec.system));
   titleWrap.appendChild(h("div", "seq-sub", label + " · order flows top to bottom"));
   const close = h("button", "gbtn seq-close", "✕ close");
   bar.append(titleWrap, close);
@@ -929,7 +1047,7 @@ async function renderVocab(focusId) {
   root.textContent = "";
   root.appendChild(h("div", "kicker", "The engineering vocabulary"));
   root.appendChild(h("h1", "title", "What engineers call it"));
-  root.appendChild(h("p", "subtitle", "Patterns are problem shapes, concepts are mechanisms, technologies are things you deploy. Every entry links back to the timeless thinking model underneath it — and to the layers where you watched it become necessary."));
+  root.appendChild(h("p", "subtitle", "Patterns are problem shapes, concepts are mechanisms, technologies are things you deploy. Every entry links back to the timeless thinking model underneath it, and to the layers where you watched it become necessary."));
 
   // where each id appears across the reader's library
   const uses = {};
@@ -1021,7 +1139,7 @@ async function openVocab(v, layer) {
       lad.appendChild(r);
     };
     const m = layer.problem && layer.problem.model ? modelById(layer.problem.model.id) : null;
-    if (m) rung("why it's forced", m.name + " — " + m.one_liner, "rung-model");
+    if (m) rung("why it's forced", m.name + ": " + m.one_liner, "rung-model");
     const sibs = (layer.developer.vocab || []).map(vocabById).filter(Boolean);
     ["pattern", "concept", "technology"].forEach(tier => {
       sibs.filter(s => s.tier === tier).forEach(s => {
@@ -1069,7 +1187,7 @@ async function openVocab(v, layer) {
           hits.push({ system: b.system, id: b.id, index: L.index, name: L.name });
       });
     });
-    if (!hits.length) { recur.appendChild(h("p", "vo-none", "Not yet — it hasn't shown up in another Deconstruct you've opened.")); return; }
+    if (!hits.length) { recur.appendChild(h("p", "vo-none", "Not yet. It hasn't shown up in another Deconstruct you've opened.")); return; }
     hits.slice(0, 8).forEach(hit => {
       const row = h("button", "vo-hit");
       row.appendChild(h("span", "vo-hit-sys", hit.system));
@@ -1183,23 +1301,23 @@ function renderWhatif(rec, opts = {}) {
     // live graft: A/B the proposal on and off; pulse tokens THROUGH it —
     // proposed payload edges are part of the shown state, so they carry flow
     const ctl = h("div", "whatif-sim-row");
-    const abBtn = h("button", "gbtn sim-btn on", "graft: on");
+    const abBtn = h("button", "gbtn sim-btn on", "Graft on");
     let graftOn = true;
     abBtn.onclick = () => {
       graftOn = !graftOn;
-      abBtn.textContent = "graft: " + (graftOn ? "on" : "off");
+      abBtn.textContent = graftOn ? "Graft on" : "Graft off";
       abBtn.classList.toggle("on", graftOn);
       showGraft(graftOn);
     };
     ctl.appendChild(abBtn);
     if (dg.sim.available) {
-      const wp = h("button", "gbtn sim-btn", "▶ pulse");
-      const wl = h("button", "gbtn sim-btn", "◉ load");
+      const wp = setFace(h("button", "gbtn sim-btn sim-primary"), "play", "Pulse");
+      const wl = setFace(h("button", "gbtn sim-btn"), "gauge", "Load");
       wl.hidden = true;
-      dg.sim.onStop(() => { wp.textContent = "▶ pulse"; wl.hidden = true; wl.classList.remove("on"); });
+      dg.sim.onStop(() => { setFace(wp, "play", "Pulse"); wp.classList.remove("on"); wl.hidden = true; wl.classList.remove("on"); });
       wp.onclick = () => {
         if (dg.sim.running) dg.sim.stop();
-        else if (dg.sim.start()) { wp.textContent = "⏸ rest"; wl.hidden = false; }
+        else if (dg.sim.start()) { setFace(wp, "pause", "Rest"); wp.classList.add("on"); wl.hidden = false; }
       };
       wl.onclick = () => wl.classList.toggle("on", dg.sim.toggleLoad());
       ctl.append(wp, wl);
@@ -1208,7 +1326,7 @@ function renderWhatif(rec, opts = {}) {
 
     resultEl.appendChild(verdictCard(w, rec.doc, {
       onAlt: a => {
-        ta.value = a.name + " — " + a.note;
+        ta.value = a.name + ": " + a.note;
         ta.focus();
         compose.scrollIntoView({ behavior: "smooth", block: "center" });
       }
@@ -1535,7 +1653,7 @@ async function renderTrack() {
 
   root.appendChild(h("div", "kicker", "Your path through the anatomy"));
   root.appendChild(h("h1", "title", "The Track"));
-  root.appendChild(h("p", "subtitle", "Foundations first, then the systems built on them — until YouTube, the capstone that drills into nearly everything before it. Work through them in order, or jump to whatever you need."));
+  root.appendChild(h("p", "subtitle", "Foundations first, then the systems built on them, ending with YouTube: the capstone that drills into nearly everything before it. Work through them in order, or jump to whatever you need."));
 
   // progress tiles
   const stats = h("div", "trk-stats");

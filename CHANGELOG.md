@@ -4,6 +4,19 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [2.0.0] · 2026-10-22 · A new face
+### Changed
+- **The whole interface is redrawn on one design system.** Warm off-white paper and graphite ink, with colour kept for meaning only: teal for the fix and your progress, red for what breaks, amber for load and money, violet for proposals. Monospace now shows up only where the content is code or numbers, so the small all-caps labels that used to sit on every card are gone.
+- **The header is light and translucent.** The brand sits on the left, and Library, Track, Models and Drill live in a centred nav island that marks where you are. While you read, the island shrinks to icons and the audience switch takes the middle. On phones the island moves to a tab bar along the bottom edge and steps aside while you read.
+- **Real icons.** Thin-line SVG icons replace the unicode glyphs (◇ ◈ ↻ ⚙ ▶ ⟲ ⇉ ⌁) in the header and the diagram tools.
+- **The landing page shows the product working.** A split hero puts the pitch on the left and, on the right, a live Deconstruct (the URL shortener) building itself layer by layer. Below it, three numbers read from the library itself and a bento of what Vitruvian is and how to use it.
+- **The library opens with a command bar** for naming a system, and each card now carries the system's one-line essence and a strip with one bar per layer that fills as you reveal them.
+- **The diagram's tools sit in one dock** under the diagram: the key, the layer scrubber, and a single toolbar with Pulse, Load, Replay, Races, Spine and GIF.
+- **The layer stepper is a floating pill** that stays pinned over the prose, with a filled Next button so the way forward is obvious.
+
+### Fixed
+- A handful of toasts and labels still used em dashes. They now read as plain sentences.
+
 ## [1.39.0] — 2026-09-23 · Opus 5.5 in, Haiku and Fable out
 ### Added
 - **Claude Opus 5.5 (`claude-opus-5-5`) is the new default.** It is both the most capable of the three and the cheapest: $4 in / $20 out per million tokens, against Opus 5's $5 / $25. A Deconstruct lands around $0.45 instead of $0.55.

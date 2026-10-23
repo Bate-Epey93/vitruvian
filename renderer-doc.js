@@ -148,7 +148,9 @@ var DocView = (() => {
     /* ── stepper ── */
     function stepper() {
       const bar = h("div", "stepper");
-      const prev = h("button", "step-btn", "‹ Prev");
+      const prev = h("button", "step-btn", "‹ ");
+      prev.appendChild(h("span", "step-word", "Prev"));
+      prev.setAttribute("aria-label", "Previous");
       prev.disabled = pos === 0;
       prev.onclick = () => goTo(pos - 1);
       const rail = h("div", "step-rail");
@@ -165,7 +167,9 @@ var DocView = (() => {
       });
       mk(N + 1, "S");
       mk(N + 2, "T");
-      const next = h("button", "step-btn", "Next ›");
+      const next = h("button", "step-btn");
+      next.append(h("span", "step-word", "Next "), document.createTextNode("›"));
+      next.setAttribute("aria-label", "Next");
       next.disabled = pos === N + 2;
       next.onclick = () => goTo(pos + 1);
       bar.append(prev, rail, next);
@@ -285,7 +289,7 @@ var DocView = (() => {
       }
 
       root.appendChild(h("p", "lib-note", doc.meta.ordering_note));
-      const go = h("button", "big-btn", "Begin the rebuild ›");
+      const go = ctaButton("Begin the rebuild");
       go.onclick = () => goTo(1);
       root.appendChild(go);
     }
@@ -296,7 +300,7 @@ var DocView = (() => {
       const gated = challenge && !a.revealed;
 
       const head = h("div", "layer-head");
-      head.appendChild(h("span", "layer-num", "LAYER " + String(L.index).padStart(2, "0") + " / " + String(N).padStart(2, "0")));
+      head.appendChild(h("span", "layer-num", "Layer " + L.index + " of " + N));
       // challenge toggle, right at the layer label: this is where the gate it
       // controls actually appears, so the control sits with its effect
       const ct = h("label", "chal-toggle" + (challenge ? " on" : ""));

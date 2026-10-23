@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.39.0",
+  appVersion: "2.0.0",
   flagshipVersion: 10,                   // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   // foundations first, then the systems built on them — YouTube last, the capstone that drills into everything
   flagshipNames: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue", "notification-system", "rate-limiter", "search-typeahead", "url-shortener", "ride-matching", "ticket-booking", "content-delivery-network", "recommendation-feed", "payment-ledger", "video-transcoding", "news-feed", "photo-store", "whatsapp", "youtube", "railway"],
@@ -559,7 +559,8 @@ var COPY = {
   labChip: "3D study",
   labKicker: "Also a machine",
   labOpen: "Open the field study →",
-  deconstructPlaceholder: "Name a system to deconstruct…",
+  libraryLede: "Name any system and Vitruvian rebuilds it from nothing, one failure at a time. Or open a sample below.",
+  deconstructPlaceholder: "A system to deconstruct, like a stock exchange or a bike share…",
   deconstructBtn: "Deconstruct",
   ownDesignLink: "Building something? Dissect your design →",
   ownDesignKicker: "Dissection",
@@ -603,9 +604,12 @@ var COPY = {
   studioUrl: "https://bate-epey93.github.io/uxfirst-studio/",
   /* ---------- LANDING (first-run explainer) ---------- */
   landing: {
-    kicker: "Welcome to Vitruvian",
+    kicker: "Free, offline, no account needed",
     headline: "Take anything apart.\nPut it back together, and it makes sense.",
-    lede: "Everyday systems, deconstructed one failure at a time.",
+    lede: "Vitruvian rebuilds everyday systems one failure at a time. Each layer exists because the version before it broke, and the diagram grows as you go.",
+    learn: "How to read a Deconstruct",
+    heroSystem: "url-shortener",
+    stats: ["sample systems to take apart", "thinking models that keep coming back", "reading levels, plain English to engineer"],
     sections: [
       { icon: "whatItIs", title: "What it is",
         body: "Pick a system. Vitruvian strips it to its bones, then rebuilds it layer by layer, each layer forced by a real failure. A diagram grows as it comes together." },
@@ -614,10 +618,10 @@ var COPY = {
       { icon: "whyWorks", title: "Why it works",
         body: "You remember what you rebuild. Design each fix yourself before the reveal, and collect the thinking models that repeat across systems." },
       { icon: "howTo", title: "How to use it",
-        body: "Start with a sample Deconstruct. Add your Anthropic API key in Settings to deconstruct anything you name, or submit your own design and see where it breaks first. Works offline; installs to your home screen." }
+        body: "Start with a sample Deconstruct. Add your Anthropic API key in Settings to deconstruct anything you name, or submit your own design and see where it breaks first. It works offline and installs to your home screen." }
     ],
-    cta: "Start deconstructing →",
-    footnote: "No account and no cloud. Your Deconstructs stay on this device."
+    cta: "Start deconstructing",
+    footnote: "Your Deconstructs stay on this device. There is no cloud to sign up for."
   },
 
   /* ---------- TUTORIAL — 'How to read a Deconstruct' (visitable anytime) ---------- */
@@ -688,16 +692,16 @@ var COPY = {
       note: "Buttons under the diagram, plus more in the ⋯ menu. These let you run the system instead of only reading it.",
       items: [
         ["Pulse ▶ / ⟲ replay", "Send live traffic through the current state. Payloads travel the flow path, crash red into whatever's broken, and (under ◉ load) congest where the system saturates. ⟲ replay re-enacts the exact historical failure, arrival by arrival."],
-        ["Fault injection", "While a pulse is running, tap any node to kill it. Traffic piles up behind the dead node and everything downstream starves — chaos engineering as a toy. Tap it again to revive it."],
+        ["Fault injection", "While a pulse is running, tap any node to kill it. Traffic piles up behind the dead node and everything downstream starves. It's chaos engineering as a toy. Tap it again to revive it."],
         ["Live HUD", "While traffic flows, a small readout shows throughput (delivered/min), how many payloads are in flight, and crashes. Under load, delivered flattens off while in-flight keeps climbing. That gap is saturation, in numbers you can read."],
         ["Race spotlight ⇉", "Rings every node with two or more concurrent writers, the places where two flows can arrive at once and race. The count tells you how many contention points the design carries."],
         ["Critical path ⌁ spine", "Traces the chain a request actually waits on and dims everything off it. Shortening anything off the spine changes nothing, which is why it helps to know where it runs. Nodes whose loss would stop delivery altogether get a red ring. The readout also compares the spine against layer 0, so you can see what surviving all those failures cost you in extra steps."],
-        ["Sequence view", "In the ⋯ menu: the same state as an interaction timeline — who sends what to whom, top to bottom, in the order it happens. The diagram shows structure and this shows behaviour."],
+        ["Sequence view", "In the ⋯ menu: the same state as an interaction timeline: who sends what to whom, top to bottom, in the order it happens. The diagram shows structure and this shows behaviour."],
         ["Probe a layer", "Ask one focused question about any layer. The answer stays grounded in that layer's own mechanism. Needs your Anthropic API key (Settings)."],
         ["Graft a change", "In the ⋯ menu: propose a change and see it ghosted onto the architecture in dashed blueprint ink, with an honest verdict (improves, mixed, or harmful) argued from the system's own invariants. Pulse runs through the graft too."],
-        ["Known as… (the engineering vocabulary)", "In Developer mode, each layer names what the profession calls what it does: patterns (problem shapes), concepts (mechanisms), technologies (things you deploy). Tap a chip to climb the ladder — from the timeless thinking model that forces the layer, down to the component you would actually deploy — and to see where the same force turns up in your other Deconstructs. Browse them all from Models, under The engineering vocabulary."],
-        ["Also called…", "Every thinking model has a different name in every field. A layer's model card shows what this system's own profession calls it — and, folded underneath, what marketers, engineers, biologists, economists and institutions call the same force. Frequency capping is rate limiting. Attribution is telemetry. Spotting that repetition is most of what taking systems apart is for."],
-        ["Not yet addressed", "When you Dissect your own design, the overview names the concerns your description has not answered yet — contention, scaling reads, idempotency — each with a sentence on why it will bite and roughly when. Treat it as a to-do list."]
+        ["Known as… (the engineering vocabulary)", "In Developer mode, each layer names what the profession calls what it does: patterns (problem shapes), concepts (mechanisms), technologies (things you deploy). Tap a chip to climb the ladder, from the timeless thinking model that forces the layer down to the component you would actually deploy. You also see where the same force turns up in your other Deconstructs. Browse them all from Models, under The engineering vocabulary."],
+        ["Also called…", "Every thinking model has a different name in every field. A layer's model card shows what this system's own profession calls it. Folded underneath is what marketers, engineers, biologists, economists and institutions call the same force. Frequency capping is rate limiting. Attribution is telemetry. Spotting that repetition is most of what taking systems apart is for."],
+        ["Not yet addressed", "When you Dissect your own design, the overview names the concerns your description has not answered yet (contention, scaling reads, idempotency), each with a sentence on why it will bite and roughly when. Treat it as a to-do list."]
       ]
     },
     forDev: {
