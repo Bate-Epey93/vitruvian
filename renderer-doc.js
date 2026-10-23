@@ -40,6 +40,34 @@ var DocView = (() => {
     let pos = Math.min(rec.progress.position || 0, N + 2);
     let hintTier = 0;            // per-visit hint ladder, not persisted
     let saveTimer = null;
+    // the loop: inside a layer you move through four steps. `challenge` is
+    // Strict mode now: the fix stays shut until you've written something.
+    let step = Math.min(4, Math.max(1, rec.progress.step || 1));
+    let onePage = !!opts.onePage;      // the whole layer on one page, as in v1
+    let before = false;                // step 3: diagram flipped to the state before the fix
+    const replayed = new Set();        // layers whose failure already replayed by itself this visit
+    const RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const STEPS = [
+      { label: "It breaks", short: "Break", tone: "red" },
+      { label: "Your move", short: "Your move", tone: "vio" },
+      { label: "The fix", short: "Fix", tone: "teal" },
+      { label: "The price", short: "Price", tone: "amber" }
+    ];
+    // "The Read Storm: Cache the Redirect" → the half that names the failure.
+    // The half after the colon names the fix, so it waits for step 3.
+    function failurePart(L) {
+      const i = L.name.indexOf(":");
+      return i > 0 ? L.name.slice(0, i).trim() : "The next failure";
+    }
+    function ruleText(id) {
+      const iv = doc.strip_down.invariants.find(x => x.id === id);
+      return iv ? iv.text : id;
+    }
+    function ruleLabel(id) { return "Rule " + (invNumber[id] || "?"); }
+    function hasSketch(a) { return !!(a.answer && a.answer.trim().length >= 3); }
+    // Strict mode keeps the fix shut until there's a sketch; once a layer has
+    // been revealed it stays open
+    function locked(L) { const a = attemptFor(L.index); return challenge && !a.revealed && !hasSketch(a); }
 
     const invNumber = {};        // inv id → display number
     doc.strip_down.invariants.forEach((iv, i) => { invNumber[iv.id] = i + 1; });
@@ -72,8 +100,7 @@ var DocView = (() => {
     }
     function refreshProgress() {
       rec.progress.gatesAnswered = Object.values(rec.attempts).filter(a => a.answer && a.answer.trim()).length;
-      rec.progress.layersRead = Math.max(rec.progress.layersRead || 0,
-        ...doc.layers.filter(L => attemptFor(L.index).revealed || !challenge).map(L => L.index), 0);
+      rec.progress.layersRead = Math.max(0, ...doc.layers.filter(L => attemptFor(L.index).revealed).map(L => L.index));
     }
     function persist() { refreshProgress(); onSave(rec); }
 
@@ -87,16 +114,27 @@ var DocView = (() => {
       const cap = docPane.parentElement.querySelector(".diagram-cap-state");
       if (cap) cap.textContent = s;
     }
+    function loadPathIds(L) {
+      const st = Diagram.stateAt(doc, L.index), ids = [];
+      st.edges.forEach(e => { if (e.kind === "payload") ids.push(e.id, e.from, e.to); });
+      return ids;
+    }
+    // The diagram follows the step: steps 1 and 2 show the system before this
+    // layer with what breaks in red; step 3 shows the fix arriving in teal (or,
+    // with Before held, the state it replaced); step 4 traces the load path.
     function syncDiagram(animate) {
-      // follow the story: after each state change, auto-pan the diagram to
-      // what changed — the gate's broken elements, or the layer's additions —
-      // so on a phone the eye lands on the action instead of hunting for it
       if (pos === 0) { lastShown = 0; diagram.show(0); capText("Layer 0 · the naive baseline"); diagram.focus(null); }
-      else if (pos > N) { lastShown = N; diagram.show(N); capText("Final state · all layers"); diagram.focus(null); }
+      else if (pos > N) { lastShown = N; diagram.show(N, { fresh: false }); capText("Final state · all layers"); diagram.focus(null); }
       else {
         const L = doc.layers[pos - 1];
-        const gated = challenge && !attemptFor(L.index).revealed;
-        if (gated) {
+        const a = attemptFor(L.index);
+        const preFix = onePage ? (challenge && !a.revealed) : (step <= 2 || before);
+        if (preFix && before && !onePage) {
+          lastShown = pos - 1;
+          diagram.show(pos - 1, { fresh: false });
+          capText(`Before layer ${pos} · release B or tap After to see the fix`);
+          diagram.focus(L.diff.highlight);
+        } else if (preFix) {
           lastShown = pos - 1;
           diagram.show(pos - 1, { highlight: L.diff.highlight });
           capText(`Before layer ${pos} · red = what breaks`);
@@ -104,76 +142,99 @@ var DocView = (() => {
         } else {
           lastShown = pos;
           diagram.show(pos, { animate: !!animate });
-          capText(`Layer ${pos} of ${N} · ${L.name}`);
           const added = diffAddedIds(L);
+          if (!onePage && step === 4 && L.at_scale && loadPathIds(L).length) {
+            diagram.spotlight(loadPathIds(L), "load");
+            capText(`Layer ${pos} of ${N} · amber = the load path`);
+          } else capText(`Layer ${pos} of ${N} · ${L.name}`);
           diagram.focus(added.length ? added : L.diff.highlight);
         }
       }
-      renderScrub();
+      renderTimeline();
+      if (opts.onTools) opts.onTools({ pos, N, step: (pos >= 1 && pos <= N && !onePage) ? step : 0, before });
     }
 
-    /* ── timeline scrubber: sweep the diagram baseline → frontier.
-       A peek only — position/navigation re-syncs on next render. In
-       challenge mode the frontier stops at the furthest revealed layer,
-       so scrubbing can't spoil un-earned strata. ── */
-    function renderScrub() {
+    /* ── The timeline: one control for place. Meet, every layer, Trials,
+       Transfer. Finished layers are teal; the current one opens up to show
+       its four steps. It replaces the step dots and the old scrubber, which
+       moved the picture without moving your place. ── */
+    function renderTimeline() {
       if (!scrubEl) return;
       scrubEl.textContent = "";
-      const frontier = challenge ? maxRevealed() : N;
-      const row = h("div", "scrub-row");
-      for (let i = 0; i <= N; i++) {
-        const seg = h("button", "scrub-seg" + (i === lastShown ? " on" : (i <= frontier ? " reached" : "")) + (i > frontier ? " locked" : ""), i === 0 ? "0" : String(i));
-        seg.setAttribute("aria-label", i === 0 ? "Baseline state" : "State after layer " + i);
-        if (i <= frontier) {
-          seg.onclick = () => {
-            lastShown = i;
-            diagram.show(i);                              // clears any diagram spotlight…
-            if (activeSpotCard) { activeSpotCard.classList.remove("spot-on"); activeSpotCard = null; }  // …so resync the card too
-            capText(i === 0 ? "Peek · the naive baseline" : `Peek · after layer ${i}`);
-            renderScrub();
-          };
-        } else seg.disabled = true;
-        row.appendChild(seg);
-      }
-      // drag to sweep
-      row.onpointerdown = row.onpointermove = ev => {
-        if (ev.type === "pointermove" && ev.buttons !== 1) return;
-        const segs = [...row.children].filter(s => !s.disabled);
-        const hit = segs.find(s => { const r = s.getBoundingClientRect(); return ev.clientX >= r.left && ev.clientX <= r.right; });
-        if (hit && !hit.classList.contains("on")) hit.click();
+      scrubEl.className = "scrub-wrap timeline" + (onePage ? " one-page" : "");
+      const row = h("div", "tl-row");
+      const seg = (p, label, state, aria) => {
+        const b = h("button", "tl-seg tl-" + state, label);
+        b.setAttribute("aria-label", aria);
+        if (p === pos) b.setAttribute("aria-current", "step");
+        b.onclick = () => goTo(p, (p >= 1 && p <= N && attemptFor(doc.layers[p - 1].index).revealed) ? 3 : 1);
+        row.appendChild(b);
       };
+      seg(0, "Meet", pos === 0 ? "on" : "done", "Meet the system");
+      doc.layers.forEach(L => {
+        const p = L.index, a = attemptFor(L.index);
+        if (p === pos && !onePage) {
+          const box = h("div", "tl-cur");
+          box.setAttribute("aria-current", "step");
+          const nm = h("div", "tl-cur-name");
+          nm.append(h("span", "tl-cur-n", String(p)), h("span", "tl-cur-t", step >= 3 || a.revealed ? L.name.split(":")[0] : failurePart(L)));
+          const ticks = h("div", "tl-ticks");
+          STEPS.forEach((st, i) => {
+            const t = h("button", "tl-tick" + (i + 1 === step ? " on" : i + 1 < step ? " past" : ""));
+            t.append(h("span", "tl-dot"), h("span", "tl-tick-t", st.short));
+            t.setAttribute("aria-label", `${st.label}, step ${i + 1} of 4`);
+            t.onclick = () => goStep(i + 1);
+            ticks.appendChild(t);
+          });
+          box.append(nm, ticks);
+          row.appendChild(box);
+        } else {
+          const state = p === pos ? "on" : a.revealed ? "done" : "todo";
+          seg(p, String(p), state, `Layer ${p}: ${a.revealed ? L.name : failurePart(L)}`);
+        }
+      });
+      seg(N + 1, "Trials", pos === N + 1 ? "on" : pos > N + 1 ? "done" : "todo", "Trials: stress tests");
+      seg(N + 2, "Transfer", pos === N + 2 ? "on" : "todo", "Transfer: what to take with you");
       scrubEl.appendChild(row);
     }
 
-    /* ── stepper ── */
-    function stepper() {
-      const bar = h("div", "stepper");
-      const prev = h("button", "step-btn", "‹ ");
-      prev.appendChild(h("span", "step-word", "Prev"));
-      prev.setAttribute("aria-label", "Previous");
-      prev.disabled = pos === 0;
-      prev.onclick = () => goTo(pos - 1);
-      const rail = h("div", "step-rail");
-      const mk = (p, label, extraCls) => {
-        const d = h("button", "step-dot" + (p === pos ? " on" : "") + (extraCls || ""), label);
-        d.onclick = () => goTo(p);
-        d.setAttribute("aria-label", p === 0 ? "Overview" : p <= N ? `Layer ${p}` : p === N + 1 ? "Stress tests" : "Transfer");
-        rail.appendChild(d);
-      };
-      mk(0, "◦");
-      doc.layers.forEach(L => {
-        const a = attemptFor(L.index);
-        mk(L.index, String(L.index), a.revealed ? " done" : (challenge ? " gated" : ""));
+    /* ── The step card's chrome: where you are, the four steps, and one
+       sticky footer that always holds the next move. ── */
+    function stepHead(root, L) {
+      const head = h("div", "step-head");
+      head.appendChild(h("div", "step-where", `Layer ${L.index} of ${N}`));
+      const tabs = h("div", "step-tabs");
+      tabs.setAttribute("role", "tablist");
+      STEPS.forEach((st, i) => {
+        const t = h("button", `step-tab tone-${st.tone}` + (i + 1 === step ? " on" : i + 1 < step ? " past" : ""), st.short);
+        t.setAttribute("role", "tab");
+        t.setAttribute("aria-selected", String(i + 1 === step));
+        if (i >= 2 && locked(L)) { t.disabled = true; t.title = "Strict mode: sketch your fix first"; }
+        t.onclick = () => goStep(i + 1);
+        tabs.appendChild(t);
       });
-      mk(N + 1, "S");
-      mk(N + 2, "T");
-      const next = h("button", "step-btn");
-      next.append(h("span", "step-word", "Next "), document.createTextNode("›"));
-      next.setAttribute("aria-label", "Next");
-      next.disabled = pos === N + 2;
-      next.onclick = () => goTo(pos + 1);
-      bar.append(prev, rail, next);
-      return bar;
+      head.appendChild(tabs);
+      root.appendChild(head);
+      const st = STEPS[step - 1];
+      root.appendChild(h("div", `step-kick tone-${st.tone}`, st.label));
+    }
+    function footer(primary, secondary, note) {
+      const f = h("div", "step-foot");
+      if (secondary) {
+        const b = h("button", "gbtn ghost step-back", secondary.label);
+        if (secondary.cls) b.classList.add(secondary.cls);
+        b.onclick = secondary.fn;
+        f.appendChild(b);
+      }
+      if (note) f.appendChild(h("span", "step-foot-note", note));
+      if (primary) {
+        const b = typeof ctaButton === "function" ? ctaButton(primary.label) : h("button", "big-btn", primary.label);
+        b.classList.add("step-next");
+        b.onclick = primary.fn;
+        if (primary.disabled) b.disabled = true;
+        f.appendChild(b);
+      }
+      return f;
     }
 
     /* ── overview (position 0) ── */
@@ -236,7 +297,7 @@ var DocView = (() => {
         const list = h("div", "sd-list");
         sd.invariants.forEach(iv => {
           const it = h("div", "sd-item inv");
-          it.appendChild(h("span", "inv-badge", "INV " + invNumber[iv.id]));
+          it.appendChild(h("span", "inv-badge", "Rule " + invNumber[iv.id]));
           it.appendChild(document.createTextNode(iv.text));
           list.appendChild(it);
         });
@@ -289,9 +350,6 @@ var DocView = (() => {
       }
 
       root.appendChild(h("p", "lib-note", doc.meta.ordering_note));
-      const go = ctaButton("Begin the rebuild");
-      go.onclick = () => goTo(1);
-      root.appendChild(go);
     }
 
     /* ── a layer (positions 1..N) ── */
@@ -301,21 +359,6 @@ var DocView = (() => {
 
       const head = h("div", "layer-head");
       head.appendChild(h("span", "layer-num", "Layer " + L.index + " of " + N));
-      // challenge toggle, right at the layer label: this is where the gate it
-      // controls actually appears, so the control sits with its effect
-      const ct = h("label", "chal-toggle" + (challenge ? " on" : ""));
-      const cb = h("input"); cb.type = "checkbox"; cb.checked = challenge;
-      cb.setAttribute("aria-label", "Challenge mode: hide each solution behind a design-it-first gate");
-      cb.onchange = () => {
-        challenge = cb.checked;
-        rec.challengeMode = challenge;
-        if (opts.onChallenge) opts.onChallenge(challenge);
-        render._keepScroll = true;                 // toggling shouldn't jump you to the top
-        render();
-      };
-      ct.append(cb, h("span", "chal-track"), h("span", "chal-txt", "Challenge"));
-      ct.title = "Hide each solution behind a design-it-first gate";
-      head.appendChild(ct);
       if (a.revealed) {
         const stamp = h("img", "enso-stamp");
         stamp.src = "assets/enso-gate.svg";
@@ -335,7 +378,16 @@ var DocView = (() => {
       if (!gated) wireSpot(prob, L.diff.highlight, "problem");
 
       if (gated) renderGate(root, L, a);
-      else renderRevealed(root, L, a);
+      else { markRead(L); renderRevealed(root, L, a); }
+    }
+
+    // reaching a layer's fix counts as reading it: progress, Track and Drill
+    function markRead(L) {
+      const a = attemptFor(L.index);
+      if (a.revealed) return;
+      a.revealed = true;
+      a.ts = a.ts || Date.now();
+      persist();
     }
 
     function modelCard(L, expanded) {
@@ -382,7 +434,7 @@ var DocView = (() => {
       box.appendChild(h("div", "pb-label", "First, a prediction: which law does this failure attack?"));
       const row = h("div", "predict-row");
       invs.forEach(iv => {
-        const chip = h("button", "predict-chip", "INV " + invNumber[iv.id]);
+        const chip = h("button", "predict-chip", "Rule " + invNumber[iv.id]);
         chip.title = iv.text;
         if (a.predict) {
           chip.disabled = true;
@@ -401,8 +453,8 @@ var DocView = (() => {
       box.appendChild(row);
       if (a.predict) {
         box.appendChild(h("p", "pb-result", a.predict.correct
-          ? "Called it. This failure attacks " + L.defends.map(d => "INV " + invNumber[d]).join(", ") + "."
-          : "It actually attacks " + L.defends.map(d => "INV " + invNumber[d]).join(", ") + ". Watch for why."));
+          ? "Called it. This failure attacks " + L.defends.map(d => "Rule " + invNumber[d]).join(", ") + "."
+          : "It actually attacks " + L.defends.map(d => "Rule " + invNumber[d]).join(", ") + ". Watch for why."));
       }
       root.appendChild(box);
     }
@@ -454,68 +506,66 @@ var DocView = (() => {
       root.appendChild(card);
     }
 
-    function renderRevealed(root, L, a) {
-      if (a.predict) {
-        const pr = h("div", "defends-row");
-        pr.appendChild(h("span", "mono-label", "Your prediction"));
-        pr.appendChild(h("span", "predict-chip static " + (a.predict.correct ? "hit" : "miss"), "INV " + invNumber[a.predict.chosen]));
-        pr.appendChild(h("span", "bd-last", a.predict.correct ? "correct" : "it attacks " + L.defends.map(d => "INV " + invNumber[d]).join(", ")));
-        root.appendChild(pr);
+    /* ── Building blocks. The step views and the one-page view assemble the
+       same pieces in a different order. ── */
+    function predictResult(L, a) {
+      const pr = h("div", "defends-row predict-result" + (a.predict.correct ? " hit" : " miss"));
+      pr.appendChild(h("span", "mono-label", "Your guess"));
+      pr.appendChild(h("span", "predict-chip static " + (a.predict.correct ? "hit" : "miss"), ruleLabel(a.predict.chosen)));
+      pr.appendChild(h("span", "bd-last", a.predict.correct
+        ? "That's the one."
+        : "This failure attacks " + L.defends.map(ruleLabel).join(", ") + "."));
+      return pr;
+    }
+    function yourAnswer(a, g) {
+      const ya = h("div", "your-answer" + (g ? " grade-" + g.grade : ""));
+      const lbl = h("div", "ya-label", "Your design");
+      if (g) lbl.appendChild(h("span", "grade-badge", GRADE_TXT[g.grade]));
+      ya.appendChild(lbl);
+      ya.appendChild(h("p", null, a.answer));
+      return ya;
+    }
+    function verdictOrCompare(L, a, g) {
+      if (a.verdict) {
+        const vc = h("div", "verdict-card" + (g ? " grade-" + g.grade : ""));
+        if (g) vc.appendChild(h("span", "grade-badge", GRADE_TXT[g.grade]));
+        vc.appendChild(document.createTextNode(g ? g.body : a.verdict));
+        return vc;
       }
-      root.appendChild(modelCard(L, false));
-
-      // parse the AI grade (pass|close|miss) out of the compared verdict, so the
-      // reader can see at a glance whether their design landed. GRADE line is
-      // stripped from the shown feedback text.
-      const g = parseGrade(a.verdict);
-      if (a.answer && a.answer.trim()) {
-        const ya = h("div", "your-answer" + (g ? " grade-" + g.grade : ""));
-        const lbl = h("div", "ya-label", "Your design");
-        if (g) lbl.appendChild(h("span", "grade-badge", GRADE_TXT[g.grade]));
-        ya.appendChild(lbl);
-        ya.appendChild(h("p", null, a.answer));
-        root.appendChild(ya);
+      const row = h("div", "gate-actions");
+      const cmp = h("button", "gbtn", COPY.gateCompare);
+      const avail = canCompare();
+      if (!avail.ok) {
+        cmp.onclick = () => alert(avail.reason || COPY.gateCompareOffline);
+      } else {
+        cmp.onclick = async () => {
+          cmp.disabled = true;
+          cmp.textContent = "Comparing…";
+          try {
+            const verdict = await onCompare(L, a.answer);
+            a.verdict = verdict;
+            persist();
+            render._keepScroll = true;
+            render();
+          } catch (e) {
+            cmp.disabled = false;
+            cmp.textContent = COPY.gateCompare;
+            alert("Comparison failed: " + e.message);
+          }
+        };
       }
+      row.appendChild(cmp);
+      return row;
+    }
+    function solutionCard(L) {
       const sol = h("div", "solution-card");
       sol.appendChild(h("div", "sc-label", "What was actually built"));
       sol.appendChild(h("p", null, L.solution));
-      root.appendChild(sol);
       // the solution card locates what this layer ADDS (accent) on the diagram
       wireSpot(sol, diffAddedIds(L), "solution");
-
-      if (a.answer && a.answer.trim()) {
-        if (a.verdict) {
-          const vc = h("div", "verdict-card" + (g ? " grade-" + g.grade : ""));
-          if (g) vc.appendChild(h("span", "grade-badge", GRADE_TXT[g.grade]));
-          vc.appendChild(document.createTextNode(g ? g.body : a.verdict));
-          root.appendChild(vc);
-        } else {
-          const row = h("div", "gate-actions");
-          const cmp = h("button", "gbtn", COPY.gateCompare);
-          const avail = canCompare();
-          if (!avail.ok) {
-            cmp.onclick = () => alert(avail.reason || COPY.gateCompareOffline);
-          } else {
-            cmp.onclick = async () => {
-              cmp.disabled = true;
-              cmp.textContent = "Comparing…";
-              try {
-                const verdict = await onCompare(L, a.answer);
-                a.verdict = verdict;
-                persist();
-                render();
-              } catch (e) {
-                cmp.disabled = false;
-                cmp.textContent = COPY.gateCompare;
-                alert("Comparison failed: " + e.message);
-              }
-            };
-          }
-          row.appendChild(cmp);
-          root.appendChild(row);
-        }
-      }
-
+      return sol;
+    }
+    function lensGrid(L) {
       const grid = h("div", "lens-grid");
       const ul = h("div", "lens-box");
       ul.appendChild(h("div", "lb-label", "For the people using it"));
@@ -526,53 +576,46 @@ var DocView = (() => {
       const m1 = h("p"); m1.appendChild(h("b", null, "Mechanism: ")); m1.appendChild(document.createTextNode(L.tech_lens.mechanism)); tl.appendChild(m1);
       const p1 = h("p"); p1.appendChild(h("b", null, "Principle: ")); p1.appendChild(document.createTextNode(L.tech_lens.principle)); tl.appendChild(p1);
       grid.append(ul, tl);
-      root.appendChild(grid);
-
-      root.appendChild(h("div", "tradeoff-band", L.tradeoff));
-
-      // "Under load" — how this mechanism holds as the system grows (the
-      // scaling question the reader most wants answered). Shown in every mode.
-      if (L.at_scale) {
-        const scale = h("div", "scale-band");
-        const sb = h("div", "sb-label", "Under load · how it scales");
-        scale.appendChild(sb);
-        scale.appendChild(h("p", null, L.at_scale));
-        // the load path = the payload flow (what the system exists to move) at
-        // this state; tap the band to trace it through the diagram in gold.
-        const st = Diagram.stateAt(doc, L.index);
-        const loadIds = [];
-        st.edges.forEach(e => { if (e.kind === "payload") loadIds.push(e.id, e.from, e.to); });
-        if (loadIds.length) sb.appendChild(h("span", "sb-hint", "◎ trace the load path"));
-        // orders of magnitude, folded away — right where the reader is already
-        // asking the scaling question, so an estimate can be made defensible
-        if (audience === "developer" && typeof NUMBERS_LIBRARY !== "undefined") {
-          const nf = h("details", "numbers-fold");
-          nf.appendChild(h("summary", null, "numbers to reason with"));
-          NUMBERS_LIBRARY.forEach(grp => {
-            nf.appendChild(h("div", "nf-group", grp.group));
-            grp.rows.forEach(([k, val]) => {
-              const r = h("div", "nf-row");
-              r.appendChild(h("span", "nf-k", k));
-              r.appendChild(h("span", "nf-v", val));
-              nf.appendChild(r);
-            });
+      return grid;
+    }
+    // "Under load": how this mechanism holds as the system grows. Tap the
+    // band to trace the load path (the payload flow at this state) in gold.
+    function scaleBand(L) {
+      if (!L.at_scale) return null;
+      const scale = h("div", "scale-band");
+      const sb = h("div", "sb-label", "Under load · how it scales");
+      scale.appendChild(sb);
+      scale.appendChild(h("p", null, L.at_scale));
+      const loadIds = loadPathIds(L);
+      if (loadIds.length) sb.appendChild(h("span", "sb-hint", "◎ trace the load path"));
+      // orders of magnitude, folded away, right where the scaling question is asked
+      if (audience === "developer" && typeof NUMBERS_LIBRARY !== "undefined") {
+        const nf = h("details", "numbers-fold");
+        nf.appendChild(h("summary", null, "numbers to reason with"));
+        NUMBERS_LIBRARY.forEach(grp => {
+          nf.appendChild(h("div", "nf-group", grp.group));
+          grp.rows.forEach(([k, val]) => {
+            const r = h("div", "nf-row");
+            r.appendChild(h("span", "nf-k", k));
+            r.appendChild(h("span", "nf-v", val));
+            nf.appendChild(r);
           });
-          scale.appendChild(nf);
-        }
-        wireSpot(scale, loadIds, "load");
-        root.appendChild(scale);
+        });
+        scale.appendChild(nf);
       }
-
-      const def = h("div", "defends-row");
+      wireSpot(scale, loadIds, "load");
+      return scale;
+    }
+    // Defends: each rule chip lights the mechanism this layer added, the
+    // structure that keeps that rule true. Rules carry their text, not just a number.
+    function defendsRow(L, withText) {
+      const def = h("div", "defends-row" + (withText ? " defends-full" : ""));
       def.appendChild(h("span", "mono-label", "Defends"));
-      // each invariant chip is tappable: light the mechanism THIS layer added —
-      // the structure that enforces the invariant — so the promise is traceable
-      // to the parts that keep it (argument grounded in the diagram)
       const defended = diffAddedIds(L);
       L.defends.forEach(d => {
-        const chip = h("button", "inv-badge inv-tap", "INV " + invNumber[d]);
+        const chip = h("button", "inv-badge inv-tap", ruleLabel(d));
         if (defended.length) {
-          chip.title = "Tap to highlight what defends this invariant";
+          chip.title = "Tap to highlight what defends this rule";
           chip.addEventListener("click", () => {
             if (activeSpotCard === chip) { diagram.spotlight(null); chip.classList.remove("spot-on"); activeSpotCard = null; return; }
             if (activeSpotCard) activeSpotCard.classList.remove("spot-on");
@@ -582,71 +625,51 @@ var DocView = (() => {
             activeSpotCard = chip;
           });
         }
-        def.appendChild(chip);
+        if (withText) {
+          const line = h("div", "defends-line");
+          line.append(chip, h("span", "defends-text", ruleText(d)));
+          def.appendChild(line);
+        } else def.appendChild(chip);
       });
-      const invTexts = L.defends.map(d => {
-        const iv = doc.strip_down.invariants.find(x => x.id === d);
-        return iv ? iv.text : d;
-      });
-      def.appendChild(h("span", "bd-last", invTexts.join(" · ")));
-      root.appendChild(def);
-
-      if (audience === "beginner") {
-        const ab = h("div", "analogy-box");
-        ab.appendChild(h("div", "ab-label", "In everyday terms"));
-        ab.appendChild(document.createTextNode(L.beginner_analogy));
-        root.appendChild(ab);
-      } else if (audience === "enthusiast") {
-        const fold = h("details", "analogy-fold");
-        fold.appendChild(h("summary", null, "analogy"));
-        const ab = h("div", "analogy-box");
-        ab.appendChild(document.createTextNode(L.beginner_analogy));
-        fold.appendChild(ab);
-        root.appendChild(fold);
+      if (!withText) def.appendChild(h("span", "bd-last", L.defends.map(ruleText).join(" · ")));
+      return def;
+    }
+    function devBox(L) {
+      const dev = h("div", "dev-box");
+      dev.appendChild(h("div", "db-label", "For engineers"));
+      // a concrete coding starting point for this layer's problem (older docs predate the field)
+      if (L.developer.approach) {
+        const ap = h("div", "dev-approach");
+        ap.appendChild(h("span", "da-tag", "Start here"));
+        ap.appendChild(h("span", "da-text", L.developer.approach));
+        dev.appendChild(ap);
       }
-
-      if (audience !== "beginner") {
-        const dev = h("div", "dev-box");
-        dev.appendChild(h("div", "db-label", "For engineers"));
-        // a concrete coding starting point for this layer's problem — the data
-        // structure / algorithm / pattern to actually begin with (guarded: older
-        // docs predate this field)
-        if (L.developer.approach) {
-          const ap = h("div", "dev-approach");
-          ap.appendChild(h("span", "da-tag", "Start here"));
-          ap.appendChild(h("span", "da-text", L.developer.approach));
-          dev.appendChild(ap);
-        }
-        L.developer.mappings.forEach(m => {
-          const row = h("div", "dev-map");
-          row.appendChild(h("span", "dm-mech", m.mechanism));
-          row.appendChild(h("span", "dm-arrow", "→"));
-          row.appendChild(h("span", "dm-sw", m.software_concept));
-          dev.appendChild(row);
+      L.developer.mappings.forEach(m => {
+        const row = h("div", "dev-map");
+        row.appendChild(h("span", "dm-mech", m.mechanism));
+        row.appendChild(h("span", "dm-arrow", "→"));
+        row.appendChild(h("span", "dm-sw", m.software_concept));
+        dev.appendChild(row);
+      });
+      // what the profession calls what this layer does; a chip opens the ladder
+      const vocab = (L.developer.vocab || []).map(vocabById).filter(Boolean);
+      if (vocab.length) {
+        const vr = h("div", "vocab-row");
+        vr.appendChild(h("span", "vr-label", "Known as"));
+        vocab.forEach(v => {
+          const chip = h("button", "vocab-chip tier-" + v.tier, v.name);
+          chip.title = v.one_liner;
+          chip.onclick = () => openVocab(v, L);
+          vr.appendChild(chip);
         });
-        // engineering vocabulary: what the profession calls what this layer does.
-        // Tap a chip for the ladder — thinking model (why it's forced) down to the
-        // component you'd deploy. Guarded: older docs predate the field.
-        const vocab = (L.developer.vocab || []).map(vocabById).filter(Boolean);
-        if (vocab.length) {
-          const vr = h("div", "vocab-row");
-          vr.appendChild(h("span", "vr-label", "Known as"));
-          vocab.forEach(v => {
-            const chip = h("button", "vocab-chip tier-" + v.tier, v.name);
-            chip.title = v.one_liner;
-            chip.onclick = () => openVocab(v, L);
-            vr.appendChild(chip);
-          });
-          dev.appendChild(vr);
-        }
-        if (audience === "developer") {
-          L.developer.interview_probes.forEach(p => dev.appendChild(h("div", "probe", p)));
-        }
-        root.appendChild(dev);
+        dev.appendChild(vr);
       }
-
-      /* Ask this layer — one bounded question, answered from this layer's
-         context. Saved Q&As render for every audience and read offline. */
+      if (audience === "developer") L.developer.interview_probes.forEach(p => dev.appendChild(h("div", "probe", p)));
+      return dev;
+    }
+    /* Ask this layer: one bounded question, answered from this layer's
+       context. Saved Q&As render for every audience and read offline. */
+    function qaBlock(L, a) {
       const qa = h("div", "qa-block");
       qa.appendChild(h("div", "lb-label", COPY.askTitle));
       (a.qa || []).forEach(item => {
@@ -660,6 +683,7 @@ var DocView = (() => {
       const inp = h("input");
       inp.placeholder = COPY.askPlaceholder;
       inp.maxLength = 220;
+      inp.setAttribute("aria-label", COPY.askTitle);
       const btn = h("button", "gbtn", COPY.askBtn);
       btn.onclick = async () => {
         const q = inp.value.trim();
@@ -683,7 +707,189 @@ var DocView = (() => {
       inp.onkeydown = ev => { if (ev.key === "Enter") btn.click(); };
       row.append(inp, btn);
       qa.appendChild(row);
-      root.appendChild(qa);
+      return qa;
+    }
+
+    /* ── One-page view: every block of a layer, top to bottom, as in v1 ── */
+    function renderRevealed(root, L, a) {
+      if (a.predict) root.appendChild(predictResult(L, a));
+      root.appendChild(modelCard(L, false));
+      const g = parseGrade(a.verdict);
+      if (hasSketch(a)) root.appendChild(yourAnswer(a, g));
+      root.appendChild(solutionCard(L));
+      if (hasSketch(a)) root.appendChild(verdictOrCompare(L, a, g));
+      root.appendChild(lensGrid(L));
+      root.appendChild(h("div", "tradeoff-band", L.tradeoff));
+      const sb = scaleBand(L);
+      if (sb) root.appendChild(sb);
+      root.appendChild(defendsRow(L, false));
+      if (audience === "beginner") {
+        const ab = h("div", "analogy-box");
+        ab.appendChild(h("div", "ab-label", "In everyday terms"));
+        ab.appendChild(document.createTextNode(L.beginner_analogy));
+        root.appendChild(ab);
+      } else if (audience === "enthusiast") {
+        const fold = h("details", "analogy-fold");
+        fold.appendChild(h("summary", null, "analogy"));
+        const ab = h("div", "analogy-box");
+        ab.appendChild(document.createTextNode(L.beginner_analogy));
+        fold.appendChild(ab);
+        root.appendChild(fold);
+      }
+      if (audience !== "beginner") root.appendChild(devBox(L));
+      root.appendChild(qaBlock(L, a));
+    }
+
+    /* ══ The loop: four steps per layer ══ */
+    function renderStep(root, L) {
+      const a = attemptFor(L.index);
+      if (step >= 3) markRead(L);
+      stepHead(root, L);
+      const title = h("h1", "step-title", step >= 3 ? L.name : failurePart(L));
+      if (step >= 3 && a.revealed) {
+        const stamp = h("img", "enso-stamp");
+        stamp.src = "assets/enso-gate.svg"; stamp.alt = ""; stamp.title = "Layer rebuilt";
+        title.appendChild(stamp);
+      }
+      root.appendChild(title);
+      [stepBreak, stepMove, stepFix, stepPrice][step - 1](root, L, a);
+    }
+
+    // 1 · It breaks: the problem, with the failure replaying on the diagram
+    function stepBreak(root, L, a) {
+      root.appendChild(h("p", "step-text", audience === "beginner" ? L.problem.beginner : L.problem.statement));
+      const tools = h("div", "step-tools");
+      if (opts.canReplay) {
+        const rp = h("button", "gbtn");
+        if (typeof setFace === "function") setFace(rp, "replay", "Replay the failure"); else rp.textContent = "Replay the failure";
+        rp.onclick = () => opts.onReplay && opts.onReplay(pos, false);
+        tools.appendChild(rp);
+      }
+      tools.appendChild(h("span", "step-note", "Red on the diagram is what breaks next."));
+      root.appendChild(tools);
+      root.appendChild(footer(
+        { label: "What would you do?", fn: () => goStep(2) },
+        challenge ? null : { label: "Skip to the fix", fn: () => goStep(3) }));
+    }
+
+    // 2 · Your move: guess the rule under attack, sketch a fix if you like
+    function stepMove(root, L, a) {
+      const invs = doc.strip_down.invariants;
+      if (invs.length >= 2) {
+        const q = h("section", "move-block");
+        q.appendChild(h("h3", "move-q", "Which rule is about to break?"));
+        const list = h("div", "rule-list");
+        invs.forEach(iv => {
+          const opt = h("button", "rule-opt");
+          opt.append(h("span", "rule-n", ruleLabel(iv.id)), h("span", "rule-t", iv.text));
+          if (a.predict) {
+            opt.disabled = true;
+            if (iv.id === a.predict.chosen) opt.classList.add(a.predict.correct ? "hit" : "miss");
+            if (!a.predict.correct && L.defends.includes(iv.id)) opt.classList.add("answer");
+          } else {
+            opt.onclick = () => {
+              a.predict = { chosen: iv.id, correct: L.defends.includes(iv.id) };
+              a.ts = Date.now();
+              persist();
+              render._keepScroll = true;
+              render();
+            };
+          }
+          list.appendChild(opt);
+        });
+        q.appendChild(list);
+        if (a.predict) q.appendChild(h("p", "pb-result", a.predict.correct
+          ? "Called it. Watch how the fix protects it."
+          : "Not quite. It attacks " + L.defends.map(ruleLabel).join(", ") + ". Watch for why."));
+        root.appendChild(q);
+      }
+
+      const sk = h("section", "move-block");
+      const sh = h("h3", "move-q", "Sketch your fix");
+      sh.appendChild(h("span", "move-opt", challenge ? "needed in Strict mode" : "optional"));
+      sk.appendChild(sh);
+      sk.appendChild(h("p", "move-prompt", L.gate.question));
+      const ta = h("textarea", "move-sketch");
+      ta.placeholder = "A few lines is plenty. What would you add, and what would it cost?";
+      ta.value = a.answer || "";
+      ta.setAttribute("aria-label", "Your sketch of the fix");
+      sk.appendChild(ta);
+      const hints = h("div");
+      sk.appendChild(hints);
+      const hintRow = h("div", "gate-actions");
+      const hint1 = h("button", "gbtn", COPY.gateHint1);
+      const hint2 = h("button", "gbtn", COPY.gateHint2);
+      hint2.hidden = hintTier < 1;
+      hint1.hidden = hintTier >= 1;
+      if (hintTier >= 1) hints.appendChild(modelCard(L, true));
+      if (hintTier >= 2) { hints.appendChild(h("div", "gate-hint", L.gate.hint)); hint2.hidden = true; }
+      hint1.onclick = () => { hintTier = 1; hints.appendChild(modelCard(L, true)); hint1.hidden = true; hint2.hidden = false; };
+      hint2.onclick = () => { hintTier = 2; hints.appendChild(h("div", "gate-hint", L.gate.hint)); hint2.hidden = true; };
+      hintRow.append(hint1, hint2);
+      sk.appendChild(hintRow);
+      root.appendChild(sk);
+
+      const foot = footer({ label: "Show me the fix", fn: () => goStep(3), disabled: locked(L) },
+        null, challenge && locked(L) ? "Write your fix first: Strict mode is on." : "Guessing first helps it stick, even when the guess is wrong.");
+      root.appendChild(foot);
+      ta.oninput = () => {
+        a.answer = ta.value;
+        a.ts = Date.now();
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(persist, 600);
+        const next = foot.querySelector(".step-next");
+        if (next) next.disabled = locked(L);
+      };
+    }
+
+    // 3 · The fix: what was built, and the idea that cracks it
+    function stepFix(root, L, a) {
+      root.appendChild(solutionCard(L));
+      root.appendChild(modelCard(L, false));
+      if (a.predict) root.appendChild(predictResult(L, a));
+      if (hasSketch(a)) {
+        const g = parseGrade(a.verdict);
+        const fold = h("details", "deeper sketch-fold");
+        const sum = h("summary", null, "Your sketch");
+        if (g) sum.appendChild(h("span", "grade-badge", GRADE_TXT[g.grade]));
+        fold.appendChild(sum);
+        fold.appendChild(yourAnswer(a, g));
+        fold.appendChild(verdictOrCompare(L, a, g));
+        root.appendChild(fold);
+      }
+      root.appendChild(footer(
+        { label: "What does it cost?", fn: () => goStep(4) },
+        { label: before ? "Show after" : "Compare before and after", fn: () => setBefore(!before), cls: "compare-btn" }));
+    }
+
+    // 4 · The price: the tradeoff, how it holds under load, the rules it keeps
+    function stepPrice(root, L, a) {
+      root.appendChild(h("div", "tradeoff-band", L.tradeoff));
+      const sb = scaleBand(L);
+      if (sb) root.appendChild(sb);
+      root.appendChild(defendsRow(L, true));
+
+      const deeper = h("section", "deeper-group");
+      deeper.appendChild(h("h3", "deeper-h", "Go deeper"));
+      const fold = (label, build, open) => {
+        const d = h("details", "deeper");
+        if (open) d.open = true;
+        d.appendChild(h("summary", null, label));
+        const body = h("div", "deeper-body");
+        build(body);
+        d.appendChild(body);
+        deeper.appendChild(d);
+      };
+      fold("In everyday terms", b => { const ab = h("div", "analogy-box"); ab.appendChild(document.createTextNode(L.beginner_analogy)); b.appendChild(ab); }, audience === "beginner");
+      fold("For the people using it · Under the hood", b => b.appendChild(lensGrid(L)), false);
+      fold("For engineers", b => b.appendChild(devBox(L)), audience === "developer");
+      fold(COPY.askTitle, b => b.appendChild(qaBlock(L, a)), (a.qa || []).length > 0);
+      root.appendChild(deeper);
+      root.appendChild(h("p", "done-note", "Layer rebuilt. It's in your Drill deck now, ready to test you later."));
+      const last = L.index === N;
+      root.appendChild(footer(
+        { label: last ? "Push it: the trials" : `Next failure · Layer ${L.index + 1}`, fn: () => goTo(L.index + 1, 1) },
+        { label: "Back to the fix", fn: () => goStep(3) }));
     }
 
     /* ── stress tests (position N+1) ── */
@@ -728,45 +934,142 @@ var DocView = (() => {
       const scroll = docPane.scrollTop;
       activeSpotCard = null;                 // cards are rebuilt; syncDiagram clears the diagram spotlight
       const inner = h("div", "doc-inner rise");
-      inner.appendChild(stepper());
-      const body = h("div");
-      if (pos === 0) renderOverview(body);
-      else if (pos <= N) renderLayer(body, doc.layers[pos - 1]);
-      else if (pos === N + 1) renderStress(body);
-      else renderTransfer(body);
+      const body = h("div", "step-body");
+      if (pos === 0) {
+        renderOverview(body);
+        body.appendChild(footer({ label: "Begin the rebuild", fn: () => goTo(1, 1) }));
+      } else if (pos <= N) {
+        const L = doc.layers[pos - 1];
+        if (onePage) {
+          renderLayer(body, L);
+          body.appendChild(footer(
+            { label: pos === N ? "Push it: the trials" : "Next layer", fn: () => goTo(pos + 1, 1) },
+            { label: "Previous", fn: () => goTo(pos - 1, 1) }));
+        } else renderStep(body, L);
+      } else if (pos === N + 1) {
+        renderStress(body);
+        body.appendChild(footer({ label: "Take it with you", fn: () => goTo(N + 2, 1) }, { label: "Back to layer " + N, fn: () => goTo(N, 4) }));
+      } else {
+        renderTransfer(body);
+        body.appendChild(footer(opts.onFinish ? { label: "Back to the library", fn: () => opts.onFinish() } : null,
+          { label: "Back to the trials", fn: () => goTo(N + 1, 1) }));
+      }
       inner.appendChild(body);
       docPane.textContent = "";
       docPane.appendChild(inner);
       syncDiagram(animateDiagram);
-      // audience flips keep the reader anchored; position changes scroll to top
+      // step 4 opens with the load path already traced: show the band as the lit card
+      if (!onePage && pos >= 1 && pos <= N && step === 4) {
+        const band = docPane.querySelector(".scale-band.spot-card");
+        if (band) { band.classList.add("spot-on"); activeSpotCard = band; }
+      }
+      // audience flips keep the reader anchored; moving on starts at the top
       docPane.scrollTop = render._keepScroll ? scroll : 0;
       render._keepScroll = false;
+      // the first time a layer's failure is on screen, play it once by itself
+      // (it only counts once it has actually played, so passing through doesn't use it up)
+      if (!onePage && pos >= 1 && pos <= N && step === 1 && !replayed.has(pos) && opts.canReplay && !RM && opts.onReplay) {
+        const at = pos;
+        setTimeout(() => {
+          if (pos !== at || step !== 1 || replayed.has(at) || !docPane.isConnected) return;
+          replayed.add(at);
+          opts.onReplay(at, true);
+        }, 650);
+      }
     }
 
-    function goTo(p) {
+    function goTo(p, s = 1) {
       if (p < 0 || p > N + 2) return;
-      const forward = p > pos;
+      const forward = p > pos || (p === pos && s > step);
       pos = p;
+      step = (p >= 1 && p <= N) ? Math.min(4, Math.max(1, s)) : 1;
+      if (p >= 1 && p <= N && step >= 3 && locked(doc.layers[p - 1])) step = 2;   // Strict: earn the fix first
+      before = false;
       hintTier = 0;
       rec.progress.position = pos;
+      rec.progress.step = step;
       persist();
-      render(forward);
+      render(forward && step >= 3);
     }
+    function goStep(s) {
+      if (pos < 1 || pos > N || onePage) return;
+      const L = doc.layers[pos - 1];
+      if (s >= 3 && locked(L)) {
+        if (step !== 2) goTo(pos, 2);
+        const ta = docPane.querySelector(".move-sketch");
+        if (ta) { ta.focus(); ta.classList.add("nudge"); setTimeout(() => ta.classList.remove("nudge"), 700); }
+        return;
+      }
+      const forward = s > step;
+      step = s;
+      before = false;
+      rec.progress.step = step;
+      persist();
+      render(forward && step === 3);
+    }
+    function setBefore(on) {
+      if (pos < 1 || pos > N || onePage || step !== 3 || before === on) return;
+      before = on;
+      syncDiagram(false);
+      const b = docPane.querySelector(".compare-btn");
+      if (b) b.textContent = before ? "Show after" : "Compare before and after";
+    }
+
+    /* Keyboard: ← and → walk the steps, Shift with an arrow jumps a layer,
+       and holding B in the fix step shows the state it replaced. */
+    function stops() {
+      const out = [[0, 1]];
+      doc.layers.forEach(L => { if (onePage) out.push([L.index, 1]); else for (let k = 1; k <= 4; k++) out.push([L.index, k]); });
+      out.push([N + 1, 1], [N + 2, 1]);
+      return out;
+    }
+    function move(dir) {
+      const list = stops();
+      const cur = list.findIndex(([p, k]) => p === pos && (pos < 1 || pos > N || onePage || k === step));
+      const next = list[Math.max(0, Math.min(list.length - 1, cur + dir))];
+      if (!next || (next[0] === pos && next[1] === step)) return;
+      if (next[0] === pos) goStep(next[1]); else goTo(next[0], dir < 0 && next[0] >= 1 && next[0] <= N ? 4 : next[1]);
+    }
+    function jumpLayer(dir) {
+      const p = Math.max(0, Math.min(N + 2, pos + dir));
+      if (p === pos) return;
+      goTo(p, (p >= 1 && p <= N && attemptFor(doc.layers[p - 1].index).revealed) ? 3 : 1);
+    }
+    function typing(t) { return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable); }
+    function onKey(ev) {
+      if (!docPane.isConnected || !docPane.offsetParent || typing(ev.target) || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+      if (ev.key === "ArrowRight" || ev.key === "ArrowLeft") {
+        ev.preventDefault();
+        const dir = ev.key === "ArrowRight" ? 1 : -1;
+        if (ev.shiftKey) jumpLayer(dir); else move(dir);
+      } else if ((ev.key === "b" || ev.key === "B") && !ev.repeat) setBefore(true);
+    }
+    function onKeyUp(ev) { if (ev.key === "b" || ev.key === "B") setBefore(false); }
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("keyup", onKeyUp);
 
     render();
 
     return {
       setAudience(a) { audience = a; render._keepScroll = true; render(); },
-      setChallenge(c) { challenge = c; render(); },
-      goToLayer(idx) { goTo(idx); },
+      setChallenge(c) { challenge = c; if (pos >= 1 && pos <= N && step >= 3 && locked(doc.layers[pos - 1])) step = 2; render._keepScroll = true; render(); },
+      setOnePage(v) { onePage = !!v; before = false; render(); },
+      setBefore,
+      get before() { return before; },
+      // from Models, Vocabulary and links: open a layer at its fix if it's been read
+      goToLayer(idx) { goTo(idx, attemptFor(idx).revealed ? 3 : 1); },
       get position() { return pos; },
-      // the state the diagram is ACTUALLY showing (gate-aware: pos-1 for an
-      // un-revealed gated layer). Anything mirroring the diagram must use this,
-      // not position, or it spoils the gate.
+      get step() { return step; },
+      // the state the diagram is ACTUALLY showing (pos-1 before the fix).
+      // Anything mirroring the diagram must use this, not position.
       get shownUpto() { return lastShown; },
       // cancel the pending debounce so a late timer can't overwrite a fresher
       // record after this view is torn down / the breakdown is re-opened
-      destroy() { clearTimeout(saveTimer); }
+      destroy() {
+        clearTimeout(saveTimer);
+        document.removeEventListener("keydown", onKey);
+        document.removeEventListener("keyup", onKeyUp);
+      }
     };
   }
 

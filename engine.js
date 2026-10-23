@@ -55,7 +55,9 @@ const ICONS = {
   layers: ["M10 3l7 3.6-7 3.6-7-3.6z", "M3 10.4l7 3.6 7-3.6", "M3 13.8l7 3.6 7-3.6"],
   pencil: ["M12.8 4.2l3 3L7.6 15.4 4 16l.6-3.6z"],
   cube: ["M10 2.8l6.4 3.6v7.2L10 17.2l-6.4-3.6V6.4z", "M3.6 6.4L10 10l6.4-3.6", "M10 10v7.2"],
-  tag: ["M3.5 10.4V4.6c0-.6.5-1.1 1.1-1.1h5.8l6.1 6.1-6.9 6.9z", "M7.2 6.6v.2"]
+  tag: ["M3.5 10.4V4.6c0-.6.5-1.1 1.1-1.1h5.8l6.1 6.1-6.9 6.9z", "M7.2 6.6v.2"],
+  compare: ["M10 3v14", "M3.5 5.5h4v9h-4z", "M12.5 5.5h4v9h-4z"],
+  flask: ["M8 3h4", "M8.6 3v5L4.4 15.2c-.5.9.1 1.8 1.1 1.8h9c1 0 1.6-.9 1.1-1.8L11.4 8V3", "M6.2 12.5h7.6"]
 };
 function icon(name, cls) {
   const NS = "http://www.w3.org/2000/svg";
@@ -151,6 +153,27 @@ async function boot() {
     meta.challengeModeDefault = false;
     meta.challengeDefaultV2 = true;
     await Store.saveMeta({ challengeModeDefault: false, challengeDefaultV2: true });
+  }
+  // v2: reading counts as progress. Before, only the challenge gate marked a
+  // layer done, and gates are off by default, so a reader who finished a whole
+  // system still showed 0 of N. Backfill once, from the furthest place each
+  // reader got to (layersRead can't be used: outside challenge mode it jumped
+  // to "every layer" the moment a system was opened). Gated records already
+  // carry their own reveals. From here on the reader marks a layer at its fix.
+  if (!meta.readCountsV2) {
+    for (const r of await Store.getBreakdowns()) {
+      if (r.challengeMode === true) continue;
+      const read = Math.min(r.doc.layers.length, (r.progress && r.progress.position) || 0);
+      let changed = false;
+      r.doc.layers.forEach(L => {
+        if (L.index > read) return;
+        const a = r.attempts[L.index] || (r.attempts[L.index] = { answer: "", revealed: false, verdict: null, ts: 0 });
+        if (!a.revealed) { a.revealed = true; a.ts = a.ts || Date.now(); changed = true; }
+      });
+      if (changed) await Store.saveBreakdownLight(r);
+    }
+    meta.readCountsV2 = true;
+    await Store.saveMeta({ readCountsV2: true });
   }
   // theme: saved choice wins; otherwise follow the OS on first run
   const initialTheme = meta.theme || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
@@ -804,8 +827,32 @@ async function openReader(id, layerIndex, opts = {}) {
   labelsBtn.title = "Show every connection's label";
   let allLabels = false;
   try { allLabels = localStorage.getItem("vitruvian_all_labels") === "1"; } catch (e) {}
+  // Before: in the fix step, flip the diagram to the state this layer replaced
+  const beforeBtn = setFace(h("button", "gbtn sim-btn"), "compare", "Before");
+  beforeBtn.title = "Show the system before this fix (or hold B)";
+  replayBtn.hidden = true;
+  beforeBtn.hidden = true;
+  // Lab tools: the deeper instruments, one tap away instead of always on show
+  const labBtn = setFace(h("button", "gbtn sim-btn lab-btn"), "flask", "Lab tools");
+  labBtn.setAttribute("aria-haspopup", "true");
+  labBtn.setAttribute("aria-expanded", "false");
+  const labMenu = h("div", "lab-menu");
+  labMenu.hidden = true;
+  labMenu.setAttribute("role", "menu");
+  [[raceBtn, "Ring the parts where two flows can arrive at once."],
+   [spineBtn, "Trace what a request waits on, and what would stop everything."],
+   [labelsBtn, "Label every connection, not just the new ones."],
+   [gifBtn, "Record a running Pulse as a looping GIF."]].forEach(([btn, desc]) => {
+    const item = h("div", "lab-item");
+    item.append(btn, h("p", "lab-desc", desc));
+    labMenu.appendChild(item);
+  });
+  const setLab = open => { labMenu.hidden = !open; labBtn.setAttribute("aria-expanded", String(open)); labBtn.classList.toggle("on", open); };
+  labBtn.onclick = e => { e.stopPropagation(); setLab(labMenu.hidden); };
+  labMenu.onclick = e => e.stopPropagation();
+  pane.onclick = () => setLab(false);
   const capTools = h("div", "cap-tools");
-  capTools.append(playBtn, loadBtn, replayBtn, capSep(), raceBtn, spineBtn, labelsBtn, capSep(), gifBtn, capToggle);
+  capTools.append(replayBtn, beforeBtn, playBtn, loadBtn, capSep(), labBtn, capToggle);
   dcap.append(capState, capTools);
   const scrubEl = h("div", "scrub-wrap");
   const caption = h("div", "dg-caption");
@@ -815,7 +862,7 @@ async function openReader(id, layerIndex, opts = {}) {
   hud.hidden = true;
   const hudRate = h("span", "hud-stat"), hudFlight = h("span", "hud-stat"), hudCrash = h("span", "hud-stat crash"), hudHint = h("span", "hud-hint", "tap any node to kill it");
   hud.append(hudRate, hudFlight, hudCrash, hudHint);
-  dpane.append(dscroll, hud, caption, Diagram.legend(), scrubEl, dcap);   // legend: the tutorial's grammar, always in view
+  dpane.append(dscroll, hud, caption, Diagram.legend(), scrubEl, dcap, labMenu);   // legend: the tutorial's grammar, always in view
   const docPane = h("div", "doc-pane");
   wrap.append(dpane, docPane);
   // breadcrumb: only while nested (drilled at least one level deep)
@@ -917,20 +964,28 @@ async function openReader(id, layerIndex, opts = {}) {
     clearTimeout(captionTimer);
     captionTimer = setTimeout(() => { caption.hidden = true; }, 7000);
   });
-  replayBtn.onclick = () => {
+  // rewind to the moment before this layer's fix (pre-state, failure lit
+  // red), then send history's two payloads into it. Quiet when the reader
+  // plays it by itself on arriving at a layer.
+  const runReplay = (p, quiet) => {
     if (diagram.sim.running) diagram.sim.stop();
     caption.hidden = true;
-    // rewind to the moment before this layer's fix: pre-state + its failure
-    // lit red — then send history's two payloads into it
-    const p = currentView ? currentView.position : 0;
     const L = rec.doc.layers[p - 1];
-    if (!L || !L.diff.highlight.length) { toast("No failure at this position. Step into a rebuild layer."); return; }
+    if (!L || !L.diff.highlight.length) { if (!quiet) toast("No failure at this position. Step into a rebuild layer."); return; }
     diagram.show(p - 1, { highlight: L.diff.highlight });
     capState.textContent = `Before layer ${p} · the failure, replayed`;
-    if (!diagram.sim.replay()) {
-      currentView.goToLayer(p);
-      toast("No payload path reaches this failure");
-    } else { setFace(playBtn, "pause", "Rest"); playBtn.classList.add("on"); hud.hidden = false; }
+    if (!diagram.sim.replay()) { if (!quiet) toast("No payload path reaches this failure"); }
+    else { setFace(playBtn, "pause", "Rest"); playBtn.classList.add("on"); hud.hidden = false; }
+  };
+  replayBtn.onclick = () => runReplay(currentView ? currentView.position : 0, false);
+  beforeBtn.onclick = () => { if (currentView) currentView.setBefore(!currentView.before); };
+  // the toolbar shows what the current step can use
+  const onTools = ({ step, before }) => {
+    replayBtn.hidden = !diagram.sim.available || !(step === 1 || step === 2);
+    beforeBtn.hidden = step !== 3;
+    beforeBtn.classList.toggle("on", !!before);
+    beforeBtn.setAttribute("aria-pressed", String(!!before));
+    setFace(beforeBtn, "compare", before ? "After" : "Before");
   };
 
   // gates are opt-in: on only if this breakdown enabled them, or the user set the default on
@@ -940,8 +995,12 @@ async function openReader(id, layerIndex, opts = {}) {
     docPane, diagram, rec, scrubEl,
     audience: meta.audienceMode || "enthusiast",
     challenge: challengeOn,
+    onePage: meta.onePage === true,
+    canReplay: diagram.sim.available,
+    onReplay: runReplay,
+    onTools,
+    async onFinish() { await flushSaves(); await renderLibrary(); show("library"); },
     onSave(r) { Store.saveBreakdownLight(r); },
-    onChallenge(v) { rec.challengeMode = v; Store.saveBreakdownLight(rec); },
     canCompare() {
       if (!navigator.onLine) return { ok: false, reason: "You're offline. " + COPY.gateCompareOffline };
       if (!meta.apiKey) return { ok: false, reason: "No API key set. " + COPY.gateCompareOffline };
@@ -1224,8 +1283,29 @@ function buildReaderMenu(rec, challengeOn) {
     b.onclick = e => { e.stopPropagation(); pop.hidden = true; fn(); };
     pop.appendChild(b);
   };
-  // Graft + Sequence now live in the topbar's context zone; challenge mode is a
-  // toggle at the layer head. The ⋯ menu keeps the rarer / one-shot actions.
+  // Graft + Sequence live in the topbar. The ⋯ menu holds the two reading
+  // preferences and the rarer, one-shot actions.
+  const check = (label, on, fn) => {
+    const b = h("button", "menu-check" + (on ? " on" : ""), label);
+    b.setAttribute("role", "menuitemcheckbox");
+    b.setAttribute("aria-checked", String(!!on));
+    b.onclick = e => { e.stopPropagation(); pop.hidden = true; fn(); };
+    pop.appendChild(b);
+  };
+  check("Strict mode: write your fix first", challengeOn, () => {
+    rec.challengeMode = !challengeOn;
+    Store.saveBreakdownLight(rec);
+    if (currentView) currentView.setChallenge(rec.challengeMode);
+    buildReaderMenu(rec, rec.challengeMode);
+    toast(rec.challengeMode ? "Strict mode on. The fix opens once you've sketched yours." : "Strict mode off");
+  });
+  check("Read each layer as one page", meta.onePage === true, async () => {
+    meta.onePage = !(meta.onePage === true);
+    await Store.saveMeta({ onePage: meta.onePage });
+    if (currentView) currentView.setOnePage(meta.onePage);
+    buildReaderMenu(rec, challengeOn);
+  });
+  pop.appendChild(h("div", "menu-sep"));
   add("How to read a Deconstruct", () => { renderTutorial("reader"); show("tutorial"); });
   pop.appendChild(h("div", "menu-sep"));
   add(COPY.shareMenu, async () => {
@@ -1686,7 +1766,7 @@ async function renderTrack() {
   };
   tile(p.pathDone, p.pathTotal, "systems on the path");
   tile(p.models, p.modelsTotal, "thinking models collected");
-  tile(p.gates, null, "gates earned");
+  tile(p.gates, null, "layers rebuilt");
   if (p.yours) tile(p.yoursDone, p.yours, "your own designs");
   root.appendChild(stats);
 
@@ -1960,7 +2040,7 @@ async function renderDrill(keep) {
 function renderGateDrill(body) {
   const { gates } = drillState;
   if (!gates.length) {
-    body.appendChild(h("p", "lib-note", "Nothing to drill yet. Reveal some gates in a Deconstruct first; drills re-test what you've earned."));
+    body.appendChild(h("p", "lib-note", "Nothing to drill yet. Read a layer through to its fix and it lands here, ready to test you later."));
     return;
   }
   const item = gates[drillState.gi % gates.length];
@@ -2137,7 +2217,7 @@ function renderSettings(banner) {
   db.appendChild(seg);
   const tog = h("div", "toggle" + (meta.challengeModeDefault === true ? " on" : ""));
   tog.style.marginTop = "12px";
-  tog.append(h("span", "tg-track"), h("span", "tg-label", "Challenge mode by default: hide each solution behind a design-it-first gate"));
+  tog.append(h("span", "tg-track"), h("span", "tg-label", "Strict mode by default: write your own fix before you can see the real one"));
   tog.onclick = async () => {
     meta.challengeModeDefault = !(meta.challengeModeDefault === true);
     await Store.saveMeta({ challengeModeDefault: meta.challengeModeDefault });

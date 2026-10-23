@@ -677,20 +677,21 @@ var COPY = {
         ["Payload shapes", "During a Pulse, every payload wears the shape of the kind that sent it: a dot from an actor, a square from a store, a diamond from a process, a bar from a channel. Colour still tells you which lane it came from, so shape and colour answer two different questions at once."],
         ["Backpressure", "When a node takes in more than it can clear, the edges feeding it stiffen and their traffic slows down. The jam creeps back toward the source rather than staying put, which is how one slow component ends up browning out everything upstream of it."],
         ["Labels", "Only the connections this layer added carry a label, so the new part of the story reads first. Hover or tap any other line to see its label, or press Labels under the diagram to show them all."],
-        ["Pan & scrub", "Dense diagrams pan sideways. Drag the scrubber (0…N) under the diagram to sweep it from the naive baseline to the finished system."]
+        ["Pan", "Dense diagrams pan sideways, and the lane names stay pinned on the left as you go. Tap a layer in the timeline to see the system at that point."]
       ]
     },
     controls: {
       title: "Controls",
       items: [
         ["Audience: B / E / D", "Three reading levels of the same Deconstruct: Beginner (plain language and everyday analogies), Enthusiast (the default), and Developer (adds the engineer mappings and interview probes). Switch anytime and you keep your place."],
-        ["Step & scrub", "Move layer by layer with Prev / Next, or drag the scrubber to sweep the diagram across every state."],
-        ["Challenge mode", "Off by default. Turn it on from the ⋯ menu to hide each solution behind a design-it-first gate: you predict the fix, then compare."]
+        ["Four steps per layer", "Each layer runs It breaks, Your move, The fix, The price. The button at the bottom of the card moves you on, and Skip to the fix is always there. Arrow keys move a step; Shift with an arrow moves a layer."],
+        ["The timeline", "The strip under the diagram is your place in the system: Meet, each layer, then Trials and Transfer. Finished layers turn teal. Tap any of them to jump there."],
+        ["Strict mode", "Off by default. Turn it on from the ⋯ menu or in Settings, and the fix stays shut until you've sketched your own. The ⋯ menu can also show each layer as one long page, the way earlier versions did."]
       ]
     },
     explore: {
       title: "Go deeper: simulate & interrogate",
-      note: "Buttons under the diagram, plus more in the ⋯ menu. These let you run the system instead of only reading it.",
+      note: "Pulse sits under the diagram, with Replay while a layer is breaking and Before while you look at the fix. Races, Spine, Labels and GIF are in Lab tools next to them.",
       items: [
         ["Pulse ▶ / ⟲ replay", "Send live traffic through the current state. Payloads travel the flow path, crash red into whatever's broken, and (under ◉ load) congest where the system saturates. ⟲ replay re-enacts the exact historical failure, arrival by arrival."],
         ["Fault injection", "While a pulse is running, tap any node to kill it. Traffic piles up behind the dead node and everything downstream starves. It's chaos engineering as a toy. Tap it again to revive it."],
