@@ -43,6 +43,17 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 - **Reading counts as progress.** Only the challenge gate used to mark a layer done, and gates have been off by default since 1.3, so a reader who finished a whole system still saw 0 of 6 on its card, 0 of 19 on Track and nothing in Drill. Reaching a layer's solution now marks it done. Existing installs are backfilled once from how far each reader got.
 - A handful of toasts and labels still used em dashes. They now read as plain sentences.
 
+## [2.2.0] — 2026-10-23 · The key points at the diagram
+### Added
+- **The key now lists only the glyphs this diagram actually uses**, and it changes as you scrub. The railway shows four entries; YouTube's storage tier shows object store, edge cache, log and queue. Each one is drawn through the same glyph table and the same hand-drawn pass as the node, so the key is not a picture of the mark, it is the mark.
+- **Tap any entry to light the nodes that carry it.** Asking "which of these is the cache" is now a tap rather than a hunt. Tap again to clear.
+
+### Fixed
+- **Cards had lost their side padding, so text sat flush against the border.** Two unrelated features had both claimed the class name `spot-card`: the diagram's tappable cards, and the Spot-it practice rows added in 2.0. The practice rule won on source order and stripped the horizontal padding from every card it touched. The practice row is now `spot-q`. Under load goes from 0px of breathing room back to 18px, and the problem and solution cards were quietly starved the same way.
+
+### Changed
+- The compact step label reads **Your guess** rather than **Guess**, matching the full label it abbreviates.
+
 ## [2.1.0] — 2026-10-23 · Nodes look like what they are
 ### Added
 - **An optional `icon` on any node**, naming the concrete thing behind the role: database, cache, blob, index, log, queue, cdn, gateway. It draws as a small hand-drawn mark inside the shape, through the same Rough.js pass as everything else.

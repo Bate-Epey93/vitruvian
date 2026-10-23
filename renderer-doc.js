@@ -49,7 +49,7 @@ var DocView = (() => {
     const RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const STEPS = [
       { label: "The problem", short: "Problem", tone: "red" },
-      { label: "Your guess", short: "Guess", tone: "vio" },
+      { label: "Your guess", short: "Your guess", tone: "vio" },
       { label: "The solution", short: "Solution", tone: "teal" },
       { label: "The tradeoff", short: "Tradeoff", tone: "amber" }
     ];

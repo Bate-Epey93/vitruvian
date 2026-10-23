@@ -576,6 +576,17 @@ input,textarea{font-family:var(--sans);}
 .dgl-line{stroke:var(--edge-ink);fill:none;stroke-width:1.4;stroke-linecap:round;}
 .dgl-new{stroke:var(--accent);}
 .dgl-broken{stroke:var(--failure);animation:dg-pulse 1.1s ease-in-out infinite;}
+/* The contextual half of the key. Each entry is a button because tapping it
+   lights the nodes that carry that glyph — the key points at the diagram
+   rather than just describing it. */
+.dgl-row{display:contents;}
+.dgl-tap{font:inherit;color:inherit;background:none;border:0;padding:2px 6px;margin:-2px -2px;
+  border-radius:7px;cursor:pointer;transition:background .15s,color .15s;}
+.dgl-tap:hover{background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--ink);}
+.dgl-tap:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+.dgl-tap.on{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent-deep);font-weight:650;}
+.dgl-mark{stroke:var(--diagram-ink);stroke-width:1.1;stroke-linecap:round;stroke-linejoin:round;}
+.dgl-tap.on .dgl-mark,.dgl-tap.on .dgl-shape{stroke:var(--accent-deep);}
 .dgl-note{color:var(--faint);font-style:italic;}
 :root[data-theme="dark"] .dgl-note{color:var(--muted);}
 .diagram-pane.collapsed .dg-legend{display:none;}
@@ -1574,8 +1585,10 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 .met-more{margin-top:18px;}
 .met-more .mono-label{margin-bottom:8px;}
 .spot-it{margin-top:40px;padding:22px;border-radius:var(--r-lg);background:color-mix(in srgb,var(--proposal) 5%,var(--panel));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--proposal) 18%,transparent);}
-.spot-card{padding:14px 0;border-top:1px solid var(--hair);}
-.spot-card .rv-prompt{font-size:15px;margin:4px 0 10px;}
+/* Spot-it practice row. NOT .spot-card: that is the diagram's tappable
+   spotlight card, and sharing the name stripped its horizontal padding. */
+.spot-q{padding:14px 0;border-top:1px solid var(--hair);}
+.spot-q .rv-prompt{font-size:15px;margin:4px 0 10px;}
 .spot-row{display:flex;gap:8px;}
 .spot-fb{font-size:14px;color:var(--ink-soft);margin:8px 0 0;min-height:1em;}
 .gbtn.spot-ok{background:var(--accent);color:#fff;box-shadow:none;opacity:1;}

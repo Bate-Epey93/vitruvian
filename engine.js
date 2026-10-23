@@ -968,7 +968,8 @@ async function openReader(id, layerIndex, opts = {}) {
   hud.hidden = true;
   const hudRate = h("span", "hud-stat"), hudFlight = h("span", "hud-stat"), hudCrash = h("span", "hud-stat crash"), hudHint = h("span", "hud-hint", "tap any node to kill it");
   hud.append(hudRate, hudFlight, hudCrash, hudHint);
-  dpane.append(dscroll, hud, caption, Diagram.legend(), scrubEl, dcap, labMenu);   // legend: the tutorial's grammar, always in view
+  const legendEl = Diagram.legend();
+  dpane.append(dscroll, hud, caption, legendEl, scrubEl, dcap, labMenu);   // legend: the tutorial's grammar, always in view
   const docPane = h("div", "doc-pane");
   /* On a phone the step card is a bottom sheet over the diagram. The grip
      drags it between three heights, or steps through them by tap or arrow
@@ -986,6 +987,9 @@ async function openReader(id, layerIndex, opts = {}) {
 
   const diagram = Diagram.mount(dscroll, rec.doc);
   diagram.onDrill((sub) => drillInto(sub));
+  // the key lists only the glyphs this state actually uses, and tapping one
+  // lights the nodes that carry it
+  if (legendEl.update) diagram.onRender(st => legendEl.update(st, diagram));
 
   /* flow simulation controls — instant response on press; any state change
      stops the sim (via diagram.show) and this resets the buttons */
@@ -1998,7 +2002,7 @@ function spotIt(recs, m) {
   let right = 0, answered = 0;
   const score = h("p", "pb-result");
   items.forEach(it => {
-    const card = h("div", "spot-card");
+    const card = h("div", "spot-q");
     card.appendChild(h("div", "rv-where", it.rec.system));
     card.appendChild(h("p", "rv-prompt", it.L.problem.beginner || it.L.problem.statement));
     const row = h("div", "spot-row");

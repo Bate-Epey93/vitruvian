@@ -363,7 +363,7 @@ var Diagram = (() => {
     layout.lanes.forEach(l => { laneLabelById[l.id] = l.label; });
     let shownIds = new Set();
     let lastState = null, lastPos = {}, lastHl = new Set();   // the sim reads the shown state
-    let traced = null, freshTimer = null, raceOn = false, spineOn = false, onDrillCb = null;
+    let traced = null, freshTimer = null, raceOn = false, spineOn = false, onDrillCb = null, onRenderCb = null;
 
     /* trace: tap a node to light it + every edge touching it and dim the
        rest — follow one part's responsibilities. Tap again to clear. */
@@ -638,6 +638,7 @@ var Diagram = (() => {
       lastState = st;
       lastPos = pos;            // the sim draws store fill meters at node positions
       lastHl = hl;
+      if (onRenderCb) onRenderCb(st);    // the key redraws itself from what is on screen
       if (raceOn) raceSpotlight(true);   // re-ring contention points on the new state
       if (spineOn) spineSpotlight(true); // and re-trace the spine, which moves layer to layer
     }
@@ -1341,7 +1342,7 @@ var Diagram = (() => {
       };
     })();
 
-    return { show, spotlight, focus, layout, laneColor, sim, zoom: zoomCtl, raceSpotlight, contendedIds, spineSpotlight, stateAt: u => stateAt(doc, u), doc, onDrill(fn) { onDrillCb = fn; } };
+    return { show, spotlight, focus, layout, laneColor, sim, zoom: zoomCtl, raceSpotlight, contendedIds, spineSpotlight, stateAt: u => stateAt(doc, u), doc, onDrill(fn) { onDrillCb = fn; }, onRender(fn) { onRenderCb = fn; if (lastState) fn(lastState); } };
   }
 
   /* ── Legend: a compact always-visible key under the diagram (brings the
@@ -1359,6 +1360,73 @@ var Diagram = (() => {
       tog.textContent = open ? "key ▾" : "key ▸";
     };
     wrap.appendChild(tog);
+
+    /* The glyph half of the key is built per render, not once. A static key
+       lists every mark the app can draw, most of which are not on screen; this
+       one lists only what this diagram actually uses, so it shrinks to four
+       entries on the railway and grows as you scrub into YouTube's storage
+       tier. Each entry is drawn through the same glyph table and the same
+       sketch pass as the node, so the key is not a picture OF the mark — it is
+       the mark. Tapping one lights every node that carries it, which is the
+       part that actually answers "which of these is the cache". */
+    const GLYPH_LABEL = {
+      actor: "actor", store: "storage", process: "process", channel: "channel",
+      database: "database", cache: "cache", blob: "object store", index: "index",
+      log: "log", queue: "queue", cdn: "edge cache", gateway: "gateway"
+    };
+    const KIND_ORDER = ["actor", "store", "process", "channel"];
+    const KIND_SHAPE = {
+      actor:   s => el("circle", { cx: 15, cy: 8, r: 5.5, class: "dgl-shape" }, s),
+      store:   s => el("path", { d: "M 6 3 L 6 13 L 24 13 L 24 3", fill: "none", class: "dgl-shape" }, s),
+      process: s => el("rect", { x: 6, y: 3, width: 18, height: 10, rx: 1.5, class: "dgl-shape" }, s),
+      channel: s => el("rect", { x: 6, y: 3, width: 18, height: 10, rx: 5, class: "dgl-shape" }, s)
+    };
+    const glyphRow = document.createElement("span");
+    glyphRow.className = "dgl-row";
+    wrap.appendChild(glyphRow);
+    let lit = null;                                   // the entry currently spotlighting
+
+    wrap.update = (st, dg) => {
+      glyphRow.textContent = "";
+      lit = null;
+      if (!st) return;
+      const present = new Map();                      // glyph name → the nodes using it
+      st.nodes.forEach(n => {
+        const name = glyphName(n);
+        if (!present.has(name)) present.set(name, []);
+        present.get(name).push(n.id);
+      });
+      const names = [...present.keys()].sort((a, b) => {
+        const ka = KIND_ORDER.indexOf(a), kb = KIND_ORDER.indexOf(b);
+        if (ka !== kb) return (ka < 0 ? 99 : ka) - (kb < 0 ? 99 : kb);   // kinds first
+        return a.localeCompare(b);
+      });
+      names.forEach(name => {
+        const ids = present.get(name);
+        const it = document.createElement("button");
+        it.className = "dgl-item dgl-tap";
+        it.type = "button";
+        it.title = `${ids.length} node${ids.length > 1 ? "s" : ""} — tap to light ${ids.length > 1 ? "them" : "it"}`;
+        // A kind entry draws the container, because the shape is what carries
+        // the role. An icon entry draws the mark, because that is what it adds.
+        const svg = el("svg", { viewBox: "0 0 30 16", class: "dgl-glyph", "aria-hidden": "true" });
+        if (KIND_SHAPE[name]) KIND_SHAPE[name](svg);
+        else el("path", { d: sketch(GLYPHS[name] || "", "key:" + name, GLYPH_SKETCH),
+                          fill: "none", class: "dgl-mark", transform: "translate(9.5 2.5)" }, svg);
+        it.appendChild(svg);
+        const t = document.createElement("span");
+        t.textContent = GLYPH_LABEL[name] || name;
+        it.appendChild(t);
+        it.onclick = () => {
+          if (!dg) return;
+          if (lit === name) { dg.spotlight(null); lit = null; }
+          else { dg.spotlight(ids, "trace"); lit = name; }
+          [...glyphRow.children].forEach(c => c.classList.toggle("on", c === it && lit === name));
+        };
+        glyphRow.appendChild(it);
+      });
+    };
+
     const item = (svgBuild, label) => {
       const it = document.createElement("span");
       it.className = "dgl-item";
@@ -1370,11 +1438,7 @@ var Diagram = (() => {
       it.appendChild(t);
       wrap.appendChild(it);
     };
-    // node kinds
-    item(s => el("circle", { cx: 15, cy: 8, r: 5.5, class: "dgl-shape" }, s), "actor");
-    item(s => el("path", { d: "M 6 3 L 6 13 L 24 13 L 24 3", fill: "none", class: "dgl-shape" }, s), "storage");
-    item(s => el("rect", { x: 6, y: 3, width: 18, height: 10, rx: 1.5, class: "dgl-shape" }, s), "process");
-    item(s => el("rect", { x: 6, y: 3, width: 18, height: 10, rx: 5, class: "dgl-shape" }, s), "channel");
+    // node kinds and icons are contextual — see wrap.update above
     // edge kinds (pattern = kind; colour follows the source lane)
     item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line", "stroke-width": 2 }, s), "flow");
     item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line", "stroke-dasharray": "4 3" }, s), "control");
