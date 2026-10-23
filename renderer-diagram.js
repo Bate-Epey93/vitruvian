@@ -72,14 +72,14 @@ var Diagram = (() => {
   }
   /* d → roughened d. Falls back to the exact geometry whenever rough is
      missing or chokes, so a failure here costs the look and nothing else. */
-  function sketch(d, id) {
+  function sketch(d, id, extra) {
     if (!roughGen || !d) return d;
     const key = id + "|" + d;
     const hit = sketchCache.get(key);
     if (hit) return hit;
     let out = d;
     try {
-      const paths = roughGen.toPaths(roughGen.path(d, Object.assign({ seed: seedOf(id) }, SKETCH)));
+      const paths = roughGen.toPaths(roughGen.path(d, Object.assign({ seed: seedOf(id) }, SKETCH, extra)));
       if (paths.length && paths[0].d) out = paths.map(p => p.d).join(" ");
     } catch (err) { /* keep the exact path */ }
     if (sketchCache.size > 4000) sketchCache.clear();   // bounded: ids × positions
@@ -220,12 +220,53 @@ var Diagram = (() => {
   /* ── Node glyphs by kind; stroke tinted by lane color. A small corner
      mark repeats the kind INSIDE the box — shape alone vanishes when
      you're deep in a dense diagram; the mark keeps kind readable. ── */
-  function kindMark(g, kind, x, y, color) {
-    let d;
-    if (kind === "store") d = `M ${x + 7} ${y + 7} h 9 M ${x + 7} ${y + 11} h 9`;                      // shelves
-    else if (kind === "channel") d = `M ${x + 11} -4 l 5 4 l -5 4`;                                    // through-arrow, on the pill's midline
-    else d = `M ${x + 8} ${y + 6} l 7 7 M ${x + 15} ${y + 6} l -7 7`;                                  // process: work
-    const m = el("path", { d, class: "dg-kmark", fill: "none" }, g);
+  /* ── Glyphs ──
+     Every mark is authored in the same 11×11 box so they can be swapped
+     without re-measuring placement, and every one is a single path string so
+     the sketch pass can roughen it like anything else.
+
+     Two tiers, and the split is the point. A node's KIND draws the top tier:
+     the timeless role it plays, which is all a railway timetable or a
+     campaign's lead list will ever need. Its optional ICON overrides that
+     with the concrete thing a particular field uses for the role. A store
+     stays an open-topped box whatever its icon, because the box is what says
+     "things accumulate here" — the icon only says what the thing is. */
+  const GLYPHS = {
+    // kind tier — abstract, domain-neutral, the fallback when no icon is set
+    actor:    "M 5.5 1.5 a 2 2 0 1 0 .1 0 Z M 1.2 10.5 a 4.3 4.3 0 0 1 8.6 0",                       // head + shoulders
+    store:    "M 1 3.5 h 9 M 1 7 h 9",                                                                // shelves
+    channel:  "M 1.5 5.5 h 5 M 5 3.2 l 2.3 2.3 l -2.3 2.3",                                           // through-arrow
+    process:  "M 2.9 5.5 a 2.6 2.6 0 1 0 5.2 0 a 2.6 2.6 0 1 0 -5.2 0 M 5.5 .3 v 1.6 M 5.5 9.1 v 1.6"
+            + " M .3 5.5 h 1.6 M 9.1 5.5 h 1.6 M 1.8 1.8 l 1.1 1.1 M 8.1 8.1 l 1.1 1.1"
+            + " M 9.2 1.8 l -1.1 1.1 M 1.8 9.2 l 1.1 -1.1",                                           // gear: work happens
+    // icon tier — concrete, opt-in per node
+    database: "M 1 2.5 a 4.5 1.8 0 0 1 9 0 v 6 a 4.5 1.8 0 0 1 -9 0 Z M 1 2.5 a 4.5 1.8 0 0 0 9 0",
+    cache:    "M 6.5 .5 L 3 6 h 2.5 l -1 4.5 l 4 -6 h -2.5 Z",                                        // bolt: fast path
+    blob:     "M 2 .5 h 4.5 l 2.5 2.5 v 7.5 h -7 Z M 6.5 .5 v 2.5 h 2.5",                             // object with a fold
+    index:    "M 1 2 h 9 M 1 4.8 h 5.5 M 1 7.6 h 8 M 1 10.4 h 3.5",                                   // sorted, ragged
+    log:      "M 1 2 h 7 M 1 5.5 h 7 M 1 9 h 4.5 M 7 7 l 2.5 2 l -2.5 2",                             // append-only
+    queue:    "M 1 3 h 2.5 v 5 h -2.5 Z M 4.2 3 h 2.5 v 5 h -2.5 Z M 7.4 3 h 2.5 v 5 h -2.5 Z",       // things waiting in line
+    cdn:      "M 5.5 .5 a 5 5 0 1 0 .1 0 Z M .5 5.5 h 10 M 5.5 .5 a 6.5 5 0 0 1 0 10 a 6.5 5 0 0 1 0 -10",
+    gateway:  "M 1 1 v 9 M 10 1 v 9 M 3 5.5 h 4.5 M 6 3.5 l 2 2 l -2 2"                               // the way in
+  };
+  // An 11px glyph roughened as hard as a 110px box turns to mush, so the
+  // sketch is gentler here. It still wobbles; it just stays readable.
+  const GLYPH_SKETCH = { roughness: 0.55, bowing: 0.7 };
+
+  function glyphName(n) {
+    return (n.icon && GLYPHS[n.icon]) ? n.icon : n.kind;
+  }
+  /* Marks sit in the shape's upper-left, clear of the centred label. The pill
+     curves away up there, so a channel's mark rides its midline instead. */
+  function kindMark(g, n, x, y, color) {
+    const name = glyphName(n);
+    const d = GLYPHS[name];
+    if (!d) return;
+    let gx = x + 5, gy = y + 4;
+    if (n.kind === "channel") { gx = x + 9; gy = -5.5; }       // pill: ride the midline
+    else if (n.kind === "actor") { gx = -5.5; gy = -5.5; }     // circle: dead centre, label is below
+    const m = el("path", { d: sketch(d, n.id + ":" + name, GLYPH_SKETCH), class: "dg-kmark", fill: "none",
+                           transform: `translate(${gx} ${gy})` }, g);
     m.style.stroke = color;
   }
   function drawNode(g, n, color) {
@@ -238,6 +279,7 @@ var Diagram = (() => {
     if (n.kind === "actor") {
       el("circle", { r: ACTOR_R, class: "dg-fill" }, g);
       el("path", { d: sketch(circleD(0, 0, ACTOR_R), n.id), class: "dg-shape" }, g).style.stroke = color;
+      kindMark(g, n, 0, 0, color);         // placement handled per kind inside kindMark
       labelBelow(g, n.label);
       return;
     }
@@ -251,7 +293,7 @@ var Diagram = (() => {
       el("rect", { x, y, width: w, height: h, rx: 3, class: "dg-fill" }, g);
       el("path", { d: sketch(roundRectD(x, y, w, h, 3), n.id), class: "dg-shape" }, g).style.stroke = color;
     }
-    kindMark(g, n.kind, x, y, color);
+    kindMark(g, n, x, y, color);
     labelInside(g, n.label);
   }
 

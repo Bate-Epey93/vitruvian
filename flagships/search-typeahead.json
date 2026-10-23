@@ -146,7 +146,8 @@
     "label": "Query log DB",
     "kind": "store",
     "lane": "index",
-    "order": 2
+    "order": 2,
+    "icon": "database"
    }
   ],
   "edges": [
@@ -233,7 +234,8 @@
       "label": "Prefix trie",
       "kind": "store",
       "lane": "index",
-      "order": 3
+      "order": 3,
+      "icon": "index"
      }
     ],
     "add_edges": [
@@ -499,7 +501,8 @@
       "kind": "store",
       "lane": "cache",
       "order": 2,
-      "expands_to": "Distributed cache"
+      "expands_to": "Distributed cache",
+      "icon": "cache"
      }
     ],
     "add_edges": [

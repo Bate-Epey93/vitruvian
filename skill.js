@@ -45,7 +45,8 @@ var SKILL = (() => {
   };
 
   /* ── The schema, as the prompt and the validator understand it ──
-     kinds: node = actor|store|process|channel · edge = payload|control|money */
+     kinds: node = actor|store|process|channel · edge = payload|control|money
+     optional node.icon names the concrete thing behind the role (see below) */
   const SCHEMA_DOC = {
     schemaVersion: 1,
     meta: { system: "string", narrowing: "string - the tractable slice you chose, '' if none needed", ordering_note: "string - why the layers come in this order", history_confidence: "high|medium|low - how sure you are the failure story is historically accurate", domain: "the system's field, one of: software|marketing|operations|biology|economics|mechanical|social - pick the SINGLE closest; it only selects which profession's vocabulary is shown first" },
@@ -60,7 +61,7 @@ var SKILL = (() => {
     },
     visual: {
       lanes: [{ id: "string", label: "string ≤14 chars - a SEMANTIC ROLE (people, control, data, money), never a physical place" }],
-      nodes: [{ id: "string", label: "≤24 chars", kind: "actor|store|process|channel", lane: "lane id", order: "int 0-7 - column within the lane" }],
+      nodes: [{ id: "string", label: "≤24 chars", kind: "actor|store|process|channel", lane: "lane id", order: "int 0-7 - column within the lane", icon: "OPTIONAL - database|cache|blob|index|log|queue|cdn|gateway" }],
       edges: [{ id: "string", from: "node id", to: "node id", kind: "payload|control|money", label: "≤16 chars, optional" }]
     },
     layers: [{
@@ -153,6 +154,7 @@ DEVELOPER APPROACH. Every layer's developer.approach names a CONCRETE coding sta
 THE DIAGRAM. You are drawing on a fixed grid, not a canvas:
 - Lanes are horizontal bands: SEMANTIC ROLES (people, service, control, data, money) - never physical places. ${BOUNDS.lanes.min}-${BOUNDS.lanes.max} lanes, labels ≤${BOUNDS.laneLabelMax} chars.
 - Node kinds mean things: actor = a person/party, store = where things wait or accumulate, process = where work happens, channel = what things move through.
+- node.icon is OPTIONAL and names the concrete thing filling that role, drawn as a small mark inside the shape: database, cache, blob, index, log, queue, cdn, gateway. Set it only when the system genuinely uses that thing and a reader of the field would recognise it - a Postgres table is a database, a Redis layer is a cache, an S3 bucket is a blob, a Kafka topic is a log, a search inverted index is an index. LEAVE IT OUT otherwise. The kind already carries the meaning, so a railway timetable, a warehouse shelf or a campaign's lead list are stores with NO icon. Never set an icon just because a node is a store.
 - Edge kinds mean things: payload = the thing the system exists to move, control = signals and permissions, money = value.
 - visual = Layer 0, the naive baseline (≤${BOUNDS.baselineNodesMax} nodes). Each layer's diff adds ≤${BOUNDS.addNodesPerLayerMax} nodes and ≤${BOUNDS.addEdgesPerLayerMax} edges. Final state: ≤${BOUNDS.totalNodesMax} nodes, ≤${BOUNDS.totalEdgesMax} edges, order values 0-${BOUNDS.orderMax}, at most ${BOUNDS.nodesPerCellMax} nodes per lane+order cell. Node labels ≤${BOUNDS.nodeLabelMax} chars, edge labels ≤${BOUNDS.edgeLabelMax}.
 - diff.highlight lists what is BROKEN before the layer fixes it (shown pulsing red at the gate). Every edge endpoint must exist by the time its layer applies. All ids globally unique.

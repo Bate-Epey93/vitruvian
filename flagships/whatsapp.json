@@ -273,7 +273,8 @@
       "label": "Per-user queue",
       "kind": "store",
       "lane": "service",
-      "order": 4
+      "order": 4,
+      "icon": "queue"
      }
     ],
     "add_edges": [
@@ -469,7 +470,8 @@
       "label": "Key directory",
       "kind": "store",
       "lane": "service",
-      "order": 2
+      "order": 2,
+      "icon": "database"
      },
      {
       "id": "keys_b",

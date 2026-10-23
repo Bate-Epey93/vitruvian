@@ -151,7 +151,8 @@
     "label": "Push (APNs/FCM)",
     "kind": "channel",
     "lane": "channels",
-    "order": 5
+    "order": 5,
+    "icon": "gateway"
    },
    {
     "id": "device",
@@ -245,7 +246,8 @@
       "kind": "store",
       "lane": "pipeline",
       "order": 1,
-      "expands_to": "Message queue"
+      "expands_to": "Message queue",
+      "icon": "queue"
      },
      {
       "id": "worker",
@@ -352,7 +354,8 @@
       "label": "Device registry",
       "kind": "store",
       "lane": "control",
-      "order": 3
+      "order": 3,
+      "icon": "database"
      }
     ],
     "add_edges": [
@@ -451,14 +454,16 @@
       "label": "Email provider",
       "kind": "channel",
       "lane": "channels",
-      "order": 6
+      "order": 6,
+      "icon": "gateway"
      },
      {
       "id": "sms_prov",
       "label": "SMS gateway",
       "kind": "channel",
       "lane": "channels",
-      "order": 7
+      "order": 7,
+      "icon": "gateway"
      }
     ],
     "add_edges": [
@@ -568,7 +573,8 @@
       "label": "Preferences",
       "kind": "store",
       "lane": "control",
-      "order": 4
+      "order": 4,
+      "icon": "database"
      }
     ],
     "add_edges": [
@@ -811,7 +817,8 @@
       "label": "Retry + DLQ",
       "kind": "store",
       "lane": "pipeline",
-      "order": 6
+      "order": 6,
+      "icon": "queue"
      }
     ],
     "add_edges": [

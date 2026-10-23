@@ -135,7 +135,8 @@
     "label": "Mapping DB",
     "kind": "store",
     "lane": "storage",
-    "order": 2
+    "order": 2,
+    "icon": "database"
    }
   ],
   "edges": [
@@ -394,7 +395,8 @@
       "kind": "store",
       "lane": "storage",
       "order": 1,
-      "expands_to": "Distributed cache"
+      "expands_to": "Distributed cache",
+      "icon": "cache"
      }
     ],
     "add_edges": [

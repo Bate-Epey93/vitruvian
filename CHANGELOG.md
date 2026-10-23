@@ -43,6 +43,18 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 - **Reading counts as progress.** Only the challenge gate used to mark a layer done, and gates have been off by default since 1.3, so a reader who finished a whole system still saw 0 of 6 on its card, 0 of 19 on Track and nothing in Drill. Reaching a layer's solution now marks it done. Existing installs are backfilled once from how far each reader got.
 - A handful of toasts and labels still used em dashes. They now read as plain sentences.
 
+## [2.1.0] — 2026-10-23 · Nodes look like what they are
+### Added
+- **An optional `icon` on any node**, naming the concrete thing behind the role: database, cache, blob, index, log, queue, cdn, gateway. It draws as a small hand-drawn mark inside the shape, through the same Rough.js pass as everything else.
+- **The four kinds got sharper marks too.** An actor is a person, a process is a gear, a store is still shelves, a channel is still an arrow passing through.
+
+### Changed
+- **The 19 sample systems are annotated**, 63 nodes in all. YouTube's raw upload is a blob, its transcode queue a queue, its edge caches a globe. Existing installs re-seed to pick them up.
+
+### Notes
+- **Kind and icon are kept apart on purpose, and the railway sample is the proof.** A kind is the timeless role a node plays: a store is anywhere things wait, whether that is a Postgres table, a warehouse shelf or a railway timetable. An icon is the concrete thing a particular field happens to use for that role. Because the icon is optional, the railway Deconstruct carries none at all — Station A, Timetable and Shared track draw their kinds and nothing more. One vocabulary still describes a railway and a payment ledger; software just gets to be specific when being specific helps.
+- The field is optional, so nothing saved before this release breaks, and a Deconstruct with no icons looks exactly as it did.
+
 ## [1.40.0] — 2026-10-23 · The diagram is drawn by hand now
 ### Changed
 - **Every node and edge is rendered with a hand-drawn stroke**, using Rough.js, the same engine Excalidraw draws with. It suits the enso brush mark the rest of the app is built around better than clean vector did.

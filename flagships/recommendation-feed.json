@@ -404,7 +404,8 @@
       "kind": "channel",
       "lane": "signals",
       "order": 3,
-      "expands_to": "Message queue"
+      "expands_to": "Message queue",
+      "icon": "log"
      },
      {
       "id": "trainer",
@@ -685,7 +686,8 @@
       "kind": "store",
       "lane": "signals",
       "order": 1,
-      "expands_to": "Distributed cache"
+      "expands_to": "Distributed cache",
+      "icon": "cache"
      }
     ],
     "add_edges": [

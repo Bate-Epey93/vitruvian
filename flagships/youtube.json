@@ -158,7 +158,8 @@
     "label": "Raw video file",
     "kind": "store",
     "lane": "content",
-    "order": 3
+    "order": 3,
+    "icon": "blob"
    },
    {
     "id": "viewer",
@@ -252,7 +253,8 @@
       "label": "Transcode queue",
       "kind": "store",
       "lane": "control",
-      "order": 1
+      "order": 1,
+      "icon": "queue"
      },
      {
       "id": "transcoder",
@@ -267,7 +269,8 @@
       "label": "Rendition ladder",
       "kind": "store",
       "lane": "content",
-      "order": 4
+      "order": 4,
+      "icon": "blob"
      }
     ],
     "add_edges": [
@@ -484,7 +487,8 @@
       "kind": "store",
       "lane": "content",
       "order": 6,
-      "expands_to": "Content delivery network"
+      "expands_to": "Content delivery network",
+      "icon": "cdn"
      }
     ],
     "add_edges": [
@@ -567,7 +571,8 @@
       "label": "Watch signals",
       "kind": "store",
       "lane": "control",
-      "order": 6
+      "order": 6,
+      "icon": "log"
      },
      {
       "id": "ranker",

@@ -153,7 +153,8 @@
     "label": "Storage node A",
     "kind": "store",
     "lane": "storage",
-    "order": 3
+    "order": 3,
+    "icon": "blob"
    }
   ],
   "edges": [
@@ -253,14 +254,16 @@
       "label": "Storage node B",
       "kind": "store",
       "lane": "storage",
-      "order": 4
+      "order": 4,
+      "icon": "blob"
      },
      {
       "id": "store_c",
       "label": "Storage node C",
       "kind": "store",
       "lane": "storage",
-      "order": 5
+      "order": 5,
+      "icon": "blob"
      },
      {
       "id": "replicator",
@@ -462,7 +465,8 @@
       "kind": "store",
       "lane": "metadata",
       "order": 2,
-      "expands_to": "Distributed key-value store"
+      "expands_to": "Distributed key-value store",
+      "icon": "index"
      }
     ],
     "add_edges": [
@@ -649,7 +653,8 @@
       "label": "Index replica",
       "kind": "store",
       "lane": "metadata",
-      "order": 3
+      "order": 3,
+      "icon": "index"
      }
     ],
     "add_edges": [
@@ -739,7 +744,8 @@
       "label": "Cold tier",
       "kind": "store",
       "lane": "storage",
-      "order": 6
+      "order": 6,
+      "icon": "blob"
      },
      {
       "id": "lifecycle",

@@ -643,7 +643,8 @@
       "label": "Local bucket",
       "kind": "store",
       "lane": "storage",
-      "order": 3
+      "order": 3,
+      "icon": "blob"
      }
     ],
     "add_edges": [

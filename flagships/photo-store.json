@@ -139,7 +139,8 @@
     "label": "Photo DB",
     "kind": "store",
     "lane": "storage",
-    "order": 2
+    "order": 2,
+    "icon": "database"
    }
   ],
   "edges": [
@@ -242,7 +243,8 @@
       "kind": "store",
       "lane": "storage",
       "order": 4,
-      "expands_to": "Object storage"
+      "expands_to": "Object storage",
+      "icon": "blob"
      }
     ],
     "add_edges": [
@@ -431,7 +433,8 @@
       "label": "Transcode queue",
       "kind": "channel",
       "lane": "control",
-      "order": 2
+      "order": 2,
+      "icon": "queue"
      },
      {
       "id": "worker",
@@ -531,7 +534,8 @@
       "kind": "store",
       "lane": "storage",
       "order": 6,
-      "expands_to": "Content delivery network"
+      "expands_to": "Content delivery network",
+      "icon": "cdn"
      }
     ],
     "add_edges": [

@@ -352,14 +352,16 @@
       "label": "Session registry",
       "kind": "store",
       "lane": "control",
-      "order": 0
+      "order": 0,
+      "icon": "database"
      },
      {
       "id": "bus",
       "label": "Pub/sub bus",
       "kind": "channel",
       "lane": "control",
-      "order": 1
+      "order": 1,
+      "icon": "queue"
      }
     ],
     "add_edges": [
@@ -461,7 +463,8 @@
       "kind": "store",
       "lane": "storage",
       "order": 1,
-      "expands_to": "Message queue"
+      "expands_to": "Message queue",
+      "icon": "queue"
      },
      {
       "id": "pushgw",
@@ -662,7 +665,8 @@
       "label": "Group log",
       "kind": "store",
       "lane": "storage",
-      "order": 3
+      "order": 3,
+      "icon": "log"
      }
     ],
     "add_edges": [

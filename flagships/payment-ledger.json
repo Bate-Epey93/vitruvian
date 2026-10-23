@@ -159,7 +159,8 @@
     "label": "Balances DB",
     "kind": "store",
     "lane": "ledger",
-    "order": 2
+    "order": 2,
+    "icon": "database"
    }
   ],
   "edges": [
@@ -246,7 +247,8 @@
       "label": "Journal",
       "kind": "store",
       "lane": "ledger",
-      "order": 1
+      "order": 1,
+      "icon": "log"
      }
     ],
     "add_edges": [
@@ -331,7 +333,8 @@
       "label": "Key registry",
       "kind": "store",
       "lane": "control",
-      "order": 0
+      "order": 0,
+      "icon": "database"
      }
     ],
     "add_edges": [
@@ -411,7 +414,8 @@
       "kind": "channel",
       "lane": "settlement",
       "order": 2,
-      "expands_to": "Message queue"
+      "expands_to": "Message queue",
+      "icon": "queue"
      },
      {
       "id": "worker",

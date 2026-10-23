@@ -143,7 +143,8 @@
     "kind": "store",
     "lane": "source",
     "order": 5,
-    "expands_to": "Relational database"
+    "expands_to": "Relational database",
+    "icon": "database"
    }
   ],
   "edges": [
@@ -235,7 +236,8 @@
       "label": "Cache node",
       "kind": "store",
       "lane": "cache",
-      "order": 2
+      "order": 2,
+      "icon": "cache"
      }
     ],
     "add_edges": [
@@ -531,14 +533,16 @@
       "label": "Cache node B",
       "kind": "store",
       "lane": "cache",
-      "order": 3
+      "order": 3,
+      "icon": "cache"
      },
      {
       "id": "cache_c",
       "label": "Cache node C",
       "kind": "store",
       "lane": "cache",
-      "order": 4
+      "order": 4,
+      "icon": "cache"
      },
      {
       "id": "ring",

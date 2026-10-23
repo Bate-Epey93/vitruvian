@@ -149,7 +149,8 @@
     "label": "Driver table",
     "kind": "store",
     "lane": "storage",
-    "order": 2
+    "order": 2,
+    "icon": "database"
    }
   ],
   "edges": [
@@ -251,7 +252,8 @@
       "kind": "store",
       "lane": "storage",
       "order": 2,
-      "expands_to": "Distributed cache"
+      "expands_to": "Distributed cache",
+      "icon": "index"
      }
     ],
     "add_edges": [

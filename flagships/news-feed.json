@@ -153,7 +153,8 @@
     "label": "Posts table",
     "kind": "store",
     "lane": "store",
-    "order": 1
+    "order": 1,
+    "icon": "database"
    },
    {
     "id": "feed_svc",
@@ -269,7 +270,8 @@
       "label": "Feed inboxes",
       "kind": "store",
       "lane": "store",
-      "order": 3
+      "order": 3,
+      "icon": "queue"
      }
     ],
     "add_edges": [
@@ -450,7 +452,8 @@
       "kind": "store",
       "lane": "read",
       "order": 1,
-      "expands_to": "Distributed cache"
+      "expands_to": "Distributed cache",
+      "icon": "cache"
      }
     ],
     "add_edges": [
@@ -617,7 +620,8 @@
       "label": "Engagement signals",
       "kind": "store",
       "lane": "store",
-      "order": 5
+      "order": 5,
+      "icon": "log"
      }
     ],
     "add_edges": [

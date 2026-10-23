@@ -225,7 +225,8 @@
       "kind": "store",
       "lane": "broker",
       "order": 2,
-      "expands_to": "Write-ahead log"
+      "expands_to": "Write-ahead log",
+      "icon": "queue"
      }
     ],
     "add_edges": [
@@ -679,7 +680,8 @@
       "label": "Dead-letter queue",
       "kind": "store",
       "lane": "broker",
-      "order": 3
+      "order": 3,
+      "icon": "queue"
      }
     ],
     "add_edges": [

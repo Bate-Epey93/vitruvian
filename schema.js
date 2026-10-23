@@ -18,6 +18,15 @@ var Schema = (() => {
   const NODE_KINDS = ["actor", "store", "process", "channel"];
   const EDGE_KINDS = ["payload", "control", "money"];
 
+  /* Optional, and deliberately so. A node's KIND is the timeless role it
+     plays — a store is anywhere things wait, whether that is a railway
+     timetable, a warehouse shelf or a Postgres table. ICON is the concrete
+     thing a particular field happens to use for that role. Keeping them
+     separate is what lets one vocabulary describe a railway and a payment
+     ledger: a node with no icon simply draws its kind, so nothing outside
+     software is forced to wear a database cylinder. */
+  const NODE_ICONS = ["database", "cache", "blob", "index", "log", "queue", "cdn", "gateway"];
+
   function isStr(v)      { return typeof v === "string"; }
   function isFullStr(v)  { return typeof v === "string" && v.trim().length > 0; }
   function isArr(v)      { return Array.isArray(v); }
@@ -113,6 +122,10 @@ var Schema = (() => {
       // name that sub-system, enabling semantic zoom (drill into a nested study)
       if (n.expands_to != null && (!isFullStr(n.expands_to) || n.expands_to.length > 60))
         err(`${where} "${n.id}": expands_to must be a non-empty string ≤60 chars`);
+      // optional: the concrete thing this node is, drawn as a mark inside the
+      // shape. Absent is the normal case and draws the kind's own glyph.
+      if (n.icon != null && !NODE_ICONS.includes(n.icon))
+        err(`${where} "${n.id}": icon must be ${NODE_ICONS.join("|")}`);
       liveNodes.set(n.id, n);
       totalNodes++;
     }

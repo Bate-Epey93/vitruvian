@@ -133,7 +133,8 @@
     "label": "Seat inventory",
     "kind": "store",
     "lane": "storage",
-    "order": 2
+    "order": 2,
+    "icon": "database"
    }
   ],
   "edges": [
@@ -423,7 +424,8 @@
       "kind": "channel",
       "lane": "control",
       "order": 2,
-      "expands_to": "Message queue"
+      "expands_to": "Message queue",
+      "icon": "queue"
      }
     ],
     "add_edges": [

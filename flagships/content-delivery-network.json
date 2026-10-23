@@ -236,7 +236,8 @@
       "label": "Edge · Asia",
       "kind": "store",
       "lane": "cache",
-      "order": 2
+      "order": 2,
+      "icon": "cdn"
      }
     ],
     "add_edges": [
@@ -353,7 +354,8 @@
       "label": "Edge · EU",
       "kind": "store",
       "lane": "cache",
-      "order": 2
+      "order": 2,
+      "icon": "cdn"
      },
      {
       "id": "router",
@@ -654,7 +656,8 @@
       "kind": "store",
       "lane": "cache",
       "order": 3,
-      "expands_to": "Distributed cache"
+      "expands_to": "Distributed cache",
+      "icon": "cache"
      }
     ],
     "add_edges": [
