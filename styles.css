@@ -1508,7 +1508,7 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 .path-dot:last-child .path-label{left:auto;right:0;transform:none;}
 #screen-library .lib-hero{margin-top:40px;}
 @media(max-width:860px){.home-top{grid-template-columns:1fr;}.home-continue{grid-template-columns:1fr;}.home-thumb{max-height:180px;}}
-@media(max-width:560px){.path-dot{width:12px;height:12px;}.path-dot.cur{width:18px;height:18px;}.path-label{font-size:11px;}}
+@media(max-width:560px){.path-dot{width:12px;height:12px;}.path-dot.cur{width:18px;height:18px;}.path-label{display:none;font-size:11.5px;}.path-dot.cur .path-label{display:block;}.path-track{gap:2px;}}
 
 /* ═══ Path: units ═══ */
 .unit{margin-top:34px;}
