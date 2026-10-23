@@ -528,10 +528,12 @@ a{color:var(--accent);}
 .dg-lane.alt{fill:rgba(20,20,22,0.025);}
 .dg-lane-line{stroke:var(--line);stroke-width:1;stroke-dasharray:2 4;}
 .dg-lane-label{font-size:9px;font-weight:700;letter-spacing:1.6px;fill:var(--muted);}
-.dg-node .dg-shape{fill:var(--node-fill);stroke:var(--diagram-ink);stroke-width:1.5;}
+/* Sketch pass: .dg-fill is the clean solid underneath, .dg-shape the roughened
+   outline drawn over it. They are separate elements because filling a sketchy
+   path ravels the edge of the fill — Excalidraw splits them the same way. */
+.dg-node .dg-shape{fill:none;stroke:var(--diagram-ink);stroke-width:1.5;}
 .dg-node .dg-fill{fill:var(--node-fill);stroke:none;}
 .dg-node .dg-open{stroke:var(--diagram-ink);stroke-width:1.5;}
-.dg-kind-actor .dg-shape{fill:var(--node-fill);}
 .dg-label{font-size:10.5px;fill:var(--diagram-ink);paint-order:stroke;stroke:var(--node-fill);stroke-width:3px;stroke-linejoin:round;}
 /* stroke COLOR comes inline from the lane; kind stays in the dash */
 .dg-epath{stroke-width:1.5;}

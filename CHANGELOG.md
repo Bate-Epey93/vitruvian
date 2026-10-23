@@ -4,6 +4,14 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [1.40.0] — 2026-10-23 · The diagram is drawn by hand now
+### Changed
+- **Every node and edge is rendered with a hand-drawn stroke**, using Rough.js, the same engine Excalidraw draws with. It suits the enso brush mark the rest of the app is built around better than clean vector did.
+- **The layout did not change.** Rough takes path data and hands back path data, so each element keeps its tag, its classes and its id. Lanes, orthogonal routing, the critical-path spine, chokepoint rings, Pulse with its per-kind tokens and backpressure, and the leader-line labels all go on working untouched. The diagram is still laid out by arithmetic; only the ink wobbles.
+- Endpoints are pinned, so an edge still meets its node's port exactly and an arrowhead cannot drift off the line it belongs to. The wobble is seeded from each element's own id, so it stays put when you scrub layers instead of reshuffling on every render.
+- Shapes now draw twice: a crisp solid underneath and the roughened outline over it. Filling a sketchy path ravels the edge of the fill, and Excalidraw splits them the same way.
+- Rough.js is vendored at `vendor/rough.js` (27KB, MIT) rather than pulled from a CDN, because the app is offline-first and the service worker precaches it. Still no build step and no runtime dependency to install.
+
 ## [1.39.0] — 2026-09-23 · Opus 5.5 in, Haiku and Fable out
 ### Added
 - **Claude Opus 5.5 (`claude-opus-5-5`) is the new default.** It is both the most capable of the three and the cheapest: $4 in / $20 out per million tokens, against Opus 5's $5 / $25. A Deconstruct lands around $0.45 instead of $0.55.

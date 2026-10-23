@@ -44,6 +44,60 @@ var Diagram = (() => {
     return !(a.x0 > b.x1 + pad || a.x1 < b.x0 - pad || a.y0 > b.y1 + pad || a.y1 < b.y0 - pad);
   }
 
+  /* ── Sketch pass ──
+     Rough.js is the engine Excalidraw draws with. It takes path data, roughens
+     the geometry, and hands back ordinary path data — so nothing about the
+     document changes. Every element keeps its tag, its classes and its
+     data-id, which is what lets the flow simulation go on measuring an edge
+     with getPointAtLength, the arrowhead markers go on sitting at the ends,
+     and the spine, congestion and spotlight classes go on landing where they
+     did. The diagram is still laid out by arithmetic; only the ink wobbles.
+
+     Three settings carry it:
+     · preserveVertices pins the endpoints, so an edge still meets its node's
+       port exactly and an arrowhead cannot drift off the line it belongs to.
+     · disableMultiStroke keeps each shape ONE path. Rough's default is two
+       overlapping strokes, which would have turned a single .dg-epath into a
+       group and broken every lookup above.
+     · The seed comes from the element's own id, so the wobble is the same on
+       every render. Without that the whole diagram would reshuffle its jitter
+       each time you moved the layer scrubber, and shimmer while you scrubbed. */
+  const SKETCH = { roughness: 0.9, bowing: 0.85, disableMultiStroke: true, preserveVertices: true };
+  const roughGen = (typeof rough !== "undefined" && rough.generator) ? rough.generator() : null;
+  const sketchCache = new Map();
+  function seedOf(id) {                       // FNV-1a: small, stable, no deps
+    let h = 2166136261;
+    for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return Math.abs(h) % 2147483647;
+  }
+  /* d → roughened d. Falls back to the exact geometry whenever rough is
+     missing or chokes, so a failure here costs the look and nothing else. */
+  function sketch(d, id) {
+    if (!roughGen || !d) return d;
+    const key = id + "|" + d;
+    const hit = sketchCache.get(key);
+    if (hit) return hit;
+    let out = d;
+    try {
+      const paths = roughGen.toPaths(roughGen.path(d, Object.assign({ seed: seedOf(id) }, SKETCH)));
+      if (paths.length && paths[0].d) out = paths.map(p => p.d).join(" ");
+    } catch (err) { /* keep the exact path */ }
+    if (sketchCache.size > 4000) sketchCache.clear();   // bounded: ids × positions
+    sketchCache.set(key, out);
+    return out;
+  }
+  function roundRectD(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    if (r <= 0) return `M ${x} ${y} h ${w} v ${h} h ${-w} Z`;
+    return `M ${x + r} ${y} h ${w - 2 * r} a ${r} ${r} 0 0 1 ${r} ${r}`
+         + ` v ${h - 2 * r} a ${r} ${r} 0 0 1 ${-r} ${r}`
+         + ` h ${-(w - 2 * r)} a ${r} ${r} 0 0 1 ${-r} ${-r}`
+         + ` v ${-(h - 2 * r)} a ${r} ${r} 0 0 1 ${r} ${-r} Z`;
+  }
+  function circleD(cx, cy, r) {
+    return `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${r * 2} 0 a ${r} ${r} 0 1 0 ${-r * 2} 0 Z`;
+  }
+
   /* ── Layout: column x + lane-center y, sized to the union of every
      node that ever exists so the viewBox never rescales. Vertical
      stagger is applied per-state in show(). ── */
@@ -177,18 +231,25 @@ var Diagram = (() => {
   function drawNode(g, n, color) {
     g.setAttribute("class", `dg-node dg-kind-${n.kind}`);
     const w = NODE_W, h = NODE_H, x = -w / 2, y = -h / 2;
+    // Each kind draws twice: a clean solid underneath (.dg-fill) and the
+    // roughened outline on top (.dg-shape). Filling the sketchy path itself
+    // would ravel the edge of the fill; keeping them apart gives a crisp
+    // shape with a hand-drawn line around it.
     if (n.kind === "actor") {
-      el("circle", { r: ACTOR_R, class: "dg-shape" }, g).style.stroke = color;
+      el("circle", { r: ACTOR_R, class: "dg-fill" }, g);
+      el("path", { d: sketch(circleD(0, 0, ACTOR_R), n.id), class: "dg-shape" }, g).style.stroke = color;
       labelBelow(g, n.label);
       return;
     }
     if (n.kind === "store") {                             // open-topped rect: 3 sides
       el("rect", { x, y, width: w, height: h, class: "dg-fill" }, g);
-      el("path", { d: `M ${x} ${y} L ${x} ${y + h} L ${x + w} ${y + h} L ${x + w} ${y}`, class: "dg-shape dg-open", fill: "none" }, g).style.stroke = color;
+      el("path", { d: sketch(`M ${x} ${y} L ${x} ${y + h} L ${x + w} ${y + h} L ${x + w} ${y}`, n.id), class: "dg-shape dg-open" }, g).style.stroke = color;
     } else if (n.kind === "channel") {
-      el("rect", { x, y, width: w, height: h, rx: h / 2, class: "dg-shape" }, g).style.stroke = color;
+      el("rect", { x, y, width: w, height: h, rx: h / 2, class: "dg-fill" }, g);
+      el("path", { d: sketch(roundRectD(x, y, w, h, h / 2), n.id), class: "dg-shape" }, g).style.stroke = color;
     } else {                                              // process
-      el("rect", { x, y, width: w, height: h, rx: 3, class: "dg-shape" }, g).style.stroke = color;
+      el("rect", { x, y, width: w, height: h, rx: 3, class: "dg-fill" }, g);
+      el("path", { d: sketch(roundRectD(x, y, w, h, 3), n.id), class: "dg-shape" }, g).style.stroke = color;
     }
     kindMark(g, n.kind, x, y, color);
     labelInside(g, n.label);
@@ -368,7 +429,7 @@ var Diagram = (() => {
         const li = layout.laneIndex[from.lane] || 0;
         const g = el("g", { class: `dg-edge dg-ekind-${e.kind}`, "data-id": e.id }, edgesG);
         const p = edgePath(e, pos, routeCtx);
-        const path = el("path", { d: p.d, fill: "none", class: "dg-epath", "marker-end": `url(#${broken ? "arr-broken" : "arr-lane" + li})` }, g);
+        const path = el("path", { d: sketch(p.d, e.id), fill: "none", class: "dg-epath", "marker-end": `url(#${broken ? "arr-broken" : "arr-lane" + li})` }, g);
         path.style.stroke = broken ? "#c22f2f" : LANE_COLORS[li % LANE_COLORS.length];
         if (broken) g.classList.add("dg-broken");
         if (ghostSet.has(e.id)) { g.classList.add("dg-ghost"); ghostPaths.push(path); }
