@@ -1597,6 +1597,42 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 .gbtn.spot-no{background:var(--failure);color:#fff;box-shadow:none;opacity:1;}
 @media(max-width:860px){.model-layout{grid-template-columns:1fr;}.model-side{position:static;margin-top:0;}}
 
+
+/* ═══ Graft: your call before the verdict ═══ */
+.graft-guess{margin:22px 0 10px;padding:22px;border-radius:var(--r-lg);background:var(--panel);box-shadow:inset 0 0 0 1px var(--hair),var(--sh-1);}
+.graft-q2{margin-top:22px;}
+.graft-guess .rule-n:empty{display:none;}
+.graft-guess .rule-opt{grid-template-columns:auto minmax(0,1fr);}
+.rule-opt.chosen{background:color-mix(in srgb,var(--proposal) 8%,var(--panel));box-shadow:inset 0 0 0 1.5px var(--proposal);}
+.graft-reveal{position:sticky;bottom:0;display:flex;align-items:center;gap:12px;padding:14px 0;background:linear-gradient(to bottom,color-mix(in srgb,var(--paper) 0%,transparent),var(--paper) 18px);}
+.graft-reveal .big-btn{margin-left:auto;}
+@media(max-width:760px){.graft-reveal{bottom:calc(72px + env(safe-area-inset-bottom));padding:12px 0;flex-wrap:wrap;}.graft-reveal .step-foot-note{flex-basis:100%;}.graft-reveal .big-btn{width:100%;}}
+.vf-guess{font-size:14.5px;line-height:1.55;padding:10px 14px;border-radius:var(--r-sm);background:var(--sunken);color:var(--ink);margin:4px 0 10px;}
+.vf-guess.hit{background:var(--accent-wash);}
+
+
+/* ═══ Dissect form and the Meet you read while generating ═══ */
+.dissect-form{display:grid;gap:18px;margin:22px 0 16px;}
+.dissect-q{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 12px;align-items:baseline;}
+.dissect-n{font:600 12px/1 var(--mono, ui-monospace, monospace);color:var(--ink-3);width:22px;height:22px;border-radius:50%;display:grid;place-items:center;box-shadow:inset 0 0 0 1px var(--hair);}
+.dissect-label{font-weight:600;font-size:15.5px;color:var(--ink);}
+.dissect-q .design-input{grid-column:2;min-height:0;margin:0;}
+.early-meet{margin-top:26px;padding:22px;border-radius:var(--r-lg);background:var(--panel);box-shadow:inset 0 0 0 1px var(--hair),var(--sh-1);animation:fadeUp .4s ease both;}
+.early-essence{font-size:17px;line-height:1.6;color:var(--ink);margin:8px 0 0;}
+.early-sub{margin-top:20px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);}
+.early-rules{margin:10px 0 0;padding-left:22px;display:grid;gap:8px;font-size:15px;line-height:1.5;color:var(--ink-2);}
+.early-rules li{animation:fadeUp .35s ease both;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.early-meet,.early-rules li{animation:none;}}
+
+
+/* ═══ Settings groups ═══ */
+.set-group{margin-top:34px;}
+.set-group:first-of-type{margin-top:18px;}
+.set-group-title{font-size:20px;font-weight:650;letter-spacing:-.01em;margin:0 0 4px;color:var(--ink);}
+.set-group-note{font-size:14px;color:var(--ink-3);margin:0 0 12px;}
+.set-toggles .toggle + .toggle{margin-top:12px;}
+
 /* ═══ Responsive chrome ═══
    Under 760px the nav island leaves the header and becomes a tab bar along
    the bottom edge, where thumbs are. It steps aside while reading so the

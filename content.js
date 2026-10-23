@@ -565,7 +565,13 @@ var COPY = {
   ownDesignLink: "Building something? Dissect your design →",
   ownDesignKicker: "Dissection",
   ownDesignTitle: "Dissect your design",
-  ownDesignLede: "Describe the system you're building: the pieces, what it must never get wrong, where you expect load. Vitruvian rebuilds it failure by failure and shows what breaks first.",
+  ownDesignLede: "Answer three questions about the system you're building. Vitruvian rebuilds it failure by failure and shows what breaks first.",
+  dissectQuestions: [
+    ["what", "What does it do, and who uses it?", "e.g. A booking app. Vendors set their availability and customers reserve time slots.", 3],
+    ["never", "What must never go wrong?", "e.g. Two customers must never book the same slot. A vendor must hear about a booking within seconds.", 3],
+    ["load", "Where will the load come from?", "e.g. Big spikes when a popular vendor opens their calendar. Mostly reads, until a release.", 2],
+    ["extra", "Anything else? (optional)", "Pieces you've already chosen, limits you're under, what worries you.", 2]
+  ],
   ownDesignPlaceholder: "e.g. A booking app where vendors set their availability and customers reserve time slots. Two customers must never book the same slot; vendors get notified the instant a booking lands; I expect big spikes when a popular vendor opens their calendar…",
   ownDesignBtn: "Dissect my design",
   audienceModes: [
@@ -583,10 +589,10 @@ var COPY = {
   askBtn: "Probe",
   whatifMenu: "Graft… (propose a change)",
   whatifKicker: "Graft",
-  whatifLede: "Propose a change to this system. Vitruvian shows what it does to the architecture, which invariants it strengthens or threatens, and whether the body accepts the graft, judged by the system's own rules.",
+  whatifLede: "Propose a change to this system. Before the verdict, make your own call. Then see what it does to the architecture and which of its rules it strengthens or threatens.",
   whatifPlaceholder: "e.g. add an HTML renderer to the terminal · cache reads at the edge · drop the acknowledgement step",
   whatifBtn: "Run the graft",
-  whatifThinking: "Weighing it against the invariants…",
+  whatifThinking: "Weighing it against the rules…",
   whatifVerdicts: { improves: "The graft takes: the system improves", mixed: "It takes, with scars: a real tradeoff", harmful: "Rejected: works against the system" },
   gateCompareOffline: "AI comparison needs a connection and an API key (Settings). Your answer is saved, so you can compare it against the reveal yourself.",
   keyNotice: "Your key is stored on this device only and sent only to Anthropic.",

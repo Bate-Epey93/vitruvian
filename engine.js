@@ -996,6 +996,7 @@ async function openReader(id, layerIndex, opts = {}) {
     challenge: challengeOn,
     onePage: meta.onePage === true,
     canReplay: diagram.sim.available,
+    autoReplay: meta.autoReplay !== false,
     onReplay: runReplay,
     onTools,
     async onOpen(id) { await flushSaves(); openReader(id); },
@@ -1369,12 +1370,12 @@ function renderWhatif(rec, opts = {}) {
       const row = h("button", "whatif-saved-row");
       row.appendChild(h("span", "ws-dot verdict-" + wi.result.verdict));
       row.appendChild(h("span", "ws-change", wi.change));
-      row.onclick = () => { showResult(wi.result, wi.change); resultEl.scrollIntoView({ behavior: "smooth", block: "start" }); };
+      row.onclick = () => { showResult(wi.result, wi.change, wi.guess); resultEl.scrollIntoView({ behavior: "smooth", block: "start" }); };
       savedWrap.appendChild(row);
     });
   }
 
-  function showResult(w, change) {
+  function showResult(w, change, guess) {
     resultEl.textContent = "";
     // ghost diagram: the study's final state + the proposal as one extra layer
     const tempDoc = { ...rec.doc, layers: [...rec.doc.layers, {
@@ -1421,6 +1422,7 @@ function renderWhatif(rec, opts = {}) {
     dpane.appendChild(ctl);
 
     resultEl.appendChild(verdictCard(w, rec.doc, {
+      guess,
       onAlt: a => {
         ta.value = a.name + ": " + a.note;
         ta.focus();
@@ -1432,6 +1434,34 @@ function renderWhatif(rec, opts = {}) {
   renderSaved();
   if (opts.result) showResult(opts.result, opts.change);
 
+  /* Guess first. The verdict is requested straight away; while it's judged,
+     you call it yourself: does the change improve the system, and which rule
+     does it put at risk? Then the verdict, with your call beside it. */
+  function guessPanel(guess, onChange) {
+    const box = h("section", "graft-guess");
+    box.appendChild(h("div", "step-kick tone-vio", "Your call"));
+    box.appendChild(h("h3", "move-q", "While it's judged: what will this change do?"));
+    const vlist = h("div", "rule-list");
+    [["improves", "It improves the system"], ["mixed", "A real tradeoff: better in one way, worse in another"], ["harmful", "It works against the system"]].forEach(([id, label]) => {
+      const b = h("button", "rule-opt");
+      b.append(h("span", "rule-n", ""), h("span", "rule-t", label));
+      b.onclick = () => { guess.verdict = id; vlist.querySelectorAll(".rule-opt").forEach(x => x.classList.toggle("chosen", x === b)); onChange(); };
+      vlist.appendChild(b);
+    });
+    box.appendChild(vlist);
+    box.appendChild(h("h3", "move-q graft-q2", "Which rule does it put most at risk?"));
+    const rlist = h("div", "rule-list");
+    const rules = rec.doc.strip_down.invariants.map((iv, k) => [iv.id, "Rule " + (k + 1), iv.text]).concat([["none", "", "None of them"]]);
+    rules.forEach(([id, n, text]) => {
+      const b = h("button", "rule-opt");
+      b.append(h("span", "rule-n", n), h("span", "rule-t", text));
+      b.onclick = () => { guess.rule = id; rlist.querySelectorAll(".rule-opt").forEach(x => x.classList.toggle("chosen", x === b)); onChange(); };
+      rlist.appendChild(b);
+    });
+    box.appendChild(rlist);
+    return box;
+  }
+
   runBtn.onclick = async () => {
     const change = ta.value.trim();
     if (change.length < 4) { ta.focus(); return; }
@@ -1440,24 +1470,38 @@ function renderWhatif(rec, opts = {}) {
     runBtn.disabled = true;
     ta.disabled = true;
     resultEl.textContent = "";
-    resultEl.appendChild(h("div", "gen-phase", COPY.whatifThinking));
-    try {
-      const w = await Generator.whatif({ apiKey: meta.apiKey, modelId: meta.modelId, doc: rec.doc, change, speed: meta.genSpeed || "balanced", voice: meta.voicePass !== false });
-      (rec.whatifs = rec.whatifs || []).push({ change, result: w, ts: Date.now() });
+    const guess = { verdict: null, rule: null };
+    let w = null, failed = null;
+    const foot = h("div", "graft-reveal");
+    const status = h("span", "step-foot-note", COPY.whatifThinking);
+    const reveal = ctaButton("Show the verdict");
+    reveal.disabled = true;
+    const sync = () => {
+      reveal.disabled = !w;
+      status.textContent = w ? (guess.verdict ? "The verdict is ready." : "The verdict is ready. Make your call first, or just look.") : COPY.whatifThinking;
+    };
+    resultEl.appendChild(guessPanel(guess, sync));
+    foot.append(status, reveal);
+    resultEl.appendChild(foot);
+    const done = () => { runBtn.disabled = false; runBtn.textContent = COPY.whatifBtn; ta.disabled = false; };
+    reveal.onclick = async () => {
+      (rec.whatifs = rec.whatifs || []).push({ change, result: w, guess, ts: Date.now() });
       await Store.saveBreakdownLight(rec);
-      showResult(w, change);
+      showResult(w, change, guess);
       renderSaved();
+      resultEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    try {
+      w = await Generator.whatif({ apiKey: meta.apiKey, modelId: meta.modelId, doc: rec.doc, change, speed: meta.genSpeed || "balanced", voice: meta.voicePass !== false });
+      sync();
     } catch (e) {
+      failed = e;
       resultEl.textContent = "";
       const box = h("div", "gen-error");
       box.appendChild(h("h3", null, e.kind === "key" ? "Invalid API key" : "Graft failed"));
       box.appendChild(h("p", null, e.message));
       resultEl.appendChild(box);
-    } finally {
-      runBtn.disabled = false;
-      runBtn.textContent = COPY.whatifBtn;
-      ta.disabled = false;
-    }
+    } finally { done(); }
   };
 }
 
@@ -1473,6 +1517,18 @@ function verdictCard(w, doc, opts = {}) {
   head.appendChild(stamp);
   card.appendChild(head);
   if (w.name) card.appendChild(h("div", "vf-name", w.name));
+  const g = opts.guess;
+  if (g && (g.verdict || g.rule)) {
+    const VERB = { improves: "it improves the system", mixed: "a real tradeoff", harmful: "it works against the system" };
+    const parts = [];
+    if (g.verdict) parts.push(g.verdict === w.verdict ? `You called it: ${VERB[w.verdict]}.` : `You said ${VERB[g.verdict]}; the verdict is ${VERB[w.verdict] || w.verdict}.`);
+    if (g.rule) {
+      const n = id => "Rule " + (invById[id] ? invById[id].n : "?");
+      if (g.rule === "none") parts.push(w.stresses && w.stresses.length ? `You expected no rule at risk; it threatens ${w.stresses.map(n).join(" and ")}.` : "You expected no rule at risk, and none is threatened.");
+      else parts.push((w.stresses || []).includes(g.rule) ? `And ${n(g.rule)} is the one it threatens.` : `You picked ${n(g.rule)}; ` + (w.stresses && w.stresses.length ? `it threatens ${w.stresses.map(n).join(" and ")}.` : "it threatens none of them."));
+    }
+    card.appendChild(h("p", "vf-guess" + (g.verdict === w.verdict ? " hit" : ""), parts.join(" ")));
+  }
   card.appendChild(h("p", "vf-assessment", w.assessment));
   if (w.gain) { const g = h("p", "vf-line"); g.appendChild(h("b", null, "Gains: ")); g.appendChild(document.createTextNode(w.gain)); card.appendChild(g); }
 
@@ -1543,14 +1599,28 @@ function renderGenerate(systemName, mode) {
   root.appendChild(h("div", "kicker", design ? COPY.ownDesignKicker : "New Deconstruct"));
   root.appendChild(h("h1", "title", design ? COPY.ownDesignTitle : systemName));
 
-  let designInput = null, focus = null;
+  /* Dissect asks three plain questions instead of one blank box: what it
+     does and for whom, what must never go wrong, and where the load comes
+     from. They become the brief the model rebuilds from. */
+  let designInput = null, focus = null, dq = null;
   if (design) {
     root.appendChild(h("p", "subtitle", COPY.ownDesignLede));
-    designInput = h("textarea", "design-input");
-    designInput.placeholder = COPY.ownDesignPlaceholder;
-    designInput.value = systemName || "";
-    designInput.maxLength = 1400;
-    root.appendChild(designInput);
+    dq = {};
+    const form = h("div", "dissect-form");
+    COPY.dissectQuestions.forEach(([id, label, hint, rows], i) => {
+      const f = h("label", "dissect-q");
+      f.append(h("span", "dissect-n", String(i + 1)), h("span", "dissect-label", label));
+      const ta = h("textarea", "design-input");
+      ta.rows = rows;
+      ta.placeholder = hint;
+      ta.maxLength = 600;
+      if (i === 0 && systemName) ta.value = systemName;
+      dq[id] = ta;
+      f.appendChild(ta);
+      form.appendChild(f);
+    });
+    root.appendChild(form);
+    designInput = dq.what;
   } else {
     const focusRow = h("div", "focus-row");
     focus = h("input");
@@ -1567,10 +1637,13 @@ function renderGenerate(systemName, mode) {
   root.appendChild(prog);
 
   startBtn.onclick = async () => {
-    const subject = design ? designInput.value.trim() : systemName;
-    if (design && subject.length < 12) { designInput.focus(); toast("Describe your design a little more"); return; }
+    let subject = systemName;
+    if (design) {
+      if (dq.what.value.trim().length < 12) { dq.what.focus(); toast("Say a little more about what it does"); return; }
+      subject = COPY.dissectQuestions.map(([id, label]) => dq[id].value.trim() ? label + "\n" + dq[id].value.trim() : "").filter(Boolean).join("\n\n");
+    }
     startBtn.disabled = true;
-    if (designInput) designInput.disabled = true;
+    if (dq) Object.values(dq).forEach(t => t.disabled = true);
     if (focus) focus.disabled = true;
     prog.textContent = "";
     const phaseEl = h("div", "gen-phase", COPY.genPhases.start);
@@ -1579,6 +1652,8 @@ function renderGenerate(systemName, mode) {
     barEl.appendChild(fill);
     const tok = h("div", "gen-tokens", "");
     prog.append(phaseEl, barEl, tok);
+    const early = earlyMeet();
+    prog.appendChild(early.el);
 
     const PHASE_PCT = { start: 4, strip_down: 18, visual: 30, layers: 42, stress: 78, transfer: 88, repair: 92, voice: 96 };
     try {
@@ -1592,6 +1667,7 @@ function renderGenerate(systemName, mode) {
             fill.style.width = (PHASE_PCT[p.phase] || 0) + "%";
           }
           if (p.tokens) tok.textContent = "~" + p.tokens.toLocaleString() + " tokens";
+          if (p.partial) early.update(p.partial);
         }
       });
       fill.style.width = "100%";
@@ -1628,7 +1704,7 @@ function renderGenerate(systemName, mode) {
       }
       if (e.kind === "overloaded" || e.kind === "rate" || e.kind === "offline" || e.kind === "http") {
         const b = h("button", "gbtn primary", "Retry");
-        b.onclick = () => { startBtn.disabled = false; if (focus) focus.disabled = false; if (designInput) designInput.disabled = false; prog.textContent = ""; startBtn.click(); };
+        b.onclick = () => { startBtn.disabled = false; if (focus) focus.disabled = false; if (dq) Object.values(dq).forEach(t => t.disabled = false); prog.textContent = ""; startBtn.click(); };
         row.appendChild(b);
       }
       if (e.raw) {
@@ -1640,9 +1716,45 @@ function renderGenerate(systemName, mode) {
       prog.appendChild(box);
       startBtn.disabled = false;
       if (focus) focus.disabled = false;
-      if (designInput) designInput.disabled = false;
+      if (dq) Object.values(dq).forEach(t => t.disabled = false);
     }
   };
+}
+
+/* While a Deconstruct streams in, the essence and the rules arrive first.
+   Show them as soon as each string is complete so there's something to
+   read during the wait; it's the same Meet you'd open afterwards. */
+function earlyMeet() {
+  const el = h("section", "early-meet");
+  el.hidden = true;
+  const ess = h("p", "early-essence");
+  const rules = h("ol", "early-rules");
+  el.append(h("div", "step-kick tone-ink", "Meet the system, while the rest is written"), ess,
+    h("div", "early-sub", "The rules it lives by"), rules);
+  rules.hidden = true;
+  let shownRules = 0;
+  const STR = '"((?:[^"\\\\]|\\\\.)*)"';
+  const dec = x => { try { return JSON.parse('"' + x + '"'); } catch (e) { return x; } };
+  function update(text) {
+    if (!ess.textContent) {
+      const m = new RegExp('"essence"\\s*:\\s*\\{\\s*"text"\\s*:\\s*' + STR).exec(text);
+      if (m) { ess.textContent = dec(m[1]); el.hidden = false; }
+    }
+    const at = text.indexOf('"invariants"');
+    if (at < 0) return;
+    const end = text.indexOf('"entities"', at);
+    const chunk = text.slice(at, end < 0 ? undefined : end);
+    const re = new RegExp('"text"\\s*:\\s*' + STR, "g");
+    const found = [];
+    let m;
+    while ((m = re.exec(chunk))) found.push(dec(m[1]));
+    for (; shownRules < found.length; shownRules++) {
+      rules.appendChild(h("li", null, found[shownRules]));
+      rules.hidden = false;
+      el.hidden = false;
+    }
+  }
+  return { el, update };
 }
 
 /* ═══ Models index (§11.4) ═══ */
@@ -2063,7 +2175,7 @@ function renderSettings(banner) {
   const root = $("screen-settings").firstElementChild;
   root.textContent = "";
   root.appendChild(h("div", "kicker", "Settings"));
-  root.appendChild(h("h1", "title", "Keys, defaults, backups"));
+  root.appendChild(h("h1", "title", "How you learn"));
   if (banner) root.appendChild(h("div", "narrowing-note", banner));
 
   /* About / how it works → landing + tutorial */
@@ -2077,7 +2189,6 @@ function renderSettings(banner) {
   tutBtn.onclick = () => { renderTutorial("settings"); show("tutorial"); };
   abRow.append(abBtn, tutBtn);
   ab.appendChild(abRow);
-  root.appendChild(ab);
 
   /* API key */
   const kb = h("div", "set-block");
@@ -2106,7 +2217,6 @@ function renderSettings(banner) {
   link.rel = "noopener";
   cost.appendChild(link);
   kb.appendChild(cost);
-  root.appendChild(kb);
 
   /* model */
   const mb = h("div", "set-block");
@@ -2130,11 +2240,17 @@ function renderSettings(banner) {
   };
   mrow.appendChild(msave);
   mb.append(mi, mrow);
-  root.appendChild(mb);
 
-  /* defaults */
+  /* how you learn: everything that changes what reading feels like */
+  const toggle = (on, label, flip) => {
+    const t = h("div", "toggle" + (on ? " on" : ""));
+    t.append(h("span", "tg-track"), h("span", "tg-label", label));
+    t.onclick = async () => { await flip(); renderSettings(); };
+    return t;
+  };
   const db = h("div", "set-block");
-  db.appendChild(h("h3", null, "Reading defaults"));
+  db.appendChild(h("h3", null, "Reading level"));
+  db.appendChild(h("p", "note", "How much each layer explains. You can switch it any time from the reader too."));
   const seg = h("div", "seg");
   COPY.audienceModes.forEach(m => {
     const b = h("button", meta.audienceMode === m.id ? "on" : "", m.label);
@@ -2147,30 +2263,19 @@ function renderSettings(banner) {
     seg.appendChild(b);
   });
   db.appendChild(seg);
-  const tog = h("div", "toggle" + (meta.challengeModeDefault === true ? " on" : ""));
-  tog.style.marginTop = "12px";
-  tog.append(h("span", "tg-track"), h("span", "tg-label", "Strict mode by default: write your own fix before you can see the real one"));
-  tog.onclick = async () => {
-    meta.challengeModeDefault = !(meta.challengeModeDefault === true);
-    await Store.saveMeta({ challengeModeDefault: meta.challengeModeDefault });
-    renderSettings();
-  };
-  db.appendChild(tog);
-  // the voice pass: generated text gets the same editing the app's own copy got
-  const vtog = h("div", "toggle" + (meta.voicePass !== false ? " on" : ""));
-  vtog.style.marginTop = "12px";
-  vtog.append(h("span", "tg-track"), h("span", "tg-label", "Edit generated text for voice: when the checker flags stock phrasing, one short extra call rewrites just those passages"));
-  vtog.onclick = async () => {
-    meta.voicePass = meta.voicePass === false;
-    await Store.saveMeta({ voicePass: meta.voicePass });
-    renderSettings();
-  };
-  db.appendChild(vtog);
-  root.appendChild(db);
+  const lb = h("div", "set-block set-toggles");
+  lb.appendChild(h("h3", null, "While you read"));
+  lb.append(
+    toggle(meta.challengeModeDefault === true, "Strict mode: write your own fix before you can see the real one",
+      () => { meta.challengeModeDefault = !(meta.challengeModeDefault === true); return Store.saveMeta({ challengeModeDefault: meta.challengeModeDefault }); }),
+    toggle(meta.autoReplay !== false, "Replay each failure on the diagram when you reach it",
+      () => { meta.autoReplay = meta.autoReplay === false; return Store.saveMeta({ autoReplay: meta.autoReplay }); }),
+    toggle(meta.onePage === true, "Read each layer as one page instead of four steps",
+      () => { meta.onePage = !(meta.onePage === true); return Store.saveMeta({ onePage: meta.onePage }); }));
 
   /* generation speed */
   const gs = h("div", "set-block");
-  gs.appendChild(h("h3", null, "Generation speed"));
+  gs.appendChild(h("h3", null, "Generation"));
   gs.appendChild(h("p", "note", "Balanced lets the model reason longer before writing, for better structure. Fast trims thinking for quicker, cheaper runs."));
   const gseg = h("div", "seg");
   [["balanced", "Balanced"], ["fast", "Fast"]].forEach(([id, label]) => {
@@ -2183,7 +2288,11 @@ function renderSettings(banner) {
     gseg.appendChild(b);
   });
   gs.appendChild(gseg);
-  root.appendChild(gs);
+  // the voice pass: generated text gets the same editing the app's own copy got
+  const vtog = toggle(meta.voicePass !== false, "Edit generated text for voice: when the checker flags stock phrasing, one short extra call rewrites just those passages",
+    () => { meta.voicePass = meta.voicePass === false; return Store.saveMeta({ voicePass: meta.voicePass }); });
+  vtog.style.marginTop = "14px";
+  gs.appendChild(vtog);
 
   /* backup / restore */
   const bb = h("div", "set-block");
@@ -2215,7 +2324,18 @@ function renderSettings(banner) {
   });
   brow.append(bexp, bres);
   bb.appendChild(brow);
-  root.appendChild(bb);
+
+  const group = (title, note, ...blocks) => {
+    const g = h("section", "set-group");
+    if (title) g.appendChild(h("h2", "set-group-title", title));
+    if (note) g.appendChild(h("p", "set-group-note", note));
+    blocks.forEach(b => g.appendChild(b));
+    root.appendChild(g);
+  };
+  group(null, null, db, lb);
+  group("Deconstructing your own systems", "Generating a Deconstruct calls Anthropic with your key. Everything else works offline.", kb, mb, gs);
+  group("Your data", null, bb);
+  group("About", null, ab);
 
   root.appendChild(h("p", "fine", COPY.privacyNote));
   root.appendChild(h("p", "fine", `${CONFIG.toolName.replace("·", "·")} v${CONFIG.appVersion} · ${COPY.offlineGenNote}`));

@@ -33,6 +33,10 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 - **Models pages teach the idea.** Each thinking model has a page showing every place it appears in your library side by side, with the diagram at that layer, plus a short Spot it quiz on failures you haven't read and its names in other fields. Engineering vocabulary is a tab of Models.
 - **Practice replaces Drill, and nothing is ever due.** A round of questions on layers you've read, whenever you want one: which thinking model cracks a failure and which rule it attacks are checked on the spot; recalling the fix or its cost shows the answer to compare against.
 - **Transfer opens with a recap** of every layer and the thinking model it used, each one a link back to that layer.
+- **Graft asks for your call first.** The verdict is requested the moment you run a change. While it's judged you say whether the change improves the system, is a real tradeoff or works against it, and which rule it puts most at risk. The verdict then shows your call beside it, and saved grafts keep it.
+- **A Deconstruct is readable while it generates.** The essence and the rules stream in first, so they appear under the progress bar as soon as each one is complete.
+- **Dissect asks three questions** instead of offering one blank box: what it does and who uses it, what must never go wrong, and where the load will come from, plus an optional fourth for anything else.
+- **Settings starts with how you learn.** Reading level, Strict mode, replaying each failure on the diagram (new, on by default) and the one-page view come first. The API key, model, generation speed and voice editing sit together under Deconstructing your own systems, then backups, then About.
 
 ### Fixed
 - **Reading counts as progress.** Only the challenge gate used to mark a layer done, and gates have been off by default since 1.3, so a reader who finished a whole system still saw 0 of 6 on its card, 0 of 19 on Track and nothing in Drill. Reaching a layer's solution now marks it done. Existing installs are backfilled once from how far each reader got.

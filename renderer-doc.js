@@ -997,7 +997,7 @@ var DocView = (() => {
       render._keepScroll = false;
       // the first time a layer's failure is on screen, play it once by itself
       // (it only counts once it has actually played, so passing through doesn't use it up)
-      if (!onePage && pos >= 1 && pos <= N && step === 1 && !replayed.has(pos) && opts.canReplay && !RM && opts.onReplay) {
+      if (!onePage && pos >= 1 && pos <= N && step === 1 && !replayed.has(pos) && opts.canReplay && opts.autoReplay !== false && !RM && opts.onReplay) {
         const at = pos;
         setTimeout(() => {
           if (pos !== at || step !== 1 || replayed.has(at) || !docPane.isConnected) return;

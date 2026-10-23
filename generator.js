@@ -109,7 +109,7 @@ var Generator = (() => {
             for (const [needle, phase] of PHASES) {
               if (!seen.has(phase) && text.includes(needle)) { seen.add(phase); onProgress({ phase, tokens: 0 }); }
             }
-            onProgress({ tokens: Math.round(text.length / 4) });
+            onProgress({ tokens: Math.round(text.length / 4), partial: text });
           }
         }
         if (ev.type === "message_delta" && ev.delta && ev.delta.stop_reason === "max_tokens")
