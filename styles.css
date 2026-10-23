@@ -572,7 +572,9 @@ input,textarea{font-family:var(--sans);}
 }
 .dgl-item{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
 .dgl-glyph{width:24px;height:14px;flex-shrink:0;}
-.dgl-shape{fill:var(--node-fill);stroke:var(--diagram-ink);stroke-width:1.2;}
+/* Now always a sketched outline path, never a filled rect: filling a rough
+   path ravels the edge of the fill, same reason the nodes draw in two. */
+.dgl-shape{fill:none;stroke:var(--diagram-ink);stroke-width:1.2;stroke-linecap:round;stroke-linejoin:round;}
 .dgl-line{stroke:var(--edge-ink);fill:none;stroke-width:1.4;stroke-linecap:round;}
 .dgl-new{stroke:var(--accent);}
 .dgl-broken{stroke:var(--failure);animation:dg-pulse 1.1s ease-in-out infinite;}
@@ -1653,6 +1655,20 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
   .brand-sub{display:none;}
   .ctx-btn .tbtn-label{display:none;}
   .ctx-btn{padding:8px;width:36px;height:36px;justify-content:center;}
+}
+/* The contextual tools move into the ⋯ menu on a phone. Three 36px buttons
+   plus the brand, the audience switch and the menu need about 440px of bar;
+   below that .tb-right overflows its own box to the LEFT and the tools end up
+   drawn across the audience switch. These two rules are a pair: the menu
+   entries exist in the DOM at every width and are revealed exactly where the
+   buttons are hidden, so a tool is never in both places or in neither. */
+/* .menu-pop button already sets display, so this needs the same specificity
+   to win — a bare .menu-compact loses the cascade and the tools appear in
+   the bar AND the menu at desktop width. */
+.menu-pop .menu-compact{display:none;}
+@media(max-width:640px){
+  .tb-right .ctx-btn{display:none;}
+  .menu-pop .menu-compact{display:block;}
 }
 @media(max-width:960px){
   .aud-full{display:none;}

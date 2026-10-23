@@ -245,9 +245,9 @@ var Diagram = (() => {
     blob:     "M 2 .5 h 4.5 l 2.5 2.5 v 7.5 h -7 Z M 6.5 .5 v 2.5 h 2.5",                             // object with a fold
     index:    "M 1 2 h 9 M 1 4.8 h 5.5 M 1 7.6 h 8 M 1 10.4 h 3.5",                                   // sorted, ragged
     log:      "M 1 2 h 7 M 1 5.5 h 7 M 1 9 h 4.5 M 7 7 l 2.5 2 l -2.5 2",                             // append-only
-    queue:    "M 1 3 h 2.5 v 5 h -2.5 Z M 4.2 3 h 2.5 v 5 h -2.5 Z M 7.4 3 h 2.5 v 5 h -2.5 Z",       // things waiting in line
+    queue:    "M 2 2.5 v 6 M 5.5 2.5 v 6 M 9 2.5 v 6",                                                // a line of things waiting
     cdn:      "M 5.5 .5 a 5 5 0 1 0 .1 0 Z M .5 5.5 h 10 M 5.5 .5 a 6.5 5 0 0 1 0 10 a 6.5 5 0 0 1 0 -10",
-    gateway:  "M 1 1 v 9 M 10 1 v 9 M 3 5.5 h 4.5 M 6 3.5 l 2 2 l -2 2"                               // the way in
+    gateway:  "M 1.5 10.5 V 5.5 a 4 4 0 0 1 8 0 v 5 M 3.5 7.5 h 4 M 6 5.8 l 1.9 1.7 l -1.9 1.7"      // an arch you pass through
   };
   // An 11px glyph roughened as hard as a 110px box turns to mush, so the
   // sketch is gentler here. It still wobbles; it just stays readable.
@@ -1375,11 +1375,13 @@ var Diagram = (() => {
       log: "log", queue: "queue", cdn: "edge cache", gateway: "gateway"
     };
     const KIND_ORDER = ["actor", "store", "process", "channel"];
-    const KIND_SHAPE = {
-      actor:   s => el("circle", { cx: 15, cy: 8, r: 5.5, class: "dgl-shape" }, s),
-      store:   s => el("path", { d: "M 6 3 L 6 13 L 24 13 L 24 3", fill: "none", class: "dgl-shape" }, s),
-      process: s => el("rect", { x: 6, y: 3, width: 18, height: 10, rx: 1.5, class: "dgl-shape" }, s),
-      channel: s => el("rect", { x: 6, y: 3, width: 18, height: 10, rx: 5, class: "dgl-shape" }, s)
+    // Drawn through the same sketch pass as the nodes: a crisp key beside a
+    // hand-drawn diagram looked like two different drawings of one thing.
+    const KIND_SHAPE_D = {
+      actor:   circleD(15, 8, 5.5),
+      store:   "M 6 3 L 6 13 L 24 13 L 24 3",
+      process: roundRectD(6, 3, 18, 10, 1.5),
+      channel: roundRectD(6, 3, 18, 10, 5)
     };
     const glyphRow = document.createElement("span");
     glyphRow.className = "dgl-row";
@@ -1399,7 +1401,8 @@ var Diagram = (() => {
       const names = [...present.keys()].sort((a, b) => {
         const ka = KIND_ORDER.indexOf(a), kb = KIND_ORDER.indexOf(b);
         if (ka !== kb) return (ka < 0 ? 99 : ka) - (kb < 0 ? 99 : kb);   // kinds first
-        return a.localeCompare(b);
+        // then by the label the reader sees, not the id behind it
+        return (GLYPH_LABEL[a] || a).localeCompare(GLYPH_LABEL[b] || b);
       });
       names.forEach(name => {
         const ids = present.get(name);
@@ -1410,9 +1413,12 @@ var Diagram = (() => {
         // A kind entry draws the container, because the shape is what carries
         // the role. An icon entry draws the mark, because that is what it adds.
         const svg = el("svg", { viewBox: "0 0 30 16", class: "dgl-glyph", "aria-hidden": "true" });
-        if (KIND_SHAPE[name]) KIND_SHAPE[name](svg);
-        else el("path", { d: sketch(GLYPHS[name] || "", "key:" + name, GLYPH_SKETCH),
-                          fill: "none", class: "dgl-mark", transform: "translate(9.5 2.5)" }, svg);
+        if (KIND_SHAPE_D[name])
+          el("path", { d: sketch(KIND_SHAPE_D[name], "key:shape:" + name, GLYPH_SKETCH),
+                       fill: "none", class: "dgl-shape" }, svg);
+        else
+          el("path", { d: sketch(GLYPHS[name] || "", "key:" + name, GLYPH_SKETCH),
+                       fill: "none", class: "dgl-mark", transform: "translate(9.5 2.5)" }, svg);
         it.appendChild(svg);
         const t = document.createElement("span");
         t.textContent = GLYPH_LABEL[name] || name;

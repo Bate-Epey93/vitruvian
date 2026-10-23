@@ -1411,6 +1411,20 @@ function buildReaderMenu(rec, challengeOn) {
     if (currentView) currentView.setOnePage(meta.onePage);
     buildReaderMenu(rec, challengeOn);
   });
+  /* On a phone the topbar cannot hold the three contextual tools as well as
+     the brand, the audience switch and this menu: they overflow their own
+     container and land on top of the audience switch. CSS hides them there
+     and shows these entries instead, which click the very same buttons, so
+     there is one handler per tool rather than two that can drift apart. */
+  // Gate on the button existing, not on it being visible: this menu is built
+  // when the reader opens, which is before the topbar reveals those buttons,
+  // so a `hidden` check here silently produced no entries at all.
+  const compact = [["sheetBtn", "System sheet"], ["seqBtn", "Sequence view"], ["graftBtn", "Graft a change"]]
+    .filter(([id]) => !!$(id));
+  if (compact.length) {
+    pop.appendChild(h("div", "menu-sep menu-compact"));
+    compact.forEach(([id, label]) => add(label, () => $(id).click(), "menu-compact"));
+  }
   pop.appendChild(h("div", "menu-sep"));
   add("Field guide", () => { renderTutorial("reader"); show("tutorial"); });
   pop.appendChild(h("div", "menu-sep"));

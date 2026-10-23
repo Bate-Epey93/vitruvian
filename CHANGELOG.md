@@ -43,6 +43,13 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 - **Reading counts as progress.** Only the challenge gate used to mark a layer done, and gates have been off by default since 1.3, so a reader who finished a whole system still saw 0 of 6 on its card, 0 of 19 on Track and nothing in Drill. Reaching a layer's solution now marks it done. Existing installs are backfilled once from how far each reader got.
 - A handful of toasts and labels still used em dashes. They now read as plain sentences.
 
+## [2.2.1] — 2026-10-23 · The key agrees with itself
+### Fixed
+- **On a phone the contextual tools were drawn across the audience switch.** System sheet, Sequence and Graft need about 440px of bar alongside the brand, the B/E/D switch and the menu; below that their container overflowed to the left and the buttons landed on top of the switch. They now move into the ⋯ menu on narrow screens, where they click the very same buttons, so each tool has one handler rather than two that can drift. Exactly one home at every width: verified at 375px and 856px.
+- **The key was drawn two different ways.** Kind entries were clean vector while the icon entries were hand-drawn, so the key disagreed with the diagram and with itself. Every entry now goes through the same sketch pass.
+- **Queue and gateway were unreadable at 11px.** Three small boxes blurred into one, and two posts with a short arrow read as nothing. Queue is three uprights, a line of things waiting; gateway is an arch you pass through.
+- Entries sort by the label you read rather than the id behind it, so the list is no longer alphabetical by a name nobody sees.
+
 ## [2.2.0] — 2026-10-23 · The key points at the diagram
 ### Added
 - **The key now lists only the glyphs this diagram actually uses**, and it changes as you scrub. The railway shows four entries; YouTube's storage tier shows object store, edge cache, log and queue. Each one is drawn through the same glyph table and the same hand-drawn pass as the node, so the key is not a picture of the mark, it is the mark.
