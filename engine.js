@@ -120,7 +120,7 @@ async function toggleTheme() {
 }
 
 /* ═══ Screen switching ═══ */
-const SCREENS = ["landing", "library", "reader", "generate", "models", "vocab", "track", "drill", "tutorial", "whatif", "settings"];
+const SCREENS = ["landing", "library", "reader", "generate", "models", "vocab", "drill", "tutorial", "whatif", "settings"];
 function show(screen) {
   SCREENS.forEach(s => { $("screen-" + s).hidden = s !== screen; });
   document.body.classList.toggle("reading", screen === "reader");   // frees topbar room for the audience switch
@@ -131,8 +131,9 @@ function show(screen) {
   ["ctxDiv", "sheetBtn", "seqBtn", "graftBtn"].forEach(id => { $(id).hidden = screen !== "reader"; });
   $("backBtn").hidden = screen === "library" || screen === "landing";
   $("menuPop").hidden = true;
+  const navScreen = screen === "vocab" ? "models" : screen;   // vocabulary is a tab of Models
   document.querySelectorAll("[data-screen]").forEach(b => {
-    const on = b.dataset.screen === screen;
+    const on = b.dataset.screen === navScreen;
     b.classList.toggle("on", on);
     if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
   });
@@ -255,9 +256,7 @@ function wireTopbar() {
   $("libraryBtn").onclick = async () => { await flushSaves(); await renderLibrary(); show("library"); };
   $("backBtn").onclick = async () => { await flushSaves(); await renderLibrary(); show("library"); };
   $("modelsBtn").onclick = () => { renderModels(); show("models"); };
-  $("trackBtn").onclick = () => { renderTrack(); show("track"); };
   $("drillBtn").onclick = () => { renderDrill(); show("drill"); };
-  refreshReviewBadge();
   $("settingsBtn").onclick = () => { renderSettings(); show("settings"); };
   $("themeBtn").onclick = () => toggleTheme();
   $("seqBtn").onclick = () => { if (currentRec) openSequence(currentRec); };
@@ -590,84 +589,9 @@ function cardGrid(recs) {
   return grid;
 }
 
-/* ═══ Home: what to do next comes first. Continue where you left off,
-   the cards due in Review, and your place on the path; the library sits
-   below. A first-time visitor gets Start here instead of Continue. ═══ */
-async function homeTop(root) {
-  const p = await computeProgress();
-  const started = p.recs.filter(r => r.lastOpen && (r.progress.position > 0 || p.readCount(r) > 0));
-  const last = started.sort((x, y) => y.lastOpen - x.lastOpen)[0];
-  const top = h("section", "home-top");
-
-  const cont = h("div", "home-card home-continue");
-  const target = last || p.path[0];
-  if (target) {
-    const thumb = h("div", "home-thumb");
-    cont.appendChild(thumb);
-    const txt = h("div", "home-cont-text");
-    const N = target.doc.layers.length, pos = target.progress.position || 0;
-    const where = !last ? `${N} layers · about ${N * 4} minutes`
-      : pos === 0 ? "Meet the system" : pos > N ? (pos === N + 1 ? "Trials" : "Transfer")
-      : `Layer ${pos} of ${N} · ${["It breaks", "Your move", "The fix", "The price"][(target.progress.step || 1) - 1]}`;
-    txt.append(h("div", "eyebrow-sm", last ? "Continue" : "Start here"), h("h2", "home-sys", target.system), h("div", "home-where", where));
-    const strata = h("div", "bd-strata");
-    target.doc.layers.forEach(L => strata.appendChild(h("span", target.attempts[L.index] && target.attempts[L.index].revealed ? "on" : null)));
-    txt.appendChild(strata);
-    const go = ctaButton(last ? "Resume" : "Start");
-    go.onclick = () => openReader(target.id);
-    txt.appendChild(go);
-    cont.appendChild(txt);
-    top.appendChild(cont);
-    try {
-      const dg = Diagram.mount(thumb, target.doc);
-      dg.show(Math.max(0, Math.min(N, pos > N ? N : pos - ((target.progress.step || 1) <= 2 && pos > 0 ? 1 : 0))), { fresh: false });
-    } catch (e) { thumb.remove(); }
-  }
-
-  const rv = h("div", "home-card home-review");
-  rv.appendChild(h("div", "eyebrow-sm", "Review"));
-  if (p.review.due) {
-    rv.appendChild(h("h2", "home-sys", `${p.review.due} due today`));
-    rv.appendChild(h("div", "home-where", `About ${Math.max(1, Math.round(Math.min(10, p.review.due) * 25 / 60))} minute${p.review.due > 2 ? "s" : ""}`));
-    const b = h("button", "gbtn", "Start review");
-    b.onclick = () => { renderDrill(); show("drill"); };
-    rv.appendChild(b);
-  } else if (p.review.cards) {
-    rv.appendChild(h("h2", "home-sys", "All caught up"));
-    rv.appendChild(h("div", "home-where", `${p.review.cards} card${p.review.cards > 1 ? "s" : ""} in your deck` + (p.review.nextDue ? `, next ${Review.inDays(p.review.nextDue)}` : "")));
-  } else {
-    rv.appendChild(h("h2", "home-sys", "Nothing yet"));
-    rv.appendChild(h("div", "home-where", "Read a layer to its fix and it comes back here to test you."));
-  }
-  top.appendChild(rv);
-  root.appendChild(top);
-
-  // your path: one dot per system, in order
-  const path = h("section", "home-path");
-  const ph = h("div", "home-path-head");
-  ph.append(h("h2", "lib-section-title", "Your path"), h("span", "lib-section-sub", `${p.pathDone} of ${p.pathTotal} systems done`));
-  const all = h("button", "gbtn ghost", "See the whole path");
-  all.onclick = () => { renderTrack(); show("track"); };
-  ph.appendChild(all);
-  path.appendChild(ph);
-  const track = h("div", "path-track");
-  p.path.forEach((r, i) => {
-    const done = p.isDone(r), cur = p.current && p.current.id === r.id;
-    const dot = h("button", "path-dot" + (done ? " done" : "") + (cur ? " cur" : ""));
-    dot.setAttribute("aria-label", `${i + 1}. ${r.system}${done ? ", done" : cur ? ", you are here" : ""}`);
-    dot.title = r.system;
-    dot.onclick = () => openReader(r.id);
-    if (cur || i === 0 || i === p.path.length - 1) dot.appendChild(h("span", "path-label", r.system));
-    track.appendChild(dot);
-  });
-  path.appendChild(track);
-  root.appendChild(path);
-}
-
 async function renderLibrary() {
   const root = $("screen-library").firstElementChild;
   root.textContent = "";
-  await homeTop(root);
   const head = h("header", "lib-hero");
   head.appendChild(h("h1", "title", "What do you want to understand?"));
   head.appendChild(h("p", "subtitle", COPY.libraryLede));
@@ -702,7 +626,7 @@ async function renderLibrary() {
   root.appendChild(bar);
 
   // second path: deconstruct a design you're building (not a known system)
-  const ownLink = setFace(h("button", "gbtn ghost own-design-btn"), "pencil", COPY.ownDesignLink.replace(/\s*→$/, ""));
+  const ownLink = setFace(h("button", "gbtn own-design-btn"), "pencil", COPY.ownDesignLink.replace(/\s*→$/, ""));
   ownLink.onclick = () => {
     if (!meta.apiKey) { renderSettings("Add your Anthropic API key to generate Deconstructs."); show("settings"); return; }
     renderGenerate("", "design");
@@ -714,10 +638,14 @@ async function renderLibrary() {
   const flagships = all.filter(b => b.source === "flagship");
   const yours = all.filter(b => b.source !== "flagship");
 
-  // Your own studies first (once you have any), then the samples below.
-  if (yours.length) {
-    root.appendChild(sectionHead(COPY.yoursHeading, yours.length + " stud" + (yours.length > 1 ? "ies" : "y")));
-    root.appendChild(cardGrid(yours));
+  // Your own Deconstructs are the point of the app; the samples only show
+  // what one looks like.
+  root.appendChild(sectionHead(COPY.yoursHeading, yours.length ? yours.length + " so far" : null));
+  if (yours.length) root.appendChild(cardGrid(yours));
+  else {
+    const empty = h("div", "empty-panel");
+    empty.appendChild(h("p", null, COPY.yoursEmpty));
+    root.appendChild(empty);
   }
   root.appendChild(sectionHead(COPY.sampleHeading, flagships.length + " systems"));
   root.appendChild(h("p", "lib-note", COPY.sampleNote));
@@ -747,12 +675,6 @@ async function renderLibrary() {
     labGrid.appendChild(lab);
   });
   root.appendChild(labGrid);
-  if (!yours.length) {
-    const empty = h("div", "empty-panel");
-    empty.appendChild(h("div", "mono-label", COPY.yoursHeading));
-    empty.appendChild(h("p", null, COPY.yoursEmpty));
-    root.appendChild(empty);
-  }
 
   // quiet foundation of future sharing: single-breakdown import
   const importRow = h("div", "lib-foot");
@@ -1065,17 +987,6 @@ async function openReader(id, layerIndex, opts = {}) {
     setFace(beforeBtn, "compare", before ? "After" : "Before");
   };
 
-  // for the recap: models met in other systems, and what comes next on the path
-  const others = (await Store.getBreakdowns()).filter(r => r.id !== rec.id);
-  const modelsElsewhere = new Set();
-  others.forEach(r => r.doc.layers.forEach(L => { const at = r.attempts[L.index]; if (at && at.revealed) modelsElsewhere.add(L.problem.model.id); }));
-  const pathIds = CONFIG.flagshipNames.map(n => "flagship-" + n);
-  const finished = r => r.doc.layers.every(L => r.attempts[L.index] && r.attempts[L.index].revealed);
-  const byId = {}; others.forEach(r => { byId[r.id] = r; });
-  const here = pathIds.indexOf(rec.id);
-  const nextId = pathIds.slice(here + 1).concat(pathIds.slice(0, Math.max(0, here))).find(id => byId[id] && !finished(byId[id]));
-  const nextOnPath = nextId ? { id: nextId, system: byId[nextId].system } : null;
-
   // gates are opt-in: on only if this breakdown enabled them, or the user set the default on
   const challengeOn = rec.challengeMode != null ? rec.challengeMode : meta.challengeModeDefault === true;
 
@@ -1087,7 +998,6 @@ async function openReader(id, layerIndex, opts = {}) {
     canReplay: diagram.sim.available,
     onReplay: runReplay,
     onTools,
-    modelsElsewhere, nextOnPath,
     async onOpen(id) { await flushSaves(); openReader(id); },
     async onFinish() { await flushSaves(); await renderLibrary(); show("library"); },
     onSave(r) { Store.saveBreakdownLight(r); },
@@ -1227,9 +1137,7 @@ async function renderVocab(focusId) {
     });
   } catch (e) { /* library unreadable — the index still lists the vocabulary */ }
 
-  const toModels = h("button", "gbtn", "‹ The 14 thinking models");
-  toModels.onclick = () => { renderModels(); show("models"); };
-  root.appendChild(toModels);
+  root.appendChild(modelTabs("vocab"));
 
   const seg = h("div", "seg vocab-seg");
   [["all", "All"], ["pattern", "Patterns"], ["concept", "Concepts"], ["technology", "Technologies"]].forEach(([id, label]) => {
@@ -1738,226 +1646,166 @@ function renderGenerate(systemName, mode) {
 }
 
 /* ═══ Models index (§11.4) ═══ */
+/* ═══ Models: each thinking model as something to learn, not a catalog row.
+   The index shows which ones you've collected; a model's page puts every
+   place you met it side by side, quizzes you on spotting it in failures you
+   haven't read yet, and lists its names in other fields. ═══ */
+function modelTabs(active) {
+  const seg = h("div", "seg models-tabs");
+  [["models", "Thinking models"], ["vocab", "Engineering vocabulary"]].forEach(([id, label]) => {
+    const b = h("button", active === id ? "on" : "", label);
+    b.onclick = () => { if (id === "models") { renderModels(); show("models"); } else { renderVocab(); show("vocab"); } };
+    seg.appendChild(b);
+  });
+  return seg;
+}
+function modelUses(recs, id) {
+  const out = [];
+  recs.forEach(rec => rec.doc.layers.forEach(L => {
+    if (L.problem.model.id !== id) return;
+    const a = rec.attempts[L.index];
+    out.push({ rec, L, read: !!(a && a.revealed) });
+  }));
+  return out;
+}
 async function renderModels(detailId) {
   const root = $("screen-models").firstElementChild;
   root.textContent = "";
-  const index = await Store.getModelIndex();
-  const byId = {};
-  index.forEach(r => { byId[r.modelId] = r.uses; });
   const recs = await Store.getBreakdowns();
-  const recById = {};
-  recs.forEach(r => { recById[r.id] = r; });
-
-  if (detailId) {
-    const m = MODEL_LIBRARY.find(x => x.id === detailId);
-    const back = h("button", "gbtn", "‹ All models");
-    back.onclick = () => renderModels();
-    root.appendChild(back);
-    root.appendChild(h("h1", "title", m.name));
-    root.appendChild(h("p", "subtitle", m.one_liner));
-    const det = h("div", "ml-detail");
-    det.appendChild(h("p", "desc", m.description));
-    root.appendChild(det);
-    root.appendChild(h("h2", "section-head", "Where it appears in your library"));
-    const uses = byId[detailId] || [];
-    if (!uses.length) root.appendChild(h("p", "lib-note", "No layer in your library uses this model yet."));
-    uses.forEach(u => {
-      const rec = recById[u.breakdownId];
-      if (!rec) return;
-      const L = rec.doc.layers.find(x => x.index === u.layerIndex);
-      const row = h("button", "ml-use");
-      const left = h("div");
-      left.appendChild(h("div", "mu-sys", rec.system));
-      left.appendChild(h("div", "mu-layer", "Layer " + u.layerIndex + " · " + (L ? L.name : "")));
-      row.appendChild(left);
-      row.appendChild(h("span", "mr-arrow", "›"));
-      row.onclick = () => openReader(rec.id, u.layerIndex);
-      root.appendChild(row);
-    });
-    return;
-  }
+  if (detailId) return renderModel(root, recs, detailId);
 
   root.appendChild(h("div", "kicker", "Cross-system pattern recognition"));
   root.appendChild(h("h1", "title", "The 14 thinking models"));
-  root.appendChild(h("p", "subtitle", "Every layer names the model that cracks its problem. Tap one to see it recur across systems."));
-  // sibling index, one altitude down: what engineers call these forces
-  const toVocab = h("button", "gbtn", "The engineering vocabulary →");
-  toVocab.style.marginBottom = "18px";
-  toVocab.onclick = () => { renderVocab(); show("vocab"); };
-  root.appendChild(toVocab);
+  root.appendChild(h("p", "subtitle", "Every layer names the idea that cracks its problem. The same fourteen keep coming back, so learning to spot them is most of what taking systems apart teaches."));
+  root.appendChild(modelTabs("models"));
   const grid = h("div", "model-grid");
   MODEL_LIBRARY.forEach(m => {
-    const uses = byId[m.id] || [];
+    const uses = modelUses(recs, m.id), read = uses.filter(u => u.read).length;
+    const systems = new Set(uses.map(u => u.rec.id)).size;
     const card = h("button", "ml-card");
     card.appendChild(h("div", "ml-name", m.name));
     card.appendChild(h("div", "ml-one", m.one_liner));
-    card.appendChild(h("div", "ml-count", uses.length ? uses.length + " layer" + (uses.length > 1 ? "s" : "") + " · " + new Set(uses.map(u => u.breakdownId)).size + " system(s)" : "not yet used"));
+    card.appendChild(h("div", "ml-count", systems ? `In ${systems} system${systems > 1 ? "s" : ""}` + (read ? ` · you've read ${read}` : "") : "Not in your library yet"));
     card.onclick = () => renderModels(m.id);
     grid.appendChild(card);
   });
   root.appendChild(grid);
 }
 
-/* ═══ Drill mode — re-earn what you've read (§value-add) ═══
-   Gates you have revealed become drillable, oldest practice first;
-   interview probes from revealed layers deal as a cross-library deck.
-   Fully offline; grades write back to the attempt record. */
+function renderModel(root, recs, id) {
+  const m = MODEL_LIBRARY.find(x => x.id === id);
+  const uses = modelUses(recs, id);
+  const read = uses.filter(u => u.read), unread = uses.filter(u => !u.read);
+  const back = h("button", "gbtn ghost", "‹ All models");
+  back.onclick = () => renderModels();
+  root.appendChild(back);
+  root.appendChild(h("div", "kicker", "Thinking model"));
+  root.appendChild(h("h1", "title", m.name));
+  root.appendChild(h("p", "subtitle", m.one_liner));
+  root.appendChild(h("p", "essence", m.description));
 
-/* ═══ Track — the curated path through the library + your progress ═══ */
-async function computeProgress() {
-  const recs = await Store.getBreakdowns();
-  const byId = {}; recs.forEach(r => byId[r.id] = r);
-  // the path is the flagship set, in the shipped order
-  const path = CONFIG.flagshipNames.map(s => byId["flagship-" + s]).filter(Boolean);
-  const isDone = r => r.doc.layers.length > 0 && r.doc.layers.every(L => r.attempts[L.index] && r.attempts[L.index].revealed);
-  const pathDone = path.filter(isDone).length;
-  // models collected: distinct thinking models you've revealed at least once
-  const seenModels = new Set();
-  let gates = 0;
-  recs.forEach(r => r.doc.layers.forEach(L => {
-    const a = r.attempts[L.index];
-    if (a && a.revealed) { gates++; if (L.problem && L.problem.model) seenModels.add(L.problem.model.id); }
-  }));
-  // which thinking models each path system introduces for the first time
-  const introduces = {}, seen = new Set();
-  path.forEach(r => {
-    introduces[r.id] = [];
-    r.doc.layers.forEach(L => { const m = L.problem.model.id; if (!seen.has(m)) { seen.add(m); introduces[r.id].push(m); } });
+  const layout = h("div", "model-layout");
+  const main = h("div", "model-main");
+  const side = h("aside", "model-side");
+
+  // every place you met it, side by side, with the fix in teal
+  main.appendChild(h("h2", "section-head", "Where you've met it"));
+  const systems = new Set(uses.map(u => u.rec.id)).size;
+  main.appendChild(h("p", "lib-note", read.length
+    ? `${systems} system${systems > 1 ? "s" : ""} in your library use it; you've read ${read.length} of those layers.`
+    : `${systems} system${systems > 1 ? "s" : ""} in your library use it.`));
+  const grid = h("div", "met-grid");
+  (read.length ? read : uses).slice(0, 6).forEach(u => {
+    const card = h("button", "met-card");
+    const thumb = h("div", "home-thumb met-thumb");
+    card.appendChild(thumb);
+    card.appendChild(h("div", "met-sys", `${u.rec.system} · layer ${u.L.index}`));
+    card.appendChild(h("div", "met-name", u.read ? u.L.name.split(":")[0] : "Not read yet"));
+    card.appendChild(h("p", "met-why", u.L.problem.model.application));
+    card.onclick = () => openReader(u.rec.id, u.L.index);
+    grid.appendChild(card);
+    try { Diagram.mount(thumb, u.rec.doc).show(u.L.index); } catch (e) { thumb.remove(); }
   });
-  const readCount = r => r.doc.layers.filter(L => r.attempts[L.index] && r.attempts[L.index].revealed).length;
-  // where you are: the most recently opened path system that isn't finished,
-  // else the first unfinished one in order
-  const open = path.filter(r => r.lastOpen && !isDone(r)).sort((x, y) => y.lastOpen - x.lastOpen)[0];
-  const current = open || path.find(r => !isDone(r)) || null;
-  return {
-    recs, path, byId, isDone, introduces, readCount, current, review: Review.stats(recs),
-    pathDone, pathTotal: path.length,
-    models: seenModels.size, modelsTotal: MODEL_LIBRARY.length,
-    gates,
-    yours: recs.filter(r => r.source !== "flagship").length,
-    yoursDone: recs.filter(r => r.source !== "flagship" && isDone(r)).length
-  };
-}
+  main.appendChild(grid);
+  const rest = (read.length ? uses.slice(0, 0).concat(read.slice(6), unread) : uses.slice(6));
+  if (rest.length) {
+    const more = h("div", "met-more");
+    more.appendChild(h("div", "mono-label", read.length ? "Also in" : "More"));
+    rest.forEach(u => {
+      const row = h("button", "ml-use");
+      const left = h("div");
+      left.append(h("div", "mu-sys", u.rec.system), h("div", "mu-layer", `Layer ${u.L.index}` + (u.read ? " · " + u.L.name.split(":")[0] : " · not read yet")));
+      row.append(left, h("span", "mr-arrow", "›"));
+      row.onclick = () => openReader(u.rec.id, u.L.index);
+      more.appendChild(row);
+    });
+    main.appendChild(more);
+  }
 
-async function renderTrack() {
-  const root = $("screen-track").firstElementChild;
-  root.textContent = "";
-  const p = await computeProgress();
-  const modelName = id => (MODEL_LIBRARY.find(m => m.id === id) || {}).name || id;
+  // Spot it: failures from layers you haven't read; is this the model?
+  main.appendChild(spotIt(recs, m));
 
-  root.appendChild(h("div", "kicker", "Your path through the anatomy"));
-  root.appendChild(h("h1", "title", "Your path"));
-  root.appendChild(h("p", "subtitle", `${p.pathTotal} systems in ${COPY.pathUnits.length} units. Each one builds on ideas from the ones before it, so the order matters, but you can jump to whatever you need.`));
-
-  // stats you can trust: finished systems, collected models, how well reviews go
-  const stats = h("div", "trk-stats");
-  const tile = (n, of, label) => {
-    const t = h("div", "trk-tile");
-    const big = h("div", "trk-n");
-    big.appendChild(document.createTextNode(String(n)));
-    if (of != null) big.appendChild(h("span", "trk-of", " / " + of));
-    t.appendChild(big);
-    t.appendChild(h("div", "trk-l", label));
-    stats.appendChild(t);
-  };
-  tile(p.pathDone, p.pathTotal, "systems finished");
-  tile(p.models, p.modelsTotal, "thinking models collected");
-  if (p.review.accuracy != null) tile(p.review.accuracy + "%", null, `review cards right, last 30 days (${p.review.total})`);
-  else tile(p.review.cards, null, "cards in your Review deck");
-  if (p.yours) tile(p.yoursDone, p.yours, "your own designs");
-  root.appendChild(stats);
-  const exp = h("button", "gbtn", "Export progress card");
-  exp.style.margin = "4px 0 12px";
-  exp.onclick = () => exportProgressCard(p);
-  root.appendChild(exp);
-
-  let n = 0;
-  COPY.pathUnits.forEach((u, ui) => {
-    const recs = u.systems.map(sl => p.byId["flagship-" + sl]).filter(Boolean);
-    const done = recs.filter(p.isDone).length;
-    const unit = h("section", "unit");
-    const head = h("div", "unit-head");
-    head.append(h("span", "unit-n", "Unit " + (ui + 1)), h("h2", "unit-name", u.name), h("span", "unit-count", `${done} of ${recs.length}`));
-    unit.appendChild(head);
-    const list = h("div", "trk-path");
-    recs.forEach(rec => {
-      n++;
-      const isDone = p.isDone(rec), read = p.readCount(rec), L = rec.doc.layers.length;
-      const isCur = p.current && p.current.id === rec.id;
-      const row = h("button", "trk-row" + (isDone ? " done" : "") + (isCur ? " current" : ""));
-      row.appendChild(h("span", "trk-idx", isDone ? "✓" : String(n)));
-      const mid = h("div", "trk-mid");
-      mid.appendChild(h("div", "trk-name", rec.system));
-      mid.appendChild(h("div", "trk-sub", `${L} layers · about ${L * 4} min` + (read && !isDone ? ` · ${read} read` : "")));
-      const intro = p.introduces[rec.id] || [];
-      if (intro.length) mid.appendChild(h("div", "trk-new", (intro.length > 1 ? "New models: " : "New model: ") + intro.map(modelName).join(", ")));
-      row.appendChild(mid);
-      row.appendChild(h("span", "trk-go", isDone ? "Revisit" : isCur ? (read ? "Continue" : "Start") : ""));
-      row.onclick = () => openReader(rec.id);
+  // its names in other fields
+  const names = typeof rosettaFor === "function" ? rosettaFor(id, null) : [];
+  if (names.length) {
+    side.appendChild(h("div", "mono-label", "Also called"));
+    const list = h("div", "aka-list");
+    names.forEach(n => {
+      const row = h("div", "aka-row");
+      row.append(h("span", "aka-dom", n.label), h("span", "aka-term", n.term));
       list.appendChild(row);
     });
-    unit.appendChild(list);
-    // a short mixed check across the unit's systems, once there's something to check
-    const cards = recs.reduce((k, r) => k + p.readCount(r), 0);
-    const chk = h("button", "unit-check");
-    chk.append(h("b", null, "Unit check"), h("span", null, cards ? `${Math.min(8, cards)} cards across these systems` : "Opens once you've read a layer in this unit"));
-    chk.disabled = !cards;
-    chk.onclick = () => { renderDrill({ practice: true, systems: new Set(recs.map(r => r.id)), label: `Unit ${ui + 1} check · ${u.name}` }); show("drill"); };
-    unit.appendChild(chk);
-    root.appendChild(unit);
-  });
+    side.appendChild(list);
+  }
+  layout.append(main, side);
+  root.appendChild(layout);
 }
 
-/* branded, shareable progress card (light washi always — reads on any feed) */
-function exportProgressCard(p) {
-  const W = 1200, H = 630, S = 2, cv = document.createElement("canvas");
-  cv.width = W * S; cv.height = H * S;
-  const x = cv.getContext("2d"); x.scale(S, S);
-  const INK = "#211e19", PAPER = "#f5f2ea", TEAL = "#0e7a63", SEAL = "#d95b31", SOFT = "#7a766b";
-  x.fillStyle = PAPER; x.fillRect(0, 0, W, H);
-  // dot grid, faint
-  x.fillStyle = "rgba(14,122,99,0.06)";
-  for (let gy = 40; gy < H; gy += 26) for (let gx = 40; gx < W; gx += 26) { x.beginPath(); x.arc(gx, gy, 1.1, 0, 7); x.fill(); }
-  // mark: teal square + brush arc
-  const mx = 92, my = 90;
-  x.strokeStyle = TEAL; x.lineWidth = 5; x.strokeRect(mx, my, 46, 46);
-  x.strokeStyle = INK; x.lineCap = "round";
-  for (let i = 0; i < 60; i++) {
-    const t = i / 60, a1 = -1.1 + (Math.PI * 2 - 0.85) * t, a2 = -1.1 + (Math.PI * 2 - 0.85) * (i + 1) / 60;
-    const R = 26, cx = mx + 23, cy = my + 23;
-    x.lineWidth = Math.max(1, 7 * (0.3 + 0.7 * Math.pow(1 - t, 1.2)) * Math.min(1, 0.2 + t * 7));
-    x.beginPath(); x.moveTo(cx + Math.cos(a1) * R, cy + Math.sin(a1) * R); x.lineTo(cx + Math.cos(a2) * R, cy + Math.sin(a2) * R); x.stroke();
+/* Spot it: three failures you haven't read. For each, does this model
+   crack it? Two use the model when there are enough; the rest use others. */
+function spotIt(recs, m) {
+  const box = h("section", "spot-it");
+  box.appendChild(h("div", "step-kick tone-vio", "Spot it"));
+  box.appendChild(h("h3", "move-q", `Does ${m.name} crack these failures?`));
+  const pool = [];
+  recs.forEach(rec => rec.doc.layers.forEach(L => {
+    const a = rec.attempts[L.index];
+    if (!(a && a.revealed)) pool.push({ rec, L, yes: L.problem.model.id === m.id });
+  }));
+  const pick = (list, n) => list.map(x => ({ x, k: Math.random() })).sort((p, q) => p.k - q.k).slice(0, n).map(p => p.x);
+  const yes = pick(pool.filter(p => p.yes), 2);
+  const items = pick(yes.concat(pick(pool.filter(p => !p.yes), 3 - yes.length)), 3);
+  if (items.length < 2) {
+    box.appendChild(h("p", "lib-note", "You've read nearly everything already. Spot it uses failures you haven't seen, so there's nothing left to test you on here."));
+    return box;
   }
-  x.fillStyle = INK; x.font = "700 30px 'Bricolage Grotesque', system-ui, sans-serif";
-  x.fillText("Vitruvian", 158, 112);
-  x.fillStyle = SOFT; x.font = "600 12px 'JetBrains Mono', monospace";
-  x.fillText("MY PROGRESS · THE ANATOMY OF EVERYDAY SYSTEMS", 158, 132);
-  // three big stats
-  const cells = [[p.pathDone + " / " + p.pathTotal, "SYSTEMS ON THE PATH"], [p.models + " / " + p.modelsTotal, "THINKING MODELS"], [p.gates + "", "GATES EARNED"]];
-  cells.forEach((c, i) => {
-    const cx = 96 + i * 350;
-    x.fillStyle = TEAL; x.font = "700 92px 'Bricolage Grotesque', system-ui, sans-serif";
-    x.fillText(c[0], cx, 340);
-    x.fillStyle = SOFT; x.font = "600 15px 'JetBrains Mono', monospace";
-    x.fillText(c[1], cx, 372);
+  box.appendChild(h("p", "lib-note", "These come from layers you haven't read, so recognising the idea is the whole exercise."));
+  let right = 0, answered = 0;
+  const score = h("p", "pb-result");
+  items.forEach(it => {
+    const card = h("div", "spot-card");
+    card.appendChild(h("div", "rv-where", it.rec.system));
+    card.appendChild(h("p", "rv-prompt", it.L.problem.beginner || it.L.problem.statement));
+    const row = h("div", "spot-row");
+    const fb = h("p", "spot-fb");
+    [["Yes", true], ["No", false]].forEach(([lab, val]) => {
+      const b = h("button", "gbtn", lab);
+      b.onclick = () => {
+        row.querySelectorAll("button").forEach(x => { x.disabled = true; });
+        const ok = val === it.yes;
+        answered++; if (ok) right++;
+        b.classList.add(ok ? "spot-ok" : "spot-no");
+        const actual = MODEL_LIBRARY.find(x => x.id === it.L.problem.model.id);
+        fb.textContent = (ok ? "Right. " : "Not this time. ") + (it.yes ? `It's ${m.name}.` : `That one is ${actual ? actual.name : "a different model"}.`);
+        if (answered === items.length) score.textContent = `${right} of ${items.length}. Open any of these systems to see the idea at work.`;
+      };
+      row.appendChild(b);
+    });
+    card.append(row, fb);
+    box.appendChild(card);
   });
-  // path completion bar
-  const bx = 96, bw = W - 192, by = 430;
-  x.fillStyle = "#e6e0d5"; x.fillRect(bx, by, bw, 12);
-  x.fillStyle = TEAL; x.fillRect(bx, by, bw * (p.pathDone / Math.max(1, p.pathTotal)), 12);
-  x.fillStyle = INK; x.font = "600 18px 'Hanken Grotesk', system-ui, sans-serif";
-  const line = p.pathDone === p.pathTotal ? "The whole path, rebuilt from its failures." : "Rebuilding the systems that run the world, one failure at a time.";
-  x.fillText(line, bx, 495);
-  // seal + url
-  x.fillStyle = SEAL; x.beginPath(); x.arc(bx + 6, 560, 7, 0, 7); x.fill();
-  x.fillStyle = SOFT; x.font = "600 14px 'JetBrains Mono', monospace";
-  x.fillText("bate-epey93.github.io/vitruvian", bx + 24, 565);
-
-  const a = document.createElement("a");
-  a.href = cv.toDataURL("image/png");
-  a.download = "vitruvian-progress.png";
-  a.click();
-  toast("Progress card exported");
+  box.appendChild(score);
+  return box;
 }
 
 /* ═══ Pulse → GIF: record a few seconds of the running simulation as a
@@ -2101,10 +1949,9 @@ async function exportPulseGIF(diagram, onProgress) {
   toast("Pulse GIF exported");
 }
 
-/* ═══ Review: spaced recall of the layers you've rebuilt (review.js) ═══
-   A short session of due cards. Model and rule cards grade themselves;
-   fix, cost and probe cards ask you to recall first, then rate yourself.
-   Every answer sets when that card comes back. */
+/* ═══ Practice: optional questions on layers you've read (review.js).
+   Nothing is scheduled or due. Model and rule questions check themselves;
+   fix, cost and probe questions ask you to recall first, then compare. ═══ */
 let reviewState = null;
 async function renderDrill(opts = {}) {
   const root = $("screen-drill").firstElementChild;
@@ -2112,35 +1959,20 @@ async function renderDrill(opts = {}) {
   const recs = await Store.getBreakdowns();
   const audience = meta.audienceMode || "enthusiast";
   if (!opts.keep || !reviewState) {
-    reviewState = {
-      deck: Review.deck(recs, { practice: !!opts.practice, systems: opts.systems || null, audience, max: opts.systems ? 8 : 10 }),
-      i: 0, right: 0, graded: 0, label: opts.label || null, practice: !!opts.practice
-    };
+    reviewState = { deck: Review.deck(recs, { systems: opts.systems || null, audience }), i: 0, right: 0, checked: 0, systems: opts.systems || null, label: opts.label || null };
   }
-  const st = reviewState, stats = Review.stats(recs);
-  root.appendChild(h("div", "kicker", st.label || "Review"));
-  root.appendChild(h("h1", "title", st.label ? st.label : "Review"));
-
+  const st = reviewState;
+  root.appendChild(h("div", "kicker", st.label || "Practice"));
+  root.appendChild(h("h1", "title", "Practice"));
   if (!st.deck.length) {
-    if (!stats.cards) {
-      root.appendChild(h("p", "subtitle", "Nothing to review yet. Read a layer through to its fix and it lands here, ready to test you later."));
-      const go = ctaButton("Go to your path");
-      go.onclick = () => { renderTrack(); show("track"); };
-      root.appendChild(go);
-      return;
-    }
-    root.appendChild(h("p", "subtitle", `You're up to date. ${stats.cards} card${stats.cards > 1 ? "s" : ""} in your deck` +
-      (stats.nextDue ? `; the next one comes back ${Review.inDays(stats.nextDue)}.` : ".")));
-    const row = h("div", "rv-actions");
-    const more = h("button", "gbtn", "Practise anyway");
-    more.onclick = () => { renderDrill({ practice: true, label: "Practice round" }); };
-    row.appendChild(more);
-    root.appendChild(row);
+    root.appendChild(h("p", "subtitle", "Nothing to practise yet. Read a layer of any Deconstruct through to its solution and you can quiz yourself on it here."));
+    const go = ctaButton("Back home");
+    go.onclick = async () => { await renderLibrary(); show("library"); };
+    root.appendChild(go);
     return;
   }
-  if (st.i >= st.deck.length) return reviewDone(root, st, stats);
-
-  root.appendChild(h("p", "subtitle", `${st.deck.length - st.i} card${st.deck.length - st.i > 1 ? "s" : ""} left · about ${Math.max(1, Math.round((st.deck.length - st.i) * 25 / 60))} minute${st.deck.length - st.i > 2 ? "s" : ""}`));
+  if (st.i >= st.deck.length) return practiceDone(root, st);
+  root.appendChild(h("p", "subtitle", `A few questions on layers you've read, whenever you like. ${st.deck.length - st.i} left in this round.`));
   const bar = h("div", "rv-progress");
   st.deck.forEach((_, k) => bar.appendChild(h("span", k < st.i ? "done" : k === st.i ? "on" : "")));
   root.appendChild(bar);
@@ -2148,19 +1980,12 @@ async function renderDrill(opts = {}) {
 }
 
 function reviewCard(root, c, audience) {
-  const { rec, L, a } = c;
+  const { rec, L } = c;
   const card = h("div", "rv-card");
   card.appendChild(h("div", "rv-type", c.label));
   card.appendChild(h("div", "rv-where", `${rec.system} · layer ${L.index}`));
-  const finish = g => {
-    const days = Review.grade(a, g);
-    Store.saveBreakdownLight(rec);
-    reviewState.graded++;
-    if (g !== "again") reviewState.right++;
-    return days;
-  };
   const next = () => { reviewState.i++; renderDrill({ keep: true }); };
-  const nextBtn = label => { const b = ctaButton(label || "Next card"); b.onclick = next; return b; };
+  const nextBtn = () => { const b = ctaButton("Next question"); b.onclick = next; return b; };
   const problem = audience === "beginner" ? L.problem.beginner : L.problem.statement;
   const model = MODEL_LIBRARY.find(m => m.id === L.problem.model.id);
 
@@ -2182,18 +2007,18 @@ function reviewCard(root, c, audience) {
         list.querySelectorAll("button").forEach(x => { x.disabled = true; });
         c.options.forEach((o2, k) => { if (o2.right) list.children[k].classList.add(o2 === o ? "hit" : "answer"); });
         if (!o.right) btn.classList.add("miss");
-        const days = finish(o.right ? "good" : "again");
+        reviewState.checked++;
+        if (o.right) reviewState.right++;
         const fb = h("div", "rv-feedback " + (o.right ? "ok" : "no"));
         fb.appendChild(h("b", null, o.right ? "Right. " : "Not this time. "));
         if (c.type === "model") fb.appendChild(document.createTextNode(`${model ? model.name + ": " + model.one_liner : ""} ${L.problem.model.application}`));
         else fb.appendChild(document.createTextNode("This failure attacks " + L.defends.map(d => "Rule " + ruleN[d]).join(" and ") + "."));
-        feedback.append(fb, h("p", "rv-when", `Back ${Review.inDays(Date.now() + days * Review.DAY)}.`), nextBtn());
+        feedback.append(fb, nextBtn());
       };
       list.appendChild(btn);
     });
     card.append(list, feedback);
   } else {
-    // recall first, then compare and rate yourself
     let question, answer;
     if (c.type === "fix") { card.appendChild(h("p", "rv-prompt", problem)); question = L.gate.question; answer = L.solution; }
     else if (c.type === "cost") { card.appendChild(h("p", "rv-prompt", L.solution)); question = "What did this fix cost, and who pays for it?"; answer = L.tradeoff; }
@@ -2211,16 +2036,7 @@ function reviewCard(root, c, audience) {
       const box = h("div", "solution-card");
       box.appendChild(h("div", "sc-label", c.type === "fix" ? "What was actually built" : c.type === "cost" ? "The tradeoff" : "The principle to check against"));
       box.appendChild(h("p", null, answer));
-      after.appendChild(box);
-      after.appendChild(h("p", "rv-q", "How well did you know it?"));
-      const rate = h("div", "rv-rate");
-      [["again", "Again"], ["good", "Good"], ["easy", "Easy"]].forEach(([g, lab]) => {
-        const b = h("button", "rv-rate-btn");
-        b.append(h("b", null, lab), h("span", null, Review.inDays(Date.now() + Review.nextDays(a, g) * Review.DAY)));
-        b.onclick = () => { finish(g); next(); };
-        rate.appendChild(b);
-      });
-      after.appendChild(rate);
+      after.append(box, nextBtn());
     };
     card.append(reveal, after);
   }
@@ -2230,29 +2046,17 @@ function reviewCard(root, c, audience) {
   root.appendChild(card);
 }
 
-function reviewDone(root, st, stats) {
-  root.appendChild(h("p", "subtitle", `${st.graded} card${st.graded === 1 ? "" : "s"} reviewed, ${st.right} right first time.` +
-    (stats.nextDue ? ` The next one comes back ${Review.inDays(stats.nextDue)}.` : "")));
+function practiceDone(root, st) {
+  root.appendChild(h("p", "subtitle", st.checked
+    ? `That's the round. ${st.right} of ${st.checked} checked questions right.`
+    : "That's the round."));
   const row = h("div", "rv-actions");
-  const home = ctaButton("Back home");
+  const again = ctaButton("Another round");
+  again.onclick = () => renderDrill({ systems: st.systems, label: st.label });
+  const home = h("button", "gbtn", "Back home");
   home.onclick = async () => { await renderLibrary(); show("library"); };
-  const more = h("button", "gbtn", "Practise a few more");
-  more.onclick = () => renderDrill({ practice: true, label: "Practice round" });
-  row.append(home, more);
+  row.append(again, home);
   root.appendChild(row);
-  refreshReviewBadge();
-}
-
-/* the count on the Review tab: how many cards are due right now */
-async function refreshReviewBadge() {
-  const btn = $("drillBtn");
-  if (!btn) return;
-  const n = Review.stats(await Store.getBreakdowns()).due;
-  let badge = btn.querySelector(".nav-badge");
-  if (!n) { if (badge) badge.remove(); btn.setAttribute("aria-label", "Review"); return; }
-  if (!badge) { badge = h("span", "nav-badge"); btn.appendChild(badge); }
-  badge.textContent = n > 99 ? "99+" : String(n);
-  btn.setAttribute("aria-label", `Review, ${n} due`);
 }
 
 function renderSettings(banner) {

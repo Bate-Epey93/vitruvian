@@ -48,10 +48,10 @@ var DocView = (() => {
     const replayed = new Set();        // layers whose failure already replayed by itself this visit
     const RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const STEPS = [
-      { label: "It breaks", short: "Break", tone: "red" },
-      { label: "Your move", short: "Your move", tone: "vio" },
-      { label: "The fix", short: "Fix", tone: "teal" },
-      { label: "The price", short: "Price", tone: "amber" }
+      { label: "The problem", short: "The problem", tone: "red" },
+      { label: "Your guess", short: "Your guess", tone: "vio" },
+      { label: "The solution", short: "The solution", tone: "teal" },
+      { label: "The tradeoff", short: "The tradeoff", tone: "amber" }
     ];
     // "The Read Storm: Cache the Redirect" → the half that names the failure.
     // The half after the colon names the fix, so it waits for step 3.
@@ -170,42 +170,12 @@ var DocView = (() => {
         b.onclick = () => goTo(p, (p >= 1 && p <= N && attemptFor(doc.layers[p - 1].index).revealed) ? 3 : 1);
         row.appendChild(b);
       };
-      if (pos === 0) {
-        const box = h("div", "tl-cur");
-        box.setAttribute("aria-current", "step");
-        const nm = h("div", "tl-cur-name");
-        nm.append(h("span", "tl-cur-t", "Meet the system"));
-        const ticks = h("div", "tl-ticks");
-        MEET.forEach((st, i) => {
-          const t = h("button", "tl-tick" + (i + 1 === step ? " on" : i + 1 < step ? " past" : ""));
-          t.append(h("span", "tl-dot"), h("span", "tl-tick-t", st.label));
-          t.onclick = () => goStep(i + 1);
-          ticks.appendChild(t);
-        });
-        box.append(nm, ticks);
-        row.appendChild(box);
-      } else seg(0, "Meet", "done", "Meet the system");
+      seg(0, "Meet", pos === 0 ? "on" : "done", "Meet the system");
       doc.layers.forEach(L => {
         const p = L.index, a = attemptFor(L.index);
-        if (p === pos && !onePage) {
-          const box = h("div", "tl-cur");
-          box.setAttribute("aria-current", "step");
-          const nm = h("div", "tl-cur-name");
-          nm.append(h("span", "tl-cur-n", String(p)), h("span", "tl-cur-t", step >= 3 || a.revealed ? L.name.split(":")[0] : failurePart(L)));
-          const ticks = h("div", "tl-ticks");
-          STEPS.forEach((st, i) => {
-            const t = h("button", "tl-tick" + (i + 1 === step ? " on" : i + 1 < step ? " past" : ""));
-            t.append(h("span", "tl-dot"), h("span", "tl-tick-t", st.short));
-            t.setAttribute("aria-label", `${st.label}, step ${i + 1} of 4`);
-            t.onclick = () => goStep(i + 1);
-            ticks.appendChild(t);
-          });
-          box.append(nm, ticks);
-          row.appendChild(box);
-        } else {
-          const state = p === pos ? "on" : a.revealed ? "done" : "todo";
-          seg(p, String(p), state, `Layer ${p}: ${a.revealed ? L.name : failurePart(L)}`);
-        }
+        const state = p === pos ? "on" : a.revealed ? "done" : "todo";
+        const name = a.revealed || (p === pos && step >= 3) ? L.name.split(":")[0] : failurePart(L);
+        seg(p, p === pos && !onePage ? `${p}  ${name}` : String(p), state, `Layer ${p}: ${name}`);
       });
       seg(N + 1, "Trials", pos === N + 1 ? "on" : pos > N + 1 ? "done" : "todo", "Trials: stress tests");
       seg(N + 2, "Transfer", pos === N + 2 ? "on" : "todo", "Transfer: what to take with you");
@@ -223,7 +193,7 @@ var DocView = (() => {
         const t = h("button", `step-tab tone-${st.tone}` + (i + 1 === step ? " on" : i + 1 < step ? " past" : ""), st.short);
         t.setAttribute("role", "tab");
         t.setAttribute("aria-selected", String(i + 1 === step));
-        if (i >= 2 && locked(L)) { t.disabled = true; t.title = "Strict mode: sketch your fix first"; }
+        if (i >= 2 && locked(L)) { t.disabled = true; t.title = "Strict mode: write your guess first"; }
         t.onclick = () => goStep(i + 1);
         tabs.appendChild(t);
       });
@@ -444,7 +414,6 @@ var DocView = (() => {
       if (a.revealed) return;
       a.revealed = true;
       a.ts = a.ts || Date.now();
-      if (typeof Review !== "undefined") Review.ensure(a);   // joins Review: first back tomorrow
       persist();
     }
 
@@ -832,7 +801,7 @@ var DocView = (() => {
       root.appendChild(tools);
       root.appendChild(footer(
         { label: "What would you do?", fn: () => goStep(2) },
-        challenge ? null : { label: "Skip to the fix", fn: () => goStep(3) }));
+        challenge ? null : { label: "Skip to the solution", fn: () => goStep(3) }));
     }
 
     // 2 · Your move: guess the rule under attack, sketch a fix if you like
@@ -865,7 +834,7 @@ var DocView = (() => {
       sk.appendChild(hintRow);
       root.appendChild(sk);
 
-      const foot = footer({ label: "Show me the fix", fn: () => goStep(3), disabled: locked(L) },
+      const foot = footer({ label: "Show me the solution", fn: () => goStep(3), disabled: locked(L) },
         null, challenge && locked(L) ? "Write your fix first: Strict mode is on." : "Guessing first helps it stick, even when the guess is wrong.");
       root.appendChild(foot);
       ta.oninput = () => {
@@ -894,7 +863,7 @@ var DocView = (() => {
         root.appendChild(fold);
       }
       root.appendChild(footer(
-        { label: "What does it cost?", fn: () => goStep(4) },
+        { label: "What's the tradeoff?", fn: () => goStep(4) },
         { label: before ? "Show after" : "Compare before and after", fn: () => setBefore(!before), cls: "compare-btn" }));
     }
 
@@ -921,11 +890,11 @@ var DocView = (() => {
       fold("For engineers", b => b.appendChild(devBox(L)), audience === "developer");
       fold(COPY.askTitle, b => b.appendChild(qaBlock(L, a)), (a.qa || []).length > 0);
       root.appendChild(deeper);
-      root.appendChild(h("p", "done-note", "Layer rebuilt. It joins your Review deck and comes back tomorrow."));
+      root.appendChild(h("p", "done-note", "Layer rebuilt. Practice can quiz you on it whenever you like."));
       const last = L.index === N;
       root.appendChild(footer(
         { label: last ? "Push it: the trials" : `Next failure · Layer ${L.index + 1}`, fn: () => goTo(L.index + 1, 1) },
-        { label: "Back to the fix", fn: () => goStep(3) }));
+        { label: "Back to the solution", fn: () => goStep(3) }));
     }
 
     /* ── stress tests (position N+1) ── */
@@ -952,28 +921,23 @@ var DocView = (() => {
     function renderRecap(root) {
       root.appendChild(h("div", "kicker", "Transfer"));
       root.appendChild(h("h1", "title", "You rebuilt " + doc.meta.system.replace(/^The /, "the ")));
-      const elsewhere = opts.modelsElsewhere || new Set();
       const list = h("div", "recap-list");
-      const models = new Set(), fresh = new Set();
+      const models = new Set();
       doc.layers.forEach(L => {
         const m = modelById(L.problem.model.id);
         const read = attemptFor(L.index).revealed;
-        const isNew = read && !elsewhere.has(L.problem.model.id);
-        if (read) { models.add(L.problem.model.id); if (isNew) fresh.add(L.problem.model.id); }
+        if (read) models.add(L.problem.model.id);
         const row = h("button", "recap-row" + (read ? "" : " unread"));
         row.append(h("span", "recap-n", String(L.index)), h("span", "recap-name", read ? L.name.split(":")[0] : failurePart(L)),
-          h("span", "chip" + (isNew ? " flagship" : ""), (m ? m.name : L.problem.model.id) + (isNew ? " · new" : "")));
+          h("span", "chip", m ? m.name : L.problem.model.id));
         row.onclick = () => goTo(L.index, read ? 3 : 1);
         list.appendChild(row);
       });
       root.appendChild(list);
       const read = doc.layers.filter(L => attemptFor(L.index).revealed).length;
-      const tiles = h("div", "recap-tiles");
-      const tile = (n, label, sub) => { const t = h("div", "trk-tile"); t.append(h("div", "trk-n", String(n)), h("div", "trk-l", label)); if (sub) t.appendChild(h("div", "trk-l recap-sub", sub)); tiles.appendChild(t); };
-      tile(models.size, `thinking model${models.size === 1 ? "" : "s"} used here`, fresh.size ? `${fresh.size} new to you` : null);
-      tile(read + " / " + N, "layers rebuilt", read ? `${read} card${read === 1 ? "" : "s"} in your Review deck` : null);
-      root.appendChild(tiles);
-      if (read < N) root.appendChild(h("p", "lib-note", `${N - read} layer${N - read === 1 ? "" : "s"} still to read. Tap one above to go straight there.`));
+      root.appendChild(h("p", "lib-note", read < N
+        ? `${read} of ${N} layers rebuilt, using ${models.size} thinking model${models.size === 1 ? "" : "s"}. Tap any layer above to go straight to it.`
+        : `All ${N} layers rebuilt, using ${models.size} thinking model${models.size === 1 ? "" : "s"}. Tap any layer above to revisit it.`));
     }
 
     function renderTransfer(root) {
@@ -1015,10 +979,8 @@ var DocView = (() => {
         body.appendChild(footer({ label: "Take it with you", fn: () => goTo(N + 2, 1) }, { label: "Back to layer " + N, fn: () => goTo(N, 4) }));
       } else {
         renderTransfer(body);
-        const nx = opts.nextOnPath;
         body.appendChild(footer(
-          nx && opts.onOpen ? { label: "Next on your path: " + nx.system, fn: () => opts.onOpen(nx.id) }
-            : opts.onFinish ? { label: "Back home", fn: () => opts.onFinish() } : null,
+          opts.onFinish ? { label: "Back home", fn: () => opts.onFinish() } : null,
           { label: "Back to the trials", fn: () => goTo(N + 1, 1) }));
       }
       inner.appendChild(body);

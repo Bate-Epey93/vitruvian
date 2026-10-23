@@ -550,24 +550,16 @@ var NUMBERS_LIBRARY = [
 /* ---------- UI COPY ---------- */
 var COPY = {
   libraryTitle: "Library",
-  // the path grouped into units, in the shipped order. Names are a first draft.
-  pathUnits: [
-    { name: "Building blocks", systems: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue"] },
-    { name: "Serving a lot of people", systems: ["notification-system", "rate-limiter", "search-typeahead", "url-shortener"] },
-    { name: "Contention, edges and money", systems: ["ride-matching", "ticket-booking", "content-delivery-network", "recommendation-feed", "payment-ledger"] },
-    { name: "Media pipelines", systems: ["video-transcoding", "news-feed", "photo-store"] },
-    { name: "Capstones", systems: ["whatsapp", "youtube", "railway"] }
-  ],
-  sampleHeading: "Sample Deconstructs",
-  sampleNote: "Worked examples that set the bar for a Deconstruct. Your path walks them in order.",
+  sampleHeading: "Samples",
+  sampleNote: "Worked examples of what a Deconstruct looks like. Open one to see how it works, then take apart a system of your own.",
   yoursHeading: "Your Deconstructs",
-  yoursEmpty: "Nothing here yet. Name any system above and Vitruvian will take it apart, failure by failure.",
+  yoursEmpty: "Nothing here yet. Name a system above, or dissect a design you're building. The samples below show what you'll get.",
   labHeading: "Field studies",
   labNote: "Machines you can turn over in your hands. Same failure ladder, drawn in three dimensions.",
   labChip: "3D study",
   labKicker: "Also a machine",
   labOpen: "Open the field study →",
-  libraryLede: "Name any system and Vitruvian rebuilds it from nothing, one failure at a time. Or open a sample below.",
+  libraryLede: "Name a system you use, or describe one you're building, and Vitruvian rebuilds it from nothing, one failure at a time, so you can study why each part exists.",
   deconstructPlaceholder: "A system to deconstruct, like a stock exchange or a bike share…",
   deconstructBtn: "Deconstruct",
   ownDesignLink: "Building something? Dissect your design →",
@@ -692,14 +684,14 @@ var COPY = {
       title: "Controls",
       items: [
         ["Audience: B / E / D", "Three reading levels of the same Deconstruct: Beginner (plain language and everyday analogies), Enthusiast (the default), and Developer (adds the engineer mappings and interview probes). Switch anytime and you keep your place."],
-        ["Four steps per layer", "Each layer runs It breaks, Your move, The fix, The price. The button at the bottom of the card moves you on, and Skip to the fix is always there. Arrow keys move a step; Shift with an arrow moves a layer."],
+        ["Four steps per layer", "Each layer runs The problem, Your guess, The solution, The tradeoff. The button at the bottom of the card moves you on, and Skip to the solution is always there. Arrow keys move a step; Shift with an arrow moves a layer."],
         ["The timeline", "The strip under the diagram is your place in the system: Meet, each layer, then Trials and Transfer. Finished layers turn teal. Tap any of them to jump there."],
         ["Strict mode", "Off by default. Turn it on from the ⋯ menu or in Settings, and the fix stays shut until you've sketched your own. The ⋯ menu can also show each layer as one long page, the way earlier versions did."]
       ]
     },
     explore: {
       title: "Go deeper: simulate & interrogate",
-      note: "Pulse sits under the diagram, with Replay while a layer is breaking and Before while you look at the fix. Races, Spine, Labels and GIF are in Lab tools next to them.",
+      note: "Pulse sits under the diagram, with Replay while you read the problem and Before while you read the solution. Races, Spine, Labels and GIF are in Lab tools next to them.",
       items: [
         ["Pulse ▶ / ⟲ replay", "Send live traffic through the current state. Payloads travel the flow path, crash red into whatever's broken, and (under ◉ load) congest where the system saturates. ⟲ replay re-enacts the exact historical failure, arrival by arrival."],
         ["Fault injection", "While a pulse is running, tap any node to kill it. Traffic piles up behind the dead node and everything downstream starves. It's chaos engineering as a toy. Tap it again to revive it."],
