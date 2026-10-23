@@ -2,7 +2,7 @@
    FIELD STUDY — page shell
    ───────────────────────────────────────────────────────────────
    Everything a field study needs that is not the machine: the layer
-   walkthrough, the demo transport, the three stage toggles, camera
+   walkthrough (the app's timeline and four-step card), the demo transport, the three stage toggles, camera
    handling, theme, and the accessibility plumbing.
 
    Knows nothing about any particular mechanism. A study supplies a
@@ -110,34 +110,52 @@ var LabPage = (function () {
       root.appendChild(bar);
     }
 
-    /* ═══ walkthrough ═══ */
+    /* ═══ walkthrough ═══
+       The same shape as a Deconstruct in the app: one timeline for your
+       place, then each layer in four steps (the problem, your guess, the
+       solution, the tradeoff) with the next move in a footer that stays
+       in reach. The demo sits with the problem and again with the
+       solution, where watching it means something. */
+    var STEPS = [
+      { label: "The problem", short: "Problem", tone: "red" },
+      { label: "Your guess", short: "Guess", tone: "vio" },
+      { label: "The solution", short: "Solution", tone: "teal" },
+      { label: "The tradeoff", short: "Tradeoff", tone: "amber" }
+    ];
+    var step = 1;
+    var seen = {};                       // layers you've reached the solution of, this visit
+    var guessKey = function (i) { return "vitruvian_lab_guess_" + location.pathname.split("/").pop() + "_" + L[i].id; };
+    function loadGuess(i) { try { return localStorage.getItem(guessKey(i)) || ""; } catch (e) { return ""; } }
+    function saveGuess(i, v) { try { localStorage.setItem(guessKey(i), v); } catch (e) {} }
+
     function buildDoc(root) {
       root.appendChild(h("div", "kicker", C.kicker));
       root.appendChild(h("h1", "title", C.title));
       root.appendChild(h("p", "subtitle", C.subtitle));
       root.appendChild(h("p", "lab-intro", C.intro));
-
-      var st = h("div", "stepper");
-      els.prev = h("button", "step-btn", "‹ Prev");
-      els.prev.addEventListener("click", function () { goto(layerIndex - 1); });
-      st.appendChild(els.prev);
-      var rail = h("div", "step-rail");
-      els.dots = L.map(function (cfg, i) {
-        var d = h("button", "step-dot", String(i));
-        d.setAttribute("aria-label", "Layer " + i + ": " + C.layers[i].name);
-        d.addEventListener("click", function () { goto(i); });
-        rail.appendChild(d);
-        return d;
-      });
-      st.appendChild(rail);
-      els.next = h("button", "step-btn", "Next ›");
-      els.next.addEventListener("click", function () { goto(layerIndex + 1); });
-      st.appendChild(els.next);
-      root.appendChild(st);
-
-      els.card = h("div", "layer-card");
+      els.timeline = h("nav", "scrub-wrap timeline lab-timeline");
+      els.timeline.setAttribute("aria-label", "Layers");
+      root.appendChild(els.timeline);
+      els.card = h("div", "layer-card step-body");
       root.appendChild(els.card);
       root.appendChild(h("p", "fine lab-footer", C.footer));
+      buildDemo();
+    }
+
+    function renderTimeline() {
+      var row = h("div", "tl-row");
+      L.forEach(function (cfg, i) {
+        var state = i === layerIndex ? "on" : seen[i] ? "done" : "todo";
+        var b = h("button", "tl-seg tl-" + state, i === layerIndex ? i + "  " + C.layers[i].name : String(i));
+        b.setAttribute("aria-label", "Layer " + i + ": " + C.layers[i].name);
+        if (i === layerIndex) b.setAttribute("aria-current", "step");
+        b.addEventListener("click", function () { goto(i, seen[i] ? 3 : 1); });
+        row.appendChild(b);
+      });
+      els.timeline.textContent = "";
+      els.timeline.appendChild(row);
+      var cur = row.querySelector(".tl-on");
+      if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: "nearest", inline: "center" });
     }
 
     function band(cls, label, text) {
@@ -147,33 +165,17 @@ var LabPage = (function () {
       return b;
     }
 
-    function renderCard() {
-      var t = C.layers[layerIndex], cfg = L[layerIndex], card = els.card;
-      card.textContent = "";
-
-      var head = h("div", "lc-head");
-      head.appendChild(h("span", "layer-num", "Layer " + layerIndex));
-      head.appendChild(h("span", "chip", t.era));
-      card.appendChild(head);
-      card.appendChild(h("h2", "lc-name", t.name));
-
-      var prob = h("div", "problem-card");
-      prob.appendChild(h("div", "mono-label", C.bands.problem));
-      prob.appendChild(h("p", null, t.problem));
-      prob.appendChild(h("p", "lc-beginner", t.beginner));
-      card.appendChild(prob);
-
-      card.appendChild(h("p", "lc-analogy", "Like " + t.analogy));
-
-      /* demo transport */
+    /* the demo transport lives across steps, so the scene's events always
+       have somewhere to report to */
+    function buildDemo() {
       var demo = h("div", "demo-box");
       var drow = h("div", "demo-row");
       els.play = h("button", "big-btn demo-play", RM ? C.controls.restart : C.controls.play);
       els.play.addEventListener("click", onPlay);
       drow.appendChild(els.play);
-      drow.appendChild(h("span", "demo-label", t.demoLabel));
+      els.demoLabel = h("span", "demo-label", "");
+      drow.appendChild(els.demoLabel);
       demo.appendChild(drow);
-
       els.scrub = document.createElement("input");
       els.scrub.type = "range";
       els.scrub.min = "0"; els.scrub.max = "1000"; els.scrub.value = "0";
@@ -187,32 +189,114 @@ var LabPage = (function () {
       els.phase = h("div", "demo-phase mono-label", C.phases.idle);
       demo.appendChild(els.phase);
       if (RM) demo.appendChild(h("p", "fine", C.a11y.rmNote));
-      if (cfg.cutaway && C.cutawayNote) demo.appendChild(h("p", "fine", C.cutawayNote));
-      card.appendChild(demo);
+      els.cutNote = C.cutawayNote ? h("p", "fine", C.cutawayNote) : null;
+      if (els.cutNote) demo.appendChild(els.cutNote);
+      els.demo = demo;
+    }
 
-      card.appendChild(band("solution", C.bands.solution, t.solution));
-      card.appendChild(band("tradeoff", C.bands.tradeoff, t.tradeoff));
-      card.appendChild(band("scale", C.bands.atScale, t.atScale));
+    function footer(primary, secondary) {
+      var f = h("div", "step-foot");
+      if (secondary) {
+        var s2 = h("button", "gbtn ghost step-back", secondary.label);
+        s2.addEventListener("click", secondary.fn);
+        f.appendChild(s2);
+      }
+      var p = primary.href ? h("a", "big-btn step-next", primary.label) : h("button", "big-btn step-next", primary.label);
+      if (primary.href) p.href = primary.href; else p.addEventListener("click", primary.fn);
+      f.appendChild(p);
+      return f;
+    }
 
-      if (cfg.free && C.freeNote) {
-        var free = h("div", "free-note");
-        free.appendChild(h("div", "mono-label", C.freeNote.label));
-        free.appendChild(h("p", null, C.freeNote.text));
-        card.appendChild(free);
+    function renderCard(focus) {
+      var t = C.layers[layerIndex], cfg = L[layerIndex], card = els.card, last = layerIndex === L.length - 1;
+      card.textContent = "";
+
+      var head = h("div", "step-head");
+      var where = h("div", "step-where");
+      where.appendChild(h("span", null, "Layer " + layerIndex + " of " + (L.length - 1) + " · "));
+      where.appendChild(h("span", "lab-era", t.era));
+      head.appendChild(where);
+      var tabs = h("div", "step-tabs");
+      tabs.setAttribute("role", "tablist");
+      STEPS.forEach(function (st, i) {
+        var b = h("button", "step-tab tone-" + st.tone + (i + 1 === step ? " on" : i + 1 < step ? " past" : ""), st.short);
+        b.setAttribute("role", "tab");
+        b.setAttribute("aria-selected", String(i + 1 === step));
+        b.addEventListener("click", function () { goto(layerIndex, i + 1); });
+        tabs.appendChild(b);
+      });
+      head.appendChild(tabs);
+      card.appendChild(head);
+      var st = STEPS[step - 1];
+      var kick = h("div", "step-kick tone-" + st.tone, st.label);
+      kick.tabIndex = -1;
+      card.appendChild(kick);
+      card.appendChild(h("h2", "lc-name", t.name));
+
+      els.demoLabel.textContent = t.demoLabel;
+      if (els.cutNote) els.cutNote.hidden = !cfg.cutaway;
+
+      if (step === 1) {
+        var prob = h("div", "problem-card");
+        prob.appendChild(h("p", null, t.problem));
+        prob.appendChild(h("p", "lc-beginner", t.beginner));
+        card.appendChild(prob);
+        card.appendChild(h("p", "lc-analogy", "Like " + t.analogy));
+        card.appendChild(els.demo);
+        card.appendChild(footer({ label: "What would you do?", fn: function () { goto(layerIndex, 2); } },
+          { label: "Skip to the solution", fn: function () { goto(layerIndex, 3); } }));
+      } else if (step === 2) {
+        card.appendChild(h("p", "step-text", t.problem));
+        card.appendChild(h("h3", "move-q", "How would you stop this from happening?"));
+        var ta = document.createElement("textarea");
+        ta.className = "move-sketch";
+        ta.rows = 4;
+        ta.placeholder = "A sentence or two is plenty. Nobody grades it.";
+        ta.setAttribute("aria-label", "Your guess");
+        ta.value = loadGuess(layerIndex);
+        ta.addEventListener("input", function () { saveGuess(layerIndex, ta.value); });
+        card.appendChild(ta);
+        card.appendChild(footer({ label: "Show me the solution", fn: function () { goto(layerIndex, 3); } },
+          { label: "Back to the problem", fn: function () { goto(layerIndex, 1); } }));
+      } else if (step === 3) {
+        var g = loadGuess(layerIndex).trim();
+        if (g) {
+          var mine = h("div", "lc-band guess");
+          mine.appendChild(h("div", "mono-label", "Your guess"));
+          mine.appendChild(h("p", null, g));
+          card.appendChild(mine);
+        }
+        card.appendChild(band("solution", C.bands.solution, t.solution));
+        card.appendChild(els.demo);
+        if (cfg.free && C.freeNote) {
+          var free = h("div", "free-note");
+          free.appendChild(h("div", "mono-label", C.freeNote.label));
+          free.appendChild(h("p", null, C.freeNote.text));
+          card.appendChild(free);
+        }
+        card.appendChild(footer({ label: "What's the tradeoff?", fn: function () { goto(layerIndex, 4); } },
+          { label: "Your guess", fn: function () { goto(layerIndex, 2); } }));
+      } else {
+        card.appendChild(band("tradeoff", C.bands.tradeoff, t.tradeoff));
+        card.appendChild(band("scale", C.bands.atScale, t.atScale));
+        card.appendChild(footer(last ? { label: "Back to Vitruvian", href: "../" } : { label: "Next layer", fn: function () { goto(layerIndex + 1, 1); } },
+          { label: "Back to the solution", fn: function () { goto(layerIndex, 3); } }));
       }
 
-      els.dots.forEach(function (d, i) {
-        d.classList.toggle("on", i === layerIndex);
-        d.classList.toggle("done", i < layerIndex);
-      });
-      els.prev.disabled = layerIndex === 0;
-      els.next.disabled = layerIndex === L.length - 1;
+      if (step >= 3) seen[layerIndex] = true;
+      renderTimeline();
 
       /* the scene owns these; the buttons only report them */
       setToggle(els.cutBtn, !!ctl.scene.clip);
       setToggle(els.expBtn, ctl.scene.explodeAmount > 0);
       if (els.altBtn) setToggle(els.altBtn, ctl.state.mode === C.altMode.on);
-      canvas.setAttribute("aria-label", C.a11y.canvas + " — " + t.name);
+      canvas.setAttribute("aria-label", C.a11y.canvas + ": " + t.name);
+      if (focus) {
+        kick.focus({ preventScroll: true });
+        live.textContent = "Layer " + layerIndex + ", " + t.name + ". " + st.label + ".";
+        var doc = $("docInner").parentElement;
+        if (doc && doc.scrollTo) doc.scrollTo({ top: Math.max(0, els.timeline.offsetTop - 12) });
+      }
       if (opts.instruments && opts.instruments.layerChanged) opts.instruments.layerChanged(api);
     }
 
@@ -233,15 +317,31 @@ var LabPage = (function () {
       els.play.textContent = RM ? C.controls.restart : C.controls.pause;
     }
 
-    function goto(i) {
+    function goto(i, s) {
       if (i < 0 || i >= L.length) return;
+      var newLayer = i !== layerIndex;
       layerIndex = i;
-      ctl.applyLayer(L[i]);
-      renderCard();
-      els.scrub.value = "0";
-      if (location.hash !== "#" + L[i].id) history.replaceState(null, "", "#" + L[i].id);
-      if (!RM) setTimeout(startDemo, 420);
+      step = Math.max(1, Math.min(4, s || 1));
+      if (newLayer) {
+        ctl.applyLayer(L[i]);
+        els.scrub.value = "0";
+        if (location.hash !== "#" + L[i].id) history.replaceState(null, "", "#" + L[i].id);
+        if (!RM && step === 1) setTimeout(startDemo, 420);
+      }
+      renderCard(true);
     }
+
+    /* ← and → walk the steps; Shift with an arrow jumps a layer */
+    document.addEventListener("keydown", function (e) {
+      var tag = e.target && e.target.tagName;
+      if (tag === "TEXTAREA" || tag === "INPUT" || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+      e.preventDefault();
+      var fwd = e.key === "ArrowRight";
+      if (e.shiftKey) goto(layerIndex + (fwd ? 1 : -1), 1);
+      else if (fwd) { if (step < 4) goto(layerIndex, step + 1); else goto(layerIndex + 1, 1); }
+      else { if (step > 1) goto(layerIndex, step - 1); else goto(layerIndex - 1, 4); }
+    });
 
     ctl.on(function (kind, payload) {
       if (kind === "phase") {
@@ -320,7 +420,7 @@ var LabPage = (function () {
     var start = L.map(function (c) { return c.id; }).indexOf(location.hash.replace("#", ""));
     layerIndex = start >= 0 ? start : 0;
     ctl.applyLayer(L[layerIndex]);
-    renderCard();
+    renderCard(false);
     ctl.scene.resize();
     ctl.resetCamera();
     ctl.start();

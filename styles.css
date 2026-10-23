@@ -557,7 +557,9 @@ input,textarea{font-family:var(--sans);}
 .diagram-scroll::-webkit-scrollbar{width:9px;height:9px;}
 .diagram-scroll::-webkit-scrollbar-thumb{background:var(--faint);border-radius:5px;border:2px solid var(--panel-2);}
 .diagram-scroll svg{width:100%;height:auto;display:block;}
-.doc-pane{min-width:0;overflow-y:auto;background:var(--canvas);scroll-behavior:smooth;}
+.doc-sheet{min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--canvas);}
+.doc-pane{min-width:0;min-height:0;flex:1;overflow-y:auto;background:var(--canvas);scroll-behavior:smooth;}
+.sheet-grip{display:none;}
 .doc-inner{max-width:600px;margin:0 auto;padding:32px 32px 0;}
 
 /* the dock: legend, scrubber and tools, one surface */
@@ -602,12 +604,20 @@ input,textarea{font-family:var(--sans);}
 @media(max-width:1280px){.cap-tools .sim-btn:not(.sim-primary) .btn-label{display:none;}.cap-tools .sim-btn:not(.sim-primary){padding:5px 7px;}}
 
 @media(max-width:860px){
-  .reader{display:flex;flex-direction:column;}
-  .diagram-pane{border-right:none;border-bottom:1px solid var(--hair);flex:none;position:sticky;top:0;z-index:30;max-height:40vh;}
-  .diagram-pane.collapsed .diagram-scroll{display:none;}
+  /* the diagram fills the reader; the step card is a sheet over its lower part */
+  .reader{display:block;position:relative;--sheet:52%;}
+  .diagram-pane{position:absolute;left:0;right:0;top:0;bottom:calc(var(--sheet) - 6px);border-right:none;transition:bottom .32s var(--ease);}
+  .doc-sheet{position:absolute;left:0;right:0;bottom:0;height:var(--sheet);z-index:30;border-radius:18px 18px 0 0;
+    box-shadow:0 -1px 0 var(--hair),0 -12px 32px -12px rgba(0,0,0,.22);transition:height .32s var(--ease);}
+  .reader.sheet-moving .doc-sheet,.reader.sheet-moving .diagram-pane{transition:none;}
+  .sheet-grip{display:grid;place-items:center;flex:none;width:100%;height:24px;border:none;background:none;cursor:grab;touch-action:none;padding:0;}
+  .sheet-grip:active{cursor:grabbing;}
+  .sheet-grip-bar{width:40px;height:5px;border-radius:3px;background:var(--hair-strong);}
+  .sheet-grip:focus-visible{outline:none;}
+  .sheet-grip:focus-visible .sheet-grip-bar{background:var(--accent);box-shadow:0 0 0 3px var(--accent-wash);}
+  .cap-toggle{display:none;}
   .diagram-scroll{padding:10px;place-items:start;}
-  .doc-pane{flex:1;}
-  .doc-inner{padding:22px 18px 0;}
+  .doc-inner{padding:4px 18px 0;}
   /* the key collapses to a chip over the diagram's corner: zero rows when closed */
   .dgl-tog{display:inline-flex;align-items:center;flex-shrink:0;position:relative;
     font-size:11.5px;font-weight:600;background:var(--glass-heavy);border:none;border-radius:var(--r-pill);
@@ -1632,6 +1642,20 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 .set-group-title{font-size:20px;font-weight:650;letter-spacing:-.01em;margin:0 0 4px;color:var(--ink);}
 .set-group-note{font-size:14px;color:var(--ink-3);margin:0 0 12px;}
 .set-toggles .toggle + .toggle{margin-top:12px;}
+
+@media(prefers-reduced-motion:reduce){.doc-sheet,.diagram-pane{transition:none!important;}}
+.doc-pane [tabindex="-1"]:focus{outline:none;}
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;}
+
+/* ═══ First-run tips ═══ */
+.tip-card{position:fixed;z-index:200;padding:16px 18px 14px;border-radius:var(--r-lg);background:var(--panel);
+  box-shadow:inset 0 0 0 1px var(--hair),var(--sh-3);animation:fadeUp .3s var(--ease) both;}
+.tip-count{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-deep);}
+.tip-title{font-size:17px;font-weight:650;margin:6px 0 4px;color:var(--ink);}
+.tip-text{font-size:14.5px;line-height:1.5;color:var(--ink-soft);margin:0;}
+.tip-row{display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:8px;}
+.tip-ring{outline:2px solid var(--accent);outline-offset:3px;border-radius:10px;position:relative;z-index:31;}
+@media(prefers-reduced-motion:reduce){.tip-card{animation:none;}}
 
 /* ═══ Responsive chrome ═══
    Under 760px the nav island leaves the header and becomes a tab bar along

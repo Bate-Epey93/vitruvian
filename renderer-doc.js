@@ -48,10 +48,10 @@ var DocView = (() => {
     const replayed = new Set();        // layers whose failure already replayed by itself this visit
     const RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const STEPS = [
-      { label: "The problem", short: "The problem", tone: "red" },
-      { label: "Your guess", short: "Your guess", tone: "vio" },
-      { label: "The solution", short: "The solution", tone: "teal" },
-      { label: "The tradeoff", short: "The tradeoff", tone: "amber" }
+      { label: "The problem", short: "Problem", tone: "red" },
+      { label: "Your guess", short: "Guess", tone: "vio" },
+      { label: "The solution", short: "Solution", tone: "teal" },
+      { label: "The tradeoff", short: "Tradeoff", tone: "amber" }
     ];
     // "The Read Storm: Cache the Redirect" → the half that names the failure.
     // The half after the colon names the fix, so it waits for step 3.
@@ -111,7 +111,7 @@ var DocView = (() => {
       return m;
     }
     function capText(s) {
-      const cap = docPane.parentElement.querySelector(".diagram-cap-state");
+      const cap = docPane.closest(".reader").querySelector(".diagram-cap-state");
       if (cap) cap.textContent = s;
     }
     function loadPathIds(L) {
@@ -1007,6 +1007,26 @@ var DocView = (() => {
       }
     }
 
+    /* After a move, keyboard and screen reader users land where sighted
+       ones look: focus goes to the new step's heading (without scrolling),
+       and the live region says where you are. */
+    function announce() {
+      const target = docPane.querySelector(".step-kick, .step-title, h1, h2");
+      const ae = document.activeElement;
+      if (target && (!ae || ae === document.body || !ae.isConnected || docPane.contains(ae) || (scrubEl && scrubEl.contains(ae)))) {
+        target.tabIndex = -1;
+        try { target.focus({ preventScroll: true }); } catch (e) {}
+      }
+      const live = document.getElementById("liveRegion");
+      if (!live) return;
+      let say;
+      if (pos === 0) say = "Meet the system. " + MEET[step - 1].label + ".";
+      else if (pos <= N) say = `Layer ${pos} of ${N}. ` + (onePage ? doc.layers[pos - 1].name : STEPS[step - 1].label + ".");
+      else if (pos === N + 1) say = "Trials: stress tests.";
+      else say = "Transfer: what to take with you.";
+      live.textContent = say;
+    }
+
     function goTo(p, s = 1) {
       if (p < 0 || p > N + 2) return;
       const forward = p > pos || (p === pos && s > step);
@@ -1019,6 +1039,7 @@ var DocView = (() => {
       rec.progress.step = step;
       persist();
       render(forward && step >= 3);
+      announce();
     }
     function goStep(s) {
       if (pos === 0) {
@@ -1026,6 +1047,7 @@ var DocView = (() => {
         rec.progress.step = step;
         persist();
         render();
+        announce();
         return;
       }
       if (pos < 1 || pos > N || onePage) return;
@@ -1042,6 +1064,7 @@ var DocView = (() => {
       rec.progress.step = step;
       persist();
       render(forward && step === 3);
+      announce();
     }
     function setBefore(on) {
       if (pos < 1 || pos > N || onePage || step !== 3 || before === on) return;

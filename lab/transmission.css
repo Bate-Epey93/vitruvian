@@ -95,10 +95,15 @@
 /* ── document pane ── */
 .lab-doc { overflow-y:auto; min-width:0;
   background:radial-gradient(circle, var(--dot) 1.1px, transparent 1.6px) 0 0/22px 22px, var(--canvas); }
-.lab-doc-inner { max-width:560px; margin:0 auto; padding:30px 26px 120px; }
+.lab-doc-inner { max-width:560px; margin:0 auto; padding:30px 26px 40px; }
 .lab-intro { font-size:15px; color:var(--ink-soft); margin:12px 0 4px; }
 .lab-footer { margin-top:30px; color:var(--muted); }
-.lab-doc .stepper { background:var(--canvas); }
+.lab-timeline { margin:22px 0 18px; padding:0; background:none; box-shadow:none; }
+.lab-era { color:var(--muted); }
+.layer-card .step-kick { margin:0; }
+.layer-card .step-kick:focus { outline:none; }
+.layer-card .step-foot { background:var(--canvas); }
+.lc-band.guess { border-left:3px solid var(--proposal); }
 
 .layer-card { display:flex; flex-direction:column; gap:14px; }
 .lc-head { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
@@ -145,7 +150,7 @@
   .lab-stage { flex:none; height:44vh; border-right:none; border-bottom:1px solid var(--line);
     position:sticky; top:0; z-index:30; }
   .lab-doc { flex:1; }
-  .lab-doc-inner { padding:24px 18px 110px; }
+  .lab-doc-inner { padding:24px 18px 30px; }
   .hud { top:8px; left:8px; padding:7px 10px; gap:9px; }
   .hud-gear-n { font-size:22px; }
   .hud-meters { min-width:120px; }

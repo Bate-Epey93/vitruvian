@@ -139,6 +139,7 @@ function show(screen) {
   });
   document.body.dataset.screen = screen;
   if (screen !== "reader") {
+    if (firstRunTips.close && document.querySelector(".tip-card")) firstRunTips.close();
     if (currentView) currentView.destroy();   // cancel any pending debounce timer
     currentView = null; currentRec = null;
   }
@@ -777,6 +778,116 @@ async function drillInto(sub) {
   }
 }
 
+/* ═══ First-run tips: three, the first time a Deconstruct opens. Each one
+   rings the part of the screen it's about. Esc or Skip ends them; the
+   field guide keeps everything else. ═══ */
+function firstRunTips() {
+  if (meta.tipsSeen) return;
+  const tips = COPY.firstRunTips;
+  let i = 0, ringed = null;
+  const card = h("div", "tip-card");
+  card.setAttribute("role", "dialog");
+  card.setAttribute("aria-live", "polite");
+  const count = h("div", "tip-count");
+  const title = h("h3", "tip-title");
+  const text = h("p", "tip-text");
+  const row = h("div", "tip-row");
+  const skip = h("button", "gbtn ghost", "Skip tips");
+  const next = h("button", "gbtn primary", "Next");
+  row.append(skip, next);
+  card.append(count, title, text, row);
+  const finish = async () => {
+    if (ringed) ringed.classList.remove("tip-ring");
+    card.remove();
+    document.removeEventListener("keydown", onKey, true);
+    window.removeEventListener("resize", place);
+    meta.tipsSeen = true;
+    await Store.saveMeta({ tipsSeen: true });
+  };
+  function place() {
+    if (!card.isConnected) return;
+    const t = ringed && ringed.getBoundingClientRect();
+    const w = Math.min(320, innerWidth - 32);
+    card.style.width = w + "px";
+    if (!t || !t.width) { card.style.left = (innerWidth - w) / 2 + "px"; card.style.top = (innerHeight - card.offsetHeight) / 2 + "px"; return; }
+    const ch = card.offsetHeight;
+    let top = t.bottom + 12;
+    if (top + ch > innerHeight - 12) top = t.top - ch - 12;
+    if (top < 12) top = Math.max(12, Math.min(innerHeight - ch - 12, t.top + 12));
+    card.style.top = top + "px";
+    card.style.left = Math.max(16, Math.min(innerWidth - w - 16, t.left + t.width / 2 - w / 2)) + "px";
+  }
+  function paint() {
+    const tip = tips[i];
+    if (ringed) ringed.classList.remove("tip-ring");
+    ringed = tip.target.split(",").map(sel => document.querySelector("#screen-reader " + sel.trim())).find(el => el && el.offsetParent);
+    if (ringed) ringed.classList.add("tip-ring");
+    count.textContent = `Tip ${i + 1} of ${tips.length}`;
+    title.textContent = tip.title;
+    text.textContent = tip.text;
+    next.textContent = i === tips.length - 1 ? "Got it" : "Next";
+    place();
+    next.focus();
+  }
+  function onKey(e) { if (e.key === "Escape") { e.stopPropagation(); finish(); } }
+  skip.onclick = finish;
+  next.onclick = () => { if (i === tips.length - 1) finish(); else { i++; paint(); } };
+  document.addEventListener("keydown", onKey, true);
+  window.addEventListener("resize", place);
+  document.body.appendChild(card);
+  paint();
+  // tips belong to the reader; leaving it ends them
+  firstRunTips.close = finish;
+}
+
+const SHEET_SNAPS = [0.3, 0.52, 0.88];          // share of the reader the sheet covers
+const SHEET_NAMES = ["mostly diagram", "half and half", "mostly text"];
+function sheetDrag(wrap, sheet, grip) {
+  let snap = 1;
+  try { const v = parseInt(localStorage.getItem("vitruvian_sheet_snap"), 10); if (v >= 0 && v < SHEET_SNAPS.length) snap = v; } catch (e) {}
+  const apply = (frac, animate) => {
+    wrap.classList.toggle("sheet-moving", !animate);
+    wrap.style.setProperty("--sheet", (frac * 100).toFixed(2) + "%");
+  };
+  const setSnap = i => {
+    snap = Math.max(0, Math.min(SHEET_SNAPS.length - 1, i));
+    apply(SHEET_SNAPS[snap], true);
+    grip.setAttribute("aria-label", `Reading panel: ${SHEET_NAMES[snap]}. Tap or use the arrow keys to resize.`);
+    try { localStorage.setItem("vitruvian_sheet_snap", String(snap)); } catch (e) {}
+  };
+  setSnap(snap);
+  let start = null, moved = false;
+  grip.addEventListener("pointerdown", e => {
+    start = { y: e.clientY, frac: SHEET_SNAPS[snap], h: wrap.clientHeight || 1 };
+    moved = false;
+    grip.setPointerCapture(e.pointerId);
+  });
+  grip.addEventListener("pointermove", e => {
+    if (!start) return;
+    const dy = start.y - e.clientY;
+    if (Math.abs(dy) > 4) moved = true;
+    if (moved) apply(Math.max(0.2, Math.min(0.95, start.frac + dy / start.h)), false);
+  });
+  const end = e => {
+    if (!start) return;
+    if (moved) {
+      const frac = start.frac + (start.y - e.clientY) / start.h;
+      let best = 0;
+      SHEET_SNAPS.forEach((f, i) => { if (Math.abs(f - frac) < Math.abs(SHEET_SNAPS[best] - frac)) best = i; });
+      setSnap(best);
+    }
+    start = null;
+  };
+  grip.addEventListener("pointerup", end);
+  grip.addEventListener("pointercancel", end);
+  // a tap steps up and wraps back down; the drag already ended without a click
+  grip.addEventListener("click", () => { if (moved) { moved = false; return; } setSnap(snap === SHEET_SNAPS.length - 1 ? 0 : snap + 1); });
+  grip.addEventListener("keydown", e => {
+    if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); setSnap(snap + 1); }
+    if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); setSnap(snap - 1); }
+  });
+}
+
 async function openReader(id, layerIndex, opts = {}) {
   const rec = await Store.getBreakdown(id);
   if (!rec) return;
@@ -849,6 +960,9 @@ async function openReader(id, layerIndex, opts = {}) {
   const setLab = open => { labMenu.hidden = !open; labBtn.setAttribute("aria-expanded", String(open)); labBtn.classList.toggle("on", open); };
   labBtn.onclick = e => { e.stopPropagation(); setLab(labMenu.hidden); };
   labMenu.onclick = e => e.stopPropagation();
+  const labEsc = e => { if (e.key === "Escape" && !labMenu.hidden) { e.stopPropagation(); setLab(false); labBtn.focus(); } };
+  labBtn.addEventListener("keydown", labEsc);
+  labMenu.addEventListener("keydown", labEsc);
   pane.onclick = () => setLab(false);
   const capTools = h("div", "cap-tools");
   capTools.append(replayBtn, beforeBtn, playBtn, loadBtn, capSep(), labBtn, capToggle);
@@ -863,7 +977,16 @@ async function openReader(id, layerIndex, opts = {}) {
   hud.append(hudRate, hudFlight, hudCrash, hudHint);
   dpane.append(dscroll, hud, caption, Diagram.legend(), scrubEl, dcap, labMenu);   // legend: the tutorial's grammar, always in view
   const docPane = h("div", "doc-pane");
-  wrap.append(dpane, docPane);
+  /* On a phone the step card is a bottom sheet over the diagram. The grip
+     drags it between three heights, or steps through them by tap or arrow
+     keys; the diagram gets whatever the sheet leaves. On wider screens the
+     sheet is just the right-hand column and the grip is hidden. */
+  const docSheet = h("div", "doc-sheet");
+  const grip = h("button", "sheet-grip");
+  grip.appendChild(h("span", "sheet-grip-bar"));
+  docSheet.append(grip, docPane);
+  wrap.append(dpane, docSheet);
+  sheetDrag(wrap, docSheet, grip);
   // breadcrumb: only while nested (drilled at least one level deep)
   if (drillStack.length > 1) pane.appendChild(drillCrumb());
   pane.appendChild(wrap);
@@ -1018,6 +1141,7 @@ async function openReader(id, layerIndex, opts = {}) {
   buildReaderMenu(rec, challengeOn);
   show("reader");
   if (layerIndex != null) currentView.goToLayer(layerIndex);
+  if (!meta.tipsSeen) setTimeout(() => { if (currentRec === rec && !document.querySelector(".tip-card")) firstRunTips(); }, 700);
 }
 
 /* ═══ Branded diagram export: current diagram state → PNG with the Vitruvian
@@ -1305,7 +1429,7 @@ function buildReaderMenu(rec, challengeOn) {
     buildReaderMenu(rec, challengeOn);
   });
   pop.appendChild(h("div", "menu-sep"));
-  add("How to read a Deconstruct", () => { renderTutorial("reader"); show("tutorial"); });
+  add("Field guide", () => { renderTutorial("reader"); show("tutorial"); });
   pop.appendChild(h("div", "menu-sep"));
   add(COPY.shareMenu, async () => {
     if (rec.source !== "flagship") { toast(COPY.shareLocalNote); return; }
@@ -2180,14 +2304,16 @@ function renderSettings(banner) {
 
   /* About / how it works → landing + tutorial */
   const ab = h("div", "set-block");
-  ab.appendChild(h("h3", null, "About & guide"));
+  ab.appendChild(h("h3", null, "About & field guide"));
   ab.appendChild(h("p", "note", "What Vitruvian is and how to read a Deconstruct: the cards, the diagram, the developer lens."));
   const abRow = h("div", "set-row");
   const abBtn = h("button", "gbtn primary", "Open the intro →");
   abBtn.onclick = () => { renderLanding(); show("landing"); };
-  const tutBtn = h("button", "gbtn", "How to read a Deconstruct →");
+  const tutBtn = h("button", "gbtn", "Field guide →");
   tutBtn.onclick = () => { renderTutorial("settings"); show("tutorial"); };
-  abRow.append(abBtn, tutBtn);
+  const tipsBtn = h("button", "gbtn", "Show the first-run tips again");
+  tipsBtn.onclick = async () => { meta.tipsSeen = false; await Store.saveMeta({ tipsSeen: false }); toast("Tips will show next time you open a Deconstruct"); };
+  abRow.append(abBtn, tutBtn, tipsBtn);
   ab.appendChild(abRow);
 
   /* API key */

@@ -630,9 +630,15 @@ var COPY = {
     footnote: "Your Deconstructs stay on this device. There is no cloud to sign up for."
   },
 
-  /* ---------- TUTORIAL — 'How to read a Deconstruct' (visitable anytime) ---------- */
+  /* ---------- FIELD GUIDE — the full reference, visitable anytime. The
+     three first-run tips cover the basics; this covers everything. ---------- */
+  firstRunTips: [
+    { target: ".timeline", title: "Your place in the system", text: "Meet, then each layer, then the trials. Tap any stop to go there. Finished layers turn teal." },
+    { target: ".step-tabs, .meet-tabs, .doc-pane", title: "Guess before you look", text: "Each layer runs in four steps: the problem, your guess, the solution, the tradeoff. Making a guess first is what makes the solution stick." },
+    { target: ".diagram-scroll", title: "The diagram follows along", text: "New parts are drawn in teal and what breaks pulses red. Pulse sends traffic through it. The field guide in the ⋯ menu explains the rest." }
+  ],
   tutorial: {
-    kicker: "How to read a Deconstruct",
+    kicker: "Field guide",
     headline: "Every Deconstruct is the same shape.",
     lede: "A Vitruvian Deconstruct rebuilds a system from nothing, one failure at a time. The pieces come in the same order every time, and developers can lift a technical spec straight out of one.",
     reading: {
@@ -692,6 +698,7 @@ var COPY = {
         ["Audience: B / E / D", "Three reading levels of the same Deconstruct: Beginner (plain language and everyday analogies), Enthusiast (the default), and Developer (adds the engineer mappings and interview probes). Switch anytime and you keep your place."],
         ["Four steps per layer", "Each layer runs The problem, Your guess, The solution, The tradeoff. The button at the bottom of the card moves you on, and Skip to the solution is always there. Arrow keys move a step; Shift with an arrow moves a layer."],
         ["The timeline", "The strip under the diagram is your place in the system: Meet, each layer, then Trials and Transfer. Finished layers turn teal. Tap any of them to jump there."],
+        ["On a phone", "The step card sits in a sheet over the diagram. Drag its handle, or tap it, to give more room to the text or to the diagram."],
         ["Strict mode", "Off by default. Turn it on from the ⋯ menu or in Settings, and the fix stays shut until you've sketched your own. The ⋯ menu can also show each layer as one long page, the way earlier versions did."]
       ]
     },
@@ -706,7 +713,7 @@ var COPY = {
         ["Critical path ⌁ spine", "Traces the chain a request actually waits on and dims everything off it. Shortening anything off the spine changes nothing, which is why it helps to know where it runs. Nodes whose loss would stop delivery altogether get a red ring. The readout also compares the spine against layer 0, so you can see what surviving all those failures cost you in extra steps."],
         ["Sequence view", "In the ⋯ menu: the same state as an interaction timeline: who sends what to whom, top to bottom, in the order it happens. The diagram shows structure and this shows behaviour."],
         ["Probe a layer", "Ask one focused question about any layer. The answer stays grounded in that layer's own mechanism. Needs your Anthropic API key (Settings)."],
-        ["Graft a change", "In the ⋯ menu: propose a change and see it ghosted onto the architecture in dashed blueprint ink, with an honest verdict (improves, mixed, or harmful) argued from the system's own invariants. Pulse runs through the graft too."],
+        ["Graft a change", "In the ⋯ menu: propose a change and see it ghosted onto the architecture in dashed blueprint ink, with an honest verdict (improves, mixed, or harmful) argued from the system's own rules. Before the verdict you make your own call, and the verdict shows the two side by side. Pulse runs through the graft too."],
         ["Known as… (the engineering vocabulary)", "In Developer mode, each layer names what the profession calls what it does: patterns (problem shapes), concepts (mechanisms), technologies (things you deploy). Tap a chip to climb the ladder, from the timeless thinking model that forces the layer down to the component you would actually deploy. You also see where the same force turns up in your other Deconstructs. Browse them all from Models, under The engineering vocabulary."],
         ["Also called…", "Every thinking model has a different name in every field. A layer's model card shows what this system's own profession calls it. Folded underneath is what marketers, engineers, biologists, economists and institutions call the same force. Frequency capping is rate limiting. Attribution is telemetry. Spotting that repetition is most of what taking systems apart is for."],
         ["Not yet addressed", "When you Dissect your own design, the overview names the concerns your description has not answered yet (contention, scaling reads, idempotency), each with a sentence on why it will bite and roughly when. Treat it as a to-do list."]
