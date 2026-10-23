@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "2.2.1",
+  appVersion: "2.3.0",
   flagshipVersion: 12,                   // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   // foundations first, then the systems built on them — YouTube last, the capstone that drills into everything
   flagshipNames: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue", "notification-system", "rate-limiter", "search-typeahead", "url-shortener", "ride-matching", "ticket-booking", "content-delivery-network", "recommendation-feed", "payment-ledger", "video-transcoding", "news-feed", "photo-store", "whatsapp", "youtube", "railway"],
@@ -632,11 +632,65 @@ var COPY = {
 
   /* ---------- FIELD GUIDE — the full reference, visitable anytime. The
      three first-run tips cover the basics; this covers everything. ---------- */
-  firstRunTips: [
-    { target: ".timeline", title: "Your place in the system", text: "Meet, then each layer, then the trials. Tap any stop to go there. Finished layers turn teal." },
-    { target: ".step-tabs, .meet-tabs, .doc-pane", title: "Guess before you look", text: "Each layer runs in four steps: the problem, your guess, the solution, the tradeoff. Making a guess first is what makes the solution stick." },
-    { target: ".diagram-scroll", title: "The diagram follows along", text: "What breaks pulses red, and tapping a card lights its parts. Pulse sends traffic through it. The field guide in the ⋯ menu explains the rest." }
+  /* ---------- TIPS ----------
+     A tip fires the first time you reach the thing it describes, once each,
+     and never again. They are ON by default and stay on: the app has more in
+     it than any first-run tour can carry, and a tour you saw once in week one
+     is no help in week three when you first open Graft. Settings turns them
+     off, and the card itself has an off switch for the moment you stop
+     wanting them.
+
+     `screen` is the screen id the tip belongs to; `target` is looked up
+     inside that screen and the tip is skipped when it is not on the page, so
+     a tip for a button that does not apply simply never fires. Order within a
+     screen is the order they are offered. --------------------------------- */
+  tips: [
+    // ── the shelf ──
+    { id: "lib-shelf", screen: "library", target: ".bd-grid, .lib-grid, .bd-card",
+      title: "Your shelf",
+      text: "Your own Deconstructs sit first, then the worked samples. Open any sample to see the shape a Deconstruct takes before you make one." },
+    { id: "lib-own", screen: "library", target: ".own-design-btn",
+      title: "Your own system",
+      text: "Describe something you are building and Vitruvian rebuilds it the same way it rebuilds the samples: one failure at a time, with the concerns your description has not answered yet named at the end." },
+
+    // ── reading a Deconstruct ──
+    { id: "timeline", screen: "reader", target: ".timeline",
+      title: "Your place in the system",
+      text: "Meet, then each layer, then the trials. Tap any stop to go there. Finished layers turn teal." },
+    { id: "steps", screen: "reader", target: ".step-tabs, .meet-tabs, .doc-pane",
+      title: "Guess before you look",
+      text: "Each layer runs in four steps: the problem, your guess, the solution, the tradeoff. Making a guess first is what makes the solution stick." },
+    { id: "diagram", screen: "reader", target: ".diagram-scroll",
+      title: "The diagram follows along",
+      text: "What breaks pulses red, and tapping a card lights its parts. The diagram is drawn by hand, and it is drawn by arithmetic: every box sits where its role and its order put it." },
+    { id: "key", screen: "reader", target: ".dg-legend",
+      title: "The key knows what is on screen",
+      text: "It lists only the glyphs this diagram actually uses, so it changes as you move through the layers. Tap any entry to light every node that carries it. The shape is the role, the small mark inside is the thing." },
+    { id: "tools", screen: "reader", target: ".diagram-cap",
+      title: "Put the system under load",
+      text: "Pulse sends real traffic through the current state and you watch where it piles up. Spine traces the path a request actually waits on and rings anything whose loss takes delivery with it. Races marks the places two flows can arrive at once." },
+    { id: "drill", screen: "reader", target: ".dg-drill-badge",
+      title: "Some boxes are systems",
+      text: "A node with this badge is worth its own Deconstruct. Open it and you drop a level, with a trail back up. The capstone systems nest several levels deep." },
+    { id: "ctx", screen: "reader", target: ".tb-right, #sheetBtn",
+      title: "The tools for this system",
+      text: "The System sheet is the reference card: what it is for, its rules, its pieces. Sequence shows the same state as an interaction timeline. Graft lets you propose a change and argues back. On a phone these live in the \u22ef menu." },
+    { id: "menu", screen: "reader", target: "#readerMenuBtn",
+      title: "Everything else",
+      text: "Strict mode makes you write your fix before the real one opens. The field guide explains every part of a Deconstruct. Exports put the diagram or the whole study somewhere else." },
+
+    // ── the rest of the app ──
+    { id: "models", screen: "models", target: ".ml-card, .model-card, .ml-grid",
+      title: "The same idea, everywhere",
+      text: "Fourteen thinking models account for nearly every layer in every system here. Open one to see every place it recurs across your library. That recurrence is the thing worth carrying away." },
+    { id: "set-model", screen: "settings", target: ".set-block",
+      title: "Your key, your model",
+      text: "Generation runs on your own Anthropic key, straight from the browser. Nothing is sent anywhere else and no account is needed. The model field takes any Anthropic id, so a new model needs no app update." },
+    { id: "set-tips", screen: "settings", target: ".set-tips",
+      title: "These tips",
+      text: "They fire once each, as you reach the thing they describe. Turn them off here whenever you have had enough, or bring them all back to walk the app again." }
   ],
+
   tutorial: {
     kicker: "Field guide",
     headline: "Every Deconstruct is the same shape.",

@@ -43,6 +43,16 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 - **Reading counts as progress.** Only the challenge gate used to mark a layer done, and gates have been off by default since 1.3, so a reader who finished a whole system still saw 0 of 6 on its card, 0 of 19 on Track and nothing in Drill. Reaching a layer's solution now marks it done. Existing installs are backfilled once from how far each reader got.
 - A handful of toasts and labels still used em dashes. They now read as plain sentences.
 
+## [2.3.0] — 2026-10-23 · The app explains itself as you go
+### Added
+- **Thirteen tips that fire as you reach each part of the app**, one at a time, once each. They replace the three-card first-run tour, which ran in your first two minutes and could say nothing useful about Graft because you would not open Graft for a week.
+- **They are on by default and stay on.** "On" costs one card the first time you meet each feature and nothing afterwards. The card itself carries an off switch, because the moment you stop wanting tips is while you are reading one, not later in Settings.
+- **Settings has a Tips block**: the toggle, a count of how many are still to come, and *Show them all again* to walk the app from the start.
+- A tip whose target is not on the page is skipped rather than queued, so a tip about a button this system does not have simply never fires.
+
+### Changed
+- Anyone who sat through the old three-card tour keeps those three marked as read; the other ten are new and will still appear.
+
 ## [2.2.1] — 2026-10-23 · The key agrees with itself
 ### Fixed
 - **On a phone the contextual tools were drawn across the audience switch.** System sheet, Sequence and Graft need about 440px of bar alongside the brand, the B/E/D switch and the menu; below that their container overflowed to the left and the buttons landed on top of the switch. They now move into the ⋯ menu on narrow screens, where they click the very same buttons, so each tool has one handler rather than two that can drift. Exactly one home at every width: verified at 375px and 856px.

@@ -138,8 +138,9 @@ function show(screen) {
     if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
   });
   document.body.dataset.screen = screen;
+  featureTips.close();
+  if (screen !== "reader") setTimeout(() => { if (document.body.dataset.screen === screen) featureTips.visit(screen); }, 650);
   if (screen !== "reader") {
-    if (firstRunTips.close && document.querySelector(".tip-card")) firstRunTips.close();
     if (currentView) currentView.destroy();   // cancel any pending debounce timer
     currentView = null; currentRec = null;
   }
@@ -781,35 +782,62 @@ async function drillInto(sub) {
 /* ═══ First-run tips: three, the first time a Deconstruct opens. Each one
    rings the part of the screen it's about. Esc or Skip ends them; the
    field guide keeps everything else. ═══ */
-function firstRunTips() {
-  if (meta.tipsSeen) return;
-  const tips = COPY.firstRunTips;
-  let i = 0, ringed = null;
-  const card = h("div", "tip-card");
-  card.setAttribute("role", "dialog");
-  card.setAttribute("aria-live", "polite");
-  const count = h("div", "tip-count");
-  const title = h("h3", "tip-title");
-  const text = h("p", "tip-text");
-  const row = h("div", "tip-row");
-  const skip = h("button", "gbtn ghost", "Skip tips");
-  const next = h("button", "gbtn primary", "Next");
-  row.append(skip, next);
-  card.append(count, title, text, row);
-  const finish = async () => {
+/* ═══ Feature tips ═══
+   Not a first-run tour. A tour runs once, in the first two minutes, when you
+   have no questions yet — and it cannot say anything useful about Graft,
+   because you will not open Graft for a week. These fire one at a time, the
+   first time you reach the thing they describe, and then never again.
+
+   On by default and they stay on, because "on" here costs one card the first
+   time you meet each feature and nothing after. meta.tipsDone records which
+   ids are spent, so turning tips off and on again does not replay what you
+   have already read; "Show them all again" is the deliberate way to do that.
+   A tip whose target is not on the page is skipped, not queued, so a tip for
+   a button this system does not have simply never fires. ══════════════ */
+const featureTips = (() => {
+  let card = null, ringed = null, queue = [], i = 0;
+
+  const on = () => meta.tipsOn !== false;            // absent means on
+  const done = () => (meta.tipsDone && typeof meta.tipsDone === "object") ? meta.tipsDone : {};
+  /* Look inside the screen first, then fall back to the whole page: some of
+     what a screen offers lives in the topbar, which is not inside the screen
+     element. Scoping to the screen alone silently made those tips unfirable.
+     The fallback is safe because visit() only ever runs for the screen that
+     is currently showing. */
+  const find = tip => {
+    const root = $("screen-" + tip.screen);
+    if (!root || root.hidden) return null;
+    const sels = tip.target.split(",").map(x => x.trim());
+    const hit = root => sels.map(sel => root.querySelector(sel)).find(el => el && el.offsetParent);
+    return hit(root) || hit(document);
+  };
+
+  function close() {
     if (ringed) ringed.classList.remove("tip-ring");
-    card.remove();
+    ringed = null;
+    if (card) card.remove();
+    card = null; queue = []; i = 0;
     document.removeEventListener("keydown", onKey, true);
     window.removeEventListener("resize", place);
-    meta.tipsSeen = true;
-    await Store.saveMeta({ tipsSeen: true });
-  };
+  }
+  async function markDone(id) {
+    const d = Object.assign({}, done()); d[id] = true;
+    meta.tipsDone = d;
+    await Store.saveMeta({ tipsDone: d });
+  }
+  function onKey(e) { if (e.key === "Escape") { e.stopPropagation(); dismiss(); } }
+  async function dismiss() { const t = queue[i]; close(); if (t) await markDone(t.id); }
+
   function place() {
-    if (!card.isConnected) return;
+    if (!card || !card.isConnected) return;
     const t = ringed && ringed.getBoundingClientRect();
-    const w = Math.min(320, innerWidth - 32);
+    const w = Math.min(330, innerWidth - 32);
     card.style.width = w + "px";
-    if (!t || !t.width) { card.style.left = (innerWidth - w) / 2 + "px"; card.style.top = (innerHeight - card.offsetHeight) / 2 + "px"; return; }
+    if (!t || !t.width) {
+      card.style.left = (innerWidth - w) / 2 + "px";
+      card.style.top = (innerHeight - card.offsetHeight) / 2 + "px";
+      return;
+    }
     const ch = card.offsetHeight;
     let top = t.bottom + 12;
     if (top + ch > innerHeight - 12) top = t.top - ch - 12;
@@ -817,28 +845,74 @@ function firstRunTips() {
     card.style.top = top + "px";
     card.style.left = Math.max(16, Math.min(innerWidth - w - 16, t.left + t.width / 2 - w / 2)) + "px";
   }
+
   function paint() {
-    const tip = tips[i];
+    const tip = queue[i];
+    if (!tip) return close();
     if (ringed) ringed.classList.remove("tip-ring");
-    ringed = tip.target.split(",").map(sel => document.querySelector("#screen-reader " + sel.trim())).find(el => el && el.offsetParent);
-    if (ringed) ringed.classList.add("tip-ring");
-    count.textContent = `Tip ${i + 1} of ${tips.length}`;
-    title.textContent = tip.title;
-    text.textContent = tip.text;
-    next.textContent = i === tips.length - 1 ? "Got it" : "Next";
+    ringed = find(tip);
+    if (!ringed) { i++; return paint(); }              // vanished since we queued it
+    ringed.classList.add("tip-ring");
+    card.querySelector(".tip-count").textContent = queue.length > 1 ? `${i + 1} of ${queue.length}` : "Tip";
+    card.querySelector(".tip-title").textContent = tip.title;
+    card.querySelector(".tip-text").textContent = tip.text;
+    card.querySelector(".tip-next").textContent = i === queue.length - 1 ? "Got it" : "Next";
     place();
-    next.focus();
+    card.querySelector(".tip-next").focus();
   }
-  function onKey(e) { if (e.key === "Escape") { e.stopPropagation(); finish(); } }
-  skip.onclick = finish;
-  next.onclick = () => { if (i === tips.length - 1) finish(); else { i++; paint(); } };
-  document.addEventListener("keydown", onKey, true);
-  window.addEventListener("resize", place);
-  document.body.appendChild(card);
-  paint();
-  // tips belong to the reader; leaving it ends them
-  firstRunTips.close = finish;
-}
+
+  function build() {
+    card = h("div", "tip-card");
+    card.setAttribute("role", "dialog");
+    card.setAttribute("aria-live", "polite");
+    const count = h("div", "tip-count");
+    const title = h("h3", "tip-title");
+    const text = h("p", "tip-text");
+    const row = h("div", "tip-row");
+    const off = h("button", "gbtn ghost tip-off", "Turn tips off");
+    const next = h("button", "gbtn primary tip-next", "Next");
+    off.onclick = async () => {
+      close();
+      meta.tipsOn = false;
+      await Store.saveMeta({ tipsOn: false });
+      toast("Tips off. Settings turns them back on.");
+    };
+    next.onclick = async () => {
+      const t = queue[i];
+      if (t) await markDone(t.id);
+      if (i >= queue.length - 1) close(); else { i++; paint(); }
+    };
+    row.append(off, next);
+    card.append(count, title, text, row);
+    document.addEventListener("keydown", onKey, true);
+    window.addEventListener("resize", place);
+    document.body.appendChild(card);
+  }
+
+  /* Called whenever a screen settles. Queues every unseen tip for that screen
+     whose target is actually on the page, then walks them one at a time. */
+  function visit(screen) {
+    if (!on() || card) return;
+    const spent = done();
+    const next = (COPY.tips || []).filter(t => t.screen === screen && !spent[t.id] && find(t));
+    if (!next.length) return;
+    queue = next; i = 0;
+    build();
+    paint();
+  }
+
+  return {
+    visit,
+    close,
+    get enabled() { return on(); },
+    async setEnabled(v) { meta.tipsOn = !!v; await Store.saveMeta({ tipsOn: !!v }); if (!v) close(); },
+    async reset() { meta.tipsDone = {}; await Store.saveMeta({ tipsDone: {} }); },
+    remaining() {
+      const spent = done();
+      return (COPY.tips || []).filter(t => !spent[t.id]).length;
+    }
+  };
+})();
 
 const SHEET_SNAPS = [0.3, 0.52, 0.88];          // share of the reader the sheet covers
 const SHEET_NAMES = ["mostly diagram", "half and half", "mostly text"];
@@ -1126,7 +1200,7 @@ async function openReader(id, layerIndex, opts = {}) {
   buildReaderMenu(rec, challengeOn);
   show("reader");
   if (layerIndex != null) currentView.goToLayer(layerIndex);
-  if (!meta.tipsSeen) setTimeout(() => { if (currentRec === rec && !document.querySelector(".tip-card")) firstRunTips(); }, 700);
+  setTimeout(() => { if (currentRec === rec) featureTips.visit("reader"); }, 750);
 }
 
 /* ═══ Branded diagram export: current diagram state → PNG with the Vitruvian
@@ -2394,6 +2468,25 @@ function renderSettings(banner) {
     toggle(meta.onePage === true, "Read each layer as one page instead of four steps",
       () => { meta.onePage = !(meta.onePage === true); return Store.saveMeta({ onePage: meta.onePage }); }));
 
+  /* feature tips — on by default, and a way back to the ones already spent */
+  const tb = h("div", "set-block set-tips");
+  tb.appendChild(h("h3", null, "Tips"));
+  tb.appendChild(h("p", "note", "A short card the first time you reach each part of the app, once each. They never repeat on their own."));
+  tb.appendChild(toggle(featureTips.enabled, "Explain each feature the first time I reach it",
+    () => featureTips.setEnabled(!featureTips.enabled)));
+  const tagain = h("button", "gbtn", "Show them all again");
+  tagain.onclick = async () => {
+    await featureTips.reset();
+    if (!featureTips.enabled) await featureTips.setEnabled(true);
+    renderSettings();
+    toast("Tips reset. They start again as you move through the app.");
+  };
+  const tleft = h("p", "note");
+  tleft.textContent = featureTips.enabled
+    ? `${featureTips.remaining()} of ${(COPY.tips || []).length} still to come.`
+    : "Tips are off.";
+  tb.append(tagain, tleft);
+
   /* generation speed */
   const gs = h("div", "set-block");
   gs.appendChild(h("h3", null, "Generation"));
@@ -2453,7 +2546,7 @@ function renderSettings(banner) {
     blocks.forEach(b => g.appendChild(b));
     root.appendChild(g);
   };
-  group(null, null, db, lb);
+  group(null, null, db, lb, tb);
   group("Deconstructing your own systems", "Generating a Deconstruct calls Anthropic with your key. Everything else works offline.", kb, mb, gs);
   group("Your data", null, bb);
   group("About", null, ab);

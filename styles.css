@@ -1640,6 +1640,12 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 /* ═══ First-run tips ═══ */
 .tip-card{position:fixed;z-index:200;padding:16px 18px 14px;border-radius:var(--r-lg);background:var(--panel);
   box-shadow:inset 0 0 0 1px var(--hair),var(--sh-3);animation:fadeUp .3s var(--ease) both;}
+/* the off switch sits on the card: the moment you stop wanting tips is
+   while you are reading one, not later in Settings */
+.tip-row{display:flex;gap:8px;align-items:center;justify-content:space-between;}
+.tip-off{font-size:12px;opacity:.75;}
+.tip-off:hover{opacity:1;}
+
 .tip-count{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-deep);}
 .tip-title{font-size:17px;font-weight:650;margin:6px 0 4px;color:var(--ink);}
 .tip-text{font-size:14.5px;line-height:1.5;color:var(--ink-soft);margin:0;}

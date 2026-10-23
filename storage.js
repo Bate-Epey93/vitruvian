@@ -96,7 +96,9 @@ var Store = (() => {
           audienceMode: "enthusiast",
           challengeModeDefault: false,   // full deconstruct by default; gates are opt-in
           genSpeed: "balanced",          // generation thinking depth: balanced | fast
-          modelId: CONFIG.defaultModel
+          modelId: CONFIG.defaultModel,
+          tipsOn: true,                  // explain each feature as it is reached
+          tipsDone: {}                   // ids already shown, so none ever repeats
         });
       }
       // Retiring a model from the Settings buttons doesn't unpick it for anyone
@@ -107,6 +109,12 @@ var Store = (() => {
       // is left alone.
       else if (RETIRED_MODELS.test(meta.modelId || "")) {
         await this.saveMeta({ modelId: CONFIG.defaultModel });
+      }
+      // The old first-run tour was one flag for three tips. Anyone who sat
+      // through it keeps those three spent; the rest of the catalogue is new
+      // to them and should still fire.
+      if (meta.tipsSeen && !meta.tipsDone) {
+        await this.saveMeta({ tipsDone: { timeline: true, steps: true, diagram: true } });
       }
       return getMetaMap();
     },
