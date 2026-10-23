@@ -299,7 +299,7 @@
     "mechanism": "Range allocation: one call reserves a contiguous block (advance the shared counter by N), served locally thereafter. The counter's load is divided by the block size; buffered blocks decouple creation from the counter's availability.",
     "principle": "Break a coordination bottleneck by amortizing it: pay the shared cost once per batch instead of once per item, and hold a buffer so the dependency can blink without stopping you."
    },
-   "tradeoff": "You buy throughput and fault-tolerance with the loss of strict global ordering and with wasted ids on every crash; the counter is amortized but still, ultimately, a shared dependency you must reach to refill.",
+   "tradeoff": "You buy throughput and fault-tolerance with the loss of strict global ordering and with wasted ids on every crash; the counter is amortized but still a shared dependency you must reach to refill.",
    "at_scale": "This multiplies the counter's ceiling by the block size: a 1000-id block lets one counter support a thousand times the creation rate, and a counter outage is survivable for as long as the buffered blocks last. But the counter is still there. Push creation high enough, or keep the counter down long enough, and every generator drains its block and stalls at once. The dependency is thinner, not gone, which forces the next layer to delete it.",
    "defends": [
     "inv3",
@@ -550,7 +550,7 @@
    "index": 5,
    "name": "The Clock That Runs Backward",
    "problem": {
-    "statement": "The timestamp bits quietly assume the clock only moves forward. It does not. NTP corrections nudge it, leap seconds repeat a second, a VM migration can jerk it, and any of these can make the wall clock read a millisecond it has already used. When that happens a generator can mint into a timestamp it already spent, colliding with ids it issued moments ago, and the ids stop climbing, breaking the ordering the whole scheme is sold on. The failure is not load; it is time itself being unreliable.",
+    "statement": "The timestamp bits quietly assume the clock only moves forward. It does not. NTP corrections nudge it, leap seconds repeat a second, a VM migration can jerk it, and any of these can make the wall clock read a millisecond it has already used. When that happens a generator can mint into a timestamp it already spent, colliding with ids it issued moments ago, and the ids stop climbing, breaking the ordering the whole scheme is sold on. Load has nothing to do with it; the clock itself is unreliable.",
     "beginner": "The ID uses the computer's clock as its main ingredient. But clocks sometimes jump backward a little to correct themselves. If that happens, the computer might reuse a moment it already used and make a duplicate ID, or make IDs that go backward in time.",
     "model": {
      "id": "graceful-degradation",

@@ -34,6 +34,62 @@ function ensoIcon(name) {
   return svg;
 }
 
+/* Line icons for chrome and tools: 20-unit grid, 1.5 stroke, round joins.
+   Same DOM-built, currentColor approach as ensoIcon, so they theme for free. */
+const ICONS = {
+  arrowRight: ["M4.5 10h11", "M11 5.5l4.5 4.5-4.5 4.5"],
+  arrowUpRight: ["M6 14l8-8", "M7.5 6H14v6.5"],
+  chevronLeft: ["M12 15l-5-5 5-5"],
+  chevronDown: ["M5 7.5l5 5 5-5"],
+  chevronUp: ["M5 12.5l5-5 5 5"],
+  play: ["M7 5.2v9.6l7.6-4.8z"],
+  pause: ["M7.5 5v10", "M12.5 5v10"],
+  gauge: ["M3.8 14a6.2 6.2 0 1 1 12.4 0", "M10 14l3.2-4"],
+  replay: ["M4 10a6 6 0 1 0 1.8-4.3", "M4 3.6v3.2h3.2"],
+  races: ["M3 7h11.5", "M12 4.5L14.5 7 12 9.5", "M3 13h11.5", "M12 10.5l2.5 2.5-2.5 2.5"],
+  spine: ["M2.5 10H6l2-5 4 10 2-5h3.5"],
+  record: ["M10 3.6a6.4 6.4 0 1 1 0 12.8a6.4 6.4 0 1 1 0-12.8z", "M10 7.6a2.4 2.4 0 1 1 0 4.8a2.4 2.4 0 1 1 0-4.8z"],
+  upload: ["M10 13V3.8", "M6.2 7.4L10 3.6l3.8 3.8", "M4 16.4h12"],
+  info: ["M10 3.2a6.8 6.8 0 1 1 0 13.6a6.8 6.8 0 1 1 0-13.6z", "M10 9v4.5", "M10 6.5v.2"],
+  sparkle: ["M10 3v4M10 13v4M3 10h4M13 10h4", "M5.6 5.6l1.8 1.8M12.6 12.6l1.8 1.8M5.6 14.4l1.8-1.8M12.6 7.4l1.8-1.8"],
+  layers: ["M10 3l7 3.6-7 3.6-7-3.6z", "M3 10.4l7 3.6 7-3.6", "M3 13.8l7 3.6 7-3.6"],
+  pencil: ["M12.8 4.2l3 3L7.6 15.4 4 16l.6-3.6z"],
+  cube: ["M10 2.8l6.4 3.6v7.2L10 17.2l-6.4-3.6V6.4z", "M3.6 6.4L10 10l6.4-3.6", "M10 10v7.2"],
+  tag: ["M3.5 10.4V4.6c0-.6.5-1.1 1.1-1.1h5.8l6.1 6.1-6.9 6.9z", "M7.2 6.6v.2"],
+  compare: ["M10 3v14", "M3.5 5.5h4v9h-4z", "M12.5 5.5h4v9h-4z"],
+  flask: ["M8 3h4", "M8.6 3v5L4.4 15.2c-.5.9.1 1.8 1.1 1.8h9c1 0 1.6-.9 1.1-1.8L11.4 8V3", "M6.2 12.5h7.6"]
+};
+function icon(name, cls) {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 20 20");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", "ico" + (cls ? " " + cls : ""));
+  (ICONS[name] || []).forEach(d => {
+    const p = document.createElementNS(NS, "path");
+    p.setAttribute("d", d);
+    svg.appendChild(p);
+  });
+  return svg;
+}
+/* a button's face: optional icon + text label (label hides on narrow chrome) */
+function setFace(btn, name, label) {
+  btn.textContent = "";
+  if (name) btn.appendChild(icon(name));
+  if (label) btn.appendChild(h("span", "btn-label", label));
+  return btn;
+}
+/* primary pill with its arrow in a nested circle; strips any trailing arrow
+   glyph from the copy since the circle now carries it */
+function ctaButton(label, cls, iconName) {
+  const b = h("button", "big-btn" + (cls ? " " + cls : ""));
+  b.appendChild(h("span", "btn-label", String(label).replace(/\s*[→›]\s*$/, "")));
+  const c = h("span", "btn-ico");
+  c.appendChild(icon(iconName || "arrowRight"));
+  b.appendChild(c);
+  return b;
+}
+
 let meta = {};                    // cached meta map
 let currentView = null;           // DocView instance when reading
 let currentRec = null;            // open breakdown record
@@ -52,9 +108,9 @@ function applyTheme(t) {
   document.documentElement.dataset.theme = t;
   try { localStorage.setItem("vitruvian_theme", t); } catch (e) {}   // splash.js reads this pre-paint on the next launch
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", t === "dark" ? "#0d0d10" : "#141416");
+  if (meta) meta.setAttribute("content", t === "dark" ? "#0c0c0e" : "#f6f5f2");
   const btn = $("themeBtn");
-  if (btn) { btn.textContent = t === "dark" ? "☀" : "☾"; btn.setAttribute("aria-label", t === "dark" ? "Switch to light mode" : "Switch to dark mode"); }
+  if (btn) btn.setAttribute("aria-label", t === "dark" ? "Switch to light mode" : "Switch to dark mode");   // the sun/moon swap is CSS, keyed off data-theme
 }
 async function toggleTheme() {
   const next = (document.documentElement.dataset.theme === "dark") ? "light" : "dark";
@@ -64,7 +120,7 @@ async function toggleTheme() {
 }
 
 /* ═══ Screen switching ═══ */
-const SCREENS = ["landing", "library", "reader", "generate", "models", "vocab", "track", "drill", "tutorial", "whatif", "settings"];
+const SCREENS = ["landing", "library", "reader", "generate", "models", "vocab", "drill", "tutorial", "whatif", "settings"];
 function show(screen) {
   SCREENS.forEach(s => { $("screen-" + s).hidden = s !== screen; });
   document.body.classList.toggle("reading", screen === "reader");   // frees topbar room for the audience switch
@@ -72,10 +128,18 @@ function show(screen) {
   $("readerMenuBtn").hidden = screen !== "reader";
   // reading-only context tools live in the topbar's right zone; hidden elsewhere
   // so global chrome never shows dead buttons (see placement note in commit)
-  ["ctxDiv", "seqBtn", "graftBtn"].forEach(id => { $(id).hidden = screen !== "reader"; });
+  ["ctxDiv", "sheetBtn", "seqBtn", "graftBtn"].forEach(id => { $(id).hidden = screen !== "reader"; });
   $("backBtn").hidden = screen === "library" || screen === "landing";
   $("menuPop").hidden = true;
+  const navScreen = screen === "vocab" ? "models" : screen;   // vocabulary is a tab of Models
+  document.querySelectorAll("[data-screen]").forEach(b => {
+    const on = b.dataset.screen === navScreen;
+    b.classList.toggle("on", on);
+    if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+  });
+  document.body.dataset.screen = screen;
   if (screen !== "reader") {
+    if (firstRunTips.close && document.querySelector(".tip-card")) firstRunTips.close();
     if (currentView) currentView.destroy();   // cancel any pending debounce timer
     currentView = null; currentRec = null;
   }
@@ -91,6 +155,27 @@ async function boot() {
     meta.challengeModeDefault = false;
     meta.challengeDefaultV2 = true;
     await Store.saveMeta({ challengeModeDefault: false, challengeDefaultV2: true });
+  }
+  // v2: reading counts as progress. Before, only the challenge gate marked a
+  // layer done, and gates are off by default, so a reader who finished a whole
+  // system still showed 0 of N. Backfill once, from the furthest place each
+  // reader got to (layersRead can't be used: outside challenge mode it jumped
+  // to "every layer" the moment a system was opened). Gated records already
+  // carry their own reveals. From here on the reader marks a layer at its fix.
+  if (!meta.readCountsV2) {
+    for (const r of await Store.getBreakdowns()) {
+      if (r.challengeMode === true) continue;
+      const read = Math.min(r.doc.layers.length, (r.progress && r.progress.position) || 0);
+      let changed = false;
+      r.doc.layers.forEach(L => {
+        if (L.index > read) return;
+        const a = r.attempts[L.index] || (r.attempts[L.index] = { answer: "", revealed: false, verdict: null, ts: 0 });
+        if (!a.revealed) { a.revealed = true; a.ts = a.ts || Date.now(); changed = true; }
+      });
+      if (changed) await Store.saveBreakdownLight(r);
+    }
+    meta.readCountsV2 = true;
+    await Store.saveMeta({ readCountsV2: true });
   }
   // theme: saved choice wins; otherwise follow the OS on first run
   const initialTheme = meta.theme || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
@@ -168,13 +253,15 @@ async function seedFlagships() {
 /* ═══ Topbar ═══ */
 function wireTopbar() {
   $("brand").onclick = async () => { await flushSaves(); await renderLibrary(); show("library"); };
+  $("brand").onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("brand").click(); } };
+  $("libraryBtn").onclick = async () => { await flushSaves(); await renderLibrary(); show("library"); };
   $("backBtn").onclick = async () => { await flushSaves(); await renderLibrary(); show("library"); };
   $("modelsBtn").onclick = () => { renderModels(); show("models"); };
-  $("trackBtn").onclick = () => { renderTrack(); show("track"); };
   $("drillBtn").onclick = () => { renderDrill(); show("drill"); };
   $("settingsBtn").onclick = () => { renderSettings(); show("settings"); };
   $("themeBtn").onclick = () => toggleTheme();
   $("seqBtn").onclick = () => { if (currentRec) openSequence(currentRec); };
+  $("sheetBtn").onclick = () => { if (currentView) currentView.openSheet(); };
   $("graftBtn").onclick = () => { if (currentRec) { renderWhatif(currentRec); show("whatif"); } };
   $("readerMenuBtn").onclick = e => { e.stopPropagation(); $("menuPop").hidden = !$("menuPop").hidden; };
   document.addEventListener("click", () => { $("menuPop").hidden = true; });
@@ -199,95 +286,123 @@ function renderAudSwitch() {
 
 /* ═══ Landing (first-run explainer, §value-add) ═══ */
 
-/* Deconstructed enso — the landing's living background. The brush ring is
-   taken apart: its arcs drift out from the centre, the Vitruvian square
-   splits into corner brackets, one vermillion dot holds still. Motion is a
-   slow rotation of the exploded parts (the app's own idea: separation you
-   can see), disabled under prefers-reduced-motion. Pure decoration:
-   aria-hidden, pointer-events none, behind the copy. */
-function landingMotif() {
-  const arc = (cx, cy, r, a0, a1, w, spread) => {
-    // arc of a circle, its midpoint pushed OUT from the centre by `spread`
-    const mid = ((a0 + a1) / 2) * Math.PI / 180;
-    const ox = Math.cos(mid) * spread, oy = Math.sin(mid) * spread;
-    const p0 = [cx + ox + r * Math.cos(a0 * Math.PI / 180), cy + oy + r * Math.sin(a0 * Math.PI / 180)];
-    const p1 = [cx + ox + r * Math.cos(a1 * Math.PI / 180), cy + oy + r * Math.sin(a1 * Math.PI / 180)];
-    const path = svgNS("path", {
-      d: `M ${p0[0]} ${p0[1]} A ${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${p1[0]} ${p1[1]}`,
-      fill: "none", "stroke-width": w, "stroke-linecap": "round"
-    });
-    path.style.stroke = "currentColor";
-    return path;
-  };
-  const bracket = (x, y, len, dx, dy) => {           // one pulled-apart square corner
-    const b = svgNS("path", { d: `M ${x + dx * len} ${y + dy} H ${x + dx} V ${y + dy * len}`, fill: "none", "stroke-width": 7, "stroke-linecap": "square" });
-    b.style.stroke = "currentColor";
-    return b;
-  };
-  const svg = svgNS("svg", { class: "landing-motif", viewBox: "0 0 1000 1000", preserveAspectRatio: "xMidYMid slice", "aria-hidden": "true" });
-
-  const big = svgNS("g", { class: "lm-spin" });      // exploded enso, upper right
-  big.appendChild(arc(780, 210, 190, -50, 75, 24, 0));
-  big.appendChild(arc(780, 210, 190, 95, 195, 15, 22));
-  big.appendChild(arc(780, 210, 190, 215, 285, 9, 44));
-  svg.appendChild(big);
-
-  const sq = svgNS("g", { class: "lm-float" });      // the square, split at its corners
-  sq.appendChild(bracket(700, 130, 46, 1, 1));
-  sq.appendChild(bracket(900, 130, 46, -1, 1));
-  sq.appendChild(bracket(700, 330, 46, 1, -1));
-  sq.appendChild(bracket(900, 330, 46, -1, -1));
-  svg.appendChild(sq);
-
-  const seal = svgNS("circle", { cx: 892, cy: 372, r: 11, class: "lm-seal" });
-  svg.appendChild(seal);
-
-  const small = svgNS("g", { class: "lm-spin-counter" });   // quieter echo, lower left
-  small.appendChild(arc(120, 840, 110, 30, 165, 13, 0));
-  small.appendChild(arc(120, 840, 110, 190, 300, 8, 18));
-  svg.appendChild(small);
-
-  return svg;
-}
+/* Landing: an editorial split. Copy on the left; on the right, a real
+   Deconstruct building itself, layer by layer, in a framed stage, because the
+   product explains itself faster than any paragraph about it. */
+let heroTimer = null;
+function stopHero() { if (heroTimer) { clearInterval(heroTimer); heroTimer = null; } }
 
 function renderLanding() {
+  stopHero();
   const root = $("screen-landing").firstElementChild;
   root.textContent = "";
   const L = COPY.landing;
-  root.appendChild(landingMotif());
-  root.appendChild(h("div", "kicker", L.kicker));
+
+  const hero = h("section", "hero");
+  const copy = h("div", "hero-copy reveal");
+  const eyebrow = h("div", "eyebrow");
+  eyebrow.appendChild(h("span", "eyebrow-dot"));
+  eyebrow.appendChild(document.createTextNode(L.kicker));
+  copy.appendChild(eyebrow);
   const head = h("h1", "landing-head");
-  L.headline.split("\n").forEach((line, i) => { if (i) head.appendChild(document.createElement("br")); head.appendChild(document.createTextNode(line)); });
-  root.appendChild(head);
-  root.appendChild(h("p", "landing-lede", L.lede));
-
-  const grid = h("div", "landing-grid");
-  L.sections.forEach(s => {
-    const card = h("div", "landing-card");
-    const hd = h("div", "lc-head");
-    const ic = h("span", "lc-icon");
-    ic.appendChild(ensoIcon(s.icon));
-    hd.appendChild(ic);
-    hd.appendChild(h("span", "lc-title", s.title));
-    card.appendChild(hd);
-    card.appendChild(h("p", null, s.body));
-    grid.appendChild(card);
-  });
-  root.appendChild(grid);
-
-  const cta = h("button", "big-btn landing-cta", L.cta);
+  L.headline.split("\n").forEach((line, i) => { head.appendChild(h("span", i ? "lh-soft" : null, line)); });
+  copy.appendChild(head);
+  copy.appendChild(h("p", "landing-lede", L.lede));
+  const actions = h("div", "hero-actions");
+  const cta = ctaButton(L.cta, "landing-cta");
   cta.onclick = async () => {
+    stopHero();
     await Store.saveMeta({ landingSeen: true });
     meta.landingSeen = true;
     await renderLibrary();
     show("library");
   };
-  root.appendChild(cta);
-  const learn = h("button", "gbtn", "How to read a Deconstruct →");
-  learn.style.marginLeft = "8px";
-  learn.onclick = () => { renderTutorial("landing"); show("tutorial"); };
-  cta.after(learn);
-  root.appendChild(h("p", "landing-foot", L.footnote));
+  const learn = h("button", "gbtn ghost", L.learn);
+  learn.onclick = () => { stopHero(); renderTutorial("landing"); show("tutorial"); };
+  actions.append(cta, learn);
+  copy.appendChild(actions);
+  copy.appendChild(h("p", "landing-foot", L.footnote));
+  hero.appendChild(copy);
+
+  // the stage: shell + core, the core holds a live diagram
+  const stage = h("div", "hero-stage reveal");
+  const core = h("div", "hs-core");
+  const bar = h("div", "hs-bar");
+  const hsTitle = h("span", "hs-title", "");
+  const hsLayer = h("span", "hs-layer", "");
+  bar.append(hsTitle, hsLayer);
+  const dg = h("div", "hs-diagram");
+  const steps = h("div", "hs-steps");
+  const note = h("div", "hs-note", "");
+  core.append(bar, dg, note, steps);
+  stage.appendChild(core);
+  hero.appendChild(stage);
+  root.appendChild(hero);
+
+  // numbers that are true today, read from the library itself
+  const stats = h("div", "landing-stats reveal");
+  [[CONFIG.flagshipNames.length, L.stats[0]], [MODEL_LIBRARY.length, L.stats[1]], [COPY.audienceModes.length, L.stats[2]]].forEach(([n, label]) => {
+    const st = h("div", "ls-item");
+    st.appendChild(h("span", "ls-n", String(n)));
+    st.appendChild(h("span", "ls-l", label));
+    stats.appendChild(st);
+  });
+  root.appendChild(stats);
+
+  const grid = h("div", "landing-grid");
+  L.sections.forEach((s, i) => {
+    const card = h("div", "landing-card reveal" + (i === 0 ? " lc-wide" : ""));
+    const hd = h("div", "lc-head");
+    const ic = h("span", "lc-icon");
+    ic.appendChild(ensoIcon(s.icon));
+    hd.appendChild(ic);
+    hd.appendChild(h("span", "lc-num", "0" + (i + 1)));
+    card.appendChild(hd);
+    card.appendChild(h("h3", "lc-title", s.title));
+    card.appendChild(h("p", null, s.body));
+    grid.appendChild(card);
+  });
+  root.appendChild(grid);
+  revealOnScroll(root);
+  mountHero({ dg, hsTitle, hsLayer, steps, note });
+}
+
+async function mountHero(el) {
+  const rec = (await Store.getBreakdown("flagship-" + COPY.landing.heroSystem).catch(() => null))
+    || (await Store.getBreakdowns()).find(b => b.source === "flagship");
+  if (!rec) return;
+  const doc = rec.doc, N = doc.layers.length;
+  const diagram = Diagram.mount(el.dg, doc);
+  el.hsTitle.textContent = doc.meta.system;
+  const segs = [];
+  for (let i = 0; i <= N; i++) { const sg = h("span", "hs-seg"); el.steps.appendChild(sg); segs.push(sg); }
+  let i = 0;
+  const paint = () => {
+    diagram.show(i, { animate: i > 0 });
+    el.hsLayer.textContent = i === 0 ? "Layer 0 · the naive baseline" : "Layer " + i + " of " + N;
+    el.note.textContent = i === 0 ? doc.meta.system + ", as simple as it can be." : doc.layers[i - 1].name;
+    segs.forEach((sg, k) => { sg.classList.toggle("done", k < i); sg.classList.toggle("on", k === i); });
+  };
+  paint();
+  if (RM_PREF()) { i = N; paint(); return; }    // reduced motion: show the finished system, hold still
+  heroTimer = setInterval(() => {
+    if ($("screen-landing").hidden) { stopHero(); return; }
+    i = (i + 1) % (N + 1);
+    paint();
+  }, 2600);
+}
+
+/* Fade-up on first sight. IntersectionObserver only: no scroll listeners. */
+function revealOnScroll(root) {
+  const els = root.querySelectorAll(".reveal");
+  if (!("IntersectionObserver" in window) || RM_PREF()) { els.forEach(e => e.classList.add("in")); return; }
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(en => { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } });
+  }, { rootMargin: "0px 0px -8% 0px" });
+  // observe a tick later: callers render first and show() the screen after,
+  // and an element observed while its screen is display:none can miss its entry
+  els.forEach((e, k) => e.style.setProperty("--d", (k % 4) * 70 + "ms"));
+  setTimeout(() => els.forEach(e => io.observe(e)), 0);
 }
 
 /* ═══ Tutorial — 'How to read a study' (visitable anytime) ═══ */
@@ -299,24 +414,21 @@ function svgNS(tag, attrs) {
 }
 function nodeSwatch(kind) {                       // mini shape echoing the diagram's node kinds
   const s = svgNS("svg", { viewBox: "0 0 46 30", class: "tut-swatch" });
-  const stroke = "#2f6f5e";
-  if (kind === "actor") { const c = svgNS("circle", { cx: 23, cy: 15, r: 10, fill: "var(--node-fill)" }); c.style.stroke = stroke; c.style.strokeWidth = 1.6; s.appendChild(c); }
-  else if (kind === "store") {
-    s.appendChild(svgNS("rect", { x: 7, y: 6, width: 32, height: 18, fill: "var(--node-fill)", stroke: "none" }));
-    const p = svgNS("path", { d: "M7 6 L7 24 L39 24 L39 6", fill: "none" }); p.style.stroke = stroke; p.style.strokeWidth = 1.6; s.appendChild(p);
-  } else if (kind === "channel") { const r = svgNS("rect", { x: 7, y: 6, width: 32, height: 18, rx: 9, fill: "var(--node-fill)" }); r.style.stroke = stroke; r.style.strokeWidth = 1.6; s.appendChild(r); }
-  else { const r = svgNS("rect", { x: 7, y: 6, width: 32, height: 18, rx: 2, fill: "var(--node-fill)" }); r.style.stroke = stroke; r.style.strokeWidth = 1.6; s.appendChild(r); }
+  const shape = d => { const p = svgNS("path", { d, class: "dgl-shape" }); s.appendChild(p); };
+  const line = d => { const p = svgNS("path", { d, class: "dgl-line", fill: "none" }); s.appendChild(p); };
+  if (kind === "actor") { s.appendChild(svgNS("circle", { cx: 23, cy: 7, r: 4, class: "dgl-shape" })); line("M23 11 V19 M16 14 H30 M23 19 L18 27 M23 19 L28 27"); }
+  else if (kind === "store") { shape("M7 8 A16 3.5 0 0 1 39 8 V22 A16 3.5 0 0 1 7 22 Z"); line("M7 8 A16 3.5 0 0 0 39 8"); }
+  else if (kind === "channel") { shape("M12 6 H34 A5 9 0 0 1 34 24 H12 A5 9 0 0 1 12 6 Z"); line("M34 6 A5 9 0 0 0 34 24"); }
+  else s.appendChild(svgNS("rect", { x: 7, y: 6, width: 32, height: 18, rx: 4, class: "dgl-shape" }));
   return s;
 }
 function edgeSwatch(kind) {                       // mini arrow echoing the diagram's edge kinds
   const s = svgNS("svg", { viewBox: "0 0 50 16", class: "tut-swatch tut-swatch-edge" });
-  const color = kind === "money" ? "#9a6212" : kind === "control" ? "#141416" : "#2f6f5e";
   const dash = kind === "money" ? "1.5 3.5" : kind === "control" ? "5 4" : "0";
-  const ln = svgNS("line", { x1: 3, y1: 8, x2: 40, y2: 8 });
-  ln.style.stroke = color; ln.style.strokeWidth = kind === "payload" ? 2.2 : 1.6; if (dash !== "0") ln.style.strokeDasharray = dash;
+  const ln = svgNS("line", { x1: 3, y1: 8, x2: 40, y2: 8, class: "dgl-line" });
+  ln.style.strokeWidth = kind === "payload" ? 1.9 : 1.5; if (dash !== "0") ln.style.strokeDasharray = dash;
   s.appendChild(ln);
-  const head = svgNS("path", { d: "M40 8 L34 5 L34 11 Z", fill: color });
-  s.appendChild(head);
+  s.appendChild(svgNS("path", { d: "M41 8 L33 4.2 L35 8 L33 11.8 Z", class: "dg-arrow" }));
   return s;
 }
 function renderTutorial(from) {
@@ -440,31 +552,37 @@ function cardGrid(recs) {
   const grid = h("div", "card-grid");
   recs.forEach(rec => {
     const card = h("button", "bd-card");
-    card.appendChild(h("div", "bd-name", rec.system));
-    const metaRow = h("div", "bd-meta");
-    const chipCls = rec.source === "flagship" ? " flagship" : (rec.source === "design" ? " design" : "");
-    const chipLabel = rec.source === "flagship" ? "sample" : (rec.source === "design" ? "your design" : "your deconstruct");
-    metaRow.appendChild(h("span", "chip" + chipCls, chipLabel));
-    metaRow.appendChild(h("span", "chip", rec.doc.layers.length + " layers"));
-    // this subject also exists as a machine you can turn over
-    if (fieldStudyFor(rec.system)) metaRow.appendChild(h("span", "chip lab-chip", COPY.labChip));
-    card.appendChild(metaRow);
-    const foot = h("div", "bd-foot");
     const n = rec.doc.layers.length;
     const done = rec.doc.layers.filter(L => rec.attempts[L.index] && rec.attempts[L.index].revealed).length;
     const pct = Math.round(100 * done / n);
-    foot.appendChild(h("span", "bd-last", rec.lastOpen ? "opened " + timeAgo(rec.lastOpen) : "new"));
+    const top = h("div", "bd-top");
+    const chipCls = rec.source === "flagship" ? " flagship" : (rec.source === "design" ? " design" : "");
+    const chipLabel = rec.source === "flagship" ? "Sample" : (rec.source === "design" ? "Your design" : "Your Deconstruct");
+    top.appendChild(h("span", "chip" + chipCls, chipLabel));
+    // this subject also exists as a machine you can turn over
+    if (fieldStudyFor(rec.system)) top.appendChild(h("span", "chip lab-chip", COPY.labChip));
+    const go = h("span", "bd-go");
+    go.appendChild(icon("arrowUpRight"));
+    top.appendChild(go);
+    card.appendChild(top);
+    card.appendChild(h("div", "bd-name", rec.system));
+    const es = rec.doc.essence && (rec.doc.essence.beginner || rec.doc.essence.text);
+    if (es) card.appendChild(h("p", "bd-essence", es));
+    // the strata: one bar per layer, filled as layers are revealed
+    const strata = h("div", "bd-strata");
+    for (let k = 1; k <= n; k++) {
+      const a = rec.attempts[k];
+      strata.appendChild(h("span", a && a.revealed ? "on" : null));
+    }
+    const foot = h("div", "bd-foot");
+    foot.appendChild(h("span", "bd-last", n + " layers · " + (rec.lastOpen ? "opened " + timeAgo(rec.lastOpen) : "not started")));
     if (pct === 100) {
       const stamp = h("img", "enso-stamp card-stamp");
       stamp.src = "assets/enso-complete.svg";
       stamp.alt = "Deconstruct complete";
       foot.appendChild(stamp);
-    } else {
-      const ring = h("div", "ring");
-      ring.style.background = `conic-gradient(var(--accent) ${pct * 3.6}deg, var(--line-soft) 0deg)`;
-      ring.appendChild(h("span", null, pct + ""));
-      foot.appendChild(ring);
-    }
+    } else if (pct > 0) foot.appendChild(h("span", "bd-pct", pct + "%"));
+    card.appendChild(strata);
     card.appendChild(foot);
     card.onclick = () => openReader(rec.id);
     grid.appendChild(card);
@@ -475,15 +593,22 @@ function cardGrid(recs) {
 async function renderLibrary() {
   const root = $("screen-library").firstElementChild;
   root.textContent = "";
-  root.appendChild(h("div", "kicker", CONFIG.tagline));
-  root.appendChild(h("h1", "title", "What do you want to understand?"));
+  const head = h("header", "lib-hero");
+  head.appendChild(h("h1", "title", "What do you want to understand?"));
+  head.appendChild(h("p", "subtitle", COPY.libraryLede));
+  root.appendChild(head);
 
   const bar = h("div", "deconstruct-bar");
+  const field = h("label", "db-field");
+  field.appendChild(icon("sparkle", "db-ico"));
   const input = h("input");
   input.id = "deconInput";
   input.placeholder = COPY.deconstructPlaceholder;
   input.maxLength = 120;
-  const go = h("button", "big-btn", COPY.deconstructBtn);
+  input.setAttribute("aria-label", "System to deconstruct");
+  input.autocomplete = "off";
+  field.appendChild(input);
+  const go = ctaButton(COPY.deconstructBtn);
   const launch = () => {
     const name = input.value.trim();
     if (!name) return;
@@ -497,11 +622,12 @@ async function renderLibrary() {
   };
   go.onclick = launch;
   input.onkeydown = e => { if (e.key === "Enter") launch(); };
-  bar.append(input, go);
+  field.appendChild(go);
+  bar.appendChild(field);
   root.appendChild(bar);
 
   // second path: deconstruct a design you're building (not a known system)
-  const ownLink = h("button", "gbtn own-design-btn", COPY.ownDesignLink);
+  const ownLink = setFace(h("button", "gbtn own-design-btn"), "pencil", COPY.ownDesignLink.replace(/\s*→$/, ""));
   ownLink.onclick = () => {
     if (!meta.apiKey) { renderSettings("Add your Anthropic API key to generate Deconstructs."); show("settings"); return; }
     renderGenerate("", "design");
@@ -513,12 +639,16 @@ async function renderLibrary() {
   const flagships = all.filter(b => b.source === "flagship");
   const yours = all.filter(b => b.source !== "flagship");
 
-  // Your own studies first (once you have any), then the samples below.
-  if (yours.length) {
-    root.appendChild(sectionHead(COPY.yoursHeading, yours.length + " stud" + (yours.length > 1 ? "ies" : "y")));
-    root.appendChild(cardGrid(yours));
+  // Your own Deconstructs are the point of the app; the samples only show
+  // what one looks like.
+  root.appendChild(sectionHead(COPY.yoursHeading, yours.length ? yours.length + " so far" : null));
+  if (yours.length) root.appendChild(cardGrid(yours));
+  else {
+    const empty = h("div", "empty-panel");
+    empty.appendChild(h("p", null, COPY.yoursEmpty));
+    root.appendChild(empty);
   }
-  root.appendChild(sectionHead(COPY.sampleHeading, null));
+  root.appendChild(sectionHead(COPY.sampleHeading, flagships.length + " systems"));
   root.appendChild(h("p", "lib-note", COPY.sampleNote));
   root.appendChild(cardGrid(flagships));
 
@@ -531,26 +661,25 @@ async function renderLibrary() {
   FIELD_STUDIES.forEach(st => {
     const lab = h("a", "bd-card lab-card");
     lab.href = st.href;
+    const top = h("div", "bd-top");
+    top.appendChild(h("span", "chip lab-chip", "Field study"));
+    top.appendChild(h("span", "chip", COPY.labChip));
+    const go = h("span", "bd-go");
+    go.appendChild(icon("arrowUpRight"));
+    top.appendChild(go);
+    lab.appendChild(top);
+    const art = h("span", "lab-art");
+    art.appendChild(icon("cube"));
+    lab.appendChild(art);
     lab.appendChild(h("div", "bd-name", st.name));
-    const labMeta = h("div", "bd-meta");
-    labMeta.appendChild(h("span", "chip flagship", "field study"));
-    labMeta.appendChild(h("span", "chip", COPY.labChip));
-    lab.appendChild(labMeta);
-    lab.appendChild(h("div", "bd-last", st.sub));
+    lab.appendChild(h("p", "bd-essence", st.sub));
     labGrid.appendChild(lab);
   });
   root.appendChild(labGrid);
-  if (!yours.length) {
-    const empty = h("div", "empty-panel");
-    empty.appendChild(h("div", "mono-label", COPY.yoursHeading));
-    empty.appendChild(h("p", null, COPY.yoursEmpty));
-    root.appendChild(empty);
-  }
 
   // quiet foundation of future sharing: single-breakdown import
-  const importRow = h("div", "gate-actions");
-  importRow.style.marginTop = "26px";
-  const imp = h("button", "gbtn", "Import a Deconstruct (.json)");
+  const importRow = h("div", "lib-foot");
+  const imp = setFace(h("button", "gbtn ghost"), "upload", "Import a Deconstruct (.json)");
   imp.onclick = () => pickFile(async file => {
     try {
       const doc = JSON.parse(await file.text());
@@ -566,7 +695,7 @@ async function renderLibrary() {
     } catch (e) { alert("Could not import: " + e.message); }
   });
   importRow.appendChild(imp);
-  const about = h("button", "gbtn", "About Vitruvian");
+  const about = setFace(h("button", "gbtn ghost"), "info", "About Vitruvian");
   about.onclick = () => { renderLanding(); show("landing"); };
   importRow.appendChild(about);
   /* Request-a-system link hidden for now — restore by re-appending req.
@@ -642,11 +771,121 @@ async function drillInto(sub) {
     return;
   }
   // nothing yet — offer to generate it (BYOK), opening as its own study
-  if (!meta.apiKey) { toast(`No Deconstruct of "${sub}" yet — add an API key to generate one`); return; }
+  if (!meta.apiKey) { toast(`No Deconstruct of "${sub}" yet. Add an API key to generate one.`); return; }
   if (confirm(`No Deconstruct of "${sub}" yet. Deconstruct it now?`)) {
     renderGenerate(sub);
     show("generate");
   }
+}
+
+/* ═══ First-run tips: three, the first time a Deconstruct opens. Each one
+   rings the part of the screen it's about. Esc or Skip ends them; the
+   field guide keeps everything else. ═══ */
+function firstRunTips() {
+  if (meta.tipsSeen) return;
+  const tips = COPY.firstRunTips;
+  let i = 0, ringed = null;
+  const card = h("div", "tip-card");
+  card.setAttribute("role", "dialog");
+  card.setAttribute("aria-live", "polite");
+  const count = h("div", "tip-count");
+  const title = h("h3", "tip-title");
+  const text = h("p", "tip-text");
+  const row = h("div", "tip-row");
+  const skip = h("button", "gbtn ghost", "Skip tips");
+  const next = h("button", "gbtn primary", "Next");
+  row.append(skip, next);
+  card.append(count, title, text, row);
+  const finish = async () => {
+    if (ringed) ringed.classList.remove("tip-ring");
+    card.remove();
+    document.removeEventListener("keydown", onKey, true);
+    window.removeEventListener("resize", place);
+    meta.tipsSeen = true;
+    await Store.saveMeta({ tipsSeen: true });
+  };
+  function place() {
+    if (!card.isConnected) return;
+    const t = ringed && ringed.getBoundingClientRect();
+    const w = Math.min(320, innerWidth - 32);
+    card.style.width = w + "px";
+    if (!t || !t.width) { card.style.left = (innerWidth - w) / 2 + "px"; card.style.top = (innerHeight - card.offsetHeight) / 2 + "px"; return; }
+    const ch = card.offsetHeight;
+    let top = t.bottom + 12;
+    if (top + ch > innerHeight - 12) top = t.top - ch - 12;
+    if (top < 12) top = Math.max(12, Math.min(innerHeight - ch - 12, t.top + 12));
+    card.style.top = top + "px";
+    card.style.left = Math.max(16, Math.min(innerWidth - w - 16, t.left + t.width / 2 - w / 2)) + "px";
+  }
+  function paint() {
+    const tip = tips[i];
+    if (ringed) ringed.classList.remove("tip-ring");
+    ringed = tip.target.split(",").map(sel => document.querySelector("#screen-reader " + sel.trim())).find(el => el && el.offsetParent);
+    if (ringed) ringed.classList.add("tip-ring");
+    count.textContent = `Tip ${i + 1} of ${tips.length}`;
+    title.textContent = tip.title;
+    text.textContent = tip.text;
+    next.textContent = i === tips.length - 1 ? "Got it" : "Next";
+    place();
+    next.focus();
+  }
+  function onKey(e) { if (e.key === "Escape") { e.stopPropagation(); finish(); } }
+  skip.onclick = finish;
+  next.onclick = () => { if (i === tips.length - 1) finish(); else { i++; paint(); } };
+  document.addEventListener("keydown", onKey, true);
+  window.addEventListener("resize", place);
+  document.body.appendChild(card);
+  paint();
+  // tips belong to the reader; leaving it ends them
+  firstRunTips.close = finish;
+}
+
+const SHEET_SNAPS = [0.3, 0.52, 0.88];          // share of the reader the sheet covers
+const SHEET_NAMES = ["mostly diagram", "half and half", "mostly text"];
+function sheetDrag(wrap, sheet, grip) {
+  let snap = 1;
+  try { const v = parseInt(localStorage.getItem("vitruvian_sheet_snap"), 10); if (v >= 0 && v < SHEET_SNAPS.length) snap = v; } catch (e) {}
+  const apply = (frac, animate) => {
+    wrap.classList.toggle("sheet-moving", !animate);
+    wrap.style.setProperty("--sheet", (frac * 100).toFixed(2) + "%");
+  };
+  const setSnap = i => {
+    snap = Math.max(0, Math.min(SHEET_SNAPS.length - 1, i));
+    apply(SHEET_SNAPS[snap], true);
+    grip.setAttribute("aria-label", `Reading panel: ${SHEET_NAMES[snap]}. Tap or use the arrow keys to resize.`);
+    try { localStorage.setItem("vitruvian_sheet_snap", String(snap)); } catch (e) {}
+  };
+  setSnap(snap);
+  let start = null, moved = false;
+  grip.addEventListener("pointerdown", e => {
+    start = { y: e.clientY, frac: SHEET_SNAPS[snap], h: wrap.clientHeight || 1 };
+    moved = false;
+    grip.setPointerCapture(e.pointerId);
+  });
+  grip.addEventListener("pointermove", e => {
+    if (!start) return;
+    const dy = start.y - e.clientY;
+    if (Math.abs(dy) > 4) moved = true;
+    if (moved) apply(Math.max(0.2, Math.min(0.95, start.frac + dy / start.h)), false);
+  });
+  const end = e => {
+    if (!start) return;
+    if (moved) {
+      const frac = start.frac + (start.y - e.clientY) / start.h;
+      let best = 0;
+      SHEET_SNAPS.forEach((f, i) => { if (Math.abs(f - frac) < Math.abs(SHEET_SNAPS[best] - frac)) best = i; });
+      setSnap(best);
+    }
+    start = null;
+  };
+  grip.addEventListener("pointerup", end);
+  grip.addEventListener("pointercancel", end);
+  // a tap steps up and wraps back down; the drag already ended without a click
+  grip.addEventListener("click", () => { if (moved) { moved = false; return; } setSnap(snap === SHEET_SNAPS.length - 1 ? 0 : snap + 1); });
+  grip.addEventListener("keydown", e => {
+    if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); setSnap(snap + 1); }
+    if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); setSnap(snap - 1); }
+  });
 }
 
 async function openReader(id, layerIndex, opts = {}) {
@@ -669,23 +908,58 @@ async function openReader(id, layerIndex, opts = {}) {
   const dscroll = h("div", "diagram-scroll");
   const dcap = h("div", "diagram-cap");
   const capState = h("span", "diagram-cap-state", "");
-  const capToggle = h("button", "gbtn", "hide");
-  capToggle.style.padding = "2px 9px";
+  const capToggle = setFace(h("button", "gbtn sim-btn icon-only cap-toggle"), "chevronDown");
+  capToggle.setAttribute("aria-label", "Hide diagram");
+  capToggle.title = "Hide diagram";
   capToggle.onclick = () => {
-    dpane.classList.toggle("collapsed");
-    capToggle.textContent = dpane.classList.contains("collapsed") ? "show" : "hide";
+    const collapsed = dpane.classList.toggle("collapsed");
+    setFace(capToggle, collapsed ? "chevronUp" : "chevronDown");
+    capToggle.setAttribute("aria-label", collapsed ? "Show diagram" : "Hide diagram");
+    capToggle.title = collapsed ? "Show diagram" : "Hide diagram";
   };
-  const playBtn = h("button", "gbtn sim-btn", "▶ pulse");
-  const loadBtn = h("button", "gbtn sim-btn", "◉ load");
-  const replayBtn = h("button", "gbtn sim-btn", "⟲ replay");
-  const raceBtn = h("button", "gbtn sim-btn", "⇉ races");
-  raceBtn.title = "Highlight nodes with two or more concurrent writers — where races can happen";
-  const spineBtn = h("button", "gbtn sim-btn", "⌁ spine");
-  spineBtn.title = "Trace the critical path — what a request waits on — and ring the nodes that would take the whole system down";
-  const gifBtn = h("button", "gbtn sim-btn", "⚏ gif");
+  const playBtn = setFace(h("button", "gbtn sim-btn sim-primary"), "play", "Pulse");
+  playBtn.title = "Send live traffic through this state";
+  const loadBtn = setFace(h("button", "gbtn sim-btn"), "gauge", "Load");
+  loadBtn.title = "Turn up the traffic until something saturates";
+  const replayBtn = setFace(h("button", "gbtn sim-btn"), "replay", "Replay");
+  replayBtn.title = "Re-enact this layer's historical failure";
+  const raceBtn = setFace(h("button", "gbtn sim-btn"), "races", "Races");
+  raceBtn.title = "Highlight nodes with two or more concurrent writers, where races can happen";
+  const spineBtn = setFace(h("button", "gbtn sim-btn"), "spine", "Spine");
+  spineBtn.title = "Trace the critical path a request waits on, and ring the nodes that would take the whole system down";
+  const gifBtn = setFace(h("button", "gbtn sim-btn"), "record", "GIF");
   gifBtn.title = "Record the running Pulse as a looping GIF to share";
   loadBtn.hidden = true;
-  dcap.append(capState, playBtn, loadBtn, replayBtn, raceBtn, spineBtn, gifBtn, capToggle);
+  const capSep = () => h("span", "cap-sep");
+  // Before: in the fix step, flip the diagram to the state this layer replaced
+  const beforeBtn = setFace(h("button", "gbtn sim-btn"), "compare", "Before");
+  beforeBtn.title = "Show the system before this fix (or hold B)";
+  replayBtn.hidden = true;
+  beforeBtn.hidden = true;
+  // Lab tools: the deeper instruments, one tap away instead of always on show
+  const labBtn = setFace(h("button", "gbtn sim-btn lab-btn"), "flask", "Lab tools");
+  labBtn.setAttribute("aria-haspopup", "true");
+  labBtn.setAttribute("aria-expanded", "false");
+  const labMenu = h("div", "lab-menu");
+  labMenu.hidden = true;
+  labMenu.setAttribute("role", "menu");
+  [[raceBtn, "Ring the parts where two flows can arrive at once."],
+   [spineBtn, "Trace what a request waits on, and what would stop everything."],
+   [gifBtn, "Record a running Pulse as a looping GIF."]].forEach(([btn, desc]) => {
+    const item = h("div", "lab-item");
+    item.append(btn, h("p", "lab-desc", desc));
+    labMenu.appendChild(item);
+  });
+  const setLab = open => { labMenu.hidden = !open; labBtn.setAttribute("aria-expanded", String(open)); labBtn.classList.toggle("on", open); };
+  labBtn.onclick = e => { e.stopPropagation(); setLab(labMenu.hidden); };
+  labMenu.onclick = e => e.stopPropagation();
+  const labEsc = e => { if (e.key === "Escape" && !labMenu.hidden) { e.stopPropagation(); setLab(false); labBtn.focus(); } };
+  labBtn.addEventListener("keydown", labEsc);
+  labMenu.addEventListener("keydown", labEsc);
+  pane.onclick = () => setLab(false);
+  const capTools = h("div", "cap-tools");
+  capTools.append(replayBtn, beforeBtn, playBtn, loadBtn, capSep(), labBtn, capToggle);
+  dcap.append(capState, capTools);
   const scrubEl = h("div", "scrub-wrap");
   const caption = h("div", "dg-caption");
   caption.hidden = true;
@@ -694,9 +968,18 @@ async function openReader(id, layerIndex, opts = {}) {
   hud.hidden = true;
   const hudRate = h("span", "hud-stat"), hudFlight = h("span", "hud-stat"), hudCrash = h("span", "hud-stat crash"), hudHint = h("span", "hud-hint", "tap any node to kill it");
   hud.append(hudRate, hudFlight, hudCrash, hudHint);
-  dpane.append(dscroll, hud, caption, Diagram.legend(), scrubEl, dcap);   // legend: the tutorial's grammar, always in view
+  dpane.append(dscroll, hud, caption, Diagram.legend(), scrubEl, dcap, labMenu);   // legend: the tutorial's grammar, always in view
   const docPane = h("div", "doc-pane");
-  wrap.append(dpane, docPane);
+  /* On a phone the step card is a bottom sheet over the diagram. The grip
+     drags it between three heights, or steps through them by tap or arrow
+     keys; the diagram gets whatever the sheet leaves. On wider screens the
+     sheet is just the right-hand column and the grip is hidden. */
+  const docSheet = h("div", "doc-sheet");
+  const grip = h("button", "sheet-grip");
+  grip.appendChild(h("span", "sheet-grip-bar"));
+  docSheet.append(grip, docPane);
+  wrap.append(dpane, docSheet);
+  sheetDrag(wrap, docSheet, grip);
   // breadcrumb: only while nested (drilled at least one level deep)
   if (drillStack.length > 1) pane.appendChild(drillCrumb());
   pane.appendChild(wrap);
@@ -708,7 +991,8 @@ async function openReader(id, layerIndex, opts = {}) {
      stops the sim (via diagram.show) and this resets the buttons */
   let captionTimer = null;
   const resetSimUI = () => {
-    playBtn.textContent = "▶ pulse";
+    setFace(playBtn, "play", "Pulse");
+    playBtn.classList.remove("on");
     loadBtn.hidden = true;
     loadBtn.classList.remove("on");
     hud.hidden = true;
@@ -724,7 +1008,8 @@ async function openReader(id, layerIndex, opts = {}) {
   playBtn.onclick = () => {
     if (diagram.sim.running) { diagram.sim.stop(); }
     else if (diagram.sim.start()) {
-      playBtn.textContent = "⏸ rest";
+      setFace(playBtn, "pause", "Rest");
+      playBtn.classList.add("on");
       loadBtn.hidden = false;
       hud.hidden = false;
     }
@@ -735,9 +1020,8 @@ async function openReader(id, layerIndex, opts = {}) {
   gifBtn.onclick = async () => {
     if (gifBtn.disabled) return;
     gifBtn.disabled = true;
-    const label = gifBtn.textContent;
-    try { await exportPulseGIF(diagram, pct => { gifBtn.textContent = "⚏ " + pct + "%"; }); }
-    finally { gifBtn.textContent = label; gifBtn.disabled = false; }
+    try { await exportPulseGIF(diagram, pct => { setFace(gifBtn, "record", pct + "%"); }); }
+    finally { setFace(gifBtn, "record", "GIF"); gifBtn.disabled = false; }
   };
   // race spotlight: ring nodes with ≥2 concurrent payload writers (contention
   // points). Structural — works standing still; under ◉ load you watch tokens
@@ -747,7 +1031,7 @@ async function openReader(id, layerIndex, opts = {}) {
     raceOn = !raceOn;
     const n = diagram.raceSpotlight(raceOn);
     raceBtn.classList.toggle("race-on", raceOn);
-    if (raceOn) toast(n ? `${n} contention point${n > 1 ? "s" : ""} — ≥2 concurrent writers` : "No contention at this state — one writer per node");
+    if (raceOn) toast(n ? `${n} contention point${n > 1 ? "s" : ""}: two or more concurrent writers` : "No contention at this state. Each node has one writer.");
   };
   // critical path: the chain a request waits on, plus the nodes whose loss
   // takes delivery with them. Structural, so it reads standing still — and the
@@ -773,7 +1057,7 @@ async function openReader(id, layerIndex, opts = {}) {
   diagram.sim.onReplayCrash(() => {
     const p = currentView ? currentView.position : 0;
     const L = rec.doc.layers[p - 1];
-    let text = "The failure, replayed — the second arrival meets the first.";
+    let text = "The failure, replayed. The second arrival meets the first.";
     if (L && L.problem && L.problem.statement) {
       const s = L.problem.statement.split(". ")[0];
       text = (s.length > 150 ? s.slice(0, 147) + "…" : s) + (s.endsWith(".") ? "" : ".");
@@ -783,20 +1067,28 @@ async function openReader(id, layerIndex, opts = {}) {
     clearTimeout(captionTimer);
     captionTimer = setTimeout(() => { caption.hidden = true; }, 7000);
   });
-  replayBtn.onclick = () => {
+  // rewind to the moment before this layer's fix (pre-state, failure lit
+  // red), then send history's two payloads into it. Quiet when the reader
+  // plays it by itself on arriving at a layer.
+  const runReplay = (p, quiet) => {
     if (diagram.sim.running) diagram.sim.stop();
     caption.hidden = true;
-    // rewind to the moment before this layer's fix: pre-state + its failure
-    // lit red — then send history's two payloads into it
-    const p = currentView ? currentView.position : 0;
     const L = rec.doc.layers[p - 1];
-    if (!L || !L.diff.highlight.length) { toast("No failure at this position — step into a rebuild layer"); return; }
+    if (!L || !L.diff.highlight.length) { if (!quiet) toast("No failure at this position. Step into a rebuild layer."); return; }
     diagram.show(p - 1, { highlight: L.diff.highlight });
     capState.textContent = `Before layer ${p} · the failure, replayed`;
-    if (!diagram.sim.replay()) {
-      currentView.goToLayer(p);
-      toast("No payload path reaches this failure");
-    } else { playBtn.textContent = "⏸ rest"; hud.hidden = false; }
+    if (!diagram.sim.replay()) { if (!quiet) toast("No payload path reaches this failure"); }
+    else { setFace(playBtn, "pause", "Rest"); playBtn.classList.add("on"); hud.hidden = false; }
+  };
+  replayBtn.onclick = () => runReplay(currentView ? currentView.position : 0, false);
+  beforeBtn.onclick = () => { if (currentView) currentView.setBefore(!currentView.before); };
+  // the toolbar shows what the current step can use
+  const onTools = ({ step, before }) => {
+    replayBtn.hidden = !diagram.sim.available || !(step === 1 || step === 2);
+    beforeBtn.hidden = step !== 3;
+    beforeBtn.classList.toggle("on", !!before);
+    beforeBtn.setAttribute("aria-pressed", String(!!before));
+    setFace(beforeBtn, "compare", before ? "After" : "Before");
   };
 
   // gates are opt-in: on only if this breakdown enabled them, or the user set the default on
@@ -806,24 +1098,31 @@ async function openReader(id, layerIndex, opts = {}) {
     docPane, diagram, rec, scrubEl,
     audience: meta.audienceMode || "enthusiast",
     challenge: challengeOn,
+    onePage: meta.onePage === true,
+    canReplay: diagram.sim.available,
+    autoReplay: meta.autoReplay !== false,
+    onReplay: runReplay,
+    onTools,
+    async onOpen(id) { await flushSaves(); openReader(id); },
+    async onFinish() { await flushSaves(); await renderLibrary(); show("library"); },
     onSave(r) { Store.saveBreakdownLight(r); },
-    onChallenge(v) { rec.challengeMode = v; Store.saveBreakdownLight(rec); },
     canCompare() {
       if (!navigator.onLine) return { ok: false, reason: "You're offline. " + COPY.gateCompareOffline };
       if (!meta.apiKey) return { ok: false, reason: "No API key set. " + COPY.gateCompareOffline };
       return { ok: true };
     },
     onCompare(layer, attempt) {
-      return Generator.compare({ apiKey: meta.apiKey, modelId: meta.modelId, layer, attempt });
+      return Generator.compare({ apiKey: meta.apiKey, modelId: meta.modelId, layer, attempt, voice: meta.voicePass !== false });
     },
     onAsk(layer, question) {
-      return Generator.ask({ apiKey: meta.apiKey, modelId: meta.modelId, doc: rec.doc, layer, question });
+      return Generator.ask({ apiKey: meta.apiKey, modelId: meta.modelId, doc: rec.doc, layer, question, voice: meta.voicePass !== false });
     }
   });
 
   buildReaderMenu(rec, challengeOn);
   show("reader");
   if (layerIndex != null) currentView.goToLayer(layerIndex);
+  if (!meta.tipsSeen) setTimeout(() => { if (currentRec === rec && !document.querySelector(".tip-card")) firstRunTips(); }, 700);
 }
 
 /* ═══ Branded diagram export: current diagram state → PNG with the Vitruvian
@@ -837,7 +1136,7 @@ async function exportDiagramPNG(rec) {
   const clone = svgEl.cloneNode(true);
   const src = [svgEl, ...svgEl.querySelectorAll("*")];
   const dst = [clone, ...clone.querySelectorAll("*")];
-  const PROPS = ["stroke", "stroke-width", "stroke-dasharray", "stroke-linecap", "fill", "fill-opacity", "opacity", "font-size", "font-weight", "letter-spacing", "paint-order"];
+  const PROPS = ["stroke", "stroke-width", "stroke-dasharray", "stroke-linecap", "stroke-linejoin", "fill", "fill-opacity", "opacity", "font-size", "font-weight", "letter-spacing", "paint-order", "display"];
   src.forEach((el, i) => {
     const cs = getComputedStyle(el);
     PROPS.forEach(p => { const v = cs.getPropertyValue(p); if (v) dst[i].style.setProperty(p, v); });
@@ -897,12 +1196,12 @@ function openSequence(rec) {
   // (pos-1 for an un-revealed challenge layer), so the sequence can't spoil a gate
   const shown = currentView && currentView.shownUpto != null ? currentView.shownUpto : (currentView ? currentView.position : 0);
   const upto = Math.max(0, Math.min(shown, N));
-  const label = upto === 0 ? "Baseline — the naive system" : upto >= N ? "Final system · after every layer" : `After layer ${upto} of ${N}`;
+  const label = upto === 0 ? "Baseline · the naive system" : upto >= N ? "Final system · after every layer" : `After layer ${upto} of ${N}`;
 
   const ov = h("div", "seq-overlay");
   const bar = h("div", "seq-bar");
   const titleWrap = h("div");
-  titleWrap.appendChild(h("h2", null, "Sequence — " + rec.system));
+  titleWrap.appendChild(h("h2", null, "Sequence · " + rec.system));
   titleWrap.appendChild(h("div", "seq-sub", label + " · order flows top to bottom"));
   const close = h("button", "gbtn seq-close", "✕ close");
   bar.append(titleWrap, close);
@@ -929,7 +1228,7 @@ async function renderVocab(focusId) {
   root.textContent = "";
   root.appendChild(h("div", "kicker", "The engineering vocabulary"));
   root.appendChild(h("h1", "title", "What engineers call it"));
-  root.appendChild(h("p", "subtitle", "Patterns are problem shapes, concepts are mechanisms, technologies are things you deploy. Every entry links back to the timeless thinking model underneath it — and to the layers where you watched it become necessary."));
+  root.appendChild(h("p", "subtitle", "Patterns are problem shapes, concepts are mechanisms, technologies are things you deploy. Every entry links back to the timeless thinking model underneath it, and to the layers where you watched it become necessary."));
 
   // where each id appears across the reader's library
   const uses = {};
@@ -942,9 +1241,7 @@ async function renderVocab(focusId) {
     });
   } catch (e) { /* library unreadable — the index still lists the vocabulary */ }
 
-  const toModels = h("button", "gbtn", "‹ The 14 thinking models");
-  toModels.onclick = () => { renderModels(); show("models"); };
-  root.appendChild(toModels);
+  root.appendChild(modelTabs("vocab"));
 
   const seg = h("div", "seg vocab-seg");
   [["all", "All"], ["pattern", "Patterns"], ["concept", "Concepts"], ["technology", "Technologies"]].forEach(([id, label]) => {
@@ -1021,7 +1318,7 @@ async function openVocab(v, layer) {
       lad.appendChild(r);
     };
     const m = layer.problem && layer.problem.model ? modelById(layer.problem.model.id) : null;
-    if (m) rung("why it's forced", m.name + " — " + m.one_liner, "rung-model");
+    if (m) rung("why it's forced", m.name + ": " + m.one_liner, "rung-model");
     const sibs = (layer.developer.vocab || []).map(vocabById).filter(Boolean);
     ["pattern", "concept", "technology"].forEach(tier => {
       sibs.filter(s => s.tier === tier).forEach(s => {
@@ -1069,7 +1366,7 @@ async function openVocab(v, layer) {
           hits.push({ system: b.system, id: b.id, index: L.index, name: L.name });
       });
     });
-    if (!hits.length) { recur.appendChild(h("p", "vo-none", "Not yet — it hasn't shown up in another Deconstruct you've opened.")); return; }
+    if (!hits.length) { recur.appendChild(h("p", "vo-none", "Not yet. It hasn't shown up in another Deconstruct you've opened.")); return; }
     hits.slice(0, 8).forEach(hit => {
       const row = h("button", "vo-hit");
       row.appendChild(h("span", "vo-hit-sys", hit.system));
@@ -1088,9 +1385,30 @@ function buildReaderMenu(rec, challengeOn) {
     b.onclick = e => { e.stopPropagation(); pop.hidden = true; fn(); };
     pop.appendChild(b);
   };
-  // Graft + Sequence now live in the topbar's context zone; challenge mode is a
-  // toggle at the layer head. The ⋯ menu keeps the rarer / one-shot actions.
-  add("How to read a Deconstruct", () => { renderTutorial("reader"); show("tutorial"); });
+  // Graft + Sequence live in the topbar. The ⋯ menu holds the two reading
+  // preferences and the rarer, one-shot actions.
+  const check = (label, on, fn) => {
+    const b = h("button", "menu-check" + (on ? " on" : ""), label);
+    b.setAttribute("role", "menuitemcheckbox");
+    b.setAttribute("aria-checked", String(!!on));
+    b.onclick = e => { e.stopPropagation(); pop.hidden = true; fn(); };
+    pop.appendChild(b);
+  };
+  check("Strict mode: write your fix first", challengeOn, () => {
+    rec.challengeMode = !challengeOn;
+    Store.saveBreakdownLight(rec);
+    if (currentView) currentView.setChallenge(rec.challengeMode);
+    buildReaderMenu(rec, rec.challengeMode);
+    toast(rec.challengeMode ? "Strict mode on. The fix opens once you've sketched yours." : "Strict mode off");
+  });
+  check("Read each layer as one page", meta.onePage === true, async () => {
+    meta.onePage = !(meta.onePage === true);
+    await Store.saveMeta({ onePage: meta.onePage });
+    if (currentView) currentView.setOnePage(meta.onePage);
+    buildReaderMenu(rec, challengeOn);
+  });
+  pop.appendChild(h("div", "menu-sep"));
+  add("Field guide", () => { renderTutorial("reader"); show("tutorial"); });
   pop.appendChild(h("div", "menu-sep"));
   add(COPY.shareMenu, async () => {
     if (rec.source !== "flagship") { toast(COPY.shareLocalNote); return; }
@@ -1155,12 +1473,12 @@ function renderWhatif(rec, opts = {}) {
       const row = h("button", "whatif-saved-row");
       row.appendChild(h("span", "ws-dot verdict-" + wi.result.verdict));
       row.appendChild(h("span", "ws-change", wi.change));
-      row.onclick = () => { showResult(wi.result, wi.change); resultEl.scrollIntoView({ behavior: "smooth", block: "start" }); };
+      row.onclick = () => { showResult(wi.result, wi.change, wi.guess); resultEl.scrollIntoView({ behavior: "smooth", block: "start" }); };
       savedWrap.appendChild(row);
     });
   }
 
-  function showResult(w, change) {
+  function showResult(w, change, guess) {
     resultEl.textContent = "";
     // ghost diagram: the study's final state + the proposal as one extra layer
     const tempDoc = { ...rec.doc, layers: [...rec.doc.layers, {
@@ -1183,23 +1501,23 @@ function renderWhatif(rec, opts = {}) {
     // live graft: A/B the proposal on and off; pulse tokens THROUGH it —
     // proposed payload edges are part of the shown state, so they carry flow
     const ctl = h("div", "whatif-sim-row");
-    const abBtn = h("button", "gbtn sim-btn on", "graft: on");
+    const abBtn = h("button", "gbtn sim-btn on", "Graft on");
     let graftOn = true;
     abBtn.onclick = () => {
       graftOn = !graftOn;
-      abBtn.textContent = "graft: " + (graftOn ? "on" : "off");
+      abBtn.textContent = graftOn ? "Graft on" : "Graft off";
       abBtn.classList.toggle("on", graftOn);
       showGraft(graftOn);
     };
     ctl.appendChild(abBtn);
     if (dg.sim.available) {
-      const wp = h("button", "gbtn sim-btn", "▶ pulse");
-      const wl = h("button", "gbtn sim-btn", "◉ load");
+      const wp = setFace(h("button", "gbtn sim-btn sim-primary"), "play", "Pulse");
+      const wl = setFace(h("button", "gbtn sim-btn"), "gauge", "Load");
       wl.hidden = true;
-      dg.sim.onStop(() => { wp.textContent = "▶ pulse"; wl.hidden = true; wl.classList.remove("on"); });
+      dg.sim.onStop(() => { setFace(wp, "play", "Pulse"); wp.classList.remove("on"); wl.hidden = true; wl.classList.remove("on"); });
       wp.onclick = () => {
         if (dg.sim.running) dg.sim.stop();
-        else if (dg.sim.start()) { wp.textContent = "⏸ rest"; wl.hidden = false; }
+        else if (dg.sim.start()) { setFace(wp, "pause", "Rest"); wp.classList.add("on"); wl.hidden = false; }
       };
       wl.onclick = () => wl.classList.toggle("on", dg.sim.toggleLoad());
       ctl.append(wp, wl);
@@ -1207,8 +1525,9 @@ function renderWhatif(rec, opts = {}) {
     dpane.appendChild(ctl);
 
     resultEl.appendChild(verdictCard(w, rec.doc, {
+      guess,
       onAlt: a => {
-        ta.value = a.name + " — " + a.note;
+        ta.value = a.name + ": " + a.note;
         ta.focus();
         compose.scrollIntoView({ behavior: "smooth", block: "center" });
       }
@@ -1218,6 +1537,34 @@ function renderWhatif(rec, opts = {}) {
   renderSaved();
   if (opts.result) showResult(opts.result, opts.change);
 
+  /* Guess first. The verdict is requested straight away; while it's judged,
+     you call it yourself: does the change improve the system, and which rule
+     does it put at risk? Then the verdict, with your call beside it. */
+  function guessPanel(guess, onChange) {
+    const box = h("section", "graft-guess");
+    box.appendChild(h("div", "step-kick tone-vio", "Your call"));
+    box.appendChild(h("h3", "move-q", "While it's judged: what will this change do?"));
+    const vlist = h("div", "rule-list");
+    [["improves", "It improves the system"], ["mixed", "A real tradeoff: better in one way, worse in another"], ["harmful", "It works against the system"]].forEach(([id, label]) => {
+      const b = h("button", "rule-opt");
+      b.append(h("span", "rule-n", ""), h("span", "rule-t", label));
+      b.onclick = () => { guess.verdict = id; vlist.querySelectorAll(".rule-opt").forEach(x => x.classList.toggle("chosen", x === b)); onChange(); };
+      vlist.appendChild(b);
+    });
+    box.appendChild(vlist);
+    box.appendChild(h("h3", "move-q graft-q2", "Which rule does it put most at risk?"));
+    const rlist = h("div", "rule-list");
+    const rules = rec.doc.strip_down.invariants.map((iv, k) => [iv.id, "Rule " + (k + 1), iv.text]).concat([["none", "", "None of them"]]);
+    rules.forEach(([id, n, text]) => {
+      const b = h("button", "rule-opt");
+      b.append(h("span", "rule-n", n), h("span", "rule-t", text));
+      b.onclick = () => { guess.rule = id; rlist.querySelectorAll(".rule-opt").forEach(x => x.classList.toggle("chosen", x === b)); onChange(); };
+      rlist.appendChild(b);
+    });
+    box.appendChild(rlist);
+    return box;
+  }
+
   runBtn.onclick = async () => {
     const change = ta.value.trim();
     if (change.length < 4) { ta.focus(); return; }
@@ -1226,24 +1573,38 @@ function renderWhatif(rec, opts = {}) {
     runBtn.disabled = true;
     ta.disabled = true;
     resultEl.textContent = "";
-    resultEl.appendChild(h("div", "gen-phase", COPY.whatifThinking));
-    try {
-      const w = await Generator.whatif({ apiKey: meta.apiKey, modelId: meta.modelId, doc: rec.doc, change, speed: meta.genSpeed || "balanced" });
-      (rec.whatifs = rec.whatifs || []).push({ change, result: w, ts: Date.now() });
+    const guess = { verdict: null, rule: null };
+    let w = null, failed = null;
+    const foot = h("div", "graft-reveal");
+    const status = h("span", "step-foot-note", COPY.whatifThinking);
+    const reveal = ctaButton("Show the verdict");
+    reveal.disabled = true;
+    const sync = () => {
+      reveal.disabled = !w;
+      status.textContent = w ? (guess.verdict ? "The verdict is ready." : "The verdict is ready. Make your call first, or just look.") : COPY.whatifThinking;
+    };
+    resultEl.appendChild(guessPanel(guess, sync));
+    foot.append(status, reveal);
+    resultEl.appendChild(foot);
+    const done = () => { runBtn.disabled = false; runBtn.textContent = COPY.whatifBtn; ta.disabled = false; };
+    reveal.onclick = async () => {
+      (rec.whatifs = rec.whatifs || []).push({ change, result: w, guess, ts: Date.now() });
       await Store.saveBreakdownLight(rec);
-      showResult(w, change);
+      showResult(w, change, guess);
       renderSaved();
+      resultEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    try {
+      w = await Generator.whatif({ apiKey: meta.apiKey, modelId: meta.modelId, doc: rec.doc, change, speed: meta.genSpeed || "balanced", voice: meta.voicePass !== false });
+      sync();
     } catch (e) {
+      failed = e;
       resultEl.textContent = "";
       const box = h("div", "gen-error");
       box.appendChild(h("h3", null, e.kind === "key" ? "Invalid API key" : "Graft failed"));
       box.appendChild(h("p", null, e.message));
       resultEl.appendChild(box);
-    } finally {
-      runBtn.disabled = false;
-      runBtn.textContent = COPY.whatifBtn;
-      ta.disabled = false;
-    }
+    } finally { done(); }
   };
 }
 
@@ -1259,30 +1620,36 @@ function verdictCard(w, doc, opts = {}) {
   head.appendChild(stamp);
   card.appendChild(head);
   if (w.name) card.appendChild(h("div", "vf-name", w.name));
+  const g = opts.guess;
+  if (g && (g.verdict || g.rule)) {
+    const VERB = { improves: "it improves the system", mixed: "a real tradeoff", harmful: "it works against the system" };
+    const parts = [];
+    if (g.verdict) parts.push(g.verdict === w.verdict ? `You called it: ${VERB[w.verdict]}.` : `You said ${VERB[g.verdict]}; the verdict is ${VERB[w.verdict] || w.verdict}.`);
+    if (g.rule) {
+      const n = id => "Rule " + (invById[id] ? invById[id].n : "?");
+      if (g.rule === "none") parts.push(w.stresses && w.stresses.length ? `You expected no rule at risk; it threatens ${w.stresses.map(n).join(" and ")}.` : "You expected no rule at risk, and none is threatened.");
+      else parts.push((w.stresses || []).includes(g.rule) ? `And ${n(g.rule)} is the one it threatens.` : `You picked ${n(g.rule)}; ` + (w.stresses && w.stresses.length ? `it threatens ${w.stresses.map(n).join(" and ")}.` : "it threatens none of them."));
+    }
+    card.appendChild(h("p", "vf-guess" + (g.verdict === w.verdict ? " hit" : ""), parts.join(" ")));
+  }
   card.appendChild(h("p", "vf-assessment", w.assessment));
   if (w.gain) { const g = h("p", "vf-line"); g.appendChild(h("b", null, "Gains: ")); g.appendChild(document.createTextNode(w.gain)); card.appendChild(g); }
 
-  if (w.stresses && w.stresses.length) {
-    const r = h("div", "defends-row");
-    r.appendChild(h("span", "mono-label", "Threatens"));
-    w.stresses.forEach(id => r.appendChild(h("span", "inv-badge stress", "INV " + (invById[id] ? invById[id].n : "?"))));
-    card.appendChild(r);
-    w.stresses.forEach(id => { if (invById[id]) card.appendChild(h("div", "vf-inv stress", invById[id].text)); });
-  }
-  if (w.defends && w.defends.length) {
-    const r = h("div", "defends-row");
-    r.appendChild(h("span", "mono-label", "Strengthens"));
-    w.defends.forEach(id => {
-      const chip = h("button", "inv-badge inv-tap", "INV " + (invById[id] ? invById[id].n : "?"));
-      chip.onclick = () => {                     // tap: reveal the invariant being defended
-        const open = chip._line;
-        if (open) { open.remove(); chip._line = null; return; }
-        if (invById[id]) { chip._line = h("div", "vf-inv", invById[id].text); r.after(chip._line); }
-      };
-      r.appendChild(chip);
+  // rules by number AND text: a reader shouldn't have to remember what Rule 3 was
+  const ruleRows = (label, ids, cls) => {
+    if (!ids || !ids.length) return;
+    const r = h("div", "defends-row defends-full");
+    r.appendChild(h("span", "mono-label", label));
+    ids.forEach(id => {
+      const line = h("div", "defends-line");
+      line.append(h("span", "inv-badge" + (cls ? " " + cls : ""), "Rule " + (invById[id] ? invById[id].n : "?")),
+        h("span", "defends-text", invById[id] ? invById[id].text : id));
+      r.appendChild(line);
     });
     card.appendChild(r);
-  }
+  };
+  ruleRows("Threatens", w.stresses, "stress");
+  ruleRows("Strengthens", w.defends, "");
   if (w.tradeoff) card.appendChild(h("div", "tradeoff-band", w.tradeoff));
   if (w.at_scale) {
     const s = h("div", "scale-band");
@@ -1335,14 +1702,28 @@ function renderGenerate(systemName, mode) {
   root.appendChild(h("div", "kicker", design ? COPY.ownDesignKicker : "New Deconstruct"));
   root.appendChild(h("h1", "title", design ? COPY.ownDesignTitle : systemName));
 
-  let designInput = null, focus = null;
+  /* Dissect asks three plain questions instead of one blank box: what it
+     does and for whom, what must never go wrong, and where the load comes
+     from. They become the brief the model rebuilds from. */
+  let designInput = null, focus = null, dq = null;
   if (design) {
     root.appendChild(h("p", "subtitle", COPY.ownDesignLede));
-    designInput = h("textarea", "design-input");
-    designInput.placeholder = COPY.ownDesignPlaceholder;
-    designInput.value = systemName || "";
-    designInput.maxLength = 1400;
-    root.appendChild(designInput);
+    dq = {};
+    const form = h("div", "dissect-form");
+    COPY.dissectQuestions.forEach(([id, label, hint, rows], i) => {
+      const f = h("label", "dissect-q");
+      f.append(h("span", "dissect-n", String(i + 1)), h("span", "dissect-label", label));
+      const ta = h("textarea", "design-input");
+      ta.rows = rows;
+      ta.placeholder = hint;
+      ta.maxLength = 600;
+      if (i === 0 && systemName) ta.value = systemName;
+      dq[id] = ta;
+      f.appendChild(ta);
+      form.appendChild(f);
+    });
+    root.appendChild(form);
+    designInput = dq.what;
   } else {
     const focusRow = h("div", "focus-row");
     focus = h("input");
@@ -1359,10 +1740,13 @@ function renderGenerate(systemName, mode) {
   root.appendChild(prog);
 
   startBtn.onclick = async () => {
-    const subject = design ? designInput.value.trim() : systemName;
-    if (design && subject.length < 12) { designInput.focus(); toast("Describe your design a little more"); return; }
+    let subject = systemName;
+    if (design) {
+      if (dq.what.value.trim().length < 12) { dq.what.focus(); toast("Say a little more about what it does"); return; }
+      subject = COPY.dissectQuestions.map(([id, label]) => dq[id].value.trim() ? label + "\n" + dq[id].value.trim() : "").filter(Boolean).join("\n\n");
+    }
     startBtn.disabled = true;
-    if (designInput) designInput.disabled = true;
+    if (dq) Object.values(dq).forEach(t => t.disabled = true);
     if (focus) focus.disabled = true;
     prog.textContent = "";
     const phaseEl = h("div", "gen-phase", COPY.genPhases.start);
@@ -1371,11 +1755,13 @@ function renderGenerate(systemName, mode) {
     barEl.appendChild(fill);
     const tok = h("div", "gen-tokens", "");
     prog.append(phaseEl, barEl, tok);
+    const early = earlyMeet();
+    prog.appendChild(early.el);
 
-    const PHASE_PCT = { start: 4, strip_down: 18, visual: 30, layers: 42, stress: 78, transfer: 90, repair: 95 };
+    const PHASE_PCT = { start: 4, strip_down: 18, visual: 30, layers: 42, stress: 78, transfer: 88, repair: 92, voice: 96 };
     try {
-      const { doc, repaired } = await Generator.generate({
-        apiKey: meta.apiKey, modelId: meta.modelId,
+      const { doc, repaired, voice } = await Generator.generate({
+        apiKey: meta.apiKey, modelId: meta.modelId, voice: meta.voicePass !== false,
         system: subject, focus: focus ? focus.value.trim() : "", mode,
         speed: meta.genSpeed || "balanced",
         onProgress(p) {
@@ -1384,6 +1770,7 @@ function renderGenerate(systemName, mode) {
             fill.style.width = (PHASE_PCT[p.phase] || 0) + "%";
           }
           if (p.tokens) tok.textContent = "~" + p.tokens.toLocaleString() + " tokens";
+          if (p.partial) early.update(p.partial);
         }
       });
       fill.style.width = "100%";
@@ -1394,6 +1781,7 @@ function renderGenerate(systemName, mode) {
       };
       await Store.saveBreakdown(rec);
       if (repaired) toast("Validated after one repair pass");
+      else if (voice && voice.fixed) toast(`Edited ${voice.fixed} passage${voice.fixed > 1 ? "s" : ""} for voice`);
       openReader(rec.id);
     } catch (e) {
       prog.textContent = "";
@@ -1419,7 +1807,7 @@ function renderGenerate(systemName, mode) {
       }
       if (e.kind === "overloaded" || e.kind === "rate" || e.kind === "offline" || e.kind === "http") {
         const b = h("button", "gbtn primary", "Retry");
-        b.onclick = () => { startBtn.disabled = false; if (focus) focus.disabled = false; if (designInput) designInput.disabled = false; prog.textContent = ""; startBtn.click(); };
+        b.onclick = () => { startBtn.disabled = false; if (focus) focus.disabled = false; if (dq) Object.values(dq).forEach(t => t.disabled = false); prog.textContent = ""; startBtn.click(); };
         row.appendChild(b);
       }
       if (e.raw) {
@@ -1431,215 +1819,208 @@ function renderGenerate(systemName, mode) {
       prog.appendChild(box);
       startBtn.disabled = false;
       if (focus) focus.disabled = false;
-      if (designInput) designInput.disabled = false;
+      if (dq) Object.values(dq).forEach(t => t.disabled = false);
     }
   };
 }
 
+/* While a Deconstruct streams in, the essence and the rules arrive first.
+   Show them as soon as each string is complete so there's something to
+   read during the wait; it's the same Meet you'd open afterwards. */
+function earlyMeet() {
+  const el = h("section", "early-meet");
+  el.hidden = true;
+  const ess = h("p", "early-essence");
+  const rules = h("ol", "early-rules");
+  el.append(h("div", "step-kick tone-ink", "Meet the system, while the rest is written"), ess,
+    h("div", "early-sub", "The rules it lives by"), rules);
+  rules.hidden = true;
+  let shownRules = 0;
+  const STR = '"((?:[^"\\\\]|\\\\.)*)"';
+  const dec = x => { try { return JSON.parse('"' + x + '"'); } catch (e) { return x; } };
+  function update(text) {
+    if (!ess.textContent) {
+      const m = new RegExp('"essence"\\s*:\\s*\\{\\s*"text"\\s*:\\s*' + STR).exec(text);
+      if (m) { ess.textContent = dec(m[1]); el.hidden = false; }
+    }
+    const at = text.indexOf('"invariants"');
+    if (at < 0) return;
+    const end = text.indexOf('"entities"', at);
+    const chunk = text.slice(at, end < 0 ? undefined : end);
+    const re = new RegExp('"text"\\s*:\\s*' + STR, "g");
+    const found = [];
+    let m;
+    while ((m = re.exec(chunk))) found.push(dec(m[1]));
+    for (; shownRules < found.length; shownRules++) {
+      rules.appendChild(h("li", null, found[shownRules]));
+      rules.hidden = false;
+      el.hidden = false;
+    }
+  }
+  return { el, update };
+}
+
 /* ═══ Models index (§11.4) ═══ */
+/* ═══ Models: each thinking model as something to learn, not a catalog row.
+   The index shows which ones you've collected; a model's page puts every
+   place you met it side by side, quizzes you on spotting it in failures you
+   haven't read yet, and lists its names in other fields. ═══ */
+function modelTabs(active) {
+  const seg = h("div", "seg models-tabs");
+  [["models", "Thinking models"], ["vocab", "Engineering vocabulary"]].forEach(([id, label]) => {
+    const b = h("button", active === id ? "on" : "", label);
+    b.onclick = () => { if (id === "models") { renderModels(); show("models"); } else { renderVocab(); show("vocab"); } };
+    seg.appendChild(b);
+  });
+  return seg;
+}
+function modelUses(recs, id) {
+  const out = [];
+  recs.forEach(rec => rec.doc.layers.forEach(L => {
+    if (L.problem.model.id !== id) return;
+    const a = rec.attempts[L.index];
+    out.push({ rec, L, read: !!(a && a.revealed) });
+  }));
+  return out;
+}
 async function renderModels(detailId) {
   const root = $("screen-models").firstElementChild;
   root.textContent = "";
-  const index = await Store.getModelIndex();
-  const byId = {};
-  index.forEach(r => { byId[r.modelId] = r.uses; });
   const recs = await Store.getBreakdowns();
-  const recById = {};
-  recs.forEach(r => { recById[r.id] = r; });
-
-  if (detailId) {
-    const m = MODEL_LIBRARY.find(x => x.id === detailId);
-    const back = h("button", "gbtn", "‹ All models");
-    back.onclick = () => renderModels();
-    root.appendChild(back);
-    root.appendChild(h("h1", "title", m.name));
-    root.appendChild(h("p", "subtitle", m.one_liner));
-    const det = h("div", "ml-detail");
-    det.appendChild(h("p", "desc", m.description));
-    root.appendChild(det);
-    root.appendChild(h("h2", "section-head", "Where it appears in your library"));
-    const uses = byId[detailId] || [];
-    if (!uses.length) root.appendChild(h("p", "lib-note", "No layer in your library uses this model yet."));
-    uses.forEach(u => {
-      const rec = recById[u.breakdownId];
-      if (!rec) return;
-      const L = rec.doc.layers.find(x => x.index === u.layerIndex);
-      const row = h("button", "ml-use");
-      const left = h("div");
-      left.appendChild(h("div", "mu-sys", rec.system));
-      left.appendChild(h("div", "mu-layer", "Layer " + u.layerIndex + " · " + (L ? L.name : "")));
-      row.appendChild(left);
-      row.appendChild(h("span", "mr-arrow", "›"));
-      row.onclick = () => openReader(rec.id, u.layerIndex);
-      root.appendChild(row);
-    });
-    return;
-  }
+  if (detailId) return renderModel(root, recs, detailId);
 
   root.appendChild(h("div", "kicker", "Cross-system pattern recognition"));
   root.appendChild(h("h1", "title", "The 14 thinking models"));
-  root.appendChild(h("p", "subtitle", "Every layer names the model that cracks its problem. Tap one to see it recur across systems."));
-  // sibling index, one altitude down: what engineers call these forces
-  const toVocab = h("button", "gbtn", "The engineering vocabulary →");
-  toVocab.style.marginBottom = "18px";
-  toVocab.onclick = () => { renderVocab(); show("vocab"); };
-  root.appendChild(toVocab);
+  root.appendChild(h("p", "subtitle", "Every layer names the idea that cracks its problem. The same fourteen keep coming back, so learning to spot them is most of what taking systems apart teaches."));
+  root.appendChild(modelTabs("models"));
   const grid = h("div", "model-grid");
   MODEL_LIBRARY.forEach(m => {
-    const uses = byId[m.id] || [];
+    const uses = modelUses(recs, m.id), read = uses.filter(u => u.read).length;
+    const systems = new Set(uses.map(u => u.rec.id)).size;
     const card = h("button", "ml-card");
     card.appendChild(h("div", "ml-name", m.name));
     card.appendChild(h("div", "ml-one", m.one_liner));
-    card.appendChild(h("div", "ml-count", uses.length ? uses.length + " layer" + (uses.length > 1 ? "s" : "") + " · " + new Set(uses.map(u => u.breakdownId)).size + " system(s)" : "not yet used"));
+    card.appendChild(h("div", "ml-count", systems ? `In ${systems} system${systems > 1 ? "s" : ""}` + (read ? ` · you've read ${read}` : "") : "Not in your library yet"));
     card.onclick = () => renderModels(m.id);
     grid.appendChild(card);
   });
   root.appendChild(grid);
 }
 
-/* ═══ Drill mode — re-earn what you've read (§value-add) ═══
-   Gates you have revealed become drillable, oldest practice first;
-   interview probes from revealed layers deal as a cross-library deck.
-   Fully offline; grades write back to the attempt record. */
-let drillState = null;
+function renderModel(root, recs, id) {
+  const m = MODEL_LIBRARY.find(x => x.id === id);
+  const uses = modelUses(recs, id);
+  const read = uses.filter(u => u.read), unread = uses.filter(u => !u.read);
+  const back = h("button", "gbtn ghost", "‹ All models");
+  back.onclick = () => renderModels();
+  root.appendChild(back);
+  root.appendChild(h("div", "kicker", "Thinking model"));
+  root.appendChild(h("h1", "title", m.name));
+  root.appendChild(h("p", "subtitle", m.one_liner));
+  root.appendChild(h("p", "essence", m.description));
 
-/* ═══ Track — the curated path through the library + your progress ═══ */
-async function computeProgress() {
-  const recs = await Store.getBreakdowns();
-  const byId = {}; recs.forEach(r => byId[r.id] = r);
-  // the path is the flagship set, in the shipped order
-  const path = CONFIG.flagshipNames.map(s => byId["flagship-" + s]).filter(Boolean);
-  const isDone = r => r.doc.layers.length > 0 && r.doc.layers.every(L => r.attempts[L.index] && r.attempts[L.index].revealed);
-  const pathDone = path.filter(isDone).length;
-  // models collected: distinct thinking models you've revealed at least once
-  const seenModels = new Set();
-  let gates = 0;
-  recs.forEach(r => r.doc.layers.forEach(L => {
-    const a = r.attempts[L.index];
-    if (a && a.revealed) { gates++; if (L.problem && L.problem.model) seenModels.add(L.problem.model.id); }
-  }));
-  return {
-    recs, path, byId, isDone,
-    pathDone, pathTotal: path.length,
-    models: seenModels.size, modelsTotal: MODEL_LIBRARY.length,
-    gates,
-    yours: recs.filter(r => r.source !== "flagship").length,
-    yoursDone: recs.filter(r => r.source !== "flagship" && isDone(r)).length
-  };
-}
+  const layout = h("div", "model-layout");
+  const main = h("div", "model-main");
+  const side = h("aside", "model-side");
 
-async function renderTrack() {
-  const root = $("screen-track").firstElementChild;
-  root.textContent = "";
-  const p = await computeProgress();
-
-  root.appendChild(h("div", "kicker", "Your path through the anatomy"));
-  root.appendChild(h("h1", "title", "The Track"));
-  root.appendChild(h("p", "subtitle", "Foundations first, then the systems built on them — until YouTube, the capstone that drills into nearly everything before it. Work through them in order, or jump to whatever you need."));
-
-  // progress tiles
-  const stats = h("div", "trk-stats");
-  const tile = (n, of, label) => {
-    const t = h("div", "trk-tile");
-    const big = h("div", "trk-n");
-    big.appendChild(document.createTextNode(String(n)));
-    if (of != null) big.appendChild(h("span", "trk-of", " / " + of));
-    t.appendChild(big);
-    t.appendChild(h("div", "trk-l", label));
-    stats.appendChild(t);
-  };
-  tile(p.pathDone, p.pathTotal, "systems on the path");
-  tile(p.models, p.modelsTotal, "thinking models collected");
-  tile(p.gates, null, "gates earned");
-  if (p.yours) tile(p.yoursDone, p.yours, "your own designs");
-  root.appendChild(stats);
-
-  // overall bar
-  const barWrap = h("div", "trk-bar");
-  const fill = h("div", "trk-bar-fill");
-  fill.style.width = Math.round(100 * p.pathDone / Math.max(1, p.pathTotal)) + "%";
-  barWrap.appendChild(fill);
-  root.appendChild(barWrap);
-
-  const exp = h("button", "gbtn", "◱ Export progress card");
-  exp.style.margin = "4px 0 26px";
-  exp.onclick = () => exportProgressCard(p);
-  root.appendChild(exp);
-
-  // the ordered path
-  root.appendChild(h("h2", "section-head", "The path"));
-  const list = h("div", "trk-path");
-  p.path.forEach((rec, i) => {
-    const done = p.isDone(rec);
-    const n = rec.doc.layers.length;
-    const revealed = rec.doc.layers.filter(L => rec.attempts[L.index] && rec.attempts[L.index].revealed).length;
-    const row = h("button", "trk-row" + (done ? " done" : ""));
-    row.appendChild(h("span", "trk-idx", done ? "✓" : String(i + 1)));
-    const mid = h("div", "trk-mid");
-    mid.appendChild(h("div", "trk-name", rec.system));
-    mid.appendChild(h("div", "trk-sub", done ? "complete · " + n + " layers" : revealed + " of " + n + " layers"));
-    row.appendChild(mid);
-    const ring = h("div", "ring trk-ring");
-    const pct = Math.round(100 * revealed / n);
-    ring.style.background = `conic-gradient(var(--accent) ${pct * 3.6}deg, var(--line-soft) 0deg)`;
-    ring.appendChild(h("span", null, pct + ""));
-    row.appendChild(ring);
-    row.onclick = () => openReader(rec.id);
-    list.appendChild(row);
+  // every place you met it, side by side, with the fix in teal
+  main.appendChild(h("h2", "section-head", "Where you've met it"));
+  const systems = new Set(uses.map(u => u.rec.id)).size;
+  main.appendChild(h("p", "lib-note", read.length
+    ? `${systems} system${systems > 1 ? "s" : ""} in your library use it; you've read ${read.length} of those layers.`
+    : `${systems} system${systems > 1 ? "s" : ""} in your library use it.`));
+  const grid = h("div", "met-grid");
+  (read.length ? read : uses).slice(0, 6).forEach(u => {
+    const card = h("button", "met-card");
+    const thumb = h("div", "home-thumb met-thumb");
+    card.appendChild(thumb);
+    card.appendChild(h("div", "met-sys", `${u.rec.system} · layer ${u.L.index}`));
+    card.appendChild(h("div", "met-name", u.read ? u.L.name.split(":")[0] : "Not read yet"));
+    card.appendChild(h("p", "met-why", u.L.problem.model.application));
+    card.onclick = () => openReader(u.rec.id, u.L.index);
+    grid.appendChild(card);
+    try { Diagram.mount(thumb, u.rec.doc).show(u.L.index); } catch (e) { thumb.remove(); }
   });
-  root.appendChild(list);
-}
-
-/* branded, shareable progress card (light washi always — reads on any feed) */
-function exportProgressCard(p) {
-  const W = 1200, H = 630, S = 2, cv = document.createElement("canvas");
-  cv.width = W * S; cv.height = H * S;
-  const x = cv.getContext("2d"); x.scale(S, S);
-  const INK = "#211e19", PAPER = "#f5f2ea", TEAL = "#0e7a63", SEAL = "#d95b31", SOFT = "#7a766b";
-  x.fillStyle = PAPER; x.fillRect(0, 0, W, H);
-  // dot grid, faint
-  x.fillStyle = "rgba(14,122,99,0.06)";
-  for (let gy = 40; gy < H; gy += 26) for (let gx = 40; gx < W; gx += 26) { x.beginPath(); x.arc(gx, gy, 1.1, 0, 7); x.fill(); }
-  // mark: teal square + brush arc
-  const mx = 92, my = 90;
-  x.strokeStyle = TEAL; x.lineWidth = 5; x.strokeRect(mx, my, 46, 46);
-  x.strokeStyle = INK; x.lineCap = "round";
-  for (let i = 0; i < 60; i++) {
-    const t = i / 60, a1 = -1.1 + (Math.PI * 2 - 0.85) * t, a2 = -1.1 + (Math.PI * 2 - 0.85) * (i + 1) / 60;
-    const R = 26, cx = mx + 23, cy = my + 23;
-    x.lineWidth = Math.max(1, 7 * (0.3 + 0.7 * Math.pow(1 - t, 1.2)) * Math.min(1, 0.2 + t * 7));
-    x.beginPath(); x.moveTo(cx + Math.cos(a1) * R, cy + Math.sin(a1) * R); x.lineTo(cx + Math.cos(a2) * R, cy + Math.sin(a2) * R); x.stroke();
+  main.appendChild(grid);
+  const rest = (read.length ? uses.slice(0, 0).concat(read.slice(6), unread) : uses.slice(6));
+  if (rest.length) {
+    const more = h("div", "met-more");
+    more.appendChild(h("div", "mono-label", read.length ? "Also in" : "More"));
+    rest.forEach(u => {
+      const row = h("button", "ml-use");
+      const left = h("div");
+      left.append(h("div", "mu-sys", u.rec.system), h("div", "mu-layer", `Layer ${u.L.index}` + (u.read ? " · " + u.L.name.split(":")[0] : " · not read yet")));
+      row.append(left, h("span", "mr-arrow", "›"));
+      row.onclick = () => openReader(u.rec.id, u.L.index);
+      more.appendChild(row);
+    });
+    main.appendChild(more);
   }
-  x.fillStyle = INK; x.font = "700 30px 'Bricolage Grotesque', system-ui, sans-serif";
-  x.fillText("Vitruvian", 158, 112);
-  x.fillStyle = SOFT; x.font = "600 12px 'JetBrains Mono', monospace";
-  x.fillText("MY PROGRESS · THE ANATOMY OF EVERYDAY SYSTEMS", 158, 132);
-  // three big stats
-  const cells = [[p.pathDone + " / " + p.pathTotal, "SYSTEMS ON THE PATH"], [p.models + " / " + p.modelsTotal, "THINKING MODELS"], [p.gates + "", "GATES EARNED"]];
-  cells.forEach((c, i) => {
-    const cx = 96 + i * 350;
-    x.fillStyle = TEAL; x.font = "700 92px 'Bricolage Grotesque', system-ui, sans-serif";
-    x.fillText(c[0], cx, 340);
-    x.fillStyle = SOFT; x.font = "600 15px 'JetBrains Mono', monospace";
-    x.fillText(c[1], cx, 372);
-  });
-  // path completion bar
-  const bx = 96, bw = W - 192, by = 430;
-  x.fillStyle = "#e6e0d5"; x.fillRect(bx, by, bw, 12);
-  x.fillStyle = TEAL; x.fillRect(bx, by, bw * (p.pathDone / Math.max(1, p.pathTotal)), 12);
-  x.fillStyle = INK; x.font = "600 18px 'Hanken Grotesk', system-ui, sans-serif";
-  const line = p.pathDone === p.pathTotal ? "The whole path, rebuilt from its failures." : "Rebuilding the systems that run the world, one failure at a time.";
-  x.fillText(line, bx, 495);
-  // seal + url
-  x.fillStyle = SEAL; x.beginPath(); x.arc(bx + 6, 560, 7, 0, 7); x.fill();
-  x.fillStyle = SOFT; x.font = "600 14px 'JetBrains Mono', monospace";
-  x.fillText("bate-epey93.github.io/vitruvian", bx + 24, 565);
 
-  const a = document.createElement("a");
-  a.href = cv.toDataURL("image/png");
-  a.download = "vitruvian-progress.png";
-  a.click();
-  toast("Progress card exported");
+  // Spot it: failures from layers you haven't read; is this the model?
+  main.appendChild(spotIt(recs, m));
+
+  // its names in other fields
+  const names = typeof rosettaFor === "function" ? rosettaFor(id, null) : [];
+  if (names.length) {
+    side.appendChild(h("div", "mono-label", "Also called"));
+    const list = h("div", "aka-list");
+    names.forEach(n => {
+      const row = h("div", "aka-row");
+      row.append(h("span", "aka-dom", n.label), h("span", "aka-term", n.term));
+      list.appendChild(row);
+    });
+    side.appendChild(list);
+  }
+  layout.append(main, side);
+  root.appendChild(layout);
+}
+
+/* Spot it: three failures you haven't read. For each, does this model
+   crack it? Two use the model when there are enough; the rest use others. */
+function spotIt(recs, m) {
+  const box = h("section", "spot-it");
+  box.appendChild(h("div", "step-kick tone-vio", "Spot it"));
+  box.appendChild(h("h3", "move-q", `Does ${m.name} crack these failures?`));
+  const pool = [];
+  recs.forEach(rec => rec.doc.layers.forEach(L => {
+    const a = rec.attempts[L.index];
+    if (!(a && a.revealed)) pool.push({ rec, L, yes: L.problem.model.id === m.id });
+  }));
+  const pick = (list, n) => list.map(x => ({ x, k: Math.random() })).sort((p, q) => p.k - q.k).slice(0, n).map(p => p.x);
+  const yes = pick(pool.filter(p => p.yes), 2);
+  const items = pick(yes.concat(pick(pool.filter(p => !p.yes), 3 - yes.length)), 3);
+  if (items.length < 2) {
+    box.appendChild(h("p", "lib-note", "You've read nearly everything already. Spot it uses failures you haven't seen, so there's nothing left to test you on here."));
+    return box;
+  }
+  box.appendChild(h("p", "lib-note", "These come from layers you haven't read, so recognising the idea is the whole exercise."));
+  let right = 0, answered = 0;
+  const score = h("p", "pb-result");
+  items.forEach(it => {
+    const card = h("div", "spot-card");
+    card.appendChild(h("div", "rv-where", it.rec.system));
+    card.appendChild(h("p", "rv-prompt", it.L.problem.beginner || it.L.problem.statement));
+    const row = h("div", "spot-row");
+    const fb = h("p", "spot-fb");
+    [["Yes", true], ["No", false]].forEach(([lab, val]) => {
+      const b = h("button", "gbtn", lab);
+      b.onclick = () => {
+        row.querySelectorAll("button").forEach(x => { x.disabled = true; });
+        const ok = val === it.yes;
+        answered++; if (ok) right++;
+        b.classList.add(ok ? "spot-ok" : "spot-no");
+        const actual = MODEL_LIBRARY.find(x => x.id === it.L.problem.model.id);
+        fb.textContent = (ok ? "Right. " : "Not this time. ") + (it.yes ? `It's ${m.name}.` : `That one is ${actual ? actual.name : "a different model"}.`);
+        if (answered === items.length) score.textContent = `${right} of ${items.length}. Open any of these systems to see the idea at work.`;
+      };
+      row.appendChild(b);
+    });
+    card.append(row, fb);
+    box.appendChild(card);
+  });
+  box.appendChild(score);
+  return box;
 }
 
 /* ═══ Pulse → GIF: record a few seconds of the running simulation as a
@@ -1739,7 +2120,7 @@ async function exportPulseGIF(diagram, onProgress) {
   // static clone with computed styles inlined once
   const clone = svgEl.cloneNode(true);
   const src = [svgEl, ...svgEl.querySelectorAll("*")], dst = [clone, ...clone.querySelectorAll("*")];
-  const PROPS = ["stroke", "stroke-width", "stroke-dasharray", "stroke-linecap", "fill", "fill-opacity", "opacity", "font-size", "font-weight", "letter-spacing", "paint-order"];
+  const PROPS = ["stroke", "stroke-width", "stroke-dasharray", "stroke-linecap", "stroke-linejoin", "fill", "fill-opacity", "opacity", "font-size", "font-weight", "letter-spacing", "paint-order", "display"];
   src.forEach((el, i) => {
     const cs = getComputedStyle(el);
     PROPS.forEach(p => { const v = cs.getPropertyValue(p); if (v) dst[i].style.setProperty(p, v); });
@@ -1781,153 +2162,136 @@ async function exportPulseGIF(diagram, onProgress) {
   toast("Pulse GIF exported");
 }
 
-async function renderDrill(keep) {
+/* ═══ Practice: optional questions on layers you've read (review.js).
+   Nothing is scheduled or due. Model and rule questions check themselves;
+   fix, cost and probe questions ask you to recall first, then compare. ═══ */
+let reviewState = null;
+async function renderDrill(opts = {}) {
   const root = $("screen-drill").firstElementChild;
   root.textContent = "";
   const recs = await Store.getBreakdowns();
-  const gates = [], probes = [];
-  recs.forEach(rec => {
-    rec.doc.layers.forEach(L => {
-      const a = rec.attempts[L.index];
-      if (a && a.revealed) {
-        gates.push({ rec, L, a });
-        L.developer.interview_probes.forEach(p => probes.push({ rec, L, p }));
+  const audience = meta.audienceMode || "enthusiast";
+  if (!opts.keep || !reviewState) {
+    reviewState = { deck: Review.deck(recs, { systems: opts.systems || null, audience }), i: 0, right: 0, checked: 0, systems: opts.systems || null, label: opts.label || null };
+  }
+  const st = reviewState;
+  root.appendChild(h("div", "kicker", st.label || "Practice"));
+  root.appendChild(h("h1", "title", "Practice"));
+  if (!st.deck.length) {
+    root.appendChild(h("p", "subtitle", "Nothing to practise yet. Read a layer of any Deconstruct through to its solution and you can quiz yourself on it here."));
+    const go = ctaButton("Back home");
+    go.onclick = async () => { await renderLibrary(); show("library"); };
+    root.appendChild(go);
+    return;
+  }
+  if (st.i >= st.deck.length) return practiceDone(root, st);
+  root.appendChild(h("p", "subtitle", `A few questions on layers you've read, whenever you like. ${st.deck.length - st.i} left in this round.`));
+  const bar = h("div", "rv-progress");
+  st.deck.forEach((_, k) => bar.appendChild(h("span", k < st.i ? "done" : k === st.i ? "on" : "")));
+  root.appendChild(bar);
+  reviewCard(root, st.deck[st.i], audience);
+}
+
+function reviewCard(root, c, audience) {
+  const { rec, L } = c;
+  const card = h("div", "rv-card");
+  card.appendChild(h("div", "rv-type", c.label));
+  card.appendChild(h("div", "rv-where", `${rec.system} · layer ${L.index}`));
+  const next = () => { reviewState.i++; renderDrill({ keep: true }); };
+  const nextBtn = () => { const b = ctaButton("Next question"); b.onclick = next; return b; };
+  const problem = audience === "beginner" ? L.problem.beginner : L.problem.statement;
+  const model = MODEL_LIBRARY.find(m => m.id === L.problem.model.id);
+
+  if (c.type === "model" || c.type === "rule") {
+    card.appendChild(h("p", "rv-prompt", problem));
+    const list = h("div", "rule-list");
+    const ruleN = {}; rec.doc.strip_down.invariants.forEach((iv, k) => { ruleN[iv.id] = k + 1; });
+    const feedback = h("div");
+    c.options.forEach(o => {
+      const btn = h("button", "rule-opt");
+      if (c.type === "model") {
+        const m = MODEL_LIBRARY.find(x => x.id === o.id);
+        btn.append(h("span", "rule-n", "Model"), h("span", "rule-t", m ? m.name : o.id));
+      } else {
+        const iv = rec.doc.strip_down.invariants.find(x => x.id === o.id);
+        btn.append(h("span", "rule-n", "Rule " + ruleN[o.id]), h("span", "rule-t", iv ? iv.text : o.id));
       }
+      btn.onclick = () => {
+        list.querySelectorAll("button").forEach(x => { x.disabled = true; });
+        c.options.forEach((o2, k) => { if (o2.right) list.children[k].classList.add(o2 === o ? "hit" : "answer"); });
+        if (!o.right) btn.classList.add("miss");
+        reviewState.checked++;
+        if (o.right) reviewState.right++;
+        const fb = h("div", "rv-feedback " + (o.right ? "ok" : "no"));
+        fb.appendChild(h("b", null, o.right ? "Right. " : "Not this time. "));
+        if (c.type === "model") fb.appendChild(document.createTextNode(`${model ? model.name + ": " + model.one_liner : ""} ${L.problem.model.application}`));
+        else fb.appendChild(document.createTextNode("This failure attacks " + L.defends.map(d => "Rule " + ruleN[d]).join(" and ") + "."));
+        feedback.append(fb, nextBtn());
+      };
+      list.appendChild(btn);
     });
-  });
-  gates.sort((x, y) => (x.a.lastDrill || x.a.ts || 0) - (y.a.lastDrill || y.a.ts || 0));
-  if (!drillState || !keep) drillState = { tab: "gates", gi: 0, done: 0 };
-  drillState.gates = gates;
-  drillState.probes = probes;
-
-  root.appendChild(h("div", "kicker", "Practice: re-earn what you've read"));
-  root.appendChild(h("h1", "title", "Drill"));
-
-  const seg = h("div", "seg");
-  [["gates", "Gates · " + gates.length], ["probes", "Probes · " + probes.length]].forEach(([id, label]) => {
-    const b = h("button", drillState.tab === id ? "on" : "", label);
-    b.onclick = () => { drillState.tab = id; drillState.gi = 0; renderDrill(true); };
-    seg.appendChild(b);
-  });
-  root.appendChild(seg);
-
-  const body = h("div");
-  body.style.marginTop = "22px";
-  root.appendChild(body);
-
-  if (drillState.tab === "gates") renderGateDrill(body);
-  else renderProbeDrill(body);
-}
-
-function renderGateDrill(body) {
-  const { gates } = drillState;
-  if (!gates.length) {
-    body.appendChild(h("p", "lib-note", "Nothing to drill yet. Reveal some gates in a Deconstruct first; drills re-test what you've earned."));
-    return;
-  }
-  const item = gates[drillState.gi % gates.length];
-  const { rec, L, a } = item;
-
-  body.appendChild(h("p", "mono-label", `card ${(drillState.gi % gates.length) + 1} / ${gates.length} · ${drillState.done} graded this session`));
-
-  const card = h("div", "gate-card");
-  const metaRow = h("div", "bd-meta");
-  metaRow.style.marginBottom = "10px";
-  metaRow.appendChild(h("span", "chip flagship", rec.system));
-  metaRow.appendChild(h("span", "chip", "layer " + L.index));
-  metaRow.appendChild(h("span", "chip", a.lastDrill ? "last drilled " + timeAgo(a.lastDrill) : "never drilled"));
-  card.appendChild(metaRow);
-
-  card.appendChild(h("p", "st-scenario", L.problem.statement));
-  card.appendChild(h("div", "gate-q", L.gate.question));
-  const ta = h("textarea");
-  ta.placeholder = "Answer from memory, then check yourself.";
-  card.appendChild(ta);
-
-  const actions = h("div", "gate-actions");
-  const revealBtn = h("button", "gbtn primary", "Check my answer");
-  actions.appendChild(revealBtn);
-  const skipBtn = h("button", "gbtn", "Skip ›");
-  skipBtn.onclick = () => { drillState.gi++; renderDrill(true); };
-  actions.appendChild(skipBtn);
-  card.appendChild(actions);
-
-  revealBtn.onclick = () => {
-    actions.remove();
-    const sol = h("div", "solution-card");
-    sol.appendChild(h("div", "sc-label", "The canonical solution"));
-    sol.appendChild(h("p", null, L.solution));
-    card.appendChild(sol);
-    if (a.answer && a.answer.trim()) {
-      const ya = h("div", "your-answer");
-      ya.appendChild(h("div", "ya-label", "Your original gate answer"));
-      ya.appendChild(h("p", null, a.answer));
-      card.appendChild(ya);
-    }
-    const grade = h("div", "gate-actions");
-    const good = h("button", "gbtn primary", "✓ Got it");
-    const again = h("button", "gbtn", "↻ Again soon");
-    const finish = ok => {
-      a.lastDrill = Date.now();
-      a.drillGrade = ok ? "good" : "again";
-      Store.saveBreakdownLight(rec);
-      drillState.gi++;
-      drillState.done++;
-      renderDrill(true);
+    card.append(list, feedback);
+  } else {
+    let question, answer;
+    if (c.type === "fix") { card.appendChild(h("p", "rv-prompt", problem)); question = L.gate.question; answer = L.solution; }
+    else if (c.type === "cost") { card.appendChild(h("p", "rv-prompt", L.solution)); question = "What did this fix cost, and who pays for it?"; answer = L.tradeoff; }
+    else { card.appendChild(h("p", "rv-prompt", `${L.name}. ${L.tech_lens.mechanism}`)); question = c.probe; answer = L.tech_lens.principle; }
+    card.appendChild(h("p", "rv-q", question));
+    const ta = h("textarea", "move-sketch");
+    ta.placeholder = "Answer from memory first. A few words is enough.";
+    ta.setAttribute("aria-label", "Your answer");
+    card.appendChild(ta);
+    const reveal = ctaButton("Show the answer");
+    const after = h("div");
+    reveal.onclick = () => {
+      reveal.remove();
+      ta.readOnly = true;
+      const box = h("div", "solution-card");
+      box.appendChild(h("div", "sc-label", c.type === "fix" ? "What was actually built" : c.type === "cost" ? "The tradeoff" : "The principle to check against"));
+      box.appendChild(h("p", null, answer));
+      after.append(box, nextBtn());
     };
-    good.onclick = () => finish(true);
-    again.onclick = () => finish(false);
-    grade.append(good, again);
-    card.appendChild(grade);
-  };
-
-  body.appendChild(card);
-}
-
-function renderProbeDrill(body) {
-  const { probes } = drillState;
-  if (!probes.length) {
-    body.appendChild(h("p", "lib-note", "No probes yet. They unlock as you reveal layers."));
-    return;
+    card.append(reveal, after);
   }
-  probes.forEach(({ rec, L, p }) => {
-    const card = h("div", "stress-card");
-    card.appendChild(h("div", "st-scenario", p));
-    const reveal = h("div", "st-reveal");
-    reveal.hidden = true;
-    reveal.appendChild(h("p", null, L.tech_lens.principle));
-    const open = h("button", "gbtn", `Open ${rec.system} · layer ${L.index}`);
-    open.style.marginTop = "8px";
-    open.onclick = () => openReader(rec.id, L.index);
-    reveal.appendChild(open);
-    const btn = h("button", "gbtn", "What is it probing?");
-    btn.onclick = () => { reveal.hidden = false; btn.remove(); };
-    card.appendChild(btn);
-    card.appendChild(reveal);
-    body.appendChild(card);
-  });
+  const open = h("button", "gbtn ghost rv-open", "Open this layer");
+  open.onclick = () => openReader(rec.id, L.index);
+  card.appendChild(open);
+  root.appendChild(card);
 }
 
-/* ═══ Settings (§11.5) ═══ */
+function practiceDone(root, st) {
+  root.appendChild(h("p", "subtitle", st.checked
+    ? `That's the round. ${st.right} of ${st.checked} checked questions right.`
+    : "That's the round."));
+  const row = h("div", "rv-actions");
+  const again = ctaButton("Another round");
+  again.onclick = () => renderDrill({ systems: st.systems, label: st.label });
+  const home = h("button", "gbtn", "Back home");
+  home.onclick = async () => { await renderLibrary(); show("library"); };
+  row.append(again, home);
+  root.appendChild(row);
+}
+
 function renderSettings(banner) {
   const root = $("screen-settings").firstElementChild;
   root.textContent = "";
   root.appendChild(h("div", "kicker", "Settings"));
-  root.appendChild(h("h1", "title", "Keys, defaults, backups"));
+  root.appendChild(h("h1", "title", "How you learn"));
   if (banner) root.appendChild(h("div", "narrowing-note", banner));
 
   /* About / how it works → landing + tutorial */
   const ab = h("div", "set-block");
-  ab.appendChild(h("h3", null, "About & guide"));
+  ab.appendChild(h("h3", null, "About & field guide"));
   ab.appendChild(h("p", "note", "What Vitruvian is and how to read a Deconstruct: the cards, the diagram, the developer lens."));
   const abRow = h("div", "set-row");
   const abBtn = h("button", "gbtn primary", "Open the intro →");
   abBtn.onclick = () => { renderLanding(); show("landing"); };
-  const tutBtn = h("button", "gbtn", "How to read a Deconstruct →");
+  const tutBtn = h("button", "gbtn", "Field guide →");
   tutBtn.onclick = () => { renderTutorial("settings"); show("tutorial"); };
-  abRow.append(abBtn, tutBtn);
+  const tipsBtn = h("button", "gbtn", "Show the first-run tips again");
+  tipsBtn.onclick = async () => { meta.tipsSeen = false; await Store.saveMeta({ tipsSeen: false }); toast("Tips will show next time you open a Deconstruct"); };
+  abRow.append(abBtn, tutBtn, tipsBtn);
   ab.appendChild(abRow);
-  root.appendChild(ab);
 
   /* API key */
   const kb = h("div", "set-block");
@@ -1956,7 +2320,6 @@ function renderSettings(banner) {
   link.rel = "noopener";
   cost.appendChild(link);
   kb.appendChild(cost);
-  root.appendChild(kb);
 
   /* model */
   const mb = h("div", "set-block");
@@ -1980,11 +2343,17 @@ function renderSettings(banner) {
   };
   mrow.appendChild(msave);
   mb.append(mi, mrow);
-  root.appendChild(mb);
 
-  /* defaults */
+  /* how you learn: everything that changes what reading feels like */
+  const toggle = (on, label, flip) => {
+    const t = h("div", "toggle" + (on ? " on" : ""));
+    t.append(h("span", "tg-track"), h("span", "tg-label", label));
+    t.onclick = async () => { await flip(); renderSettings(); };
+    return t;
+  };
   const db = h("div", "set-block");
-  db.appendChild(h("h3", null, "Reading defaults"));
+  db.appendChild(h("h3", null, "Reading level"));
+  db.appendChild(h("p", "note", "How much each layer explains. You can switch it any time from the reader too."));
   const seg = h("div", "seg");
   COPY.audienceModes.forEach(m => {
     const b = h("button", meta.audienceMode === m.id ? "on" : "", m.label);
@@ -1997,20 +2366,19 @@ function renderSettings(banner) {
     seg.appendChild(b);
   });
   db.appendChild(seg);
-  const tog = h("div", "toggle" + (meta.challengeModeDefault === true ? " on" : ""));
-  tog.style.marginTop = "12px";
-  tog.append(h("span", "tg-track"), h("span", "tg-label", "Challenge mode by default: hide each solution behind a design-it-first gate"));
-  tog.onclick = async () => {
-    meta.challengeModeDefault = !(meta.challengeModeDefault === true);
-    await Store.saveMeta({ challengeModeDefault: meta.challengeModeDefault });
-    renderSettings();
-  };
-  db.appendChild(tog);
-  root.appendChild(db);
+  const lb = h("div", "set-block set-toggles");
+  lb.appendChild(h("h3", null, "While you read"));
+  lb.append(
+    toggle(meta.challengeModeDefault === true, "Strict mode: write your own fix before you can see the real one",
+      () => { meta.challengeModeDefault = !(meta.challengeModeDefault === true); return Store.saveMeta({ challengeModeDefault: meta.challengeModeDefault }); }),
+    toggle(meta.autoReplay !== false, "Replay each failure on the diagram when you reach it",
+      () => { meta.autoReplay = meta.autoReplay === false; return Store.saveMeta({ autoReplay: meta.autoReplay }); }),
+    toggle(meta.onePage === true, "Read each layer as one page instead of four steps",
+      () => { meta.onePage = !(meta.onePage === true); return Store.saveMeta({ onePage: meta.onePage }); }));
 
   /* generation speed */
   const gs = h("div", "set-block");
-  gs.appendChild(h("h3", null, "Generation speed"));
+  gs.appendChild(h("h3", null, "Generation"));
   gs.appendChild(h("p", "note", "Balanced lets the model reason longer before writing, for better structure. Fast trims thinking for quicker, cheaper runs."));
   const gseg = h("div", "seg");
   [["balanced", "Balanced"], ["fast", "Fast"]].forEach(([id, label]) => {
@@ -2023,7 +2391,11 @@ function renderSettings(banner) {
     gseg.appendChild(b);
   });
   gs.appendChild(gseg);
-  root.appendChild(gs);
+  // the voice pass: generated text gets the same editing the app's own copy got
+  const vtog = toggle(meta.voicePass !== false, "Edit generated text for voice: when the checker flags stock phrasing, one short extra call rewrites just those passages",
+    () => { meta.voicePass = meta.voicePass === false; return Store.saveMeta({ voicePass: meta.voicePass }); });
+  vtog.style.marginTop = "14px";
+  gs.appendChild(vtog);
 
   /* backup / restore */
   const bb = h("div", "set-block");
@@ -2055,7 +2427,18 @@ function renderSettings(banner) {
   });
   brow.append(bexp, bres);
   bb.appendChild(brow);
-  root.appendChild(bb);
+
+  const group = (title, note, ...blocks) => {
+    const g = h("section", "set-group");
+    if (title) g.appendChild(h("h2", "set-group-title", title));
+    if (note) g.appendChild(h("p", "set-group-note", note));
+    blocks.forEach(b => g.appendChild(b));
+    root.appendChild(g);
+  };
+  group(null, null, db, lb);
+  group("Deconstructing your own systems", "Generating a Deconstruct calls Anthropic with your key. Everything else works offline.", kb, mb, gs);
+  group("Your data", null, bb);
+  group("About", null, ab);
 
   root.appendChild(h("p", "fine", COPY.privacyNote));
   root.appendChild(h("p", "fine", `${CONFIG.toolName.replace("·", "·")} v${CONFIG.appVersion} · ${COPY.offlineGenNote}`));

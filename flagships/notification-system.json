@@ -602,7 +602,7 @@
    },
    "gate": {
     "question": "A user follows a thread that just got popular, and your pipeline wants to send them forty pushes in five minutes, each one individually allowed. How do you keep every send valid yet stop the phone from buzzing forty times?",
-    "hint": "The problem is not any single send; it is their rate. What can you count per user, and what do you do when the count crosses a line?"
+    "hint": "Each single send is fine; their rate is the problem. What can you count per user, and what do you do when the count crosses a line?"
    },
    "solution": "A per-user rate limiter (a token bucket) on the send path, plus bundling: when sends for a user exceed a threshold in a window, collapse them into a digest ('Alex and 12 others replied') or defer low-priority ones to a scheduled summary. High-priority sends (a security code) bypass; low-value ones are merged or shed. The limiter senses the rate and the response damps it.",
    "user_lens": {

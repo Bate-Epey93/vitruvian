@@ -1,13 +1,15 @@
-const CACHE_VERSION = "vitruvian-v1.40.0";  // bump on EVERY deploy, including content edits
+const CACHE_VERSION = "vitruvian-v2.0.0";  // bump on EVERY deploy, including content edits
 const SHELL = [
   "./",
   "./index.html",
   "./styles.css",
   "./splash.js",
   "./content.js",
+  "./voice.js",
   "./skill.js",
   "./schema.js",
   "./storage.js",
+  "./review.js",
   "./vendor/rough.js",
   "./renderer-diagram.js",
   "./renderer-doc.js",

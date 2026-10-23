@@ -24,8 +24,8 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "1.40.0",
-  flagshipVersion: 10,                   // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
+  appVersion: "2.0.0",
+  flagshipVersion: 11,                   // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   // foundations first, then the systems built on them — YouTube last, the capstone that drills into everything
   flagshipNames: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue", "notification-system", "rate-limiter", "search-typeahead", "url-shortener", "ride-matching", "ticket-booking", "content-delivery-network", "recommendation-feed", "payment-ledger", "video-transcoding", "news-feed", "photo-store", "whatsapp", "youtube", "railway"],
   siteUrl: "https://bate-epey93.github.io/vitruvian/",
@@ -550,21 +550,28 @@ var NUMBERS_LIBRARY = [
 /* ---------- UI COPY ---------- */
 var COPY = {
   libraryTitle: "Library",
-  sampleHeading: "Sample Deconstructs",
-  sampleNote: "Worked examples that set the bar for a Deconstruct. Track walks them in order.",
+  sampleHeading: "Samples",
+  sampleNote: "Worked examples of what a Deconstruct looks like. Open one to see how it works, then take apart a system of your own.",
   yoursHeading: "Your Deconstructs",
-  yoursEmpty: "Nothing here yet. Name any system above and Vitruvian will take it apart, failure by failure.",
+  yoursEmpty: "Nothing here yet. Name a system above, or dissect a design you're building. The samples below show what you'll get.",
   labHeading: "Field studies",
   labNote: "Machines you can turn over in your hands. Same failure ladder, drawn in three dimensions.",
   labChip: "3D study",
   labKicker: "Also a machine",
   labOpen: "Open the field study →",
-  deconstructPlaceholder: "Name a system to deconstruct…",
+  libraryLede: "Name a system you use, or describe one you're building, and Vitruvian rebuilds it from nothing, one failure at a time, so you can study why each part exists.",
+  deconstructPlaceholder: "A system to deconstruct, like a stock exchange or a bike share…",
   deconstructBtn: "Deconstruct",
   ownDesignLink: "Building something? Dissect your design →",
   ownDesignKicker: "Dissection",
   ownDesignTitle: "Dissect your design",
-  ownDesignLede: "Describe the system you're building: the pieces, what it must never get wrong, where you expect load. Vitruvian rebuilds it failure by failure and shows what breaks first.",
+  ownDesignLede: "Answer three questions about the system you're building. Vitruvian rebuilds it failure by failure and shows what breaks first.",
+  dissectQuestions: [
+    ["what", "What does it do, and who uses it?", "e.g. A booking app. Vendors set their availability and customers reserve time slots.", 3],
+    ["never", "What must never go wrong?", "e.g. Two customers must never book the same slot. A vendor must hear about a booking within seconds.", 3],
+    ["load", "Where will the load come from?", "e.g. Big spikes when a popular vendor opens their calendar. Mostly reads, until a release.", 2],
+    ["extra", "Anything else? (optional)", "Pieces you've already chosen, limits you're under, what worries you.", 2]
+  ],
   ownDesignPlaceholder: "e.g. A booking app where vendors set their availability and customers reserve time slots. Two customers must never book the same slot; vendors get notified the instant a booking lands; I expect big spikes when a popular vendor opens their calendar…",
   ownDesignBtn: "Dissect my design",
   audienceModes: [
@@ -582,10 +589,10 @@ var COPY = {
   askBtn: "Probe",
   whatifMenu: "Graft… (propose a change)",
   whatifKicker: "Graft",
-  whatifLede: "Propose a change to this system. Vitruvian shows what it does to the architecture, which invariants it strengthens or threatens, and whether the body accepts the graft, judged by the system's own rules.",
+  whatifLede: "Propose a change to this system. Before the verdict, make your own call. Then see what it does to the architecture and which of its rules it strengthens or threatens.",
   whatifPlaceholder: "e.g. add an HTML renderer to the terminal · cache reads at the edge · drop the acknowledgement step",
   whatifBtn: "Run the graft",
-  whatifThinking: "Weighing it against the invariants…",
+  whatifThinking: "Weighing it against the rules…",
   whatifVerdicts: { improves: "The graft takes: the system improves", mixed: "It takes, with scars: a real tradeoff", harmful: "Rejected: works against the system" },
   gateCompareOffline: "AI comparison needs a connection and an API key (Settings). Your answer is saved, so you can compare it against the reveal yourself.",
   keyNotice: "Your key is stored on this device only and sent only to Anthropic.",
@@ -603,9 +610,12 @@ var COPY = {
   studioUrl: "https://bate-epey93.github.io/uxfirst-studio/",
   /* ---------- LANDING (first-run explainer) ---------- */
   landing: {
-    kicker: "Welcome to Vitruvian",
+    kicker: "Free, offline, no account needed",
     headline: "Take anything apart.\nPut it back together, and it makes sense.",
-    lede: "Everyday systems, deconstructed one failure at a time.",
+    lede: "Vitruvian rebuilds everyday systems one failure at a time. Each layer exists because the version before it broke, and the diagram grows as you go.",
+    learn: "How to read a Deconstruct",
+    heroSystem: "url-shortener",
+    stats: ["sample systems to take apart", "thinking models that keep coming back", "reading levels, plain English to engineer"],
     sections: [
       { icon: "whatItIs", title: "What it is",
         body: "Pick a system. Vitruvian strips it to its bones, then rebuilds it layer by layer, each layer forced by a real failure. A diagram grows as it comes together." },
@@ -614,22 +624,28 @@ var COPY = {
       { icon: "whyWorks", title: "Why it works",
         body: "You remember what you rebuild. Design each fix yourself before the reveal, and collect the thinking models that repeat across systems." },
       { icon: "howTo", title: "How to use it",
-        body: "Start with a sample Deconstruct. Add your Anthropic API key in Settings to deconstruct anything you name, or submit your own design and see where it breaks first. Works offline; installs to your home screen." }
+        body: "Start with a sample Deconstruct. Add your Anthropic API key in Settings to deconstruct anything you name, or submit your own design and see where it breaks first. It works offline and installs to your home screen." }
     ],
-    cta: "Start deconstructing →",
-    footnote: "No account and no cloud. Your Deconstructs stay on this device."
+    cta: "Start deconstructing",
+    footnote: "Your Deconstructs stay on this device. There is no cloud to sign up for."
   },
 
-  /* ---------- TUTORIAL — 'How to read a Deconstruct' (visitable anytime) ---------- */
+  /* ---------- FIELD GUIDE — the full reference, visitable anytime. The
+     three first-run tips cover the basics; this covers everything. ---------- */
+  firstRunTips: [
+    { target: ".timeline", title: "Your place in the system", text: "Meet, then each layer, then the trials. Tap any stop to go there. Finished layers turn teal." },
+    { target: ".step-tabs, .meet-tabs, .doc-pane", title: "Guess before you look", text: "Each layer runs in four steps: the problem, your guess, the solution, the tradeoff. Making a guess first is what makes the solution stick." },
+    { target: ".diagram-scroll", title: "The diagram follows along", text: "What breaks pulses red, and tapping a card lights its parts. Pulse sends traffic through it. The field guide in the ⋯ menu explains the rest." }
+  ],
   tutorial: {
-    kicker: "How to read a Deconstruct",
+    kicker: "Field guide",
     headline: "Every Deconstruct is the same shape.",
     lede: "A Vitruvian Deconstruct rebuilds a system from nothing, one failure at a time. The pieces come in the same order every time, and developers can lift a technical spec straight out of one.",
     reading: {
       title: "The path through a Deconstruct",
       steps: [
-        ["Essence", "The system in one breath, plus a few surprising, checkable facts."],
-        ["The Skeleton", "What the system cannot do without: who wants what, the invariants (the things that must never be false), the pieces, the flows, and the limits physics and economics impose."],
+        ["Meet the system", "Two short steps: the system in one breath with a few surprising, checkable facts, then the rules it must never break (the invariants)."],
+        ["The System sheet", "The reference card, one tap away from anywhere in the header: what it is for, the rules, who wants what, the pieces, what flows, and the limits physics and economics impose."],
         ["The rebuild", "Four to seven layers, and the heart of the whole thing. Each one is forced by a concrete failure of the version before it, often a real disaster with a date attached. The design becomes necessary in front of you instead of being described to you."],
         ["Stress tests", "Push the finished system somewhere nasty and see how it copes, or where it honestly breaks."],
         ["Transfer", "The principles that outlive this particular system, and where the same shapes turn up elsewhere."]
@@ -645,7 +661,7 @@ var COPY = {
         ["lens", "For the people · Under the hood", "Two lenses side by side: what users gain and what they pay, versus how it works and the transferable principle."],
         ["tradeoff", "The tradeoff", "What this layer sacrifices. Safety costs capacity; caching costs freshness."],
         ["scale", "Under load", "How the mechanism holds as load grows: its scaling property, its ceiling, or the sharding it forces. Tap to trace the load path in gold."],
-        ["defends", "Defends", "Which invariants from the strip-down this layer protects, by number. Tap a chip to light the mechanism on the diagram that defends it."],
+        ["defends", "Defends", "Which rules this layer protects, each with its text. Tap a rule to light the part of the diagram that keeps it true."],
         ["dev", "For engineers", "Opens with 'Start here', a concrete coding approach (the data structure, algorithm, or pattern) for the layer's problem. Then it maps each mechanism to its software concept and adds interview probes. In Developer mode this reads as spec material."],
         ["analogy", "In everyday terms", "One plain analogy, for when an idea needs grounding."]
       ]
@@ -666,45 +682,47 @@ var COPY = {
       ],
       extra: [
         ["Lanes & colour", "Horizontal bands group parts by the role they play (People, Service, Control, Money), each with its own colour. An arrow wears the colour of the lane it comes from, so you can see who drives what."],
-        ["The red pulse", "At a gate, or when you tap the problem card, the parts about to break pulse red. You see the failure before the fix."],
+        ["The red pulse", "When you read a layer's problem, or tap the problem card, the parts about to break pulse red. You see the failure before the fix."],
         ["Spotlight", "Tap a card to light its parts and dim the rest: the problem card lights what breaks (red), the solution card lights what's added (teal), and Under load traces the path load travels (gold)."],
         ["Trace a part", "Tap any node to light it and every edge touching it; the rest dims, so you can follow one part's whole reach. Tap it again to clear."],
         ["Zoom in ⊕", "Some nodes are whole systems in their own right and carry a ⊕ badge. Tap it to open that sub-system as its own Deconstruct, and follow the breadcrumb back up. Systems nest as deep as the library goes."],
         ["Payload shapes", "During a Pulse, every payload wears the shape of the kind that sent it: a dot from an actor, a square from a store, a diamond from a process, a bar from a channel. Colour still tells you which lane it came from, so shape and colour answer two different questions at once."],
         ["Backpressure", "When a node takes in more than it can clear, the edges feeding it stiffen and their traffic slows down. The jam creeps back toward the source rather than staying put, which is how one slow component ends up browning out everything upstream of it."],
-        ["Pan & scrub", "Dense diagrams pan sideways. Drag the scrubber (0…N) under the diagram to sweep it from the naive baseline to the finished system."]
+        ["Pan", "Dense diagrams pan sideways. Tap a layer in the timeline to see the system at that point."]
       ]
     },
     controls: {
       title: "Controls",
       items: [
         ["Audience: B / E / D", "Three reading levels of the same Deconstruct: Beginner (plain language and everyday analogies), Enthusiast (the default), and Developer (adds the engineer mappings and interview probes). Switch anytime and you keep your place."],
-        ["Step & scrub", "Move layer by layer with Prev / Next, or drag the scrubber to sweep the diagram across every state."],
-        ["Challenge mode", "Off by default. Turn it on from the ⋯ menu to hide each solution behind a design-it-first gate: you predict the fix, then compare."]
+        ["Four steps per layer", "Each layer runs The problem, Your guess, The solution, The tradeoff. The button at the bottom of the card moves you on, and Skip to the solution is always there. Arrow keys move a step; Shift with an arrow moves a layer."],
+        ["The timeline", "The strip under the diagram is your place in the system: Meet, each layer, then Trials and Transfer. Finished layers turn teal. Tap any of them to jump there."],
+        ["On a phone", "The step card sits in a sheet over the diagram. Drag its handle, or tap it, to give more room to the text or to the diagram."],
+        ["Strict mode", "Off by default. Turn it on from the ⋯ menu or in Settings, and the fix stays shut until you've sketched your own. The ⋯ menu can also show each layer as one long page, the way earlier versions did."]
       ]
     },
     explore: {
       title: "Go deeper: simulate & interrogate",
-      note: "Buttons under the diagram, plus more in the ⋯ menu. These let you run the system instead of only reading it.",
+      note: "Pulse sits under the diagram, with Replay while you read the problem and Before while you read the solution. Races, Spine and GIF are in Lab tools next to them.",
       items: [
         ["Pulse ▶ / ⟲ replay", "Send live traffic through the current state. Payloads travel the flow path, crash red into whatever's broken, and (under ◉ load) congest where the system saturates. ⟲ replay re-enacts the exact historical failure, arrival by arrival."],
-        ["Fault injection", "While a pulse is running, tap any node to kill it. Traffic piles up behind the dead node and everything downstream starves — chaos engineering as a toy. Tap it again to revive it."],
+        ["Fault injection", "While a pulse is running, tap any node to kill it. Traffic piles up behind the dead node and everything downstream starves. It's chaos engineering as a toy. Tap it again to revive it."],
         ["Live HUD", "While traffic flows, a small readout shows throughput (delivered/min), how many payloads are in flight, and crashes. Under load, delivered flattens off while in-flight keeps climbing. That gap is saturation, in numbers you can read."],
         ["Race spotlight ⇉", "Rings every node with two or more concurrent writers, the places where two flows can arrive at once and race. The count tells you how many contention points the design carries."],
         ["Critical path ⌁ spine", "Traces the chain a request actually waits on and dims everything off it. Shortening anything off the spine changes nothing, which is why it helps to know where it runs. Nodes whose loss would stop delivery altogether get a red ring. The readout also compares the spine against layer 0, so you can see what surviving all those failures cost you in extra steps."],
-        ["Sequence view", "In the ⋯ menu: the same state as an interaction timeline — who sends what to whom, top to bottom, in the order it happens. The diagram shows structure and this shows behaviour."],
+        ["Sequence view", "In the ⋯ menu: the same state as an interaction timeline: who sends what to whom, top to bottom, in the order it happens. The diagram shows structure and this shows behaviour."],
         ["Probe a layer", "Ask one focused question about any layer. The answer stays grounded in that layer's own mechanism. Needs your Anthropic API key (Settings)."],
-        ["Graft a change", "In the ⋯ menu: propose a change and see it ghosted onto the architecture in dashed blueprint ink, with an honest verdict (improves, mixed, or harmful) argued from the system's own invariants. Pulse runs through the graft too."],
-        ["Known as… (the engineering vocabulary)", "In Developer mode, each layer names what the profession calls what it does: patterns (problem shapes), concepts (mechanisms), technologies (things you deploy). Tap a chip to climb the ladder — from the timeless thinking model that forces the layer, down to the component you would actually deploy — and to see where the same force turns up in your other Deconstructs. Browse them all from Models, under The engineering vocabulary."],
-        ["Also called…", "Every thinking model has a different name in every field. A layer's model card shows what this system's own profession calls it — and, folded underneath, what marketers, engineers, biologists, economists and institutions call the same force. Frequency capping is rate limiting. Attribution is telemetry. Spotting that repetition is most of what taking systems apart is for."],
-        ["Not yet addressed", "When you Dissect your own design, the overview names the concerns your description has not answered yet — contention, scaling reads, idempotency — each with a sentence on why it will bite and roughly when. Treat it as a to-do list."]
+        ["Graft a change", "In the ⋯ menu: propose a change and see it ghosted onto the architecture in dashed blueprint ink, with an honest verdict (improves, mixed, or harmful) argued from the system's own rules. Before the verdict you make your own call, and the verdict shows the two side by side. Pulse runs through the graft too."],
+        ["Known as… (the engineering vocabulary)", "In Developer mode, each layer names what the profession calls what it does: patterns (problem shapes), concepts (mechanisms), technologies (things you deploy). Tap a chip to climb the ladder, from the timeless thinking model that forces the layer down to the component you would actually deploy. You also see where the same force turns up in your other Deconstructs. Browse them all from Models, under The engineering vocabulary."],
+        ["Also called…", "Every thinking model has a different name in every field. A layer's model card shows what this system's own profession calls it. Folded underneath is what marketers, engineers, biologists, economists and institutions call the same force. Frequency capping is rate limiting. Attribution is telemetry. Spotting that repetition is most of what taking systems apart is for."],
+        ["Not yet addressed", "When you Dissect your own design, the overview names the concerns your description has not answered yet (contention, scaling reads, idempotency), each with a sentence on why it will bite and roughly when. Treat it as a to-do list."]
       ]
     },
     forDev: {
       title: "For developers: reading a Deconstruct as a spec",
       intro: "A Deconstruct is already shaped like a design document. Switch to Developer mode first, since it surfaces the mappings and probes that the other reading levels tuck away, then lift it across:",
       map: [
-        ["The Skeleton", "system context: actors, invariants (your correctness guarantees), entities, data flows, and hard constraints."],
+        ["The System sheet", "system context: actors, invariants (your correctness guarantees), entities, data flows, and hard constraints."],
         ["Each layer's mechanism + principle", "an architecture decision record: what you built and the rule it encodes."],
         ["Under load", "the scaling / capacity section: throughput ceilings, bottlenecks, and the sharding or caching strategy."],
         ["Tradeoffs + stress tests", "your risk register and failure-mode analysis."],
@@ -721,6 +739,7 @@ var COPY = {
     visual:     "Drawing the baseline…",
     layers:     "Rebuilding, layer by layer…",
     stress:     "Stress-testing…",
-    transfer:   "Extracting principles…"
+    transfer:   "Extracting principles…",
+    voice:      "Editing for voice…"
   }
 };

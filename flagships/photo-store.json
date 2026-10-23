@@ -9,12 +9,12 @@
  },
  "essence": {
   "text": "A photo store ingests billions of images and hands each one back, instantly, to anyone on earth. The trick is that the photo bytes never touch the database. The database holds only a tiny pointer; the heavy, immutable pixels live in object storage, get resized once into a handful of sizes, and are served from a cache in the viewer's own city. The whole discipline is keeping large immutable blobs cheap to keep and close to every eye.",
-  "beginner": "A photo app lets you upload a picture and lets millions of people see it. The hard part is not taking the photo, it is storing billions of them without ever losing one, and showing each one fast, at the right size, to people all over the world.",
+  "beginner": "A photo app lets you upload a picture and lets millions of people see it. Taking the photo is the easy part. The hard part is storing billions of them without ever losing one, and showing each one fast, at the right size, to people all over the world.",
   "deep_facts": [
    "A photo is large and immutable; its metadata is tiny and mutable. Storing multi-megabyte blobs as database rows bloats backups and pollutes the query cache, which is why the bytes live in object storage and the database holds only a short pointer.",
    "Reads dwarf writes: a single upload can be viewed millions of times, so nearly all the cost and all the risk live on the serving path, not the upload path.",
    "The original is almost never what you serve. A 12-megapixel photo is several megabytes; the feed thumbnail a phone actually shows can be under 30 kilobytes, so serving the master would waste over 99 percent of the bytes.",
-   "Because a photo never changes after upload, CDN edge caches hit almost every time; an immutable object can be cached at the edge essentially forever, with no invalidation problem to solve.",
+   "Because a photo never changes after upload, CDN edge caches hit almost every time; an immutable object can sit at the edge more or less forever, with no invalidation problem to solve.",
    "A presigned URL lets the browser upload straight to the blob store, so the application servers never touch the photo bytes; they only sign a short, expiring permission for one object."
   ]
  },
@@ -493,7 +493,7 @@
    },
    "tech_lens": {
     "mechanism": "Immutable renditions served through a CDN keyed by URL, with long TTLs and cache-control set for near-permanent edge caching; the origin object store answers only misses. Deletion requires an explicit edge purge or versioned URLs.",
-    "principle": "Immutable data is a caching dream: move it to the edge, cache it near the reader essentially forever, and let the origin see only cold misses."
+    "principle": "Immutable data is ideal to cache: move it to the edge, keep it near the reader for as long as you like, and let the origin see only cold misses."
    },
    "tradeoff": "You trade tight, immediate control over the bytes (instant deletion, one source) for enormous read scale and low latency, and you take on cache purging and URL versioning to handle the rare case where an immutable object must actually disappear.",
    "at_scale": "This is what lets reads scale without bound: a single origin serves thousands of requests a second, a CDN serves millions from thousands of edges, and because photos are immutable the edge hit rate approaches 100 percent, so origin load stays nearly flat as viewership grows. The residual ceiling is the single hottest object at one edge, which CDNs handle with tiered caching and replication.",

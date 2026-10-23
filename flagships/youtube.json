@@ -8,7 +8,7 @@
   "domain": "software"
  },
  "essence": {
-  "text": "YouTube takes a video from one phone and makes it playable, findable, and profitable for two billion people: a broadcast tower anyone can climb. The genius is not the player. It is three interlocking answers to three brutal questions: how do you serve a planet's worth of video without going bankrupt, how does anyone find anything in an unbrowsable ocean, and how do you let everyone publish without becoming a landfill?",
+  "text": "YouTube takes a video from one phone and makes it playable, findable, and profitable for two billion people: a broadcast tower anyone can climb. The player is the simple part. What makes it work is three interlocking answers to three brutal questions: how do you serve a planet's worth of video without going bankrupt, how does anyone find anything in an unbrowsable ocean, and how do you let everyone publish without becoming a landfill?",
   "beginner": "YouTube is how a video filmed on one person's phone can be watched smoothly, for free, by millions of strangers around the world, with the site suggesting it to exactly the people likely to enjoy it and the person who filmed it getting paid.",
   "deep_facts": [
    "On the order of 500 hours of video are uploaded every minute; in one day, YouTube ingests more video than a person could watch in eighty years of nonstop viewing. No workforce of editors or reviewers could see it all, so every gatekeeping decision must start as a machine's decision.",
@@ -529,14 +529,14 @@
    "solution": "Watch signals (what each viewer clicks, skips, abandons, and finishes, and how long the whole session runs) stream into ranking models that pick what appears on the home page and in the up-next rail. In the 2010s the ranking currency shifted from clicks to watch time, because a misleading thumbnail can buy a click but not twenty minutes of dwell. The loop closes: what gets watched gets recommended, which gets it watched more. Most of YouTube's viewing now arrives through this loop, not through search.",
    "user_lens": {
     "gives": "The platform feels like it knows you, and the long tail comes alive: a niche creator can find their exact audience worldwide, something no broadcaster in history could have offered them.",
-    "costs": "The loop optimizes watch time, not truth and not your wellbeing. It will amplify whatever holds attention (outrage, fear, rabbit holes) with the same enthusiasm as excellence, and your feed becomes a mirror that exaggerates you back at yourself. The hours it captures from you are not a side effect; they are the objective."
+    "costs": "The loop optimizes watch time, not truth and not your wellbeing. It will amplify whatever holds attention (outrage, fear, rabbit holes) with the same enthusiasm as excellence, and your feed becomes a mirror that exaggerates you back at yourself. The hours it captures from you are the objective itself."
    },
    "tech_lens": {
     "mechanism": "Behavioral event streams feed candidate generation (narrow billions of videos to hundreds) and then a ranking model (order those hundreds per viewer per moment), trained continuously on watch-time-flavored objectives; every recommendation is also an experiment that generates the next round of training data.",
     "principle": "Whatever metric closes a feedback loop becomes the thing the system actually optimizes, regardless of what anyone intended. Choose it knowing it will be both amplified and gamed."
    },
    "tradeoff": "Positive feedback compounds: small early advantages snowball into monster hits while near-identical videos starve, and the metric quietly becomes the platform's editorial policy, a line that emerged from an objective function, which nobody chose and nobody can fully see.",
-   "at_scale": "Ranking is precomputed and approximate, so cost per request stays sub-linear even across billions of videos; you scale it by pouring more offline compute into candidate generation. The catch: the loop optimizes a proxy, watch time, and amplifies whatever scales fastest, indifferent to whether that thing is worth watching.",
+   "at_scale": "Ranking is precomputed and approximate, so cost per request stays sub-linear even across billions of videos; you scale it by pouring more offline compute into candidate generation. The cost is that the loop optimizes a proxy, watch time, and amplifies whatever scales fastest, indifferent to whether that thing is worth watching.",
    "defends": [
     "inv5",
     "inv3"

@@ -109,7 +109,7 @@ var Generator = (() => {
             for (const [needle, phase] of PHASES) {
               if (!seen.has(phase) && text.includes(needle)) { seen.add(phase); onProgress({ phase, tokens: 0 }); }
             }
-            onProgress({ tokens: Math.round(text.length / 4) });
+            onProgress({ tokens: Math.round(text.length / 4), partial: text });
           }
         }
         if (ev.type === "message_delta" && ev.delta && ev.delta.stop_reason === "max_tokens")
@@ -132,8 +132,77 @@ var Generator = (() => {
     catch (e) { throw fail("invalid", "The model returned unparseable JSON.", text); }
   }
 
-  /* ── the full pipeline: generate → validate → one repair ── */
-  async function generate({ apiKey, modelId, system, focus, speed, mode, onProgress }) {
+  /* ── Voice pass. Voice.lint flags the strings that read as machine prose;
+     only those go back, in one short call that names each problem. A
+     rewrite is kept only if it is cleaner than the original and about as
+     long, and only if the whole document still validates afterwards. Any
+     failure here keeps the original text: the pass can improve a result,
+     never break one. ── */
+  async function rewriteStrings(apiKey, modelId, items, context) {
+    if (!navigator.onLine || !items.length) return [];
+    const res = await fetch(API, {
+      method: "POST", headers: headers(apiKey, modelId),
+      body: JSON.stringify({
+        model: modelId, max_tokens: 16000, ...effortFor(modelId, "fast"), ...fallbackFor(modelId),
+        system: `You are the copy editor for Vitruvian, an app that explains how systems work. You get numbered passages from ${context}, each with the writing problems a checker found in it. Rewrite each passage to fix exactly those problems. Keep every fact, number, name and technical term, keep about the same length and the same reading level, and change as little as you can. ${Voice.SHORT_RULES}
+Return ONLY a JSON array of {"i": <number>, "text": "<rewritten passage>"}, one entry per passage, with no prose and no code fences.`,
+        messages: [{ role: "user", content: JSON.stringify(items.map((it, i) => ({
+          i, text: it.text,
+          problems: it.issues.map(x => x.hint + (x.match ? ` (found: "${x.match}")` : ""))
+        })), null, 1) }]
+      })
+    });
+    if (!res.ok) throw await httpError(res);
+    const data = await res.json();
+    if (data.stop_reason !== "end_turn") return [];
+    const raw = data.content.map(b => b.text || "").join("").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    let arr;
+    try { arr = JSON.parse(raw.slice(raw.indexOf("["), raw.lastIndexOf("]") + 1)); } catch (e) { return []; }
+    const out = [];
+    (Array.isArray(arr) ? arr : []).forEach(r => { if (r && Number.isInteger(r.i) && typeof r.text === "string") out[r.i] = r.text.trim(); });
+    return out;
+  }
+  function better(orig, next) {
+    if (typeof next !== "string" || !next) return false;
+    const ratio = next.length / orig.length;
+    return ratio > 0.6 && ratio < 1.6 && Voice.lint(next).length < Voice.lint(orig).length;
+  }
+  async function voicePass({ apiKey, modelId, doc, onProgress, validate }) {
+    Voice.straighten(doc);
+    const flagged = Voice.lintDoc(doc).slice(0, 60);
+    if (!flagged.length) return { doc, flagged: 0, fixed: 0 };
+    if (onProgress) onProgress({ phase: "voice", tokens: 0 });
+    let out;
+    try { out = await rewriteStrings(apiKey, modelId, flagged, "one document"); }
+    catch (e) { return { doc, flagged: flagged.length, fixed: 0 }; }
+    const trial = JSON.parse(JSON.stringify(doc));
+    let fixed = 0;
+    flagged.forEach((f, i) => { if (better(f.text, out[i])) { Voice.set(trial, f.path, out[i]); fixed++; } });
+    if (!fixed || (validate && !validate(trial))) return { doc, flagged: flagged.length, fixed: 0 };
+    return { doc: trial, flagged: flagged.length, fixed };
+  }
+  // short replies: rewrite only when the lint finds more than one tell, and
+  // keep the reply's first line when the caller says it carries structure
+  async function polishShort(apiKey, modelId, text, keepFirstLine) {
+    const issues = Voice.lint(text);
+    if (issues.length < 2) return text;
+    try {
+      const [next] = await rewriteStrings(apiKey, modelId, [{ text, issues }],
+        keepFirstLine ? "a short graded answer; keep its first line and its RIGHT:/MISSED:/VERDICT: labels exactly" : "a short answer");
+      if (!better(text, next)) return text;
+      if (keepFirstLine && next.split("\n")[0].trim() !== text.split("\n")[0].trim()) return text;
+      return next;
+    } catch (e) { return text; }
+  }
+
+  /* ── the full pipeline: generate → validate → one repair → voice ── */
+  async function generate({ apiKey, modelId, system, focus, speed, mode, onProgress, voice = true }) {
+    const result = await generateRaw({ apiKey, modelId, system, focus, speed, mode, onProgress });
+    if (!voice) return { ...result, voice: { flagged: 0, fixed: 0, off: true } };
+    const v = await voicePass({ apiKey, modelId, doc: result.doc, onProgress, validate: d => Schema.validate(d, { strict: true }).ok });
+    return { doc: v.doc, repaired: result.repaired, voice: { flagged: v.flagged, fixed: v.fixed } };
+  }
+  async function generateRaw({ apiKey, modelId, system, focus, speed, mode, onProgress }) {
     const sys = SKILL.text(mode);
     const userMsg = (mode === "design"
       ? `Review and deconstruct this design I'm building:\n\n${system}`
@@ -177,7 +246,7 @@ var Generator = (() => {
   }
 
   /* ── AI-compare: the small second-type call (§7) ── */
-  async function compare({ apiKey, modelId, layer, attempt }) {
+  async function compare({ apiKey, modelId, layer, attempt, voice = true }) {
     if (!navigator.onLine) throw fail("offline", "AI comparison needs a connection.");
     const p = SKILL.comparePrompt(layer, attempt);
     let res;
@@ -192,11 +261,12 @@ var Generator = (() => {
     if (!res.ok) throw await httpError(res);
     const data = await res.json();
     if (data.stop_reason === "refusal") throw fail("refusal", "The model declined this request. Try a different model.");
-    return data.content.map(b => b.text || "").join("").trim();
+    const text = data.content.map(b => b.text || "").join("").trim();
+    return voice ? polishShort(apiKey, modelId, text, true) : text;
   }
 
   /* ── Ask-this-layer: one bounded Q&A call (§value-add) ── */
-  async function ask({ apiKey, modelId, doc, layer, question }) {
+  async function ask({ apiKey, modelId, doc, layer, question, voice = true }) {
     if (!navigator.onLine) throw fail("offline", "Asking needs a connection.");
     const p = SKILL.askPrompt(doc, layer, question);
     let res;
@@ -209,7 +279,8 @@ var Generator = (() => {
     if (!res.ok) throw await httpError(res);
     const data = await res.json();
     if (data.stop_reason === "refusal") throw fail("refusal", "The model declined this question. Try a different model.");
-    return data.content.map(b => b.text || "").join("").trim();
+    const text = data.content.map(b => b.text || "").join("").trim();
+    return voice ? polishShort(apiKey, modelId, text, false) : text;
   }
 
   /* ── What-if: propose a change → verdict + ghost diff (§value-add) ── */
@@ -242,7 +313,7 @@ var Generator = (() => {
     w.alternatives = (Array.isArray(w.alternatives) ? w.alternatives : []).filter(a => a && a.name && a.note);
     return w;
   }
-  async function whatif({ apiKey, modelId, doc, change, speed }) {
+  async function whatif({ apiKey, modelId, doc, change, speed, voice = true }) {
     if (!navigator.onLine) throw fail("offline", "What-if needs a connection.");
     const p = SKILL.whatifPrompt(doc, change);
     async function call() {
@@ -258,12 +329,17 @@ var Generator = (() => {
       if (data.stop_reason === "refusal") throw fail("refusal", "The model declined this proposal. Try a different model.");
       return data.content.map(b => b.text || "").join("").trim();
     }
-    let text = await call();
-    try { return sanitizeWhatif(parseDoc(text), doc); }
-    catch (e) { if (e.kind !== "invalid") throw e; }
-    text = await call();                                   // one retry
-    return sanitizeWhatif(parseDoc(text), doc);
+    let text = await call(), w;
+    try { w = sanitizeWhatif(parseDoc(text), doc); }
+    catch (e) {
+      if (e.kind !== "invalid") throw e;
+      text = await call();                                 // one retry
+      w = sanitizeWhatif(parseDoc(text), doc);
+    }
+    if (!voice) return w;
+    const v = await voicePass({ apiKey, modelId, doc: w });
+    return v.doc;
   }
 
-  return { generate, compare, ask, whatif };
+  return { generate, compare, ask, whatif, voicePass };
 })();

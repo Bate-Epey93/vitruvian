@@ -49,7 +49,7 @@ window.addEventListener("beforeinstallprompt", e => {
   const btn = document.createElement("button");
   btn.id = "installBtn";
   btn.className = "tbtn accent";
-  btn.innerHTML = '<span class="tbtn-label">Install</span><span class="tbtn-ico">⤓</span>';
+  btn.innerHTML = '<svg class="ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.5v9M6.2 9l3.8 3.8L13.8 9M4 16.5h12"/></svg><span class="tbtn-label">Install</span>';
   btn.setAttribute("aria-label", "Install app");
   btn.onclick = async () => {
     if(!deferredPrompt) return;
