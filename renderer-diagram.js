@@ -236,9 +236,12 @@ var Diagram = (() => {
     actor:    "M 5.5 1.5 a 2 2 0 1 0 .1 0 Z M 1.2 10.5 a 4.3 4.3 0 0 1 8.6 0",                       // head + shoulders
     store:    "M 1 3.5 h 9 M 1 7 h 9",                                                                // shelves
     channel:  "M 1.5 5.5 h 5 M 5 3.2 l 2.3 2.3 l -2.3 2.3",                                           // through-arrow
-    process:  "M 2.9 5.5 a 2.6 2.6 0 1 0 5.2 0 a 2.6 2.6 0 1 0 -5.2 0 M 5.5 .3 v 1.6 M 5.5 9.1 v 1.6"
-            + " M .3 5.5 h 1.6 M 9.1 5.5 h 1.6 M 1.8 1.8 l 1.1 1.1 M 8.1 8.1 l 1.1 1.1"
-            + " M 9.2 1.8 l -1.1 1.1 M 1.8 9.2 l 1.1 -1.1",                                           // gear: work happens
+    /* A gear was the honest picture of "work happens here" and it did not
+       survive the size: eight teeth and a hub inside an 11px box read as a
+       sun, not a machine. Two crossed strokes carry no meaning of their own,
+       which is the point — process is the kind with no shape to borrow, so
+       its mark is a label, not a drawing. */
+    process:  "M 2.6 2.6 L 8.4 8.4 M 8.4 2.6 L 2.6 8.4",                                              // cross: work happens
     // icon tier — concrete, opt-in per node
     database: "M 1 2.5 a 4.5 1.8 0 0 1 9 0 v 6 a 4.5 1.8 0 0 1 -9 0 Z M 1 2.5 a 4.5 1.8 0 0 0 9 0",
     cache:    "M 6.5 .5 L 3 6 h 2.5 l -1 4.5 l 4 -6 h -2.5 Z",                                        // bolt: fast path

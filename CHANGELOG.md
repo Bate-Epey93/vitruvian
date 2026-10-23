@@ -43,6 +43,11 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 - **Reading counts as progress.** Only the challenge gate used to mark a layer done, and gates have been off by default since 1.3, so a reader who finished a whole system still saw 0 of 6 on its card, 0 of 19 on Track and nothing in Drill. Reaching a layer's solution now marks it done. Existing installs are backfilled once from how far each reader got.
 - A handful of toasts and labels still used em dashes. They now read as plain sentences.
 
+## [2.4.1] — 2026-10-24 · The process mark stops pretending
+
+### Changed
+- **The mark inside a process node is a cross again.** It was a gear, which is the honest picture of "work happens here" and did not survive the size: eight teeth and a hub inside an 11-pixel box read as a sun. Process is the one kind with no shape to borrow, so its mark is a label rather than a drawing, and two crossed strokes are legible at any size. The key is unchanged — kind entries there draw the container, never the mark.
+
 ## [2.4.0] — 2026-10-24 · It says when a system is also a machine
 
 ### Added
