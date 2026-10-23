@@ -591,6 +591,42 @@ function cardGrid(recs) {
   return grid;
 }
 
+/* ═══ Field-study candidates ═══
+   A Deconstruct whose subject is a physical mechanism carries meta.field_study,
+   written by the model against the two bars in the prompt. None of them is
+   built, so the reader gets a description rather than a link, and this is where
+   a reader saying "I'd use this" is recorded. Interest is local, like
+   everything else here — it exists to rank the queue, not to phone home. */
+function labInterestMap() {
+  return (meta.labInterest && typeof meta.labInterest === "object") ? meta.labInterest : {};
+}
+function labInterestHas(system) {
+  return !!labInterestMap()[String(system || "").toLowerCase()];
+}
+async function labInterestAdd(system, fs) {
+  const key = String(system || "").toLowerCase();
+  if (!key) return;
+  const map = Object.assign({}, labInterestMap());
+  map[key] = { system: system, at: Date.now(), effort: (fs && fs.effort) || "medium" };
+  meta.labInterest = map;
+  await Store.saveMeta({ labInterest: map });
+  toast(COPY.labMaybeDone);
+}
+/* Every stored Deconstruct the model flagged, newest first, wanted ones first. */
+async function labCandidates() {
+  const all = await Store.getBreakdowns();
+  const want = labInterestMap();
+  const out = [];
+  for (const row of all) {
+    const fs = row.doc && row.doc.meta && row.doc.meta.field_study;
+    if (!fs) continue;
+    if (fieldStudyFor(row.system)) continue;          // already built; it is not a candidate
+    out.push({ system: row.system, fs: fs, wanted: !!want[String(row.system).toLowerCase()] });
+  }
+  out.sort((a, b) => (b.wanted - a.wanted) || a.system.localeCompare(b.system));
+  return out;
+}
+
 async function renderLibrary() {
   const root = $("screen-library").firstElementChild;
   root.textContent = "";
@@ -677,6 +713,28 @@ async function renderLibrary() {
     labGrid.appendChild(lab);
   });
   root.appendChild(labGrid);
+
+  /* Candidates: flagged by the model, none of them built. Rendered as plain
+     rows rather than cards on purpose — a card here would read as something
+     you can open, and these are the ones you cannot. */
+  const candWrap = h("div", "lab-cands");
+  root.appendChild(candWrap);
+  labCandidates().then(list => {
+    candWrap.textContent = "";
+    candWrap.appendChild(sectionHead(COPY.labCandHeading, list.length ? String(list.length) : ""));
+    candWrap.appendChild(h("p", "lib-note", list.length ? COPY.labCandNote : COPY.labCandEmpty));
+    if (!list.length) return;
+    list.forEach(c => {
+      const row = h("div", "cand-row" + (c.wanted ? " wanted" : ""));
+      const head = h("div", "cand-head");
+      head.appendChild(h("span", "cand-name", c.system));
+      head.appendChild(h("span", "chip cand-effort", c.fs.effort));
+      if (c.wanted) head.appendChild(h("span", "chip cand-want", "you'd use this"));
+      row.appendChild(head);
+      row.appendChild(h("p", "cand-ladder", c.fs.ladder));
+      candWrap.appendChild(row);
+    });
+  });
 
   // quiet foundation of future sharing: single-breakdown import
   const importRow = h("div", "lib-foot");

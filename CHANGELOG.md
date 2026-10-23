@@ -43,6 +43,16 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 - **Reading counts as progress.** Only the challenge gate used to mark a layer done, and gates have been off by default since 1.3, so a reader who finished a whole system still saw 0 of 6 on its card, 0 of 19 on Track and nothing in Drill. Reaching a layer's solution now marks it done. Existing installs are backfilled once from how far each reader got.
 - A handful of toasts and labels still used em dashes. They now read as plain sentences.
 
+## [2.4.0] — 2026-10-24 · It says when a system is also a machine
+
+### Added
+- **A Deconstruct can now tell you it is also a machine you could turn.** While writing a document, the model decides whether the subject is a physical mechanism worth drawing in three dimensions, and if it is, it records what moves and the failure ladder a field study of it would show. The reader sees that at the end of the document: what the mechanism does, in one monospace line, and the ladder in prose.
+- **The card is a description, not a link.** No study of these is built yet, and offering to open something that does not exist is worse than offering nothing, so the card says so in as many words. The one live target inside it is a button — "I'd use this" — that records your interest on the device and nothing else. Nothing is sent anywhere.
+- **The library collects them.** Under Field studies there is now a Candidates list: every flagged system you have deconstructed that has no study built, with its effort estimate and the ones you said you would use ranked first. It is a queue, in the open, rather than a promise.
+
+### Changed
+- **The bar for flagging is deliberately high.** A subject qualifies only when the mechanism is the argument and the geometry is reachable: solids of revolution, constant-section extrusions, or sections swept along a path, moving by spinning, sliding, pivoting or following a computed path. Gears, escapements, brakes, locks, pawls, valves, linkages and engines pass. Software does not — a message queue has no axis of revolution — so almost every Deconstruct carries no such card at all.
+
 ## [2.3.0] — 2026-10-23 · The app explains itself as you go
 ### Added
 - **Thirteen tips that fire as you reach each part of the app**, one at a time, once each. They replace the three-card first-run tour, which ran in your first two minutes and could say nothing useful about Graft because you would not open Graft for a week.

@@ -55,6 +55,22 @@ var Schema = (() => {
       // profession's word without one marked "here"), but must be real if given
       if (meta.domain != null && !(typeof DOMAINS !== "undefined" && DOMAINS.some(d => d.id === meta.domain)))
         err(`meta.domain: "${meta.domain}" is not a known domain`);
+      /* Optional, and absent for nearly everything. Present only when the
+         subject is a physical mechanism that could be drawn and turned: the
+         model fills it in, the reader is told what a field study of it would
+         show, and nothing anywhere promises that such a study exists. */
+      if (meta.field_study != null) {
+        const fs = meta.field_study;
+        if (!isObj(fs)) err("meta.field_study must be an object");
+        else {
+          if (!isFullStr(fs.motion) || fs.motion.length > 90)
+            err("meta.field_study.motion must be a non-empty string ≤90 chars");
+          if (!isFullStr(fs.ladder) || fs.ladder.length > 240)
+            err("meta.field_study.ladder must be a non-empty string ≤240 chars");
+          if (!["small", "medium", "large"].includes(fs.effort))
+            err("meta.field_study.effort must be small|medium|large");
+        }
+      }
     }
 
     /* ── essence ── */

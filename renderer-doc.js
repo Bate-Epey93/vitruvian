@@ -277,6 +277,30 @@ var DocView = (() => {
         box.appendChild(h("p", "lab-offer-text", study.blurb));
         box.appendChild(h("span", "lab-offer-cta", COPY.labOpen));
         root.appendChild(box);
+      } else if (doc.meta.field_study) {
+        /* Eligible, but nobody has built it. This is a description and a
+           show-of-hands, deliberately NOT a link: the rule next to
+           FIELD_STUDIES is that offering to open something that does not
+           exist is worse than offering nothing, and a button that leads
+           nowhere would break it just as thoroughly as a dead href. */
+        const fs = doc.meta.field_study;
+        const box = h("div", "lab-offer lab-maybe");
+        box.appendChild(h("div", "mono-label", COPY.labMaybeKicker));
+        box.appendChild(h("p", "lab-offer-text", fs.ladder));
+        box.appendChild(h("p", "lab-maybe-motion", fs.motion));
+        const cta = h("button", "gbtn lab-maybe-cta");
+        const already = typeof labInterestHas === "function" && labInterestHas(doc.meta.system);
+        cta.textContent = already ? COPY.labMaybeDone : COPY.labMaybeCta;
+        cta.disabled = !!already;
+        cta.onclick = async () => {
+          if (typeof labInterestAdd !== "function") return;
+          await labInterestAdd(doc.meta.system, fs);
+          cta.textContent = COPY.labMaybeDone;
+          cta.disabled = true;
+        };
+        box.appendChild(cta);
+        box.appendChild(h("p", "lab-maybe-foot", COPY.labMaybeFoot));
+        root.appendChild(box);
       }
       root.appendChild(footer({ label: "The rules it lives by", fn: () => goStep(2) }));
     }
