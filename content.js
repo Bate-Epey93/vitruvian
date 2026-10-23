@@ -632,8 +632,8 @@ var COPY = {
     reading: {
       title: "The path through a Deconstruct",
       steps: [
-        ["Essence", "The system in one breath, plus a few surprising, checkable facts."],
-        ["The Skeleton", "What the system cannot do without: who wants what, the invariants (the things that must never be false), the pieces, the flows, and the limits physics and economics impose."],
+        ["Meet the system", "Two short steps: the system in one breath with a few surprising, checkable facts, then the rules it must never break (the invariants)."],
+        ["The System sheet", "The reference card, one tap away from anywhere in the header: what it is for, the rules, who wants what, the pieces, what flows, and the limits physics and economics impose."],
         ["The rebuild", "Four to seven layers, and the heart of the whole thing. Each one is forced by a concrete failure of the version before it, often a real disaster with a date attached. The design becomes necessary in front of you instead of being described to you."],
         ["Stress tests", "Push the finished system somewhere nasty and see how it copes, or where it honestly breaks."],
         ["Transfer", "The principles that outlive this particular system, and where the same shapes turn up elsewhere."]
@@ -649,7 +649,7 @@ var COPY = {
         ["lens", "For the people · Under the hood", "Two lenses side by side: what users gain and what they pay, versus how it works and the transferable principle."],
         ["tradeoff", "The tradeoff", "What this layer sacrifices. Safety costs capacity; caching costs freshness."],
         ["scale", "Under load", "How the mechanism holds as load grows: its scaling property, its ceiling, or the sharding it forces. Tap to trace the load path in gold."],
-        ["defends", "Defends", "Which invariants from the strip-down this layer protects, by number. Tap a chip to light the mechanism on the diagram that defends it."],
+        ["defends", "Defends", "Which rules this layer protects, each with its text. Tap a rule to light the part of the diagram that keeps it true."],
         ["dev", "For engineers", "Opens with 'Start here', a concrete coding approach (the data structure, algorithm, or pattern) for the layer's problem. Then it maps each mechanism to its software concept and adds interview probes. In Developer mode this reads as spec material."],
         ["analogy", "In everyday terms", "One plain analogy, for when an idea needs grounding."]
       ]
@@ -710,7 +710,7 @@ var COPY = {
       title: "For developers: reading a Deconstruct as a spec",
       intro: "A Deconstruct is already shaped like a design document. Switch to Developer mode first, since it surfaces the mappings and probes that the other reading levels tuck away, then lift it across:",
       map: [
-        ["The Skeleton", "system context: actors, invariants (your correctness guarantees), entities, data flows, and hard constraints."],
+        ["The System sheet", "system context: actors, invariants (your correctness guarantees), entities, data flows, and hard constraints."],
         ["Each layer's mechanism + principle", "an architecture decision record: what you built and the rule it encodes."],
         ["Under load", "the scaling / capacity section: throughput ceilings, bottlenecks, and the sharding or caching strategy."],
         ["Tradeoffs + stress tests", "your risk register and failure-mode analysis."],

@@ -128,7 +128,7 @@ function show(screen) {
   $("readerMenuBtn").hidden = screen !== "reader";
   // reading-only context tools live in the topbar's right zone; hidden elsewhere
   // so global chrome never shows dead buttons (see placement note in commit)
-  ["ctxDiv", "seqBtn", "graftBtn"].forEach(id => { $(id).hidden = screen !== "reader"; });
+  ["ctxDiv", "sheetBtn", "seqBtn", "graftBtn"].forEach(id => { $(id).hidden = screen !== "reader"; });
   $("backBtn").hidden = screen === "library" || screen === "landing";
   $("menuPop").hidden = true;
   document.querySelectorAll("[data-screen]").forEach(b => {
@@ -260,6 +260,7 @@ function wireTopbar() {
   $("settingsBtn").onclick = () => { renderSettings(); show("settings"); };
   $("themeBtn").onclick = () => toggleTheme();
   $("seqBtn").onclick = () => { if (currentRec) openSequence(currentRec); };
+  $("sheetBtn").onclick = () => { if (currentView) currentView.openSheet(); };
   $("graftBtn").onclick = () => { if (currentRec) { renderWhatif(currentRec); show("whatif"); } };
   $("readerMenuBtn").onclick = e => { e.stopPropagation(); $("menuPop").hidden = !$("menuPop").hidden; };
   document.addEventListener("click", () => { $("menuPop").hidden = true; });
@@ -1478,27 +1479,21 @@ function verdictCard(w, doc, opts = {}) {
   card.appendChild(h("p", "vf-assessment", w.assessment));
   if (w.gain) { const g = h("p", "vf-line"); g.appendChild(h("b", null, "Gains: ")); g.appendChild(document.createTextNode(w.gain)); card.appendChild(g); }
 
-  if (w.stresses && w.stresses.length) {
-    const r = h("div", "defends-row");
-    r.appendChild(h("span", "mono-label", "Threatens"));
-    w.stresses.forEach(id => r.appendChild(h("span", "inv-badge stress", "INV " + (invById[id] ? invById[id].n : "?"))));
-    card.appendChild(r);
-    w.stresses.forEach(id => { if (invById[id]) card.appendChild(h("div", "vf-inv stress", invById[id].text)); });
-  }
-  if (w.defends && w.defends.length) {
-    const r = h("div", "defends-row");
-    r.appendChild(h("span", "mono-label", "Strengthens"));
-    w.defends.forEach(id => {
-      const chip = h("button", "inv-badge inv-tap", "INV " + (invById[id] ? invById[id].n : "?"));
-      chip.onclick = () => {                     // tap: reveal the invariant being defended
-        const open = chip._line;
-        if (open) { open.remove(); chip._line = null; return; }
-        if (invById[id]) { chip._line = h("div", "vf-inv", invById[id].text); r.after(chip._line); }
-      };
-      r.appendChild(chip);
+  // rules by number AND text: a reader shouldn't have to remember what Rule 3 was
+  const ruleRows = (label, ids, cls) => {
+    if (!ids || !ids.length) return;
+    const r = h("div", "defends-row defends-full");
+    r.appendChild(h("span", "mono-label", label));
+    ids.forEach(id => {
+      const line = h("div", "defends-line");
+      line.append(h("span", "inv-badge" + (cls ? " " + cls : ""), "Rule " + (invById[id] ? invById[id].n : "?")),
+        h("span", "defends-text", invById[id] ? invById[id].text : id));
+      r.appendChild(line);
     });
     card.appendChild(r);
-  }
+  };
+  ruleRows("Threatens", w.stresses, "stress");
+  ruleRows("Strengthens", w.defends, "");
   if (w.tradeoff) card.appendChild(h("div", "tradeoff-band", w.tradeoff));
   if (w.at_scale) {
     const s = h("div", "scale-band");

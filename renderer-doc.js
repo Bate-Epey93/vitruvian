@@ -170,7 +170,21 @@ var DocView = (() => {
         b.onclick = () => goTo(p, (p >= 1 && p <= N && attemptFor(doc.layers[p - 1].index).revealed) ? 3 : 1);
         row.appendChild(b);
       };
-      seg(0, "Meet", pos === 0 ? "on" : "done", "Meet the system");
+      if (pos === 0) {
+        const box = h("div", "tl-cur");
+        box.setAttribute("aria-current", "step");
+        const nm = h("div", "tl-cur-name");
+        nm.append(h("span", "tl-cur-t", "Meet the system"));
+        const ticks = h("div", "tl-ticks");
+        MEET.forEach((st, i) => {
+          const t = h("button", "tl-tick" + (i + 1 === step ? " on" : i + 1 < step ? " past" : ""));
+          t.append(h("span", "tl-dot"), h("span", "tl-tick-t", st.label));
+          t.onclick = () => goStep(i + 1);
+          ticks.appendChild(t);
+        });
+        box.append(nm, ticks);
+        row.appendChild(box);
+      } else seg(0, "Meet", "done", "Meet the system");
       doc.layers.forEach(L => {
         const p = L.index, a = attemptFor(L.index);
         if (p === pos && !onePage) {
@@ -237,8 +251,28 @@ var DocView = (() => {
       return f;
     }
 
-    /* ── overview (position 0) ── */
+    /* ── Meet the system (position 0): two short steps instead of one long
+       page. Essence first, then the rules it must never break. Who wants
+       what, the pieces, the flows and the limits are reference material, so
+       they live in the System sheet, one tap away from anywhere. ── */
+    const MEET = [{ label: "Essence", tone: "teal" }, { label: "Rules", tone: "vio" }];
+    function meetHead(root) {
+      const head = h("div", "step-head");
+      head.appendChild(h("div", "step-where", "Meet the system"));
+      const tabs = h("div", "step-tabs");
+      tabs.setAttribute("role", "tablist");
+      MEET.forEach((st, i) => {
+        const t = h("button", `step-tab tone-${st.tone}` + (i + 1 === step ? " on" : i + 1 < step ? " past" : ""), st.label);
+        t.setAttribute("role", "tab");
+        t.setAttribute("aria-selected", String(i + 1 === step));
+        t.onclick = () => goStep(i + 1);
+        tabs.appendChild(t);
+      });
+      head.appendChild(tabs);
+      root.appendChild(head);
+    }
     function renderOverview(root) {
+      meetHead(root);
       root.appendChild(h("div", "kicker", "Deconstruct · " + doc.meta.history_confidence + " historical confidence"));
       const titleRow = h("h1", "title", doc.meta.system);
       if (doc.layers.every(L => attemptFor(L.index).revealed)) {
@@ -249,6 +283,8 @@ var DocView = (() => {
         titleRow.appendChild(stamp);
       }
       root.appendChild(titleRow);
+      if (step === 2) return renderRules(root);
+
       if (doc.meta.narrowing) {
         const nn = h("div", "narrowing-note");
         nn.appendChild(h("b", null, "Scope: "));
@@ -256,9 +292,8 @@ var DocView = (() => {
         root.appendChild(nn);
       }
       root.appendChild(h("p", "essence", audience === "beginner" ? doc.essence.beginner : doc.essence.text));
-
       const facts = h("div", "deep-facts");
-      doc.essence.deep_facts.forEach(f => facts.appendChild(h("div", "fact", f)));
+      doc.essence.deep_facts.slice(0, 3).forEach(f => facts.appendChild(h("div", "fact", f)));
       root.appendChild(facts);
 
       // Some subjects are not only diagrams. Offered here, after the reader
@@ -273,83 +308,105 @@ var DocView = (() => {
         box.appendChild(h("span", "lab-offer-cta", COPY.labOpen));
         root.appendChild(box);
       }
+      root.appendChild(footer({ label: "The rules it lives by", fn: () => goStep(2) }));
+    }
+    function ruleCards() {
+      const list = h("div", "rule-cards");
+      doc.strip_down.invariants.forEach(iv => {
+        const it = h("div", "rule-card");
+        it.append(h("span", "inv-badge", ruleLabel(iv.id)), h("p", "rule-card-t", iv.text));
+        list.appendChild(it);
+      });
+      return list;
+    }
+    function renderRules(root) {
+      const n = doc.strip_down.invariants.length;
+      root.appendChild(h("p", "essence rules-lede", `${n} rule${n === 1 ? "" : "s"} it must never break. Every layer that follows defends at least one, and the guess in each layer asks which one is under attack.`));
+      root.appendChild(ruleCards());
+      gapsBox(root);
+      const more = h("button", "sheet-link");
+      more.append(h("span", null, "Who wants what, the pieces, what flows, and the limits"), h("b", null, "Open the System sheet ›"));
+      more.onclick = () => openSheet();
+      root.appendChild(more);
+      root.appendChild(h("p", "lib-note", doc.meta.ordering_note));
+      root.appendChild(footer({ label: "Start: the first failure", fn: () => goTo(1, 1) }, { label: "Back to the essence", fn: () => goStep(1) }));
+    }
+    // Gaps (design reviews only): the concerns the reader's own design hasn't
+    // answered yet, named in the profession's vocabulary. A to-do list a
+    // reference site can't give, because it requires reading THEIR design.
+    function gapsBox(root) {
+      if (!Array.isArray(doc.design_gaps) || !doc.design_gaps.length) return;
+      const gb = h("div", "gaps-box");
+      gb.appendChild(h("div", "gaps-label", "Not yet addressed"));
+      gb.appendChild(h("p", "gaps-lede", "Concerns your description doesn't answer yet. Each is a real decision waiting, not a criticism."));
+      doc.design_gaps.forEach(g => {
+        const v = vocabById(g.vocab);
+        const row = h("div", "gap-row");
+        const chipWrap = h("div", "gap-chip-wrap");
+        if (v) {
+          const chip = h("button", "vocab-chip tier-" + v.tier, v.name);
+          chip.title = v.one_liner;
+          chip.onclick = () => openVocab(v, null);
+          chipWrap.appendChild(chip);
+        }
+        row.appendChild(chipWrap);
+        row.appendChild(h("p", "gap-note", g.note));
+        gb.appendChild(row);
+      });
+      root.appendChild(gb);
+    }
 
+    /* ── The System sheet: the reference card for this system, as a side
+       panel you can open from any step without losing your place. ── */
+    let sheetEl = null, sheetReturn = null;
+    function closeSheet() {
+      if (!sheetEl) return;
+      sheetEl.remove();
+      sheetEl = null;
+      document.removeEventListener("keydown", sheetKey, true);
+      if (sheetReturn && sheetReturn.focus) sheetReturn.focus();
+    }
+    function sheetKey(ev) { if (ev.key === "Escape") { ev.stopPropagation(); closeSheet(); } }
+    function openSheet() {
+      if (sheetEl) { closeSheet(); return; }
+      sheetReturn = document.activeElement;
       const sd = doc.strip_down;
-      root.appendChild(h("h2", "section-head", "The Skeleton"));
+      const scrim = h("div", "sheet-scrim");
+      const panel = h("aside", "sheet");
+      panel.setAttribute("role", "dialog");
+      panel.setAttribute("aria-modal", "true");
+      panel.setAttribute("aria-label", "System sheet: " + doc.meta.system);
+      const head = h("div", "sheet-head");
+      const ttl = h("div");
+      ttl.append(h("div", "mono-label", "System sheet"), h("h2", null, doc.meta.system));
+      const x = h("button", "modal-close", "×");
+      x.setAttribute("aria-label", "Close the System sheet");
+      x.onclick = closeSheet;
+      head.append(ttl, x);
+      const body = h("div", "sheet-body");
       const block = (title, build) => {
         const b = h("div", "sd-block");
         b.appendChild(h("h3", null, title));
         build(b);
-        root.appendChild(b);
+        body.appendChild(b);
       };
-      block("The purpose", b => b.appendChild(h("div", "sd-purpose", sd.purpose)));
-      block("Who wants what", b => {
-        const list = h("div", "sd-list");
-        sd.actors.forEach(a => {
-          const it = h("div", "sd-item");
-          it.appendChild(h("b", null, a.name));
-          it.appendChild(document.createTextNode(": " + a.want));
-          list.appendChild(it);
-        });
-        b.appendChild(list);
-      });
-      block("What must never be false", b => {
-        const list = h("div", "sd-list");
-        sd.invariants.forEach(iv => {
-          const it = h("div", "sd-item inv");
-          it.appendChild(h("span", "inv-badge", "Rule " + invNumber[iv.id]));
-          it.appendChild(document.createTextNode(iv.text));
-          list.appendChild(it);
-        });
-        b.appendChild(list);
-      });
-      block("The pieces", b => {
-        const list = h("div", "sd-list");
-        sd.entities.forEach(en => {
-          const it = h("div", "sd-item");
-          it.appendChild(h("b", null, en.name));
-          it.appendChild(document.createTextNode(": " + en.note));
-          list.appendChild(it);
-        });
-        b.appendChild(list);
-      });
-      block("What flows", b => {
-        const list = h("div", "sd-list");
-        sd.flows.forEach(f => list.appendChild(h("div", "sd-item", f.text)));
-        b.appendChild(list);
-      });
-      block("What cannot be wished away", b => {
-        const list = h("div", "sd-list");
-        sd.constraints.forEach(c => list.appendChild(h("div", "sd-item", c)));
-        b.appendChild(list);
-      });
-
-      // Gaps — design reviews only. The concerns their described design has not
-      // addressed yet, named in the profession's vocabulary. This is the most
-      // actionable thing in the document: a to-do list a reference site can't
-      // give you, because it requires reading THEIR design.
-      if (Array.isArray(doc.design_gaps) && doc.design_gaps.length) {
-        const gb = h("div", "gaps-box");
-        gb.appendChild(h("div", "gaps-label", "Not yet addressed"));
-        gb.appendChild(h("p", "gaps-lede", "Concerns your description doesn't answer yet. Each is a real decision waiting, not a criticism."));
-        doc.design_gaps.forEach(g => {
-          const v = vocabById(g.vocab);
-          const row = h("div", "gap-row");
-          const chipWrap = h("div", "gap-chip-wrap");
-          if (v) {
-            const chip = h("button", "vocab-chip tier-" + v.tier, v.name);
-            chip.title = v.one_liner;
-            chip.onclick = () => openVocab(v, null);
-            chipWrap.appendChild(chip);
-          }
-          row.appendChild(chipWrap);
-          row.appendChild(h("p", "gap-note", g.note));
-          gb.appendChild(row);
-        });
-        root.appendChild(gb);
-      }
-
-      root.appendChild(h("p", "lib-note", doc.meta.ordering_note));
+      const list = (items, fill) => { const l = h("div", "sd-list"); items.forEach(x2 => l.appendChild(fill(x2))); return l; };
+      const named = (name, text) => { const it = h("div", "sd-item"); it.appendChild(h("b", null, name)); it.appendChild(document.createTextNode(": " + text)); return it; };
+      block("What it's for", b => b.appendChild(h("div", "sd-purpose", sd.purpose)));
+      block("Rules it must never break", b => b.appendChild(ruleCards()));
+      block("Who wants what", b => b.appendChild(list(sd.actors, a => named(a.name, a.want))));
+      block("The pieces", b => b.appendChild(list(sd.entities, en => named(en.name, en.note))));
+      block("What flows", b => b.appendChild(list(sd.flows, f => h("div", "sd-item", f.text))));
+      block("What cannot be wished away", b => b.appendChild(list(sd.constraints, c => h("div", "sd-item", c))));
+      gapsBox(body);
+      panel.append(head, body);
+      scrim.appendChild(panel);
+      scrim.onclick = ev => { if (ev.target === scrim) closeSheet(); };
+      document.body.appendChild(scrim);
+      sheetEl = scrim;
+      document.addEventListener("keydown", sheetKey, true);
+      requestAnimationFrame(() => scrim.classList.add("open"));
+      x.focus();
     }
 
     /* ── a layer (positions 1..N) ── */
@@ -427,36 +484,41 @@ var DocView = (() => {
     /* one-tap prediction: which invariant does this failure attack?
        Rendered before the design question; needs ≥2 invariants to be
        a real choice. Persists once — no retries, honesty over score. */
-    function renderPredict(root, L, a) {
+    /* Which rule is about to break? One tap records the guess, and it can't
+       be changed afterwards. Each rule shows its text, not just a number. */
+    function rulePicker(L, a) {
       const invs = doc.strip_down.invariants;
-      if (invs.length < 2) return;
-      const box = h("div", "predict-box");
-      box.appendChild(h("div", "pb-label", "First, a prediction: which law does this failure attack?"));
-      const row = h("div", "predict-row");
+      if (invs.length < 2) return null;
+      const q = h("section", "move-block");
+      q.appendChild(h("h3", "move-q", "Which rule is about to break?"));
+      const list = h("div", "rule-list");
       invs.forEach(iv => {
-        const chip = h("button", "predict-chip", "Rule " + invNumber[iv.id]);
-        chip.title = iv.text;
+        const opt = h("button", "rule-opt");
+        opt.append(h("span", "rule-n", ruleLabel(iv.id)), h("span", "rule-t", iv.text));
         if (a.predict) {
-          chip.disabled = true;
-          if (iv.id === a.predict.chosen) chip.classList.add(a.predict.correct ? "hit" : "miss");
-          if (!a.predict.correct && L.defends.includes(iv.id)) chip.classList.add("answer");
+          opt.disabled = true;
+          if (iv.id === a.predict.chosen) opt.classList.add(a.predict.correct ? "hit" : "miss");
+          if (!a.predict.correct && L.defends.includes(iv.id)) opt.classList.add("answer");
         } else {
-          chip.onclick = () => {
+          opt.onclick = () => {
             a.predict = { chosen: iv.id, correct: L.defends.includes(iv.id) };
             a.ts = Date.now();
             persist();
+            render._keepScroll = true;
             render();
           };
         }
-        row.appendChild(chip);
+        list.appendChild(opt);
       });
-      box.appendChild(row);
-      if (a.predict) {
-        box.appendChild(h("p", "pb-result", a.predict.correct
-          ? "Called it. This failure attacks " + L.defends.map(d => "Rule " + invNumber[d]).join(", ") + "."
-          : "It actually attacks " + L.defends.map(d => "Rule " + invNumber[d]).join(", ") + ". Watch for why."));
-      }
-      root.appendChild(box);
+      q.appendChild(list);
+      if (a.predict) q.appendChild(h("p", "pb-result", a.predict.correct
+        ? "Called it. Watch how the fix protects it."
+        : "Not quite. It attacks " + L.defends.map(ruleLabel).join(", ") + ". Watch for why."));
+      return q;
+    }
+    function renderPredict(root, L, a) {
+      const q = rulePicker(L, a);
+      if (q) root.appendChild(q);
     }
 
     function renderGate(root, L, a) {
@@ -774,35 +836,8 @@ var DocView = (() => {
 
     // 2 · Your move: guess the rule under attack, sketch a fix if you like
     function stepMove(root, L, a) {
-      const invs = doc.strip_down.invariants;
-      if (invs.length >= 2) {
-        const q = h("section", "move-block");
-        q.appendChild(h("h3", "move-q", "Which rule is about to break?"));
-        const list = h("div", "rule-list");
-        invs.forEach(iv => {
-          const opt = h("button", "rule-opt");
-          opt.append(h("span", "rule-n", ruleLabel(iv.id)), h("span", "rule-t", iv.text));
-          if (a.predict) {
-            opt.disabled = true;
-            if (iv.id === a.predict.chosen) opt.classList.add(a.predict.correct ? "hit" : "miss");
-            if (!a.predict.correct && L.defends.includes(iv.id)) opt.classList.add("answer");
-          } else {
-            opt.onclick = () => {
-              a.predict = { chosen: iv.id, correct: L.defends.includes(iv.id) };
-              a.ts = Date.now();
-              persist();
-              render._keepScroll = true;
-              render();
-            };
-          }
-          list.appendChild(opt);
-        });
-        q.appendChild(list);
-        if (a.predict) q.appendChild(h("p", "pb-result", a.predict.correct
-          ? "Called it. Watch how the fix protects it."
-          : "Not quite. It attacks " + L.defends.map(ruleLabel).join(", ") + ". Watch for why."));
-        root.appendChild(q);
-      }
+      const picker = rulePicker(L, a);
+      if (picker) root.appendChild(picker);
 
       const sk = h("section", "move-block");
       const sh = h("h3", "move-q", "Sketch your fix");
@@ -937,7 +972,6 @@ var DocView = (() => {
       const body = h("div", "step-body");
       if (pos === 0) {
         renderOverview(body);
-        body.appendChild(footer({ label: "Begin the rebuild", fn: () => goTo(1, 1) }));
       } else if (pos <= N) {
         const L = doc.layers[pos - 1];
         if (onePage) {
@@ -982,7 +1016,7 @@ var DocView = (() => {
       if (p < 0 || p > N + 2) return;
       const forward = p > pos || (p === pos && s > step);
       pos = p;
-      step = (p >= 1 && p <= N) ? Math.min(4, Math.max(1, s)) : 1;
+      step = (p >= 1 && p <= N) ? Math.min(4, Math.max(1, s)) : p === 0 ? Math.min(2, Math.max(1, s)) : 1;
       if (p >= 1 && p <= N && step >= 3 && locked(doc.layers[p - 1])) step = 2;   // Strict: earn the fix first
       before = false;
       hintTier = 0;
@@ -992,6 +1026,13 @@ var DocView = (() => {
       render(forward && step >= 3);
     }
     function goStep(s) {
+      if (pos === 0) {
+        step = Math.min(2, Math.max(1, s));
+        rec.progress.step = step;
+        persist();
+        render();
+        return;
+      }
       if (pos < 1 || pos > N || onePage) return;
       const L = doc.layers[pos - 1];
       if (s >= 3 && locked(L)) {
@@ -1018,17 +1059,17 @@ var DocView = (() => {
     /* Keyboard: ← and → walk the steps, Shift with an arrow jumps a layer,
        and holding B in the fix step shows the state it replaced. */
     function stops() {
-      const out = [[0, 1]];
+      const out = [[0, 1], [0, 2]];
       doc.layers.forEach(L => { if (onePage) out.push([L.index, 1]); else for (let k = 1; k <= 4; k++) out.push([L.index, k]); });
       out.push([N + 1, 1], [N + 2, 1]);
       return out;
     }
     function move(dir) {
       const list = stops();
-      const cur = list.findIndex(([p, k]) => p === pos && (pos < 1 || pos > N || onePage || k === step));
+      const cur = list.findIndex(([p, k]) => p === pos && (pos > N || (pos >= 1 && onePage) || k === step));
       const next = list[Math.max(0, Math.min(list.length - 1, cur + dir))];
       if (!next || (next[0] === pos && next[1] === step)) return;
-      if (next[0] === pos) goStep(next[1]); else goTo(next[0], dir < 0 && next[0] >= 1 && next[0] <= N ? 4 : next[1]);
+      if (next[0] === pos) goStep(next[1]); else goTo(next[0], dir < 0 && next[0] >= 1 && next[0] <= N ? 4 : next[0] === 0 && dir < 0 ? 2 : next[1]);
     }
     function jumpLayer(dir) {
       const p = Math.max(0, Math.min(N + 2, pos + dir));
@@ -1055,6 +1096,7 @@ var DocView = (() => {
       setChallenge(c) { challenge = c; if (pos >= 1 && pos <= N && step >= 3 && locked(doc.layers[pos - 1])) step = 2; render._keepScroll = true; render(); },
       setOnePage(v) { onePage = !!v; before = false; render(); },
       setBefore,
+      openSheet,
       get before() { return before; },
       // from Models, Vocabulary and links: open a layer at its fix if it's been read
       goToLayer(idx) { goTo(idx, attemptFor(idx).revealed ? 3 : 1); },
@@ -1067,6 +1109,7 @@ var DocView = (() => {
       // record after this view is torn down / the breakdown is re-opened
       destroy() {
         clearTimeout(saveTimer);
+        closeSheet();
         document.removeEventListener("keydown", onKey);
         document.removeEventListener("keyup", onKeyUp);
       }

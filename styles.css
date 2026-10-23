@@ -1451,6 +1451,31 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 }
 @media(prefers-reduced-motion:reduce){.move-sketch.nudge,.lab-menu{animation:none;}}
 
+
+/* ═══ Meet the system: rules, and the System sheet ═══ */
+.rules-lede{margin:6px 0 18px;}
+.rule-cards{display:grid;gap:8px;}
+.rule-card{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:baseline;background:var(--panel);
+  border-radius:var(--r-md);padding:14px 16px;box-shadow:inset 0 0 0 1px var(--hair),var(--sh-1);}
+.rule-card .inv-badge{font-family:var(--sans);font-size:11.5px;font-weight:700;}
+.rule-card-t{margin:0;font-size:15px;line-height:1.55;color:var(--ink);}
+.sheet-link{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:100%;text-align:left;margin:20px 0 6px;
+  padding:14px 16px;border:none;cursor:pointer;border-radius:var(--r-md);background:var(--sunken);color:var(--ink-soft);font-size:14px;
+  transition:background .25s var(--ease);}
+.sheet-link b{font-weight:650;color:var(--accent-deep);}
+.sheet-link:hover{background:color-mix(in srgb,var(--accent) 9%,var(--sunken));}
+.sheet-scrim{position:fixed;inset:0;z-index:75;background:rgba(12,12,14,0);transition:background .3s var(--ease);}
+.sheet-scrim.open{background:rgba(12,12,14,.28);}
+.sheet{position:absolute;top:0;right:0;bottom:0;width:min(480px,100vw);display:flex;flex-direction:column;background:var(--panel);
+  box-shadow:var(--sh-3),inset 1px 0 0 var(--hair);transform:translateX(24px);opacity:0;
+  transition:transform .45s var(--ease-spring),opacity .3s var(--ease);padding-top:env(safe-area-inset-top);}
+.sheet-scrim.open .sheet{transform:none;opacity:1;}
+.sheet-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:20px 22px 16px;border-bottom:1px solid var(--hair);}
+.sheet-head h2{font-family:var(--display);font-weight:650;font-size:22px;letter-spacing:-.025em;margin-top:4px;}
+.sheet-body{overflow-y:auto;padding:4px 22px calc(28px + env(safe-area-inset-bottom));}
+.sheet-body .sd-block{margin:22px 0;}
+@media(prefers-reduced-motion:reduce){.sheet,.sheet-scrim{transition:none;}}
+
 /* ═══ Responsive chrome ═══
    Under 760px the nav island leaves the header and becomes a tab bar along
    the bottom edge, where thumbs are. It steps aside while reading so the
