@@ -601,7 +601,7 @@
    "name": "Fan-out and the Big Group",
    "problem": {
     "statement": "A one-to-one message is one delivery. A message to a group is one for every member, and groups are not small. Send to a 100,000-member community and the naive fabric, on the sender's own path, must write 100,000 inboxes, publish to as many gateways, and fire tens of thousands of push wake-ups, all triggered by one tap. That single message becomes a storm that saturates whichever servers happen to own those recipients, and a handful of huge, active groups (or a celebrity broadcast) become permanent hot spots that dwarf every private chat combined. The average message is cheap; the fattest group is what melts a server.",
-    "beginner": "Sending to a big group is not one delivery, it is one per member. A message to a hundred-thousand-person group means a hundred thousand copies, all set off by a single tap. A few giant, busy groups can generate more work than all the small chats put together, and they overwhelm the servers unlucky enough to hold those members.",
+    "beginner": "Sending to a big group means one delivery per member. A message to a hundred-thousand-person group means a hundred thousand copies, all set off by a single tap. A few giant, busy groups can generate more work than all the small chats put together, and they overwhelm the servers unlucky enough to hold those members.",
     "model": {
      "id": "bottleneck",
      "application": "The fattest group governs the whole system's throughput. Move fan-out off the sender's path into a dedicated service, and for the largest groups switch from copying to everyone (fan-out on write) to letting members pull from one shared log (fan-out on read)."

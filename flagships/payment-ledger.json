@@ -12,7 +12,7 @@
   "beginner": "A payment ledger keeps track of money moving between accounts. Its one job is to make sure that when you send money, it leaves once, arrives once, and is never accidentally created or destroyed, even when computers crash or the network hiccups and sends the same request twice.",
   "deep_facts": [
    "Double-entry bookkeeping is over 500 years old (codified by Luca Pacioli in 1494), and modern ledgers still run on its core rule: every entry's debits equal its credits, so the books always sum to zero.",
-   "A balance is not stored, it is derived: the sum of an immutable list of postings. The current balance is a cache of history, and any wrong balance can be recomputed from the log.",
+   "A balance is derived, never stored: it is the sum of an immutable list of postings. The current balance is a cache of history, and any wrong balance can be recomputed from the log.",
    "A request that times out has three possible truths at once (never sent, applied, or applied but the acknowledgement was lost), and the client cannot tell which, which is why an idempotency key is mandatory rather than optional.",
    "Exactly-once delivery is provably impossible over a lossy network. Real systems get exactly-once effect by combining at-least-once retries with idempotent, deduplicated writes.",
    "There is no two-phase commit a bank and a card network will both join, so a transfer spanning two providers must be a saga of compensatable steps, not a distributed transaction.",
@@ -279,7 +279,7 @@
    "name": "The Retry Doubles the Money",
    "problem": {
     "statement": "The atomic journal makes each write correct, but says nothing about a write that happens twice. A client sends 'transfer fifty' and the response times out. The client cannot tell whether the transfer posted, the network dropped the request, or it posted and only the acknowledgement was lost. So it does the only safe thing and retries, and now fifty moves twice. Over a real network every state-changing request will eventually be sent more than once; at-least-once delivery is the only kind you can get.",
-    "beginner": "You send a transfer, but the reply gets lost, so you do not know if it worked. Naturally you try again. Without protection, the system now runs the transfer twice and moves double the money. On a real network this is not rare, it is guaranteed to happen eventually.",
+    "beginner": "You send a transfer, but the reply gets lost, so you do not know if it worked. Naturally you try again. Without protection, the system now runs the transfer twice and moves double the money. On a real network this will happen sooner or later.",
     "model": {
      "id": "idempotency",
      "application": "Attach a stable key to each intended transfer and record which keys have been applied, so a retried request lands the money exactly once no matter how many times it arrives."
@@ -493,7 +493,7 @@
     }
    },
    "gate": {
-    "question": "A transfer needs a debit at one provider and a credit at another, and either can fail independently. You cannot make them commit together. How do you guarantee the pair is all-or-nothing when a partial failure is not just possible but expected?",
+    "question": "A transfer needs a debit at one provider and a credit at another, and either can fail independently. You cannot make them commit together. How do you guarantee the pair is all-or-nothing when partial failures are expected?",
     "hint": "If you cannot prevent a half-done transfer, can you always undo one? What would the reverse of each step be?"
    },
    "solution": "Run the transfer as a saga: an ordered chain of steps, each with a defined compensating action that reverses it. Debit provider A; if the credit at provider B succeeds, the saga is done; if it fails, run A's compensation (refund the debit) so the money returns to the source and the ledger nets to zero. A coordinator drives the chain and, on any step's failure, runs the compensations for the steps already completed, in reverse. Because providers and compensations are called with idempotency keys, a retried or duplicated step is safe. There is no distributed transaction; there is a forward path and a guaranteed unwind.",

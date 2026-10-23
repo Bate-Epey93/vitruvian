@@ -1007,10 +1007,10 @@ async function openReader(id, layerIndex, opts = {}) {
       return { ok: true };
     },
     onCompare(layer, attempt) {
-      return Generator.compare({ apiKey: meta.apiKey, modelId: meta.modelId, layer, attempt });
+      return Generator.compare({ apiKey: meta.apiKey, modelId: meta.modelId, layer, attempt, voice: meta.voicePass !== false });
     },
     onAsk(layer, question) {
-      return Generator.ask({ apiKey: meta.apiKey, modelId: meta.modelId, doc: rec.doc, layer, question });
+      return Generator.ask({ apiKey: meta.apiKey, modelId: meta.modelId, doc: rec.doc, layer, question, voice: meta.voicePass !== false });
     }
   });
 
@@ -1444,7 +1444,7 @@ function renderWhatif(rec, opts = {}) {
     resultEl.textContent = "";
     resultEl.appendChild(h("div", "gen-phase", COPY.whatifThinking));
     try {
-      const w = await Generator.whatif({ apiKey: meta.apiKey, modelId: meta.modelId, doc: rec.doc, change, speed: meta.genSpeed || "balanced" });
+      const w = await Generator.whatif({ apiKey: meta.apiKey, modelId: meta.modelId, doc: rec.doc, change, speed: meta.genSpeed || "balanced", voice: meta.voicePass !== false });
       (rec.whatifs = rec.whatifs || []).push({ change, result: w, ts: Date.now() });
       await Store.saveBreakdownLight(rec);
       showResult(w, change);
@@ -1588,10 +1588,10 @@ function renderGenerate(systemName, mode) {
     const tok = h("div", "gen-tokens", "");
     prog.append(phaseEl, barEl, tok);
 
-    const PHASE_PCT = { start: 4, strip_down: 18, visual: 30, layers: 42, stress: 78, transfer: 90, repair: 95 };
+    const PHASE_PCT = { start: 4, strip_down: 18, visual: 30, layers: 42, stress: 78, transfer: 88, repair: 92, voice: 96 };
     try {
-      const { doc, repaired } = await Generator.generate({
-        apiKey: meta.apiKey, modelId: meta.modelId,
+      const { doc, repaired, voice } = await Generator.generate({
+        apiKey: meta.apiKey, modelId: meta.modelId, voice: meta.voicePass !== false,
         system: subject, focus: focus ? focus.value.trim() : "", mode,
         speed: meta.genSpeed || "balanced",
         onProgress(p) {
@@ -1610,6 +1610,7 @@ function renderGenerate(systemName, mode) {
       };
       await Store.saveBreakdown(rec);
       if (repaired) toast("Validated after one repair pass");
+      else if (voice && voice.fixed) toast(`Edited ${voice.fixed} passage${voice.fixed > 1 ? "s" : ""} for voice`);
       openReader(rec.id);
     } catch (e) {
       prog.textContent = "";
@@ -2224,6 +2225,16 @@ function renderSettings(banner) {
     renderSettings();
   };
   db.appendChild(tog);
+  // the voice pass: generated text gets the same editing the app's own copy got
+  const vtog = h("div", "toggle" + (meta.voicePass !== false ? " on" : ""));
+  vtog.style.marginTop = "12px";
+  vtog.append(h("span", "tg-track"), h("span", "tg-label", "Edit generated text for voice: when the checker flags stock phrasing, one short extra call rewrites just those passages"));
+  vtog.onclick = async () => {
+    meta.voicePass = meta.voicePass === false;
+    await Store.saveMeta({ voicePass: meta.voicePass });
+    renderSettings();
+  };
+  db.appendChild(vtog);
   root.appendChild(db);
 
   /* generation speed */

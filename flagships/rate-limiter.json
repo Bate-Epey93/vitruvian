@@ -185,7 +185,7 @@
    "name": "A Rate Needs a Clock: The Fixed Window",
    "problem": {
     "statement": "The naive limiter keeps a running count per caller and rejects anyone past N. But a count with no clock is a lifetime quota, not a rate: a steady, well-behaved caller sends its N requests over an hour and is then locked out forever, while nothing ever forgives old traffic. The word 'rate' means events per unit of time, and this design has thrown the time away.",
-    "beginner": "The first idea is to count each user's requests and stop them at 100. But if you never reset that count, a normal user who makes 100 requests over a whole day is banned for good. A limit with no clock is not a speed limit, it is a total you can never exceed.",
+    "beginner": "The first idea is to count each user's requests and stop them at 100. But if you never reset that count, a normal user who makes 100 requests over a whole day is banned for good. A limit with no clock works as a lifetime total, which is a very different thing from a speed limit.",
     "model": {
      "id": "first-principles",
      "application": "Strip 'rate limiting' to what a rate actually is, events divided by time, and bind every count to a slice of the clock so old traffic ages out."
@@ -684,7 +684,7 @@
    "id": "st1",
    "title": "A caller times its burst to the window seam",
    "scenario": "A caller limited to 100 per minute sends 100 requests at 11:59:59.5 and another 100 at 12:00:00.5, deliberately aiming to double its rate across the window reset.",
-   "reveal": "On the original fixed-window design this admits 200 requests in one second, each window seeing only its lawful 100. The sliding-window counter, and the token bucket that replaced it, count a rolling window instead, so the second burst still sees the first in view and is throttled back to roughly the true 100. The token bucket additionally caps the instantaneous burst at its capacity B. inv1 holds and the boundary exploit is gone."
+   "reveal": "On the original fixed-window design this admits 200 requests in one second, each window seeing only its lawful 100. The sliding-window counter, and the token bucket that replaced it, count a rolling window instead, so the second burst still sees the first in view and is throttled back to roughly the true 100. The token bucket also caps the instantaneous burst at its capacity B. inv1 holds and the boundary exploit is gone."
   },
   {
    "id": "st2",

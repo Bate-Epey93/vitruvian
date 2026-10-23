@@ -170,6 +170,8 @@ VOICE - applies to every string field:
 - No aphorism closers. Do not end a passage on a quotable line that restates it more grandly ("X stops being a picture and starts behaving like the system"). Stop when the fact is delivered.
 - Avoid stacking short fragments for drama. One short sentence for emphasis is fine; four in a row is a tell.
 
+${Voice.RULES}
+
 HARD RULES:
 - Output ONLY the JSON document. No prose before or after, no code fences, no markdown inside string fields.
 - user_lens.costs is never empty - every mechanism charges its users something.
@@ -192,7 +194,7 @@ If you receive a message listing validation errors, return the corrected COMPLET
     schemaVersion: 1,
     meta: { system: "The railway network", narrowing: "", ordering_note: "Layers follow the historical order because each mechanism was forced by a real failure of the previous state.", history_confidence: "high" },
     essence: {
-      text: "A railway is a machine the size of a country that lets thousands of trains share a few threads of steel without touching. Its genius is not the engine; it is the invisible discipline of separation.",
+      text: "A railway is a machine the size of a country that lets thousands of trains share a few threads of steel without touching. It runs on separation: no train may enter a stretch of track until the train ahead has provably left it.",
       beginner: "A railway is how many heavy, fast trains share the same few tracks all day without ever crashing into each other.",
       deep_facts: ["A loaded freight train can need over 2 km to stop; the driver can never stop within the distance they can see.", "The 1861 Clayton Tunnel crash killed 23 people while the railway was following its safety rules perfectly.", "Britain legislated standard time largely because railways could not run on hundreds of local town clocks."]
     },
@@ -261,7 +263,7 @@ Then a blank line, then under 150 words in exactly three parts, plain text:
 RIGHT: what their attempt got right.
 MISSED: what it missed that the canonical solution handles.
 VERDICT: whether they found a different valid path; celebrate it when true.
-Be specific and generous; grade the design, not the prose. Never use em dashes.`,
+Be specific and generous; grade the design, not the prose. ${Voice.SHORT_RULES}`,
       user: `THE PROBLEM: ${layer.problem.statement}\n\nTHE THINKING MODEL: ${layer.problem.model.id}: ${layer.problem.model.application}\n\nCANONICAL SOLUTION: ${layer.solution}\n\nLEARNER'S ATTEMPT: ${attempt}`
     };
   }
@@ -270,7 +272,7 @@ Be specific and generous; grade the design, not the prose. Never use em dashes.`
      context (§value-add). Not freeform chat - one question, one answer. ── */
   function askPrompt(doc, layer, question) {
     return {
-      system: `You answer ONE question from a reader about ONE layer of a system breakdown. Ground your answer in the provided context plus well-established knowledge of this system; when the context doesn't settle it, say so plainly rather than speculating. Maximum 160 words, plain text, no markdown, no em dashes. Be direct and specific: name the mechanism, tradeoff, or scaling shape that answers the question. If the reader proposes an alternative design, treat it seriously: say what it gets right before what it misses.`,
+      system: `You answer ONE question from a reader about ONE layer of a system breakdown. Ground your answer in the provided context plus well-established knowledge of this system; when the context doesn't settle it, say so plainly rather than speculating. Maximum 160 words, plain text, no markdown. ${Voice.SHORT_RULES} Be direct and specific: name the mechanism, tradeoff, or scaling shape that answers the question. If the reader proposes an alternative design, treat it seriously: say what it gets right before what it misses.`,
       user: `SYSTEM: ${doc.meta.system}
 ESSENCE: ${doc.essence.text}
 
@@ -330,7 +332,8 @@ Rules:
 - verdict is one of improves|mixed|harmful. 'mixed' when it helps one goal while costing another.
 - diff renders the change on the existing diagram. New nodes use ONLY the existing lane ids. Edges' from/to must reference an existing node id (listed below) or one of your own new node ids. New ids must be unique and must NOT reuse any existing id. If the change is purely behavioral with no new structure, use empty arrays.
 - alternatives (1-3): the cleaner or established ways people actually achieve this benefit; this is where you point at how it's really done.
-- Be concrete to THIS system; do not answer generically. Never use em dashes in any string.`,
+- Be concrete to THIS system; do not answer generically.
+- ${Voice.SHORT_RULES}`,
       user: `SYSTEM: ${doc.meta.system}
 ESSENCE: ${doc.essence.text}
 

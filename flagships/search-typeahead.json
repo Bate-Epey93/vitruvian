@@ -468,7 +468,7 @@
     "principle": "When reads dwarf changes and the answer is identical across users, move the answer close to the reader and pay for speed in bounded staleness."
    },
    "tradeoff": "You accept a staleness window as wide as the TTL on the read path, and a whole cache tier to operate and keep warm, in exchange for taking the index almost entirely out of the common case.",
-   "at_scale": "This is what makes global typeahead affordable: one cache fleet serves hundreds of thousands of lookups a second from memory while a handful of trie replicas handle the misses, and a short prefix that everyone types is answered by the cache instead of hammering one node. The ceiling moves from index CPU to cache memory and, ultimately, to the single hottest prefix, which the final layer confronts.",
+   "at_scale": "This is what makes global typeahead affordable: one cache fleet serves hundreds of thousands of lookups a second from memory while a handful of trie replicas handle the misses, and a short prefix that everyone types is answered by the cache instead of hammering one node. The ceiling moves from index CPU to cache memory and, in the end, to the single hottest prefix, which the final layer confronts.",
    "defends": [
     "inv4"
    ],

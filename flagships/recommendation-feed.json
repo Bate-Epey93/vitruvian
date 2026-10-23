@@ -8,7 +8,7 @@
   "domain": "software"
  },
  "essence": {
-  "text": "A recommendation feed decides, billions of times a second, what one person sees next out of a near-infinite catalog. Its genius is not any single model but a loop: it ranks what it predicts you will value, watches what you actually do, and feeds that back to rank again, all inside a couple hundred milliseconds. The hard part is that the loop learns from its own choices, so left alone it narrows into a bubble and chases whatever is already popular.",
+  "text": "A recommendation feed decides, billions of times a second, what one person sees next out of a near-infinite catalog. The core of it is a loop rather than any single model: it ranks what it predicts you will value, watches what you actually do, and feeds that back to rank again, all inside a couple hundred milliseconds. The hard part is that the loop learns from its own choices, so left alone it narrows into a bubble and chases whatever is already popular.",
   "beginner": "A recommendation feed picks what to show you next from more content than you could watch in a thousand lifetimes. It guesses what you will like, sees what you actually do, and uses that to guess better next time.",
   "deep_facts": [
    "The pipeline is a funnel: candidate generation narrows millions of items to a few hundred, then a heavier ranker scores only those. YouTube's 2016 deep-learning paper describes exactly this two-stage split.",
@@ -638,7 +638,7 @@
    },
    "gate": {
     "question": "One clip is being opened by forty million people this minute, and a creator with a hundred million followers just posted. Which piece of your pipeline melts first, and how do you keep the feed up without special-casing every superstar by hand?",
-    "hint": "Traffic is not uniform; it is a power law. What do you do to a key that is a thousand times hotter than the median that you would never bother doing to the median?"
+    "hint": "Traffic follows a power law, so a few keys get most of it. What do you do to a key that is a thousand times hotter than the median that you would never bother doing to the median?"
    },
    "solution": "Engineer for the power law. Detect hot items and celebrities; cache and replicate their features and precomputed candidate lists; coalesce the flood of duplicate reads into one; shard the engagement stream by item so one viral clip cannot swamp a single partition; and assemble a celebrity's fan-out at read time instead of writing to hundreds of millions of inboxes.",
    "user_lens": {

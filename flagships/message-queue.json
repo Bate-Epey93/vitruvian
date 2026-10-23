@@ -364,7 +364,7 @@
    "index": 3,
    "name": "Idempotency: Make a Repeat Harmless",
    "problem": {
-    "statement": "At-least-once means duplicates are not an edge case, they are guaranteed: every timed-out-but-actually-finished message, every redelivery after a slow ack, arrives again. If processing a message has a side effect, charging a card, sending an email, incrementing a balance, then a duplicate does that side effect twice. Exactly-once delivery is impossible over a network, so the duplicate cannot be prevented; it can only be made not to matter.",
+    "statement": "At-least-once means duplicates are guaranteed, not occasional: every timed-out-but-actually-finished message, every redelivery after a slow ack, arrives again. If processing a message has a side effect, charging a card, sending an email, incrementing a balance, then a duplicate does that side effect twice. Exactly-once delivery is impossible over a network, so the duplicate cannot be prevented; it can only be made harmless.",
     "beginner": "Because the queue may deliver the same task twice, a task that charges money or sends an email could do it twice. You cannot stop the second delivery, so you have to make doing the task a second time change nothing.",
     "model": {
      "id": "idempotency",

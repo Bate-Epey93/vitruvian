@@ -15,7 +15,7 @@
    "In 2016 WhatsApp switched on Signal-protocol end-to-end encryption for its entire user base of over a billion people, widely described as the largest deployment of end-to-end encryption in history.",
    "Your phone is unreachable most of the time: its radio sleeps to save battery. 'Instant' messaging is a queue on a server plus a push notification that wakes the phone to come and collect.",
    "The second grey tick means delivered to the device, not read, and the server confirms delivery of a message it cannot decrypt. The receipt system and the secrecy system are deliberately independent.",
-   "A message to a 256-member group is uploaded from your phone essentially once. The server multiplies it into hundreds of copies without ever being able to read the one you gave it."
+   "A message to a 256-member group is uploaded from your phone about once. The server multiplies it into hundreds of copies without ever being able to read the one you gave it."
   ]
  },
  "strip_down": {
@@ -329,7 +329,7 @@
    },
    "tech_lens": {
     "mechanism": "At-least-once delivery on every hop (send, await ack, timeout, resend) composed with dedup-by-message-id at every receiver, which together produce exactly-once presentation.",
-    "principle": "Exactly-once is not a network property; it is at-least-once plus idempotent receivers. Name the operation, then retries cost nothing but bandwidth."
+    "principle": "Exactly-once comes from at-least-once delivery plus idempotent receivers; the network can't provide it. Name the operation, then retries cost nothing but bandwidth."
    },
    "tradeoff": "Roughly half the system's chatter is now messages about messages, and every hop must remember what it has already seen. The guarantee is bought with memory and reverse traffic, and receipts leak activity: the ticks tell the sender when your device came online.",
    "at_scale": "Message-id dedup is O(1) per message and needs no coordination, so a retry storm costs cheap lookups instead of corruption or locks. It scales with a dedup store partitioned by id (add shards, not consensus), so 'a million retries a second' is a caching problem, not a correctness one.",
@@ -410,7 +410,7 @@
    "index": 3,
    "name": "End-to-End Encryption: Blind the Middleman",
    "problem": {
-    "statement": "Layers 1 and 2 made the server the hero of the story, and that is exactly the problem. Every message rests, readable, in its queues; every conversation of two billion people transits one company's machines in plaintext. That is not a system with a privacy risk; it is a wiretap with a delivery feature. One breach, one insider, one subpoena, one change of corporate heart, and everything ever queued is on the table. The invariant 'only the endpoints can read it' isn't weakly protected. It doesn't exist yet.",
+    "statement": "Layers 1 and 2 made the server the hero of the story, and that is exactly the problem. Every message rests, readable, in its queues; every conversation of two billion people transits one company's machines in plaintext. Calling that a privacy risk undersells it: it is a wiretap with a delivery feature. One breach, one insider, one subpoena, one change of corporate heart, and everything ever queued is on the table. The invariant 'only the endpoints can read it' isn't weakly protected. It doesn't exist yet.",
     "beginner": "The middle computer can read every message it holds and delivers. So anyone who hacks it, works at the company, or shows up with a court order can read them too. The mail carrier can currently open every letter.",
     "model": {
      "id": "trust-boundary",
@@ -421,7 +421,7 @@
     "question": "The server must keep doing everything it does (queueing, retrying, receipting) but must lose the ability to read what it carries. The hard part: two phones that have never met must agree on a secret key, and their only channel to each other runs through the very server you're defending against. How can they share a secret in front of the eavesdropper who delivers their mail?",
     "hint": "There are kinds of locks whose closing and opening are different powers. What could a phone publish openly so that anyone can lock a box for it, but only it can open the box?"
    },
-   "solution": "The Signal protocol. Each device generates keypairs and uploads only the public halves ('prekey bundles') to a directory on the server. A sender fetches the recipient's bundle and runs a key agreement that yields a shared session secret the server never sees, even though it carried every byte of the exchange. From then on, a double ratchet churns the keys forward with every message, so even a key stolen later can't unlock the past. In 2016 WhatsApp completed the rollout across more than a billion users: every message, every chat, by default. The queues still queue and the ticks still tick, over content that is now noise to the machine holding it.",
+   "solution": "The Signal protocol. Each device generates keypairs and uploads only the public halves ('prekey bundles') to a directory on the server. A sender fetches the recipient's bundle and runs a key agreement that yields a shared session secret the server never sees, even though it carried every byte of the exchange. From then on, a double ratchet churns the keys forward with every message, so even a key stolen later can't decrypt the past. In 2016 WhatsApp completed the rollout across more than a billion users: every message, every chat, by default. The queues still queue and the ticks still tick, over content that is now noise to the machine holding it.",
    "user_lens": {
     "gives": "Privacy as the default rather than a setting: neither the company, a server breach, nor a wiretap on the wire can read your messages, and you did nothing to earn it but update the app.",
     "costs": "The protection cuts both ways. Lose your phone and the server cannot restore your history; it never had it. Cloud backups become the escape hatch that can quietly reintroduce the risk. And your metadata (who, when, how often) remains fully visible; only the words are dark."
@@ -431,7 +431,7 @@
     "principle": "Draw the trust boundary at the endpoints and verify at every crossing. The middleman that cannot read what it carries cannot leak it, sell it, or be compelled to surrender it."
    },
    "tradeoff": "The server is deliberately blinded, and everything that needed sight gets harder: no server-side search, no content-based spam filtering, no 'restore history from the cloud'. Abuse moderation must lean on metadata and reports. And the trust problem doesn't vanish; it moves to key authenticity, which is why 'security code changed' notices exist and why almost nobody verifies them.",
-   "at_scale": "Encryption runs on the phones, so the server's crypto cost is essentially zero and does not grow with the user count: the trust boundary offloads the expensive per-message work onto the fleet of clients. Adding a billion users adds a billion CPUs doing the work, not a billion users' load on the datacenter.",
+   "at_scale": "Encryption runs on the phones, so the server's crypto cost is close to zero and does not grow with the user count: the trust boundary offloads the expensive per-message work onto the fleet of clients. Adding a billion users adds a billion CPUs doing the work, not a billion users' load on the datacenter.",
    "defends": [
     "inv3"
    ],
@@ -750,7 +750,7 @@
    "id": "st1",
    "title": "The queue that nobody empties",
    "scenario": "A user in a dozen hyperactive groups loses their phone and stays offline for two months. Their per-user queue on the server swallows tens of thousands of messages, and end-to-end encryption forbids the server from compacting, deduplicating, or summarizing content it cannot read. Multiply by millions of dormant accounts.",
-   "reveal": "The waiting room has a closing time. Undelivered messages are held for a bounded period (on the order of a month) and then deleted; senders' phones keep their own copies, but the server's promise is delivery soon, not archival forever. This is a deliberate breach of inv1 at the margin: the system chooses bounded storage over eternal delivery, because an unbounded queue is not a buffer, it is a slowly detonating archive. Every queue needs a policy for the day the consumer never comes back."
+   "reveal": "The waiting room has a closing time. Undelivered messages are held for a bounded period (on the order of a month) and then deleted; senders' phones keep their own copies, but the server's promise is delivery soon, not archival forever. This is a deliberate breach of inv1 at the margin: the system chooses bounded storage over eternal delivery, because an unbounded queue slowly turns into an archive that eventually blows up. Every queue needs a policy for the day the consumer never comes back."
   },
   {
    "id": "st2",

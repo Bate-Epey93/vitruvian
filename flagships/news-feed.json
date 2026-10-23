@@ -8,7 +8,7 @@
   "domain": "software"
  },
  "essence": {
-  "text": "A news feed answers one question, 'what's new from everyone you follow?', for hundreds of millions of people at once, in the time it takes a thumb to stop scrolling. Its genius is a bet: a timeline is read far more than it is written, so do the expensive work when someone posts, not when someone looks.",
+  "text": "A news feed answers one question, 'what's new from everyone you follow?', for hundreds of millions of people at once, in the time it takes a thumb to stop scrolling. It rests on a bet: a timeline is read far more often than it is written, so the expensive work happens when someone posts rather than when someone looks.",
   "beginner": "A news feed shows you the latest posts from everyone you follow. The hard part is doing it instantly, for hundreds of millions of people, all at the same time.",
   "deep_facts": [
    "Reads dwarf writes on a timeline: a person posts rarely but refreshes constantly, often more than a hundred reads per write, so the whole design optimizes reads and pays for it on the write side.",
@@ -495,7 +495,7 @@
    },
    "solution": "Cursor pagination. Each page returns a cursor, an opaque token encoding the sort key of the last item on the page (a post id, or timestamp plus id). The next request says 'give me items after this cursor,' and the server returns the posts immediately following that fixed point in the ordered feed. New arrivals at the top do not move the boundary, because the boundary is a piece of content, not a count.",
    "user_lens": {
-    "gives": "Scrolling is seamless and correct: no post shown twice, none skipped, and the reader can pull fresh posts at the top without disturbing where they are further down.",
+    "gives": "Scrolling stays smooth and correct: no post shown twice, none skipped, and the reader can pull fresh posts at the top without losing their place further down.",
     "costs": "You lose random access. There is no 'jump to page 50,' only 'continue from here,' and the cursor has to stay meaningful even if the exact item it points at is later deleted."
    },
    "tech_lens": {

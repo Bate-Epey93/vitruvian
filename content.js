@@ -25,7 +25,7 @@ var CONFIG = {
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
   appVersion: "2.0.0",
-  flagshipVersion: 10,                   // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
+  flagshipVersion: 11,                   // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   // foundations first, then the systems built on them — YouTube last, the capstone that drills into everything
   flagshipNames: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue", "notification-system", "rate-limiter", "search-typeahead", "url-shortener", "ride-matching", "ticket-booking", "content-delivery-network", "recommendation-feed", "payment-ledger", "video-transcoding", "news-feed", "photo-store", "whatsapp", "youtube", "railway"],
   siteUrl: "https://bate-epey93.github.io/vitruvian/",
@@ -727,6 +727,7 @@ var COPY = {
     visual:     "Drawing the baseline…",
     layers:     "Rebuilding, layer by layer…",
     stress:     "Stress-testing…",
-    transfer:   "Extracting principles…"
+    transfer:   "Extracting principles…",
+    voice:      "Editing for voice…"
   }
 };
