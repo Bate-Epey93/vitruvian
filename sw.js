@@ -1,4 +1,4 @@
-const CACHE_VERSION = "vitruvian-v2.4.1";  // bump on EVERY deploy, including content edits
+const CACHE_VERSION = "vitruvian-v2.5.0";  // bump on EVERY deploy, including content edits
 const SHELL = [
   "./",
   "./index.html",
@@ -45,13 +45,19 @@ const SHELL = [
   "./icons/icon-512.png",
   "./icons/icon-maskable-512.png",
   "./icons/apple-touch-icon.png",
-  "./lab/transmission.html",
-  "./lab/transmission.css",
+  "./lab/lab.css",
   "./lab/ink3d.js",
   "./lab/lab-page.js",
+  "./lab/transmission.html",
+  "./lab/transmission.css",
   "./lab/transmission-scene.js",
   "./lab/transmission-copy.js",
-  "./lab/transmission-page.js"
+  "./lab/transmission-page.js",
+  "./lab/escapement.html",
+  "./lab/escapement.css",
+  "./lab/escapement-scene.js",
+  "./lab/escapement-copy.js",
+  "./lab/escapement-page.js"
 ];
 self.addEventListener("install", e => {
   // Fetch each shell asset with cache:"reload" so a stale entry in the browser's

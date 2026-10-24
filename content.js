@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "2.4.1",
+  appVersion: "2.5.0",
   flagshipVersion: 12,                   // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   // foundations first, then the systems built on them — YouTube last, the capstone that drills into everything
   flagshipNames: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue", "notification-system", "rate-limiter", "search-typeahead", "url-shortener", "ride-matching", "ticket-booking", "content-delivery-network", "recommendation-feed", "payment-ledger", "video-transcoding", "news-feed", "photo-store", "whatsapp", "youtube", "railway"],
@@ -57,6 +57,17 @@ var FIELD_STUDIES = [
     terms: ["manual transmission", "manual gearbox", "car transmission",
             "gearbox", "gear box", "gear change", "synchromesh", "syncromesh",
             "stick shift", "manual shift", "dog clutch", "shift linkage"]
+  },
+  {
+    id: "escapement",
+    name: "The Beat",
+    href: "lab/escapement.html",
+    sub: "Five clock escapements, and the drive force each one failed to ignore",
+    blurb: "This one is also a machine. The same failure ladder, drawn in three dimensions: five escapements on one bench, and a mainspring you can drag to see which of them care.",
+    terms: ["escapement", "clock escapement", "lever escapement", "anchor escapement",
+            "deadbeat escapement", "dead beat escapement", "verge escapement",
+            "mechanical clock", "mechanical watch", "pendulum clock", "balance wheel",
+            "clock movement", "watch movement", "horology"]
   }
 ];
 

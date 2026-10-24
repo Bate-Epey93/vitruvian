@@ -15,13 +15,19 @@ hand-authored geometry.
 Built studies are registered in `FIELD_STUDIES` in `content.js`, which is what puts the
 3D chip on a matching Deconstruct. Adding one here changes nothing until it ships.
 
+## Built
+
+| System | Study | Shipped |
+|---|---|---|
+| **Manual gearbox** | The Gear Change — `lab/transmission.html` | v1.x |
+| **Escapement** | The Beat — `lab/escapement.html`. Foliot, verge and pendulum, anchor, deadbeat, detached lever. The argument turned out not to be the locking geometry, which is invisible at this scale, but the wheel's motion over one beat: recoil, dead, or detached. | v2.5.0 |
+
 ## Strong candidates
 
 Every one of these is a failure ladder before it is a drawing.
 
 | System | The ladder | Effort |
 |---|---|---|
-| **Escapement** | Gravity runs the train down in seconds → verge lets it down in beats → anchor stops recoil → deadbeat stops it properly → detent removes friction from the impulse. The anchor is one prism, the escape wheel one gear-like revolve. | Small |
 | **Differential** | Rigid axle scrubs its tyres in a turn → open differential lets the wheels differ → and now one spinning wheel takes all the torque → limited-slip → locker. The mechanism *is* the tradeoff. | Medium — bevel gears have no builder |
 | **Disc brake** | Drum fades when hot → disc sheds heat → pad tapers unevenly → floating caliper → vented and cross-drilled. Everything is a revolve or a slide. | Small |
 | **Four-stroke engine** | Intake, compression, power, exhaust, and the valve timing that has to agree with the crank. Piston slides, crank spins, conrod takes `pos` and `dyn` per frame. Cam and follower come free. | Medium |

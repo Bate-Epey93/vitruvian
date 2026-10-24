@@ -43,6 +43,19 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 - **Reading counts as progress.** Only the challenge gate used to mark a layer done, and gates have been off by default since 1.3, so a reader who finished a whole system still saw 0 of 6 on its card, 0 of 19 on Track and nothing in Drill. Reaching a layer's solution now marks it done. Existing installs are backfilled once from how far each reader got.
 - A handful of toasts and labels still used em dashes. They now read as plain sentences.
 
+## [2.5.0] — 2026-10-24 · The Beat
+
+### Added
+- **A second field study: The Beat.** Five clock escapements on one bench, drawn in three dimensions out of the same primitives as the gearbox. The foliot, the verge with Huygens' pendulum, Clement's anchor, Graham's deadbeat, and Mudge's detached lever — each one built because the one before it let the drive force have an opinion about the rate.
+- **One control carries the whole argument: the mainspring.** Drag it and two readouts move. Rate is how wrong the clock is. Drive sensitivity is how much of that the mainspring is responsible for, and it is the only figure that improves at every rung: twenty minutes a day on the foliot, forty seconds on the verge, twelve on the anchor, one and a half on the deadbeat, four tenths on the lever. Absolute accuracy does not improve at every rung, and the study says so — a lever watch is less accurate than a Graham regulator and still beat it, because being carried does not disturb it.
+- **The sixth layer is a free bench.** Every escapement is selectable, by click or by pressing 1 to 5, with the mainspring live.
+- **A hairspring, swept along a real spiral**, and a balance wheel that swings the 135 degrees a watch balance actually swings.
+
+### Changed
+- **Three things in the drawing are deliberately larger than life, and the page says which.** Pallets and teeth, because a wristwatch escapement is the width of a fingernail. The swing, because an anchor pendulum moves five degrees and five degrees is nothing to look at — so the readout shows the real figure beside the drawn one, on exactly the two layers where they differ. And the recoil, because an escapement that does not visibly recoil is a drawing of nothing. Which escapements recoil at all is not exaggerated: the deadbeat and the lever do it exactly zero times, at any setting of the mainspring.
+- **Field-study page styles are shared.** Everything the gear change and the beat have in common — shell, stage, document pane, demo transport — moved to `lab/lab.css`, so each study's own stylesheet is only its instruments. The gear change renders unchanged.
+- **Analogies read as the sentence they are part of.** The layer card prints "Like " before the analogy, which made every one of them start with a stray capital. Fixed in both studies.
+
 ## [2.4.1] — 2026-10-24 · The process mark stops pretending
 
 ### Changed

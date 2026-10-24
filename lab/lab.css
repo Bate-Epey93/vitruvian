@@ -1,0 +1,136 @@
+/* ═══════════════════════════════════════════════════════════════
+   FIELD STUDIES — shared lab-page styles
+   ───────────────────────────────────────────────────────────────
+   Every field study is the same page: a stage on the left, the
+   failure ladder on the right, and a strip of instruments the
+   study supplies itself. This file is everything that is the
+   same from one study to the next, so a new study writes only
+   its own instruments.
+
+   Inherits every token, font and shared component from
+   ../styles.css. Only what the app doesn't already have is here.
+   ═══════════════════════════════════════════════════════════════ */
+
+
+.lab-shell { display:grid; grid-template-rows:auto minmax(0,1fr); height:100vh; overflow:hidden; }
+.lab-main  { display:grid; grid-template-columns:minmax(0,1fr) clamp(340px,38%,540px); min-height:0; }
+
+/* ── topbar: the app's translucent header, slimmer ── */
+.lab-top { display:flex; align-items:center; gap:12px; padding:0 16px; height:56px;
+  background:color-mix(in srgb,var(--paper) 82%,transparent); color:var(--ink);
+  -webkit-backdrop-filter:blur(20px) saturate(180%); backdrop-filter:blur(20px) saturate(180%);
+  border-bottom:1px solid var(--hair); position:relative; z-index:20; }
+.lab-back { display:grid; place-items:center; width:36px; height:36px; border-radius:50%;
+  font-size:18px; line-height:1; text-decoration:none; color:var(--ink-soft);
+  transition:background .3s var(--ease), color .3s var(--ease); }
+.lab-back:hover { background:color-mix(in srgb,var(--ink) 6%,transparent); color:var(--ink); }
+.lab-top .brand-mark::before { content:''; width:9px; height:9px; border-radius:2px; background:var(--accent); }
+.lab-top .spacer { flex:1; }
+
+/* ── stage ── */
+.lab-stage { position:relative; border-right:1px solid var(--hair); background:var(--panel-2);
+  min-width:0; overflow:hidden; }
+#stage { display:block; width:100%; height:100%; touch-action:none; cursor:grab;
+  transition:filter .18s; }
+#stage:active { cursor:grabbing; }
+.lab-stage.crashing #stage { filter:drop-shadow(0 0 14px color-mix(in srgb, var(--failure) 45%, transparent)); }
+
+#hint { position:absolute; left:50%; bottom:14px; transform:translateX(-50%); white-space:nowrap;
+  font-family:var(--mono); font-size:9.5px; letter-spacing:2px; text-transform:uppercase;
+  color:var(--faint); pointer-events:none; transition:opacity .4s; }
+#hint.gone { opacity:0; }
+@media (max-width:720px) { #hint { display:none; } }
+
+#tip { position:absolute; pointer-events:none; opacity:0; transition:opacity .12s;
+  transform:translate(14px,-30px); max-width:230px;
+  background:var(--panel); border:1px solid var(--line); border-radius:6px;
+  padding:6px 10px; font-size:12px; line-height:1.4; color:var(--ink);
+  box-shadow:0 6px 20px rgba(0,0,0,.14); z-index:12; }
+#tip.on { opacity:1; }
+
+.dbg { position:absolute; right:10px; bottom:10px; font-family:var(--mono); font-size:10px;
+  color:var(--muted); background:var(--panel); border:1px solid var(--line-soft);
+  border-radius:4px; padding:3px 7px; pointer-events:none; }
+
+
+/* ── stage controls ── */
+/* ── stage controls ── */
+.stage-ctrls { position:absolute; top:12px; right:12px; display:flex; flex-wrap:wrap;
+  justify-content:flex-end; gap:6px; z-index:10; max-width:60%; }
+.st-btn { font-family:var(--mono); font-size:9.5px; letter-spacing:1px; text-transform:uppercase;
+  background:color-mix(in srgb, var(--panel) 88%, transparent); color:var(--ink-soft);
+  border:1px solid var(--line); border-radius:5px; padding:6px 10px; cursor:pointer; transition:all .15s;
+  backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
+.st-btn:hover { border-color:var(--accent); color:var(--accent); }
+.st-btn.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+/* ── document pane ── */
+.lab-doc { overflow-y:auto; min-width:0;
+  background:radial-gradient(circle, var(--dot) 1.1px, transparent 1.6px) 0 0/22px 22px, var(--canvas); }
+.lab-doc-inner { max-width:560px; margin:0 auto; padding:30px 26px 40px; }
+.lab-intro { font-size:15px; color:var(--ink-soft); margin:12px 0 4px; }
+.lab-footer { margin-top:30px; color:var(--muted); }
+.lab-timeline { margin:22px 0 18px; padding:0; background:none; box-shadow:none; }
+.lab-era { color:var(--muted); }
+.layer-card .step-kick { margin:0; }
+.layer-card .step-kick:focus { outline:none; }
+.layer-card .step-foot { background:var(--canvas); }
+.lc-band.guess { border-left:3px solid var(--proposal); }
+
+.layer-card { display:flex; flex-direction:column; gap:14px; }
+.lc-head { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+.lc-name { font-family:var(--display); font-weight:800; font-size:24px; line-height:1.15;
+  letter-spacing:-.02em; margin:0; }
+.problem-card { background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--failure);
+  border-radius:9px; padding:14px 16px; display:flex; flex-direction:column; gap:8px; }
+.problem-card p { font-size:14.5px; }
+.lc-beginner { color:var(--ink-soft); font-size:13.5px !important; border-top:1px solid var(--line-soft); padding-top:8px; }
+.lc-analogy { font-style:italic; color:var(--muted); font-size:14px; }
+
+.lc-band { border-radius:9px; padding:13px 16px; border:1px solid var(--line-soft); background:var(--panel); }
+.lc-band p { font-size:14px; margin-top:5px; }
+.lc-band.solution { border-left:3px solid var(--accent); background:color-mix(in srgb, var(--accent-wash) 60%, var(--panel)); }
+.lc-band.tradeoff { border-left:3px solid var(--money); }
+.lc-band.scale    { border-left:3px solid var(--ink-soft); }
+
+/* ── demo controls ── */
+.demo-box { border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+  background:var(--panel); display:flex; flex-direction:column; gap:9px; }
+.demo-row { display:flex; align-items:center; gap:11px; }
+.demo-play { padding:9px 16px; font-size:11px; }
+.demo-label { font-size:13px; color:var(--ink-soft); line-height:1.35; }
+.demo-phase { color:var(--muted); }
+.demo-phase.bad { color:var(--failure); }
+.free-note { border:1px dashed var(--accent); border-radius:9px; padding:12px 14px;
+  background:color-mix(in srgb, var(--accent-wash) 55%, transparent); }
+.free-note p { font-size:13.5px; margin-top:4px; }
+
+.scrub { -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:4px;
+  background:var(--line-soft); outline:none; cursor:pointer; }
+.scrub::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:16px; height:16px;
+  border-radius:50%; background:var(--accent); border:2px solid var(--panel); cursor:grab; }
+.scrub::-moz-range-thumb { width:14px; height:14px; border-radius:50%; background:var(--accent);
+  border:2px solid var(--panel); cursor:grab; }
+.scrub:focus-visible { box-shadow:0 0 0 3px var(--accent-wash); }
+
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+  clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+
+
+/* ── narrow: the stage becomes a sticky header ── */
+@media (max-width:860px) {
+  .lab-main { display:flex; flex-direction:column; }
+  .lab-stage { flex:none; height:44vh; border-right:none; border-bottom:1px solid var(--line);
+    position:sticky; top:0; z-index:30; }
+  .lab-doc { flex:1; }
+  .lab-doc-inner { padding:24px 18px 30px; }
+  .lc-name { font-size:21px; }
+  .stage-ctrls { top:8px; right:8px; }
+  .st-btn { padding:5px 8px; font-size:9px; }
+}
+
+/* Nothing moves on its own; the scrubber is the whole interface. */
+@media (prefers-reduced-motion: reduce) {
+  #stage, #hint, #tip { transition:none !important; }
+  .lab-stage.crashing #stage { filter:none; }
+}
