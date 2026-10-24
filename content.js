@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "2.5.0",
+  appVersion: "2.5.1",
   flagshipVersion: 12,                   // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   // foundations first, then the systems built on them — YouTube last, the capstone that drills into everything
   flagshipNames: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue", "notification-system", "rate-limiter", "search-typeahead", "url-shortener", "ride-matching", "ticket-booking", "content-delivery-network", "recommendation-feed", "payment-ledger", "video-transcoding", "news-feed", "photo-store", "whatsapp", "youtube", "railway"],
@@ -579,7 +579,9 @@ var COPY = {
   labMaybeFoot: "No study of this one is built yet. Saying so here is how it gets prioritised.",
   labCandHeading: "Candidates",
   labCandNote: "Systems in your library that could be built as field studies. Flagged while the Deconstruct was written, ranked by the ones you said you would use.",
-  labCandEmpty: "None yet. Deconstruct something mechanical \u2014 an escapement, a lock, a brake \u2014 and it will show up here.",
+  /* The examples have to be things with no study built, or the line
+     promises a card that the built-study check will always filter out. */
+  labCandEmpty: "None yet. Deconstruct something mechanical \u2014 a pin-tumbler lock, a disc brake, a ratchet and pawl \u2014 and it will show up here.",
   libraryLede: "Name a system you use, or describe one you're building, and Vitruvian rebuilds it from nothing, one failure at a time, so you can study why each part exists.",
   deconstructPlaceholder: "A system to deconstruct, like a stock exchange or a bike share…",
   deconstructBtn: "Deconstruct",

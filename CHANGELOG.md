@@ -43,6 +43,11 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 - **Reading counts as progress.** Only the challenge gate used to mark a layer done, and gates have been off by default since 1.3, so a reader who finished a whole system still saw 0 of 6 on its card, 0 of 19 on Track and nothing in Drill. Reaching a layer's solution now marks it done. Existing installs are backfilled once from how far each reader got.
 - A handful of toasts and labels still used em dashes. They now read as plain sentences.
 
+## [2.5.1] — 2026-10-24 · The empty shelf points somewhere real
+
+### Fixed
+- **The Candidates empty state offered an escapement as an example**, which has a study now — so a Deconstruct of one would get the real link and never appear in that list. It names a pin-tumbler lock, a disc brake and a ratchet and pawl instead, all of which are genuinely unbuilt.
+
 ## [2.5.0] — 2026-10-24 · The Beat
 
 ### Added
