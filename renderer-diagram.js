@@ -1397,6 +1397,16 @@ var Diagram = (() => {
       process: roundRectD(6, 3, 18, 10, 1.5),
       channel: roundRectD(6, 3, 18, 10, 5)
     };
+    /* Where the mark sits inside the key's own shape, mirroring where
+       kindMark puts it on a real node: centred in the actor's circle, on the
+       channel's midline, upper-left everywhere else. Scaled to fit a 30×16
+       key box, so an entry is a miniature of a node rather than a diagram of
+       one. */
+    const KEY_MARK_SCALE = 0.58;
+    const KEY_MARK_AT = {
+      actor:   [11.8, 4.8], store: [7.6, 4.0],
+      process: [7.6, 4.0],  channel: [8.4, 4.8]
+    };
     const glyphRow = document.createElement("span");
     glyphRow.className = "dgl-row";
     wrap.appendChild(glyphRow);
@@ -1406,33 +1416,56 @@ var Diagram = (() => {
       glyphRow.textContent = "";
       lit = null;
       if (!st) return;
-      const present = new Map();                      // glyph name → the nodes using it
+
+      /* A node draws two things and the key owes the reader both: the
+         container SHAPE, which carries the kind, and the corner MARK, which
+         is the icon where a node has one and the kind where it does not.
+
+         Keying only the marks left shapes undefined. A storage tier whose
+         every node carries an icon contributed database, cache and queue
+         entries and never once said what the open-topped box meant — true of
+         81 of the 137 layers across the flagship library. */
+      const shapes = new Map();                       // kind → node ids (the box)
+      const marks = new Map();                        // glyph name → node ids (the corner)
       st.nodes.forEach(n => {
-        const name = glyphName(n);
-        if (!present.has(name)) present.set(name, []);
-        present.get(name).push(n.id);
+        if (!shapes.has(n.kind)) shapes.set(n.kind, []);
+        shapes.get(n.kind).push(n.id);
+        const m = glyphName(n);
+        if (!marks.has(m)) marks.set(m, []);
+        marks.get(m).push(n.id);
       });
-      const names = [...present.keys()].sort((a, b) => {
-        const ka = KIND_ORDER.indexOf(a), kb = KIND_ORDER.indexOf(b);
-        if (ka !== kb) return (ka < 0 ? 99 : ka) - (kb < 0 ? 99 : kb);   // kinds first
-        // then by the label the reader sees, not the id behind it
-        return (GLYPH_LABEL[a] || a).localeCompare(GLYPH_LABEL[b] || b);
+
+      /* Kinds first, in their own order, then icons by the label the reader
+         sees. A kind entry carries its mark too whenever some node of that
+         kind is actually wearing it. */
+      const entries = [];
+      KIND_ORDER.forEach(k => {
+        if (shapes.has(k)) entries.push({ name: k, ids: shapes.get(k), shape: true, mark: marks.has(k) });
       });
-      names.forEach(name => {
-        const ids = present.get(name);
+      [...marks.keys()].filter(m => !KIND_SHAPE_D[m])
+        .sort((a, b) => (GLYPH_LABEL[a] || a).localeCompare(GLYPH_LABEL[b] || b))
+        .forEach(m => entries.push({ name: m, ids: marks.get(m), shape: false, mark: true }));
+
+      entries.forEach(ent => {
+        const name = ent.name, ids = ent.ids;
         const it = document.createElement("button");
         it.className = "dgl-item dgl-tap";
         it.type = "button";
         it.title = `${ids.length} node${ids.length > 1 ? "s" : ""} — tap to light ${ids.length > 1 ? "them" : "it"}`;
-        // A kind entry draws the container, because the shape is what carries
-        // the role. An icon entry draws the mark, because that is what it adds.
         const svg = el("svg", { viewBox: "0 0 30 16", class: "dgl-glyph", "aria-hidden": "true" });
-        if (KIND_SHAPE_D[name])
+        if (ent.shape) {
           el("path", { d: sketch(KIND_SHAPE_D[name], "key:shape:" + name, GLYPH_SKETCH),
                        fill: "none", class: "dgl-shape" }, svg);
-        else
+          if (ent.mark) {
+            const at = KEY_MARK_AT[name] || [7.6, 4.0];
+            el("path", { d: sketch(GLYPHS[name] || "", "key:" + name, GLYPH_SKETCH),
+                         fill: "none", class: "dgl-mark",
+                         transform: `translate(${at[0]} ${at[1]}) scale(${KEY_MARK_SCALE})` }, svg);
+          }
+        } else {
           el("path", { d: sketch(GLYPHS[name] || "", "key:" + name, GLYPH_SKETCH),
                        fill: "none", class: "dgl-mark", transform: "translate(9.5 2.5)" }, svg);
+        }
         it.appendChild(svg);
         const t = document.createElement("span");
         t.textContent = GLYPH_LABEL[name] || name;
@@ -1445,6 +1478,34 @@ var Diagram = (() => {
         };
         glyphRow.appendChild(it);
       });
+
+      /* The drill badge is a glyph like any other and was on 91 of those 137
+         layers with nothing anywhere saying what it meant. */
+      const drill = [...st.nodes.values()]
+        .filter(n => typeof n.expands_to === "string" && n.expands_to.trim())
+        .map(n => n.id);
+      if (drill.length) {
+        const it = document.createElement("button");
+        it.className = "dgl-item dgl-tap";
+        it.type = "button";
+        it.title = `${drill.length} node${drill.length > 1 ? "s are systems" : " is a system"} in its own right — tap to light ${drill.length > 1 ? "them" : "it"}`;
+        const svg = el("svg", { viewBox: "0 0 30 16", class: "dgl-glyph", "aria-hidden": "true" });
+        const b = el("g", { transform: "translate(15 8)", class: "dgl-drill" }, svg);
+        el("circle", { r: 6, class: "dgl-drill-disc" }, b);
+        el("line", { x1: -2.6, y1: 0, x2: 2.6, y2: 0, class: "dgl-drill-plus" }, b);
+        el("line", { x1: 0, y1: -2.6, x2: 0, y2: 2.6, class: "dgl-drill-plus" }, b);
+        it.appendChild(svg);
+        const t = document.createElement("span");
+        t.textContent = "opens up";
+        it.appendChild(t);
+        it.onclick = () => {
+          if (!dg) return;
+          if (lit === "__drill") { dg.spotlight(null); lit = null; }
+          else { dg.spotlight(drill, "trace"); lit = "__drill"; }
+          [...glyphRow.children].forEach(c => c.classList.toggle("on", c === it && lit === "__drill"));
+        };
+        glyphRow.appendChild(it);
+      }
     };
 
     const item = (svgBuild, label) => {

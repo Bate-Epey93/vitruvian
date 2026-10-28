@@ -610,6 +610,14 @@ input,textarea{font-family:var(--sans);}
 .dgl-tap.on{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent-deep);font-weight:650;}
 .dgl-mark{stroke:var(--diagram-ink);stroke-width:1.1;stroke-linecap:round;stroke-linejoin:round;}
 .dgl-tap.on .dgl-mark,.dgl-tap.on .dgl-shape{stroke:var(--accent-deep);}
+/* A kind entry now carries its corner mark inside the container, the way a
+   node does, so the mark is drawn at the node's own weight rather than the
+   container's heavier line. */
+.dgl-shape + .dgl-mark{stroke-width:1.6;}
+/* the drill badge, at key size */
+.dgl-drill-disc{fill:var(--proposal);stroke:none;}
+.dgl-drill-plus{stroke:var(--panel);stroke-width:1.5;stroke-linecap:round;}
+.dgl-tap.on .dgl-drill-disc{fill:var(--accent-deep);}
 .dgl-note{color:var(--faint);font-style:italic;}
 :root[data-theme="dark"] .dgl-note{color:var(--muted);}
 .diagram-pane.collapsed .dg-legend{display:none;}

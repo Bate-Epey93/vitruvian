@@ -43,6 +43,15 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 - **Reading counts as progress.** Only the challenge gate used to mark a layer done, and gates have been off by default since 1.3, so a reader who finished a whole system still saw 0 of 6 on its card, 0 of 19 on Track and nothing in Drill. Reaching a layer's solution now marks it done. Existing installs are backfilled once from how far each reader got.
 - A handful of toasts and labels still used em dashes. They now read as plain sentences.
 
+## [2.6.1] — 2026-10-28 · The key owes you every mark
+
+### Fixed
+- **A kind's entry in the key now carries its corner mark, the way a node does.** It used to draw the container shape alone, so the mark actually sitting in the corner of every actor, store, process and channel on screen was never defined anywhere. The entry is now a miniature of a node: the shape with the mark inside it, drawn through the same glyph table and the same sketch pass.
+- **A shape on screen is always in the key, even when every node wearing it carries an icon.** A storage tier whose nodes are all database, cache and queue used to contribute those three entries and never say what the open-topped box meant. That was true of 81 of the 137 layers in the flagship library.
+- **The drill badge is in the key.** The violet ⊕ that marks a node you can open into its own study was drawn on 91 of those 137 layers with nothing anywhere saying what it was. It is listed as "opens up", and tapping it lights every node on the layer that has one.
+
+Every layer in the library was then re-checked against its own key: 137 layers, no glyph left undefined.
+
 ## [2.6.0] — 2026-10-28 · Marks that look like the thing
 
 ### Changed
