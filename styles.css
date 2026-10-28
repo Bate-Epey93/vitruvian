@@ -618,6 +618,30 @@ input,textarea{font-family:var(--sans);}
 .dgl-drill-disc{fill:var(--proposal);stroke:none;}
 .dgl-drill-plus{stroke:var(--panel);stroke-width:1.5;stroke-linecap:round;}
 .dgl-tap.on .dgl-drill-disc{fill:var(--accent-deep);}
+
+/* ── Abstraction ── */
+/* the outline behind a folded box: lighter, so it reads as depth rather than
+   as a second component */
+.dg-stack{opacity:.42;stroke-dasharray:none;}
+.dg-fold-n{font-family:var(--mono);font-size:8.5px;opacity:.72;letter-spacing:.3px;}
+/* the pill that says the diagram is not showing you everything */
+.dg-fold-pill{
+  position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:7;
+  display:flex;gap:9px;align-items:center;cursor:pointer;border:none;
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.3px;
+  background:var(--glass-heavy);-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(150%);backdrop-filter:blur(var(--glass-blur)) saturate(150%);
+  border-radius:var(--r-pill);padding:6px 16px;box-shadow:inset 0 0 0 1px var(--hair), var(--sh-2);
+  color:var(--proposal);transition:box-shadow .2s var(--ease), color .2s var(--ease);}
+.dg-fold-pill:hover{box-shadow:inset 0 0 0 1px var(--proposal), var(--sh-2);}
+.dg-fold-pill .fold-what{color:var(--muted);font-family:var(--sans);
+  border-left:1px solid var(--hair-strong);padding-left:11px;}
+.dg-fold-pill .fold-off{color:var(--faint);font-family:var(--sans);}
+/* the HUD owns the top strip while a pulse runs, so the pill steps down */
+.dg-hud:not([hidden]) ~ .dg-fold-pill{top:50px;}
+@media(max-width:640px){
+  .dg-fold-pill{font-size:10.5px;padding:5px 12px;gap:7px;}
+  .dg-fold-pill .fold-what{display:none;}
+}
 .dgl-note{color:var(--faint);font-style:italic;}
 :root[data-theme="dark"] .dgl-note{color:var(--muted);}
 .diagram-pane.collapsed .dg-legend{display:none;}
@@ -1455,6 +1479,18 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 .lab-item .sim-btn .btn-label{display:inline!important;}
 .lab-item .sim-btn{padding:5px 10px 5px 8px!important;}
 .lab-desc{font-size:12.5px;color:var(--muted);margin:2px 0 0 8px;line-height:1.45;}
+/* how many layers stay drawn in full, inside the abstraction item */
+.fold-levels{display:flex;align-items:center;gap:5px;margin:7px 0 0 8px;opacity:.5;
+  transition:opacity .2s var(--ease);}
+.fold-levels.live{opacity:1;}
+.fold-levels-cap{font-family:var(--mono);font-size:9.5px;letter-spacing:1px;
+  text-transform:uppercase;color:var(--faint);margin-right:2px;}
+.fold-lvl{font-family:var(--mono);font-size:11px;min-width:24px;padding:3px 0;cursor:pointer;
+  background:none;color:var(--ink-soft);border:1px solid var(--hair-strong);border-radius:5px;
+  transition:all .15s var(--ease);}
+.fold-lvl:hover{border-color:var(--proposal);color:var(--proposal);}
+.fold-lvl.on{background:var(--proposal);border-color:var(--proposal);color:#fff;}
+.fold-lvl:focus-visible{outline:2px solid var(--proposal);outline-offset:1px;}
 .lab-btn.on{background:var(--panel);box-shadow:var(--sh-1),inset 0 0 0 1px var(--hair);color:var(--ink);}
 .menu-pop .menu-check{display:flex;align-items:center;gap:10px;}
 .menu-pop .menu-check::before{content:'';width:15px;height:15px;border-radius:4px;flex-shrink:0;box-shadow:inset 0 0 0 1.5px var(--hair-strong);}

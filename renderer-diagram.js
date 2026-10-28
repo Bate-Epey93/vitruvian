@@ -140,6 +140,80 @@ var Diagram = (() => {
     return { nodes, edges };
   }
 
+  /* ── Abstraction: fold what the reader has already been shown ──────────
+     Past a few layers a diagram carries more settled machinery than argument,
+     and the layer's actual point is buried in it. Folding collapses everything
+     introduced before the last `keep` layers into one box per lane, which
+     takes the lane's own name.
+
+     By lane rather than into a single box, deliberately: one box for the whole
+     past would have every edge in the diagram touching it, which says nothing.
+     By lane you get two or three, the flow still reads left to right, and the
+     labels are free and correct.
+
+     The first version of this kept every node the current layer's EDGES
+     touched, and folded almost nothing — at the last layer of a real document
+     nearly every node is reached by some new edge. What the reader needs
+     expanded is what the argument just added.
+
+     Pure: a state goes in, a state comes out, and nothing downstream knows.
+     The sim, the spine, the races and the key all run on the result as though
+     the folded boxes had always been components. ── */
+  function foldState(st, doc, upto, keep) {
+    const live = new Set();
+    for (let i = Math.max(0, upto - keep); i < upto; i++) {
+      ((doc.layers[i] || {}).diff || { add_nodes: [] }).add_nodes.forEach(n => live.add(n.id));
+    }
+    const byLane = new Map();
+    st.nodes.forEach(n => {
+      if (live.has(n.id)) return;
+      if (!byLane.has(n.lane)) byLane.set(n.lane, []);
+      byLane.get(n.lane).push(n);
+    });
+
+    const nodes = new Map(), memberOf = new Map();
+    st.nodes.forEach(n => { if (live.has(n.id)) nodes.set(n.id, n); });
+    const laneLabel = {};
+    (doc.visual.lanes || []).forEach(l => { laneLabel[l.id] = l.label; });
+
+    byLane.forEach((members, lane) => {
+      /* one component on its own is not an abstraction, it is the component */
+      if (members.length < 2) { members.forEach(n => nodes.set(n.id, n)); return; }
+      const id = "fold:" + lane;
+      nodes.set(id, {
+        id, lane,
+        order: Math.min.apply(null, members.map(m => m.order)),
+        kind: "process",
+        label: laneLabel[lane] || lane,
+        folded: members.length,
+        members: members.map(m => m.id)
+      });
+      members.forEach(m => memberOf.set(m.id, id));
+    });
+
+    /* Rewire. An edge now wholly inside one box is interior and goes; edges
+       that land on the same pair merge and carry the count, so the drawing
+       never claims one path where there were three. */
+    const merged = new Map();
+    st.edges.forEach(e => {
+      const from = memberOf.get(e.from) || e.from;
+      const to = memberOf.get(e.to) || e.to;
+      if (from === to) return;
+      const key = from + ">" + to;
+      const hit = merged.get(key);
+      if (hit) {
+        hit.n++;
+        if (hit.label !== e.label) hit.label = hit.n + " paths";
+        if (e.kind === "flow") hit.kind = "flow";    // payload outranks control on a merged line
+        return;
+      }
+      merged.set(key, Object.assign({}, e, { id: "fold:" + key, from, to, n: 1 }));
+    });
+    const edges = new Map();
+    merged.forEach(e => edges.set(e.id, e));
+    return { nodes, edges, memberOf };
+  }
+
   /* ── Edge routing: orthogonal with port discipline. Forward edges leave
      the source's RIGHT side and enter the target's LEFT side (mirrored when
      flowing backward), so arrows read with the column flow. Lane-to-lane
@@ -261,13 +335,17 @@ var Diagram = (() => {
     cdn:      "M 5.5 .6 a 4.9 4.9 0 1 0 .1 0 Z M .6 5.5 h 9.8 M 5.5 .6 v 9.8",                        // a globe
     /* An arch you pass through. The arrow that used to sit inside it was
        what mushed; the gate alone is both clearer and more literal. */
-    gateway:  "M 1.5 10.4 V 5.5 a 4 4 0 0 1 8 0 v 4.9 M 3.6 10.4 V 6.2 a 1.9 1.9 0 0 1 3.8 0 v 4.2"  // a gate
+    gateway:  "M 1.5 10.4 V 5.5 a 4 4 0 0 1 8 0 v 4.9 M 3.6 10.4 V 6.2 a 1.9 1.9 0 0 1 3.8 0 v 4.2", // a gate
+    /* not a kind and not an icon: the mark a folded box wears, so the key can
+       say what one is */
+    folded:   "M .8 4.2 h 6 v 6 h -6 Z M 3.2 4.2 V 1.2 h 6 v 6 h -2.4"                                // things behind things
   };
   // An 11px glyph roughened as hard as a 110px box turns to mush, so the
   // sketch is gentler here. It still wobbles; it just stays readable.
   const GLYPH_SKETCH = { roughness: 0.55, bowing: 0.7 };
 
   function glyphName(n) {
+    if (n.folded) return "folded";
     return (n.icon && GLYPHS[n.icon]) ? n.icon : n.kind;
   }
   /* Marks sit in the shape's upper-left, clear of the centred label. The pill
@@ -304,11 +382,25 @@ var Diagram = (() => {
       el("rect", { x, y, width: w, height: h, rx: h / 2, class: "dg-fill" }, g);
       el("path", { d: sketch(roundRectD(x, y, w, h, h / 2), n.id), class: "dg-shape" }, g).style.stroke = color;
     } else {                                              // process
+      /* A folded box gets a second outline behind it. Without that it reads as
+         one component wearing somebody else's name, which is the one thing an
+         abstraction must never be mistaken for. */
+      if (n.folded) {
+        el("path", { d: sketch(roundRectD(x + 6, y - 6, w, h, 3), n.id + ":stack"),
+                     class: "dg-shape dg-stack" }, g).style.stroke = color;
+      }
       el("rect", { x, y, width: w, height: h, rx: 3, class: "dg-fill" }, g);
       el("path", { d: sketch(roundRectD(x, y, w, h, 3), n.id), class: "dg-shape" }, g).style.stroke = color;
     }
     kindMark(g, n, x, y, color);
     labelInside(g, n.label);
+    /* how many it hides, stated. A box that does not say is a box that lies. */
+    if (n.folded) {
+      const c = el("text", { x: NODE_W / 2 - 7, y: NODE_H / 2 - 6, "text-anchor": "end",
+                             class: "dg-fold-n" }, g);
+      c.style.fill = color;
+      txt(c, n.folded + " parts");
+    }
   }
 
   function splitLabel(s, max) {
@@ -439,12 +531,39 @@ var Diagram = (() => {
       });
     }
 
+    let foldKeep = 0;                        // 0 = off; otherwise layers kept open
+    let lastFold = null;
     function show(upto, opts = {}) {
       sim.stop();                            // a state change invalidates in-flight tokens
       const { highlight = [], animate = false, ghost = [], stress = [] } = opts;
-      const ghostSet = new Set(ghost), stressSet = new Set(stress);   // what-if: proposed elements + stressed existing ones
-      const st = stateAt(doc, upto);
-      const hl = new Set(highlight);
+      let st = stateAt(doc, upto);
+
+      /* Abstraction. Folding happens here rather than at any call site, so the
+         sim, the spine, the races, the drill and the key all see one state and
+         none of them needs to know. Every id the caller passed is remapped
+         through the fold, or a highlight on a node that just went inside a box
+         would simply vanish. */
+      let foldMap = null;
+      if (foldKeep > 0 && upto > foldKeep) {
+        const folded = foldState(st, doc, upto, foldKeep);
+        if (folded.memberOf.size) { st = folded; foldMap = folded.memberOf; }
+      }
+      const thru = ids => (ids || []).map(id => (foldMap && foldMap.get(id)) || id);
+      const ghostSet = new Set(thru(ghost)), stressSet = new Set(thru(stress));   // what-if: proposed elements + stressed existing ones
+      const hl = new Set(thru(highlight));
+      lastFold = foldMap ? { keep: foldKeep, memberOf: foldMap,
+                             boxes: [...st.nodes.values()].filter(n => n.folded).length,
+                             hidden: foldMap.size } : null;
+
+      /* A folded box has an id the precomputed layout has never seen. Its
+         place is a pure function of lane and order, the same one computeLayout
+         uses, so it can simply be filled in. */
+      st.nodes.forEach(n => {
+        if (!layout.pos[n.id]) {
+          layout.pos[n.id] = { x: GUTTER + n.order * COL_W + COL_W / 2,
+                               y: layout.laneY[n.lane] + LANE_H / 2 };
+        }
+      });
       const prev = shownIds;
       edgesG.textContent = "";
       nodesG.textContent = "";
@@ -660,7 +779,17 @@ var Diagram = (() => {
     /* spotlight: dim everything, then light the given ids (nodes/edges + their
        labels, matched by data-id) in the card's colour. kind = problem|solution.
        Empty/null clears. Used by the reader to link a card to its diagram parts. */
+    /* Ids handed in from outside are pre-fold: a layer's highlight, a load
+       path, the nodes a step wants in view. Mapping them here means every
+       call site keeps working with the ids it already knows. */
+    function viaFold(ids) {
+      if (!lastFold || !lastFold.memberOf || !ids) return ids;
+      const out = [];
+      ids.forEach(id => { const m = lastFold.memberOf.get(id); out.push(m || id); });
+      return out;
+    }
     function spotlight(ids, kind) {
+      ids = viaFold(ids);
       // strip every dg-spot* class (problem/solution/load/future kinds), or a
       // leftover kind class keeps its stroke on after toggle-off
       svg.querySelectorAll(".dg-spot").forEach(e => [...e.classList].filter(c => c.indexOf("dg-spot") === 0).forEach(c => e.classList.remove(c)));
@@ -850,6 +979,7 @@ var Diagram = (() => {
        lands on what changed, instead of hunting for it off-screen).
        null = scroll home. No-op when the diagram fully fits. ── */
     function focus(ids) {
+      ids = viaFold(ids);
       const noOverflow = container.scrollWidth <= container.clientWidth + 4
                       && container.scrollHeight <= container.clientHeight + 4;
       if (noOverflow) return;
@@ -1356,7 +1486,11 @@ var Diagram = (() => {
       };
     })();
 
-    return { show, spotlight, focus, layout, laneColor, sim, zoom: zoomCtl, raceSpotlight, contendedIds, spineSpotlight, stateAt: u => stateAt(doc, u), doc, onDrill(fn) { onDrillCb = fn; }, onRender(fn) { onRenderCb = fn; if (lastState) fn(lastState); } };
+    return { show, spotlight, focus, layout, laneColor, sim, zoom: zoomCtl, raceSpotlight, contendedIds, spineSpotlight, stateAt: u => stateAt(doc, u), doc,
+             setFold(keep) { foldKeep = Math.max(0, keep | 0); return foldKeep; },
+             getFold() { return foldKeep; },
+             foldInfo() { return lastFold; },
+             onDrill(fn) { onDrillCb = fn; }, onRender(fn) { onRenderCb = fn; if (lastState) fn(lastState); } };
   }
 
   /* ── Legend: a compact always-visible key under the diagram (brings the

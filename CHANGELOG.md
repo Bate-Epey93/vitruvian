@@ -43,6 +43,19 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 - **Reading counts as progress.** Only the challenge gate used to mark a layer done, and gates have been off by default since 1.3, so a reader who finished a whole system still saw 0 of 6 on its card, 0 of 19 on Track and nothing in Drill. Reaching a layer's solution now marks it done. Existing installs are backfilled once from how far each reader got.
 - A handful of toasts and labels still used em dashes. They now read as plain sentences.
 
+## [2.7.0] — 2026-10-28 · Abstraction
+
+### Added
+- **The diagram can fold what you have already been shown.** Past a few layers it carries more settled machinery than argument, and the layer you are actually on is buried in it. Abstraction collapses everything introduced before the recent layers into one box per lane, which takes the lane's own name: Producers, Broker, Consumers. On the message queue at its last layer that is eleven components and eighteen edges down to five and eight.
+- **It lives in Lab tools, with the level beside it.** Keep the last 1, 2 or 3 layers drawn in full. One is the aggressive setting: only what this layer added keeps its own box. The choice sticks across documents, because how much abstraction you want depends on how well you know systems, not on which one you are reading.
+- **A pill says so while it is on**, in the same place and the same shape as the Pulse readout: *Abstraction on · 3 boxes folded · tap to turn off*. Tapping it turns abstraction off. A view that hides things without a standing notice is a view that misleads, so the pill is not dismissable — it goes away only when the folding does.
+
+### Changed
+- **A folded box is drawn as a box with another box behind it, and says how many parts it stands for.** Without that it reads as one component wearing somebody else's name, which is the one thing an abstraction must never be mistaken for. Edges that merged into one line carry their count, so the drawing never claims a single path where there were three.
+- **Folding never collapses a lone component.** One node folded into a box named after its lane is not an abstraction, it is the same component under a worse name.
+- **The pill stays quiet until there is something to say.** On the early layers nothing has settled yet, and a notice claiming otherwise would be the diagram lying about itself.
+- **"folded" is in the key**, like every other mark.
+
 ## [2.6.1] — 2026-10-28 · The key owes you every mark
 
 ### Fixed

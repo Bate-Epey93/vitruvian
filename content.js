@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "2.6.1",
+  appVersion: "2.7.0",
   flagshipVersion: 12,                   // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   // foundations first, then the systems built on them — YouTube last, the capstone that drills into everything
   flagshipNames: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue", "notification-system", "rate-limiter", "search-typeahead", "url-shortener", "ride-matching", "ticket-booking", "content-delivery-network", "recommendation-feed", "payment-ledger", "video-transcoding", "news-feed", "photo-store", "whatsapp", "youtube", "railway"],
@@ -573,6 +573,20 @@ var COPY = {
   // The honest half: eligible, but nobody has built it. No link, because
   // there is nothing to link to — a described thing and a button that only
   // registers that you would use it.
+  /* ── Abstraction ── */
+  foldLabel: "Abstraction",
+  foldHint: "Fold what you have already been shown into one box per lane",
+  foldDesc: "Collapse the layers you have already read into one box per lane, so the layer you are on is the only thing in full.",
+  foldLevelsCap: "keep open",
+  foldLevelsLabel: "How many recent layers stay drawn in full",
+  foldLvl1: "Keep only this layer drawn in full",
+  foldOn: "Abstraction on",
+  foldTapOff: "tap to turn off",
+  foldWhat: n => n + (n === 1 ? " box folded" : " boxes folded"),
+  foldNothing: "Nothing to fold yet — read a few more layers.",
+  foldSet: n => n === 1 ? "Abstraction on · this layer only" : `Abstraction on · last ${n} layers open`,
+  foldOff: "Abstraction off",
+
   labMaybeKicker: "Also a machine",
   labMaybeCta: "I\u2019d use this",
   labMaybeDone: "Noted \u2014 it is on the candidates list",

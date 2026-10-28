@@ -1068,6 +1068,23 @@ async function openReader(id, layerIndex, opts = {}) {
   beforeBtn.title = "Show the system before this fix (or hold B)";
   replayBtn.hidden = true;
   beforeBtn.hidden = true;
+  /* How much of the past stays drawn. One layer is the aggressive setting:
+     only what this layer added keeps its own box. The choice is the reader's
+     and it sticks, because the right amount of abstraction depends on how
+     well they already know the system. */
+  const foldLevels = h("div", "fold-levels");
+  foldLevels.setAttribute("role", "group");
+  foldLevels.setAttribute("aria-label", COPY.foldLevelsLabel);
+  const foldOpts = [1, 2, 3].map(k => {
+    const b = h("button", "fold-lvl", String(k));
+    b.type = "button";
+    b.title = k === 1 ? COPY.foldLvl1 : `Keep the last ${k} layers drawn in full`;
+    b.setAttribute("aria-label", k === 1 ? COPY.foldLvl1 : `Keep the last ${k} layers drawn in full`);
+    foldLevels.appendChild(b);
+    return b;
+  });
+  foldLevels.insertBefore(h("span", "fold-levels-cap", COPY.foldLevelsCap), foldLevels.firstChild);
+
   // Lab tools: the deeper instruments, one tap away instead of always on show
   const labBtn = setFace(h("button", "gbtn sim-btn lab-btn"), "flask", "Lab tools");
   labBtn.setAttribute("aria-haspopup", "true");
@@ -1075,11 +1092,15 @@ async function openReader(id, layerIndex, opts = {}) {
   const labMenu = h("div", "lab-menu");
   labMenu.hidden = true;
   labMenu.setAttribute("role", "menu");
+  const foldBtn = setFace(h("button", "gbtn sim-btn"), "layers", COPY.foldLabel);
+  foldBtn.title = COPY.foldHint;
   [[raceBtn, "Ring the parts where two flows can arrive at once."],
    [spineBtn, "Trace what a request waits on, and what would stop everything."],
+   [foldBtn, COPY.foldDesc],
    [gifBtn, "Record a running Pulse as a looping GIF."]].forEach(([btn, desc]) => {
     const item = h("div", "lab-item");
     item.append(btn, h("p", "lab-desc", desc));
+    if (btn === foldBtn) item.appendChild(foldLevels);
     labMenu.appendChild(item);
   });
   const setLab = open => { labMenu.hidden = !open; labBtn.setAttribute("aria-expanded", String(open)); labBtn.classList.toggle("on", open); };
@@ -1100,8 +1121,18 @@ async function openReader(id, layerIndex, opts = {}) {
   hud.hidden = true;
   const hudRate = h("span", "hud-stat"), hudFlight = h("span", "hud-stat"), hudCrash = h("span", "hud-stat crash"), hudHint = h("span", "hud-hint", "tap any node to kill it");
   hud.append(hudRate, hudFlight, hudCrash, hudHint);
+  /* Says the diagram is not showing everything, and takes the saying-so back
+     in one tap. A view that hides things without a standing notice is a view
+     that misleads. */
+  const foldPill = h("button", "dg-fold-pill");
+  foldPill.type = "button";
+  foldPill.hidden = true;
+  const pillMain = h("span", "fold-main", COPY.foldOn);
+  const pillWhat = h("span", "fold-what");
+  const pillOff = h("span", "fold-off", COPY.foldTapOff);
+  foldPill.append(pillMain, pillWhat, pillOff);
   const legendEl = Diagram.legend();
-  dpane.append(dscroll, hud, caption, legendEl, scrubEl, dcap, labMenu);   // legend: the tutorial's grammar, always in view
+  dpane.append(dscroll, hud, foldPill, caption, legendEl, scrubEl, dcap, labMenu);   // legend: the tutorial's grammar, always in view
   const docPane = h("div", "doc-pane");
   /* On a phone the step card is a bottom sheet over the diagram. The grip
      drags it between three heights, or steps through them by tap or arrow
@@ -1120,8 +1151,13 @@ async function openReader(id, layerIndex, opts = {}) {
   const diagram = Diagram.mount(dscroll, rec.doc);
   diagram.onDrill((sub) => drillInto(sub));
   // the key lists only the glyphs this state actually uses, and tapping one
-  // lights the nodes that carry it
-  if (legendEl.update) diagram.onRender(st => legendEl.update(st, diagram));
+  // lights the nodes that carry it. onRender holds a single callback, so the
+  // key and the abstraction pill share it — registered once, below, after
+  // paintFold exists.
+  const onDiagramRender = st => {
+    if (legendEl.update) legendEl.update(st, diagram);
+    paintFold();
+  };
 
   /* flow simulation controls — instant response on press; any state change
      stops the sim (via diagram.show) and this resets the buttons */
@@ -1163,6 +1199,50 @@ async function openReader(id, layerIndex, opts = {}) {
   // points). Structural — works standing still; under ◉ load you watch tokens
   // actually collide there. Toggle off clears the rings.
   let raceOn = false;
+  /* ── Abstraction ──
+     The level is the reader's and it sticks across documents, because how
+     much of a system you want folded depends on how well you already know
+     systems, not on which one you are reading. Off is the default: a reader
+     who has not asked for it should see what was drawn. */
+  let foldKeep = Number(meta.foldKeep) > 0 ? Math.min(3, Number(meta.foldKeep)) : 0;
+  const paintFold = () => {
+    const on = foldKeep > 0;
+    foldBtn.classList.toggle("on", on);
+    foldBtn.setAttribute("aria-pressed", String(on));
+    foldOpts.forEach((b, k) => {
+      b.classList.toggle("on", on && foldKeep === k + 1);
+      b.setAttribute("aria-pressed", String(on && foldKeep === k + 1));
+    });
+    foldLevels.classList.toggle("live", on);
+    const info = diagram.foldInfo();
+    /* The pill only claims something is folded when something is. On the
+       early layers there is nothing settled yet, and a notice that said
+       otherwise would be the diagram lying about itself. */
+    foldPill.hidden = !(on && info && info.boxes > 0);
+    if (!foldPill.hidden) {
+      pillWhat.textContent = COPY.foldWhat(info.boxes);
+      foldPill.title = COPY.foldSet(foldKeep);
+    }
+  };
+  const applyFold = (keep, say) => {
+    foldKeep = keep;
+    diagram.setFold(keep);
+    meta.foldKeep = keep;
+    Store.saveMeta({ foldKeep: keep });
+    if (currentView && currentView.refresh) currentView.refresh();
+    paintFold();
+    if (say) {
+      const info = diagram.foldInfo();
+      toast(keep === 0 ? COPY.foldOff
+            : (info && info.boxes) ? COPY.foldSet(keep) : COPY.foldNothing);
+    }
+  };
+  foldBtn.onclick = () => applyFold(foldKeep > 0 ? 0 : 1, true);
+  foldOpts.forEach((b, k) => { b.onclick = () => applyFold(k + 1, true); });
+  foldPill.onclick = () => applyFold(0, true);
+  diagram.setFold(foldKeep);
+  diagram.onRender(onDiagramRender);
+
   raceBtn.onclick = () => {
     raceOn = !raceOn;
     const n = diagram.raceSpotlight(raceOn);

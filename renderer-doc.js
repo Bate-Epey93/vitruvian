@@ -1139,6 +1139,8 @@ var DocView = (() => {
       setOnePage(v) { onePage = !!v; before = false; render(); },
       setBefore,
       openSheet,
+      /* the abstraction level changed under us; redraw at the same place */
+      refresh() { syncDiagram(false); },
       get before() { return before; },
       // from Models, Vocabulary and links: open a layer at its fix if it's been read
       goToLayer(idx) { goTo(idx, attemptFor(idx).revealed ? 3 : 1); },
