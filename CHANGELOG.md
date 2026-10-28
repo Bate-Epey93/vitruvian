@@ -43,6 +43,13 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 - **Reading counts as progress.** Only the challenge gate used to mark a layer done, and gates have been off by default since 1.3, so a reader who finished a whole system still saw 0 of 6 on its card, 0 of 19 on Track and nothing in Drill. Reaching a layer's solution now marks it done. Existing installs are backfilled once from how far each reader got.
 - A handful of toasts and labels still used em dashes. They now read as plain sentences.
 
+## [2.6.0] — 2026-10-28 · Marks that look like the thing
+
+### Changed
+- **Seven of the twelve node marks are redrawn.** Storage is stacked platters rather than two bare lines, which at 11px were the index glyph. Object store is a bucket, the word and the picture every object store has used since S3. Queue is an open tray filled unevenly, a backlog with a depth, instead of three uprights that were a barcode. Edge cache keeps its globe but the meridian is straight, because an ellipse inside an 11-pixel circle closes into a smudge. Gateway is the arch without the arrow that was mushing inside it. Cache keeps the bolt, squared up so the notch survives.
+- **Process is a triangle.** Twice a gear has failed in that box — eight teeth read as a sun, four read as an asterisk — because anything with radial repeats turns to mush at this size. The cross that replaced it was legible and meant nothing. A triangle has three strokes, a silhouette nothing else in the table shares, and it says the node runs.
+- **Actor, database, index and log are untouched.** They already read at size, and the test every change had to pass was a bench that drew each candidate at the real 11px under three different rough.js seeds, beside the neighbour it was most likely to be confused with. A mark that only survives one wobble is not a mark.
+
 ## [2.5.1] — 2026-10-24 · The empty shelf points somewhere real
 
 ### Fixed

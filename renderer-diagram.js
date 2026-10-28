@@ -234,23 +234,34 @@ var Diagram = (() => {
   const GLYPHS = {
     // kind tier — abstract, domain-neutral, the fallback when no icon is set
     actor:    "M 5.5 1.5 a 2 2 0 1 0 .1 0 Z M 1.2 10.5 a 4.3 4.3 0 0 1 8.6 0",                       // head + shoulders
-    store:    "M 1 3.5 h 9 M 1 7 h 9",                                                                // shelves
+    /* Stacked platters, closed at the sides. Two bare lines read as the
+       index glyph at 11px, which is the one thing storage must not be. */
+    store:    "M .8 3 h 9.4 M .8 6 h 9.4 M .8 9 h 9.4 M .8 3 v 6 M 10.2 3 v 6",                        // stacked platters
     channel:  "M 1.5 5.5 h 5 M 5 3.2 l 2.3 2.3 l -2.3 2.3",                                           // through-arrow
-    /* A gear was the honest picture of "work happens here" and it did not
-       survive the size: eight teeth and a hub inside an 11px box read as a
-       sun, not a machine. Two crossed strokes carry no meaning of their own,
-       which is the point — process is the kind with no shape to borrow, so
-       its mark is a label, not a drawing. */
-    process:  "M 2.6 2.6 L 8.4 8.4 M 8.4 2.6 L 2.6 8.4",                                              // cross: work happens
+    /* Twice now a gear has failed here: eight teeth read as a sun and four
+       read as an asterisk, because anything with radial repeats turns to
+       mush in an 11px box. A triangle has one idea, three strokes and a
+       silhouette nothing else in this table shares. It says the node runs,
+       which is more than the cross it replaces ever said. */
+    process:  "M 3.2 1.8 L 9 5.5 L 3.2 9.2 Z",                                                        // it runs
     // icon tier — concrete, opt-in per node
     database: "M 1 2.5 a 4.5 1.8 0 0 1 9 0 v 6 a 4.5 1.8 0 0 1 -9 0 Z M 1 2.5 a 4.5 1.8 0 0 0 9 0",
-    cache:    "M 6.5 .5 L 3 6 h 2.5 l -1 4.5 l 4 -6 h -2.5 Z",                                        // bolt: fast path
-    blob:     "M 2 .5 h 4.5 l 2.5 2.5 v 7.5 h -7 Z M 6.5 .5 v 2.5 h 2.5",                             // object with a fold
+    cache:    "M 6.9 .6 L 2.6 6.2 h 2.9 l -.9 4.6 l 4.4 -6 h -3 Z",                                   // bolt: fast path
+    /* A bucket, which is what S3 named the thing and what every object
+       store icon has copied since. The page-with-a-fold it replaces said
+       "document", and opaque bytes are not a document. */
+    blob:     "M 1 2.4 h 9 l -1.1 8.2 h -6.8 Z M 1 2.4 a 4.5 1.5 0 0 1 9 0",                          // a bucket
     index:    "M 1 2 h 9 M 1 4.8 h 5.5 M 1 7.6 h 8 M 1 10.4 h 3.5",                                   // sorted, ragged
     log:      "M 1 2 h 7 M 1 5.5 h 7 M 1 9 h 4.5 M 7 7 l 2.5 2 l -2.5 2",                             // append-only
-    queue:    "M 2 2.5 v 6 M 5.5 2.5 v 6 M 9 2.5 v 6",                                                // a line of things waiting
-    cdn:      "M 5.5 .5 a 5 5 0 1 0 .1 0 Z M .5 5.5 h 10 M 5.5 .5 a 6.5 5 0 0 1 0 10 a 6.5 5 0 0 1 0 -10",
-    gateway:  "M 1.5 10.5 V 5.5 a 4 4 0 0 1 8 0 v 5 M 3.5 7.5 h 4 M 6 5.8 l 1.9 1.7 l -1.9 1.7"      // an arch you pass through
+    /* An open-topped tray filled unevenly: a backlog with a depth. Three
+       bare uprights were a barcode, and said nothing about waiting. */
+    queue:    "M .9 1.8 v 7.4 h 9.2 V 1.8 M 2.7 9.2 V 5 M 5.5 9.2 V 3.4 M 8.3 9.2 V 6.6",             // a backlog, with a depth
+    /* The meridian was an ellipse, and an ellipse inside an 11px circle
+       closes into a smudge. Straight, it reads as a globe at any size. */
+    cdn:      "M 5.5 .6 a 4.9 4.9 0 1 0 .1 0 Z M .6 5.5 h 9.8 M 5.5 .6 v 9.8",                        // a globe
+    /* An arch you pass through. The arrow that used to sit inside it was
+       what mushed; the gate alone is both clearer and more literal. */
+    gateway:  "M 1.5 10.4 V 5.5 a 4 4 0 0 1 8 0 v 4.9 M 3.6 10.4 V 6.2 a 1.9 1.9 0 0 1 3.8 0 v 4.2"  // a gate
   };
   // An 11px glyph roughened as hard as a 110px box turns to mush, so the
   // sketch is gentler here. It still wobbles; it just stays readable.
