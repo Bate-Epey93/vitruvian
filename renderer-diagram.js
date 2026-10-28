@@ -159,7 +159,7 @@ var Diagram = (() => {
      Pure: a state goes in, a state comes out, and nothing downstream knows.
      The sim, the spine, the races and the key all run on the result as though
      the folded boxes had always been components. ── */
-  function foldState(st, doc, upto, keep) {
+  function foldState(st, doc, upto, keep, open) {
     const live = new Set();
     for (let i = Math.max(0, upto - keep); i < upto; i++) {
       ((doc.layers[i] || {}).diff || { add_nodes: [] }).add_nodes.forEach(n => live.add(n.id));
@@ -177,8 +177,12 @@ var Diagram = (() => {
     (doc.visual.lanes || []).forEach(l => { laneLabel[l.id] = l.label; });
 
     byLane.forEach((members, lane) => {
-      /* one component on its own is not an abstraction, it is the component */
-      if (members.length < 2) { members.forEach(n => nodes.set(n.id, n)); return; }
+      /* one component on its own is not an abstraction, it is the component;
+         and a lane the reader has opened stays open */
+      if (members.length < 2 || (open && open.has(lane))) {
+        members.forEach(n => nodes.set(n.id, n));
+        return;
+      }
       const id = "fold:" + lane;
       nodes.set(id, {
         id, lane,
@@ -470,6 +474,48 @@ var Diagram = (() => {
     let shownIds = new Set();
     let lastState = null, lastPos = {}, lastHl = new Set();   // the sim reads the shown state
     let traced = null, freshTimer = null, raceOn = false, spineOn = false, onDrillCb = null, onRenderCb = null;
+    let onSelectCb = null;
+    /* Every part exists because something broke, which is the whole claim of
+       this app — and until now the diagram could not be asked. The diffs
+       already say who added what; this is just the index. */
+    /* What a part DOES, in the document's own words. Nodes carry no
+       description — only id, label, kind, lane, order and an optional icon —
+       so inventing one would be the drawing making things up. What is real is
+       the traffic: the labels on the edges that reach it and leave it. "Takes
+       job queued from Upload service, gives next job to Transcoder" is both
+       derived and true, which a paraphrase of the layer's prose would not be. */
+    function roleOf(id) {
+      if (!lastState) return null;
+      const ins = [], outs = [];
+      lastState.edges.forEach(e => {
+        if (e.to === id && lastState.nodes.has(e.from)) ins.push(e);
+        if (e.from === id && lastState.nodes.has(e.to)) outs.push(e);
+      });
+      const name = nid => { const n = lastState.nodes.get(nid); return n ? n.label : nid; };
+      /* one of each is the clearest sentence; past that it is a list, and a
+         list of six edges is the diagram again, not a summary of it */
+      const say = (arr, verb) => {
+        if (!arr.length) return null;
+        const first = arr[0];
+        const lbl = first.label ? `“${first.label}” ` : "";
+        const other = verb === "Takes" ? name(first.from) : name(first.to);
+        const more = arr.length > 1 ? ` and ${arr.length - 1} more` : "";
+        return `${verb} ${lbl}${verb === "Takes" ? "from" : "to"} ${other}${more}`;
+      };
+      const parts = [say(ins, "Takes"), say(outs, "Gives")].filter(Boolean);
+      if (!parts.length) return null;
+      /* one sentence, so only the first clause is capitalised */
+      return parts.map((t, i) => i ? t[0].toLowerCase() + t.slice(1) : t).join(", ") + ".";
+    }
+
+    const originOf = (() => {
+      const m = new Map();
+      (doc.visual.nodes || []).forEach(n => m.set(n.id, -1));          // -1: there from the start
+      (doc.layers || []).forEach((L, i) => {
+        ((L.diff || {}).add_nodes || []).forEach(n => m.set(n.id, i));
+      });
+      return m;
+    })();
 
     /* trace: tap a node to light it + every edge touching it and dim the
        rest — follow one part's responsibilities. Tap again to clear. */
@@ -489,11 +535,31 @@ var Diagram = (() => {
       // mid-sim, a node tap KILLS the node — chaos engineering: watch tokens
       // pile up behind it and everything downstream starve
       if (sim.running) { sim.toggleFault(id); return; }
-      if (traced === id) { traced = null; spotlight(null); return; }
+      // a folded box opens where it stands: the obvious gesture on something
+      // labelled "3 parts" is to look inside it
+      const fn = lastState.nodes.get(id);
+      if (fn && fn.folded) {
+        ev.stopPropagation();
+        openLanes.add(fn.lane);
+        show(lastUpto, lastOpts);
+        return;
+      }
+      if (traced === id) {
+        traced = null; spotlight(null);
+        if (onSelectCb) onSelectCb(null);
+        return;
+      }
       const ids = [id];
       lastState.edges.forEach(e => { if (e.from === id || e.to === id) ids.push(e.id); });
       spotlight(ids, "trace");
       traced = id;
+      if (onSelectCb) {
+        const at = originOf.has(id) ? originOf.get(id) : null;
+        onSelectCb({ id, label: fn ? fn.label : id,
+                     layerIndex: at,
+                     layerName: (at != null && at >= 0 && doc.layers[at]) ? doc.layers[at].name : null,
+                     does: roleOf(id) });
+      }
     });
 
     /* Hover isolation: on a pointer that can hover, passing over a node
@@ -533,8 +599,17 @@ var Diagram = (() => {
 
     let foldKeep = 0;                        // 0 = off; otherwise layers kept open
     let lastFold = null;
+    let openLanes = new Set();               // folded lanes the reader has opened back up
+    /* The drawing is fitted to its frame on every render. Eight of the twenty
+       flagships are wider than a laptop's diagram column and all of them are
+       wider than a phone, so natural size meant the signature artifact was
+       clipped by default on every screen. Zooming by hand turns this off
+       until Fit is asked for again. */
+    let autoFit = true;
+    let lastUpto = 0, lastOpts = {};
     function show(upto, opts = {}) {
       sim.stop();                            // a state change invalidates in-flight tokens
+      lastUpto = upto; lastOpts = opts;
       const { highlight = [], animate = false, ghost = [], stress = [] } = opts;
       let st = stateAt(doc, upto);
 
@@ -545,7 +620,7 @@ var Diagram = (() => {
          would simply vanish. */
       let foldMap = null;
       if (foldKeep > 0 && upto > foldKeep) {
-        const folded = foldState(st, doc, upto, foldKeep);
+        const folded = foldState(st, doc, upto, foldKeep, openLanes);
         if (folded.memberOf.size) { st = folded; foldMap = folded.memberOf; }
       }
       const thru = ids => (ids || []).map(id => (foldMap && foldMap.get(id)) || id);
@@ -553,6 +628,7 @@ var Diagram = (() => {
       const hl = new Set(thru(highlight));
       lastFold = foldMap ? { keep: foldKeep, memberOf: foldMap,
                              boxes: [...st.nodes.values()].filter(n => n.folded).length,
+                             opened: openLanes.size,
                              hidden: foldMap.size } : null;
 
       /* A folded box has an id the precomputed layout has never seen. Its
@@ -771,6 +847,7 @@ var Diagram = (() => {
       lastState = st;
       lastPos = pos;            // the sim draws store fill meters at node positions
       lastHl = hl;
+      if (autoFit) zoomCtl.fit();        // the whole system, by default, on every screen
       if (onRenderCb) onRenderCb(st);    // the key redraws itself from what is on screen
       if (raceOn) raceSpotlight(true);   // re-ring contention points on the new state
       if (spineOn) spineSpotlight(true); // and re-trace the spine, which moves layer to layer
@@ -1011,7 +1088,13 @@ var Diagram = (() => {
     const zoomCtl = (() => {
       const MAXZ = 1.6;
       let settleRaf = null;
-      const fitZ = () => Math.min(1, Math.max(0.2, (container.clientWidth - 24) / layout.width));
+      /* the frame's real inside width: the container's own padding is 20px a
+         side, and guessing 24 for the pair left a sliver still scrolling */
+      const innerW = () => {
+        const cs = getComputedStyle(container);
+        return container.clientWidth - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0);
+      };
+      const fitZ = () => Math.min(1, Math.max(0.2, innerW() / layout.width));
       const current = () => (svg.getBoundingClientRect().width || layout.width) / layout.width;
       function apply(nz, cx, cy) {
         nz = Math.max(fitZ() * 0.85, Math.min(MAXZ * 1.15, nz));   // soft overshoot beyond bounds
@@ -1083,7 +1166,53 @@ var Diagram = (() => {
         const cR = container.getBoundingClientRect();
         animateTo(current() > fitZ() * 1.15 ? fitZ() : 1, e.clientX - cR.left, e.clientY - cR.top, 200);
       });
-      return { fitZ, current };
+      /* Fit is the default the renderer wants; anything the reader does by
+         hand turns it off until they ask for it back.
+
+         show() can run before the pane has been laid out — on mount, and
+         again whenever the reading sheet is dragged — and a fit measured
+         against a zero-width container collapses to the 0.2 floor. So a
+         frame with no width to measure is skipped and retried rather than
+         acted on. */
+      let retry = 0;
+      function fit() {
+        const w = innerW();
+        if (!(w > 80)) {
+          cancelAnimationFrame(retry);
+          retry = requestAnimationFrame(fit);
+          return null;
+        }
+        const z = Math.min(1, Math.max(0.2, w / layout.width));
+        svg.style.minWidth = "0";
+        svg.style.width = (layout.width * z) + "px";
+        container.scrollLeft = 0;
+        return z;
+      }
+      /* the frame changes size when the sheet is dragged or the window is
+         resized; a fitted drawing should stay fitted through both */
+      if (typeof ResizeObserver === "function") {
+        let roRaf = 0;
+        new ResizeObserver(() => {
+          if (!autoFit) return;
+          cancelAnimationFrame(roRaf);
+          roRaf = requestAnimationFrame(fit);
+        }).observe(container);
+      }
+      function full() {
+        svg.style.minWidth = "0";
+        svg.style.width = layout.width + "px";
+        return 1;
+      }
+      function by(f, animate) {
+        const cx = container.clientWidth / 2, cy = container.clientHeight / 2;
+        const target = Math.max(fitZ(), Math.min(MAXZ, current() * f));
+        if (animate === false) apply(target, cx, cy); else animateTo(target, cx, cy);
+        return target;
+      }
+      return { fitZ, current, fit, full, by,
+               /* true when the whole drawing is already on screen, so a Fit
+                  control can say whether it would do anything */
+               fits: () => fitZ() >= 1 };
     })();
 
     /* ── Flow simulation: tokens travel the payload path of the CURRENT
@@ -1487,9 +1616,19 @@ var Diagram = (() => {
     })();
 
     return { show, spotlight, focus, layout, laneColor, sim, zoom: zoomCtl, raceSpotlight, contendedIds, spineSpotlight, stateAt: u => stateAt(doc, u), doc,
-             setFold(keep) { foldKeep = Math.max(0, keep | 0); return foldKeep; },
+             setFold(keep) { foldKeep = Math.max(0, keep | 0); openLanes = new Set(); return foldKeep; },
              getFold() { return foldKeep; },
              foldInfo() { return lastFold; },
+             foldOpenCount() { return openLanes.size; },
+             foldCloseAll() { openLanes = new Set(); show(lastUpto, lastOpts); },
+             /* fit is the default; a hand zoom suspends it until Fit is asked for */
+             fitNow() { autoFit = true; zoomCtl.fit(); },
+             zoomBy(f) { autoFit = false; return zoomCtl.by(f); },
+             zoomFull() { autoFit = false; return zoomCtl.full(); },
+             isAutoFit() { return autoFit; },
+             fitsWhole() { return zoomCtl.fits(); },
+             onSelect(fn) { onSelectCb = fn; },
+             redraw() { show(lastUpto, lastOpts); },
              onDrill(fn) { onDrillCb = fn; }, onRender(fn) { onRenderCb = fn; if (lastState) fn(lastState); } };
   }
 

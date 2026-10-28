@@ -389,8 +389,7 @@ input,textarea{font-family:var(--sans);}
 .hs-title{font-family:var(--display);font-weight:650;font-size:15px;letter-spacing:-.02em;}
 .hs-layer{font-size:12px;font-weight:600;color:var(--accent-deep);background:var(--accent-wash);border-radius:var(--r-pill);padding:3px 10px;font-variant-numeric:tabular-nums;}
 .hs-diagram{aspect-ratio:16/10.5;display:grid;place-items:center;padding:14px;pointer-events:none;
-  background:linear-gradient(var(--grid-line) 1px,transparent 1px) 0 0/24px 24px,
-             linear-gradient(90deg,var(--grid-line) 1px,transparent 1px) 0 0/24px 24px,var(--panel-2);}
+  background:var(--panel-2);}
 .hs-diagram svg{width:100%!important;min-width:0!important;height:100%!important;max-height:100%;display:block;}
 .hs-note{font-size:13.5px;color:var(--ink-soft);padding:12px 18px 0;min-height:42px;border-top:1px solid var(--hair);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -568,12 +567,13 @@ input,textarea{font-family:var(--sans);}
 .reader{display:grid;grid-template-columns:minmax(0,1fr) clamp(360px,40%,580px);height:100%;overflow:hidden;min-width:0;}
 .diagram-pane{
   border-right:1px solid var(--hair);
-  background:linear-gradient(var(--grid-line) 1px,transparent 1px) 0 0/24px 24px,
-             linear-gradient(90deg,var(--grid-line) 1px,transparent 1px) 0 0/24px 24px,var(--panel-2);
+  background:var(--panel-2);
   display:flex;flex-direction:column;overflow:hidden;min-width:0;position:relative;
 }
 /* safe center: centred when it fits, top-aligned the instant it is taller */
-.diagram-scroll{flex:1;overflow:auto;padding:20px;display:grid;align-items:safe center;justify-items:start;min-width:0;
+/* safe center on both axes: centred when the drawing fits its frame, and
+   still scrolling from the top-left corner when it does not */
+.diagram-scroll{flex:1;overflow:auto;padding:20px;display:grid;align-items:safe center;justify-items:safe center;min-width:0;
   overscroll-behavior:contain;touch-action:pan-x pan-y;}
 .diagram-scroll::-webkit-scrollbar{width:9px;height:9px;}
 .diagram-scroll::-webkit-scrollbar-thumb{background:var(--faint);border-radius:5px;border:2px solid var(--panel-2);}
@@ -638,6 +638,44 @@ input,textarea{font-family:var(--sans);}
 .dg-fold-pill .fold-off{color:var(--faint);font-family:var(--sans);}
 /* the HUD owns the top strip while a pulse runs, so the pill steps down */
 .dg-hud:not([hidden]) ~ .dg-fold-pill{top:50px;}
+
+/* ── Zoom ──
+   The drawing is fitted on every render, so these are for getting closer and
+   getting back. It rides the control bar rather than floating over the
+   drawing: every floating corner is already taken — HUD and the abstraction
+   pill centre, the collapsed key chip right — and anything down the bottom
+   covers the key. */
+.dg-zoom{display:inline-flex;gap:1px;padding:2px;align-items:center;
+  border-radius:var(--r-pill);box-shadow:inset 0 0 0 1px var(--hair);}
+.zbtn{font-family:var(--mono);font-size:11px;line-height:1;min-width:26px;height:24px;padding:0 7px;
+  border:none;background:none;color:var(--ink-soft);border-radius:var(--r-pill);cursor:pointer;
+  transition:background .15s var(--ease),color .15s var(--ease);}
+.zbtn:hover:not(:disabled){background:color-mix(in srgb,var(--ink) 8%,transparent);color:var(--ink);}
+.zbtn:disabled{opacity:.4;cursor:default;}
+.zbtn.zfit{font-size:9.5px;letter-spacing:1px;text-transform:uppercase;min-width:38px;}
+.zbtn.on{color:var(--accent-deep);}
+.zbtn:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+
+/* ── Why this part is here ──
+   Anchored bottom-centre so it never covers the zoom cluster or the Lab menu. */
+.dg-origin{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:9;
+  max-width:min(340px,calc(100% - 140px));padding:10px 14px;border-radius:var(--r-md);
+  background:var(--glass-heavy);
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(160%);backdrop-filter:blur(var(--glass-blur)) saturate(160%);
+  box-shadow:inset 0 0 0 1px var(--hair), var(--sh-2);
+  animation:pop-in .2s var(--ease) both;}
+.org-name{font-weight:650;font-size:13.5px;color:var(--ink);line-height:1.25;}
+.org-when{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.4;}
+/* what it does, from its own edges — a notch quieter than the layer line
+   because it is derived, not authored */
+.org-does{font-size:12px;color:var(--ink-soft);margin-top:6px;line-height:1.45;
+  padding-top:6px;border-top:1px solid var(--hair);}
+.org-go{margin-top:8px;padding:5px 11px!important;font-size:11px;}
+@media(max-width:720px){
+  .dg-origin{max-width:calc(100% - 24px);}
+  .zbtn{min-width:22px;height:22px;padding:0 5px;}
+  .zbtn.zfit{min-width:32px;}
+}
 @media(max-width:640px){
   .dg-fold-pill{font-size:10.5px;padding:5px 12px;gap:7px;}
   .dg-fold-pill .fold-what{display:none;}
@@ -1130,9 +1168,17 @@ g.dg-node.dg-enter{animation:dg-fade .45s var(--ease) both;}
 /* replay caption */
 .dg-caption{
   font-size:13.5px;line-height:1.55;color:var(--ink);
-  background:var(--panel);border-radius:var(--r-md);box-shadow:inset 3px 0 0 var(--failure), inset 0 0 0 1px var(--hair), var(--sh-2);
-  padding:10px 14px 10px 16px;margin:0 12px 10px;
+  background:var(--panel);border-radius:var(--r-md);
+  box-shadow:inset 0 0 0 1px var(--hair), var(--sh-2);
+  padding:10px 15px;margin:0 12px 10px;
+  display:flex;gap:11px;align-items:flex-start;
 }
+/* the caution sign: hand-drawn, like everything else on the canvas it sits
+   beside. Nudged down a hair so it sits on the first line's baseline rather
+   than its ascender. */
+.cap-caution{flex:none;width:20px;height:20px;margin-top:1px;overflow:visible;}
+.cap-caution path{fill:none;stroke:var(--failure);stroke-linecap:round;stroke-linejoin:round;}
+.cap-text{min-width:0;}
 /* live HUD */
 .dg-hud{
   position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:6;
@@ -1313,8 +1359,7 @@ g.dg-node.dg-enter{animation:dg-fade .45s var(--ease) both;}
 @media(max-width:600px){.whatif-compose{flex-direction:column;align-items:stretch;}.whatif-compose .big-btn{width:100%;}}
 .whatif-diagram{height:320px;border-radius:var(--r-lg);overflow:hidden;margin:20px 0 6px;position:relative;display:flex;flex-direction:column;
   box-shadow:inset 0 0 0 1px var(--hair), var(--sh-1);
-  background:linear-gradient(var(--grid-line) 1px,transparent 1px) 0 0/24px 24px,
-             linear-gradient(90deg,var(--grid-line) 1px,transparent 1px) 0 0/24px 24px,var(--panel-2);}
+  background:var(--panel-2);}
 .whatif-diagram .diagram-scroll{height:100%;}
 .whatif-sim-row{display:flex;gap:4px;align-items:center;padding:8px 10px;border-top:1px solid var(--hair);background:var(--panel);}
 .verdict-full{border-radius:var(--r-lg);padding:22px 24px;margin:16px 0;background:var(--panel);
@@ -1545,7 +1590,7 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 .home-card{background:var(--panel);border-radius:var(--r-lg);padding:18px;box-shadow:inset 0 0 0 1px var(--hair),var(--sh-1);min-width:0;}
 .home-continue{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:20px;align-items:center;}
 .home-thumb{aspect-ratio:16/10;border-radius:var(--r-md);overflow:hidden;pointer-events:none;display:grid;place-items:center;padding:6px;
-  background:linear-gradient(var(--grid-line) 1px,transparent 1px) 0 0/16px 16px,linear-gradient(90deg,var(--grid-line) 1px,transparent 1px) 0 0/16px 16px,var(--panel-2);
+  background:var(--panel-2);
   box-shadow:inset 0 0 0 1px var(--hair);}
 .home-thumb svg{width:100%!important;min-width:0!important;height:100%!important;}
 .home-cont-text{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0;}

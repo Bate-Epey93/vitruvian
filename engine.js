@@ -975,7 +975,12 @@ const featureTips = (() => {
 const SHEET_SNAPS = [0.3, 0.52, 0.88];          // share of the reader the sheet covers
 const SHEET_NAMES = ["mostly diagram", "half and half", "mostly text"];
 function sheetDrag(wrap, sheet, grip) {
-  let snap = 1;
+  /* On a phone the chrome above and below the diagram — topbar, timeline,
+     caption, transport — already takes most of what the sheet leaves, so the
+     old half-and-half default gave the signature artifact 29% of the screen.
+     Narrow screens open on "mostly diagram"; the reader's own choice, once
+     made, still wins. */
+  let snap = (window.matchMedia && window.matchMedia("(max-width:720px)").matches) ? 0 : 1;
   try { const v = parseInt(localStorage.getItem("vitruvian_sheet_snap"), 10); if (v >= 0 && v < SHEET_SNAPS.length) snap = v; } catch (e) {}
   const apply = (frac, animate) => {
     wrap.classList.toggle("sheet-moving", !animate);
@@ -1110,12 +1115,63 @@ async function openReader(id, layerIndex, opts = {}) {
   labBtn.addEventListener("keydown", labEsc);
   labMenu.addEventListener("keydown", labEsc);
   pane.onclick = () => setLab(false);
+  /* Zoom. Fit is what the renderer does by itself; these exist so the reader
+     can get in closer and get back out again, which on desktop was previously
+     impossible — the pinch handler ignores anything that is not a touch. */
+  const zoomBar = h("div", "dg-zoom");
+  const zOut = h("button", "zbtn", "\u2212");
+  const zFit = h("button", "zbtn zfit", COPY.zoomFit);
+  const zIn = h("button", "zbtn", "+");
+  [[zOut, COPY.zoomOutHint], [zFit, COPY.zoomFitHint], [zIn, COPY.zoomInHint]].forEach(([b, t]) => {
+    b.type = "button"; b.title = t; b.setAttribute("aria-label", t);
+  });
+  zoomBar.append(zOut, zFit, zIn);
+
   const capTools = h("div", "cap-tools");
-  capTools.append(replayBtn, beforeBtn, playBtn, loadBtn, capSep(), labBtn, capToggle);
+  capTools.append(replayBtn, beforeBtn, playBtn, loadBtn, capSep(), zoomBar, labBtn, capToggle);
   dcap.append(capState, capTools);
   const scrubEl = h("div", "scrub-wrap");
+  /* The caption narrates a failure the reader just watched, so it is marked
+     by a caution sign rather than a coloured edge. Drawn through rough.js at
+     the same roughness the diagram's own small marks use, so it belongs to
+     the drawing beside it instead of looking like interface chrome.
+
+     Built once: the sign never changes, and re-roughening it on every replay
+     would make it twitch. */
   const caption = h("div", "dg-caption");
   caption.hidden = true;
+  const capIcon = (() => {
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 20 20");
+    svg.setAttribute("class", "cap-caution");
+    svg.setAttribute("aria-hidden", "true");
+    /* a triangle and a bang: three strokes and two marks, which is all that
+       survives at this size — the same bar the node glyphs are held to */
+    const parts = [
+      ["M 10 2.2 L 18.2 16.4 L 1.8 16.4 Z", 1.5],
+      ["M 10 7.1 L 10 11.6", 1.6],
+      ["M 10 13.9 L 10 14.1", 2.2]
+    ];
+    const gen = (typeof rough !== "undefined" && rough.generator) ? rough.generator() : null;
+    parts.forEach(([d, w], i) => {
+      let out = d;
+      if (gen) {
+        try {
+          const ps = gen.toPaths(gen.path(d, { seed: 41 + i * 7, roughness: 0.6, bowing: 0.7,
+                                               disableMultiStroke: true, preserveVertices: true }));
+          if (ps.length && ps[0].d) out = ps.map(x => x.d).join(" ");
+        } catch (e) { /* the exact path is a fine fallback */ }
+      }
+      const el = document.createElementNS(NS, "path");
+      el.setAttribute("d", out);
+      el.setAttribute("stroke-width", String(w));
+      svg.appendChild(el);
+    });
+    return svg;
+  })();
+  const capText = h("span", "cap-text");
+  caption.append(capIcon, capText);
   // live HUD: throughput / in-flight / crashed while the sim runs
   const hud = h("div", "dg-hud");
   hud.hidden = true;
@@ -1124,6 +1180,17 @@ async function openReader(id, layerIndex, opts = {}) {
   /* Says the diagram is not showing everything, and takes the saying-so back
      in one tap. A view that hides things without a standing notice is a view
      that misleads. */
+  /* "Why is this here?" — the question the whole app is built to answer, and
+     until now the one thing you could not ask the drawing. */
+  const originCard = h("div", "dg-origin");
+  originCard.hidden = true;
+  const oTitle = h("div", "org-name");
+  const oWhen = h("div", "org-when");
+  const oDoes = h("div", "org-does");
+  const oGo = h("button", "gbtn org-go");
+  oGo.type = "button";
+  originCard.append(oTitle, oWhen, oDoes, oGo);
+
   const foldPill = h("button", "dg-fold-pill");
   foldPill.type = "button";
   foldPill.hidden = true;
@@ -1132,7 +1199,7 @@ async function openReader(id, layerIndex, opts = {}) {
   const pillOff = h("span", "fold-off", COPY.foldTapOff);
   foldPill.append(pillMain, pillWhat, pillOff);
   const legendEl = Diagram.legend();
-  dpane.append(dscroll, hud, foldPill, caption, legendEl, scrubEl, dcap, labMenu);   // legend: the tutorial's grammar, always in view
+  dpane.append(dscroll, hud, foldPill, originCard, caption, legendEl, scrubEl, dcap, labMenu);   // legend: the tutorial's grammar, always in view
   const docPane = h("div", "doc-pane");
   /* On a phone the step card is a bottom sheet over the diagram. The grip
      drags it between three heights, or steps through them by tap or arrow
@@ -1220,9 +1287,11 @@ async function openReader(id, layerIndex, opts = {}) {
        otherwise would be the diagram lying about itself. */
     foldPill.hidden = !(on && info && info.boxes > 0);
     if (!foldPill.hidden) {
-      pillWhat.textContent = COPY.foldWhat(info.boxes);
+      const opened = diagram.foldOpenCount();
+      pillWhat.textContent = opened ? COPY.foldSome(info.boxes, opened) : COPY.foldWhat(info.boxes);
       foldPill.title = COPY.foldSet(foldKeep);
     }
+    paintZoom();
   };
   const applyFold = (keep, say) => {
     foldKeep = keep;
@@ -1237,6 +1306,58 @@ async function openReader(id, layerIndex, opts = {}) {
             : (info && info.boxes) ? COPY.foldSet(keep) : COPY.foldNothing);
     }
   };
+  /* ── zoom ── */
+  const paintZoom = () => {
+    const whole = diagram.fitsWhole();
+    zFit.classList.toggle("on", diagram.isAutoFit());
+    /* when the drawing already fits there is nothing for Fit to do, and a
+       control that does nothing should not look live */
+    zFit.disabled = whole && diagram.isAutoFit();
+    zoomBar.hidden = whole && diagram.isAutoFit() && !diagram.doc.layers.length;
+  };
+  zOut.onclick = () => { diagram.zoomBy(1 / 1.25); paintZoom(); };
+  zIn.onclick = () => { diagram.zoomBy(1.25); paintZoom(); };
+  zFit.onclick = () => { diagram.fitNow(); paintZoom(); };
+  /* desktop: the modifier-wheel gesture every map and canvas uses. A plain
+     wheel keeps scrolling the page, which is what a reader expects. */
+  dscroll.addEventListener("wheel", e => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    diagram.zoomBy(e.deltaY < 0 ? 1.12 : 1 / 1.12);
+    paintZoom();
+  }, { passive: false });
+
+  /* ── why is this part here ── */
+  const closeOrigin = () => { originCard.hidden = true; };
+  diagram.onSelect(sel => {
+    if (!sel) { closeOrigin(); return; }
+    oTitle.textContent = sel.label;
+    if (sel.layerIndex == null) { closeOrigin(); return; }
+    oDoes.textContent = sel.does || "";
+    oDoes.hidden = !sel.does;
+    if (sel.layerIndex < 0) {
+      oWhen.textContent = COPY.originBase;
+      oGo.hidden = true;
+    } else {
+      oWhen.textContent = COPY.originAt(sel.layerIndex + 1, sel.layerName);
+      oGo.hidden = false;
+      oGo.textContent = COPY.originGo;
+      oGo.onclick = () => {
+        closeOrigin();
+        if (currentView && currentView.goToLayer) currentView.goToLayer(sel.layerIndex);
+      };
+    }
+    /* Sit on the drawing's own bottom edge, not the pane's: the key, the
+       scrubber and the control bar live below the drawing, and a card pinned
+       to the pane covers them whenever the pane is short. */
+    const pane = originCard.parentElement, frame = dscroll;
+    if (pane && frame) {
+      const gap = pane.getBoundingClientRect().bottom - frame.getBoundingClientRect().bottom;
+      originCard.style.bottom = Math.max(12, Math.round(gap) + 12) + "px";
+    }
+    originCard.hidden = false;
+  });
+
   foldBtn.onclick = () => applyFold(foldKeep > 0 ? 0 : 1, true);
   foldOpts.forEach((b, k) => { b.onclick = () => applyFold(k + 1, true); });
   foldPill.onclick = () => applyFold(0, true);
@@ -1278,7 +1399,7 @@ async function openReader(id, layerIndex, opts = {}) {
       const s = L.problem.statement.split(". ")[0];
       text = (s.length > 150 ? s.slice(0, 147) + "…" : s) + (s.endsWith(".") ? "" : ".");
     }
-    caption.textContent = text;
+    capText.textContent = text;
     caption.hidden = false;
     clearTimeout(captionTimer);
     captionTimer = setTimeout(() => { caption.hidden = true; }, 7000);

@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "2.7.0",
+  appVersion: "2.8.0",
   flagshipVersion: 12,                   // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   // foundations first, then the systems built on them — YouTube last, the capstone that drills into everything
   flagshipNames: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue", "notification-system", "rate-limiter", "search-typeahead", "url-shortener", "ride-matching", "ticket-booking", "content-delivery-network", "recommendation-feed", "payment-ledger", "video-transcoding", "news-feed", "photo-store", "whatsapp", "youtube", "railway"],
@@ -586,6 +586,16 @@ var COPY = {
   foldNothing: "Nothing to fold yet — read a few more layers.",
   foldSet: n => n === 1 ? "Abstraction on · this layer only" : `Abstraction on · last ${n} layers open`,
   foldOff: "Abstraction off",
+  foldSome: (boxes, opened) => `${boxes} folded · ${opened} opened`,
+
+  /* ── Zoom and origin ── */
+  zoomFit: "Fit",
+  zoomFitHint: "Fit the whole system in view",
+  zoomInHint: "Zoom in (or hold \u2318 and scroll)",
+  zoomOutHint: "Zoom out (or hold \u2318 and scroll)",
+  originBase: "Here from the start \u2014 part of the naive baseline.",
+  originAt: (n, name) => `Added in layer ${n}${name ? " \u00b7 " + name : ""}`,
+  originGo: "Read that layer",
 
   labMaybeKicker: "Also a machine",
   labMaybeCta: "I\u2019d use this",
@@ -776,10 +786,13 @@ var COPY = {
         ["The red pulse", "When you read a layer's problem, or tap the problem card, the parts about to break pulse red. You see the failure before the fix."],
         ["Spotlight", "Tap a card to light its parts and dim the rest: the problem card lights what breaks (red), the solution card lights what's added (teal), and Under load traces the path load travels (gold)."],
         ["Trace a part", "Tap any node to light it and every edge touching it; the rest dims, so you can follow one part's whole reach. Tap it again to clear."],
+        ["Why a part is here", "The same tap answers the question the whole app is built on. A card names the layer that introduced the part, says what it takes in and gives out, and offers to open that layer. Parts with no layer named were there from the start, in the naive baseline."],
         ["Zoom in ⊕", "Some nodes are whole systems in their own right and carry a ⊕ badge. Tap it to open that sub-system as its own Deconstruct, and follow the breadcrumb back up. Systems nest as deep as the library goes."],
         ["Payload shapes", "During a Pulse, every payload wears the shape of the kind that sent it: a dot from an actor, a square from a store, a diamond from a process, a bar from a channel. Colour still tells you which lane it came from, so shape and colour answer two different questions at once."],
         ["Backpressure", "When a node takes in more than it can clear, the edges feeding it stiffen and their traffic slows down. The jam creeps back toward the source rather than staying put, which is how one slow component ends up browning out everything upstream of it."],
-        ["Pan", "Dense diagrams pan sideways. Tap a layer in the timeline to see the system at that point."]
+        ["Fit and zoom", "The whole system is fitted into view by default, on any screen. The controls beside Lab tools get you closer and back out again, and holding the command key while scrolling does the same. Fit stays lit until you zoom by hand, and relights the moment you tap it."],
+        ["The key", "Under the diagram, and built from what is actually on screen rather than everything the app can draw. It lists every shape and every mark this state uses, so nothing is drawn that the key does not name. Tap an entry to light the parts carrying it."],
+        ["Abstraction", "Past a few layers the diagram carries more settled machinery than argument. Turn Abstraction on in Lab tools and everything older folds into one box per lane, each named after the lane and marked with how many parts it stands for. Lines that merged say how many paths they are. Choose how many recent layers stay drawn in full, tap a folded box to open just that one, and tap the pill at the top to turn it all off."]
       ]
     },
     controls: {
@@ -788,19 +801,20 @@ var COPY = {
         ["Audience: B / E / D", "Three reading levels of the same Deconstruct: Beginner (plain language and everyday analogies), Enthusiast (the default), and Developer (adds the engineer mappings and interview probes). Switch anytime and you keep your place."],
         ["Four steps per layer", "Each layer runs The problem, Your guess, The solution, The tradeoff. The button at the bottom of the card moves you on, and Skip to the solution is always there. Arrow keys move a step; Shift with an arrow moves a layer."],
         ["The timeline", "The strip under the diagram is your place in the system: Meet, each layer, then Trials and Transfer. Finished layers turn teal. Tap any of them to jump there."],
-        ["On a phone", "The step card sits in a sheet over the diagram. Drag its handle, or tap it, to give more room to the text or to the diagram."],
+        ["On a phone", "The diagram takes the larger half to start with, and the step card sits in a sheet below it. Drag the sheet's handle, or tap it, to give more room to the text or back to the diagram. Whatever you choose is remembered."],
         ["Strict mode", "Off by default. Turn it on from the ⋯ menu or in Settings, and the fix stays shut until you've sketched your own. The ⋯ menu can also show each layer as one long page, the way earlier versions did."]
       ]
     },
     explore: {
       title: "Go deeper: simulate & interrogate",
-      note: "Pulse sits under the diagram, with Replay while you read the problem and Before while you read the solution. Races, Spine and GIF are in Lab tools next to them.",
+      note: "Pulse sits under the diagram, with Replay while you read the problem and Before while you read the solution. Races, Spine, Abstraction and GIF are in Lab tools next to them.",
       items: [
         ["Pulse ▶ / ⟲ replay", "Send live traffic through the current state. Payloads travel the flow path, crash red into whatever's broken, and (under ◉ load) congest where the system saturates. ⟲ replay re-enacts the exact historical failure, arrival by arrival."],
         ["Fault injection", "While a pulse is running, tap any node to kill it. Traffic piles up behind the dead node and everything downstream starves. It's chaos engineering as a toy. Tap it again to revive it."],
         ["Live HUD", "While traffic flows, a small readout shows throughput (delivered/min), how many payloads are in flight, and crashes. Under load, delivered flattens off while in-flight keeps climbing. That gap is saturation, in numbers you can read."],
         ["Race spotlight ⇉", "Rings every node with two or more concurrent writers, the places where two flows can arrive at once and race. The count tells you how many contention points the design carries."],
         ["Critical path ⌁ spine", "Traces the chain a request actually waits on and dims everything off it. Shortening anything off the spine changes nothing, which is why it helps to know where it runs. Nodes whose loss would stop delivery altogether get a red ring. The readout also compares the spine against layer 0, so you can see what surviving all those failures cost you in extra steps."],
+        ["Abstraction", "Folds the layers you have already read into one box per lane, so the layer you are on is the only thing drawn in full. Keep the last one, two or three layers open. It is a reading aid, not an edit: nothing is removed, the counts on the boxes and the merged lines say exactly what is being stood in for, and a notice at the top of the diagram stays up the whole time it is on."],
         ["Sequence view", "In the ⋯ menu: the same state as an interaction timeline: who sends what to whom, top to bottom, in the order it happens. The diagram shows structure and this shows behaviour."],
         ["Probe a layer", "Ask one focused question about any layer. The answer stays grounded in that layer's own mechanism. Needs your Anthropic API key (Settings)."],
         ["Graft a change", "In the ⋯ menu: propose a change and see it ghosted onto the architecture in dashed blueprint ink, with an honest verdict (improves, mixed, or harmful) argued from the system's own rules. Before the verdict you make your own call, and the verdict shows the two side by side. Pulse runs through the graft too."],

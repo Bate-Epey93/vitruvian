@@ -43,6 +43,23 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 - **Reading counts as progress.** Only the challenge gate used to mark a layer done, and gates have been off by default since 1.3, so a reader who finished a whole system still saw 0 of 6 on its card, 0 of 19 on Track and nothing in Drill. Reaching a layer's solution now marks it done. Existing installs are backfilled once from how far each reader got.
 - A handful of toasts and labels still used em dashes. They now read as plain sentences.
 
+## [2.8.0] — 2026-10-28 · The whole system, on screen
+
+### Added
+- **The diagram is fitted to its frame, on every screen.** It used to render at natural size, so on a laptop a quarter of YouTube sat off the right edge and on a phone you saw a third of the system through a 238-pixel slot. Eight of the twenty samples were wider than a laptop's diagram column and every one of them was wider than a phone. Now the whole thing is in view by default and the slack is centred.
+- **Zoom, for getting closer.** Minus, Fit and plus sit in the control bar beside Lab tools, and holding the command key while scrolling does the same. Fit stays lit until you zoom by hand and relights the moment you tap it. There was a working fit calculation in the renderer all along, reachable only by pinching, which meant no desktop reader could use it.
+- **Tap a part and it tells you why it is there.** A card names the layer that introduced it, says what it takes in and gives out in the document's own edge labels, and offers to open that layer. Parts with no layer named were in the naive baseline from the start. This is the question the whole app is built on and the drawing could not previously be asked it.
+- **A folded box opens where it stands.** Tap one and that lane unfolds while the rest stay folded; the notice counts both halves. Changing the level or switching abstraction off resets it.
+
+### Changed
+- **The diagram's background is plain.** The graph-paper grid is gone from all five places that drew it: the reader, the landing hero, the what-if preview, the home thumbnail and the shared pane rule.
+- **The replay caption is marked by a hand-drawn caution sign** instead of a red edge, roughened through the same pass the diagram's own small marks use, so it belongs to the drawing rather than to the interface around it.
+- **On a phone the diagram opens as the larger half**, not a quarter. The sheet's three stops and your own choice are unchanged.
+- **The field guide covers all of it**: fit and zoom, why a part is here, the key, abstraction, and a phone entry that matches what the phone now does.
+
+### Fixed
+- **Fit measured against the wrong box twice.** It subtracted a guessed 24 pixels from a container with 40 pixels of padding, leaving a sliver that still scrolled; and it could run before the pane had been laid out, where a zero-width measurement collapsed the drawing to the 20% floor. It now measures the real padding, skips frames it cannot measure, and re-fits when the reading sheet is dragged.
+
 ## [2.7.0] — 2026-10-28 · Abstraction
 
 ### Added
