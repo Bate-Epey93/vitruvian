@@ -43,6 +43,16 @@ Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a C
 - **Reading counts as progress.** Only the challenge gate used to mark a layer done, and gates have been off by default since 1.3, so a reader who finished a whole system still saw 0 of 6 on its card, 0 of 19 on Track and nothing in Drill. Reaching a layer's solution now marks it done. Existing installs are backfilled once from how far each reader got.
 - A handful of toasts and labels still used em dashes. They now read as plain sentences.
 
+## [2.9.0] — 2026-10-29 · The headline argues with itself
+
+### Added
+- **The landing headline is drawn, not only set.** An arrow runs from "together" to "makes sense" and a payload travels it, using the same grammar as the diagrams: hand-drawn through rough.js, with an arrowhead on the true tangent. "together" is green to begin with and hands the green to "makes sense" as the payload arrives, so the sentence's claim happens in front of you instead of being asserted.
+- **"Take anything apart." is roughened.** A turbulence and displacement filter wobbles the letterforms, so the words carry the same hand as the drawings. It is a filter rather than converted outlines: the text stays real text, selectable and searchable and read aloud. Display line only — at body size the same filter blurs the edges past reading.
+
+### Changed
+- **Fit contains the frame and may grow past natural size.** It was capped at 100% and measured width alone, so on a 3440-wide display the URL shortener sat at 432 pixels in a 2819-pixel frame, using fifteen per cent of the width and a third of the height. It now takes whichever of width or height binds first, up to 2.2×. That system now draws at 950×924, and YouTube at 2402×924. Uncapped, a four-node diagram would scale six times and become a poster of itself.
+- **The abstraction notice rests at half strength.** It has to stay up the whole time abstraction is on, which means it sits over the drawing for a long while. It returns to full on hover and on keyboard focus.
+
 ## [2.8.0] — 2026-10-28 · The whole system, on screen
 
 ### Added

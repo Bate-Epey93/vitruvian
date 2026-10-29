@@ -1086,7 +1086,7 @@ var Diagram = (() => {
        that settles back into bounds (rubber-band, then snap). Double-tap
        (or desktop double-click) toggles fit <-> 100% around the tap. ── */
     const zoomCtl = (() => {
-      const MAXZ = 1.6;
+      const MAXZ = 3.2;              // above MAXUP, so Fit is never the largest the reader can get
       let settleRaf = null;
       /* the frame's real inside width: the container's own padding is 20px a
          side, and guessing 24 for the pair left a sliver still scrolling */
@@ -1094,7 +1094,28 @@ var Diagram = (() => {
         const cs = getComputedStyle(container);
         return container.clientWidth - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0);
       };
-      const fitZ = () => Math.min(1, Math.max(0.2, innerW() / layout.width));
+      /* Contain, not fit-to-width, and allowed above natural size.
+
+         Capping at 1 meant the drawing never grew: on a 3440-wide display the
+         diagram frame is about 2819×1196 and the URL shortener sat in it at
+         432×420 — fifteen per cent of the width. Measuring width alone also
+         left the frame's height unused, which is where the laptop's slack
+         came from.
+
+         MAXUP stops the other failure. Uncapped, a four-node diagram scales
+         six times and becomes a poster of itself; the lane bands stretch, the
+         labels tower, and nothing is any clearer than it was. */
+      const MAXUP = 2.2;
+      const innerH = () => {
+        const cs = getComputedStyle(container);
+        return container.clientHeight - parseFloat(cs.paddingTop || 0) - parseFloat(cs.paddingBottom || 0);
+      };
+      const fitZ = () => {
+        const w = innerW(), hh = innerH();
+        const byW = w / layout.width;
+        const byH = hh > 40 ? hh / layout.height : Infinity;   // a frame too short to measure binds nothing
+        return Math.max(0.2, Math.min(MAXUP, byW, byH));
+      };
       const current = () => (svg.getBoundingClientRect().width || layout.width) / layout.width;
       function apply(nz, cx, cy) {
         nz = Math.max(fitZ() * 0.85, Math.min(MAXZ * 1.15, nz));   // soft overshoot beyond bounds
@@ -1182,7 +1203,7 @@ var Diagram = (() => {
           retry = requestAnimationFrame(fit);
           return null;
         }
-        const z = Math.min(1, Math.max(0.2, w / layout.width));
+        const z = fitZ();
         svg.style.minWidth = "0";
         svg.style.width = (layout.width * z) + "px";
         container.scrollLeft = 0;
@@ -1210,9 +1231,9 @@ var Diagram = (() => {
         return target;
       }
       return { fitZ, current, fit, full, by,
-               /* true when the whole drawing is already on screen, so a Fit
-                  control can say whether it would do anything */
-               fits: () => fitZ() >= 1 };
+               /* whether the drawing is already sitting at its fitted size, so
+                  a Fit control can say whether tapping it would do anything */
+               fits: () => Math.abs(current() - fitZ()) < 0.02 };
     })();
 
     /* ── Flow simulation: tokens travel the payload path of the CURRENT

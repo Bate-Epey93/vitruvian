@@ -372,9 +372,32 @@ input,textarea{font-family:var(--sans);}
 .hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.12fr);gap:64px;align-items:center;min-height:min(640px,calc(100dvh - 180px));}
 .hero-copy{display:flex;flex-direction:column;align-items:flex-start;}
 .landing-head{font-family:var(--display);font-weight:650;font-size:clamp(38px,4vw,58px);line-height:1.02;
-  letter-spacing:-.045em;margin:22px 0 22px;text-wrap:balance;}
-.landing-head span{display:block;}
+  letter-spacing:-.045em;margin:22px 0 22px;text-wrap:balance;padding-bottom:30px;}
+.landing-head{position:relative;}
+.landing-head > span{display:block;}
 .landing-head .lh-soft{color:var(--muted);}
+/* roughened letterforms. Display size only — the same displacement at body
+   size blurs the edges past reading. */
+.lh-rough{filter:url(#rough-ink);}
+/* the two ideas the arrow runs between: inline, so they keep wrapping with
+   the sentence rather than becoming blocks */
+.landing-head .lh-from,.landing-head .lh-to{display:inline;position:relative;
+  transition:color .45s var(--ease);}
+.landing-head .lh-from.lit,.landing-head .lh-to.lit{color:var(--accent-deep);}
+/* Sits over the text rather than under it: a negative z-index would put it
+   behind an opaque ancestor, and pointer-events:none means it can never
+   be in the way. The headline reserves the room the dip needs. */
+.lh-arrow{position:absolute;left:0;top:0;pointer-events:none;overflow:visible;}
+/* the true curve carries the token and is never painted; the roughened
+   copy is what the reader sees */
+.lh-arrow .lh-true{fill:none;stroke:none;}
+.lh-arrow .lh-ink{fill:none;stroke:var(--accent-deep);stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round;opacity:.55;}
+.lh-tok{fill:var(--accent-deep);transition:opacity .3s var(--ease);}
+@media(prefers-reduced-motion:reduce){
+  .landing-head .lh-from,.landing-head .lh-to{transition:none;}
+  .lh-tok{display:none;}
+}
 .landing-lede{font-size:clamp(16.5px,1.6vw,19px);line-height:1.55;color:var(--ink-soft);max-width:44ch;margin-bottom:34px;text-wrap:pretty;}
 .hero-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 .landing-cta{font-size:15px;}
@@ -632,7 +655,13 @@ input,textarea{font-family:var(--sans);}
   background:var(--glass-heavy);-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(150%);backdrop-filter:blur(var(--glass-blur)) saturate(150%);
   border-radius:var(--r-pill);padding:6px 16px;box-shadow:inset 0 0 0 1px var(--hair), var(--sh-2);
   color:var(--proposal);transition:box-shadow .2s var(--ease), color .2s var(--ease);}
-.dg-fold-pill:hover{box-shadow:inset 0 0 0 1px var(--proposal), var(--sh-2);}
+/* It has to stay up the whole time abstraction is on, which means it sits
+   over the drawing for a long while. Resting at half strength keeps it
+   readable as a notice without masking what is behind it; it comes back to
+   full on hover and on keyboard focus. */
+.dg-fold-pill{opacity:.55;transition:opacity .2s var(--ease),box-shadow .2s var(--ease),color .2s var(--ease);}
+.dg-fold-pill:hover,.dg-fold-pill:focus-visible{opacity:1;
+  box-shadow:inset 0 0 0 1px var(--proposal), var(--sh-2);}
 .dg-fold-pill .fold-what{color:var(--muted);font-family:var(--sans);
   border-left:1px solid var(--hair-strong);padding-left:11px;}
 .dg-fold-pill .fold-off{color:var(--faint);font-family:var(--sans);}

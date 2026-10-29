@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "2.8.0",
+  appVersion: "2.9.0",
   flagshipVersion: 12,                   // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   // foundations first, then the systems built on them — YouTube last, the capstone that drills into everything
   flagshipNames: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue", "notification-system", "rate-limiter", "search-typeahead", "url-shortener", "ride-matching", "ticket-booking", "content-delivery-network", "recommendation-feed", "payment-ledger", "video-transcoding", "news-feed", "photo-store", "whatsapp", "youtube", "railway"],
@@ -659,6 +659,13 @@ var COPY = {
   landing: {
     kicker: "Free, offline, no account needed",
     headline: "Take anything apart.\nPut it back together, and it makes sense.",
+    /* The second line is drawn, not just set: an arrow runs from the first
+       marked word to the second and a payload travels it, the same grammar
+       the diagrams use. Both fragments must appear in headline's second line
+       exactly as written, or the mark-up falls back to plain text. */
+    headlineFrom: "together",
+    headlineTo: "makes sense",
+    headlineArrowLabel: "and then",
     lede: "Vitruvian rebuilds everyday systems one failure at a time. Each layer exists because the version before it broke, and the diagram grows as you go.",
     learn: "How to read a Deconstruct",
     heroSystem: "url-shortener",

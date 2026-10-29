@@ -293,6 +293,159 @@ function renderAudSwitch() {
 let heroTimer = null;
 function stopHero() { if (heroTimer) { clearInterval(heroTimer); heroTimer = null; } }
 
+/* ═══ The headline's second line, drawn ═══
+   "Put it back together, and it makes sense" is an argument with a shape:
+   one thing leads to another. So it is drawn with the same grammar as the
+   diagrams — an arrow from the first idea to the second, with a payload
+   travelling it — rather than merely stated. The words are still words. ═══ */
+
+/* The displacement filter, injected once. A CSS filter pointing at a missing
+   id makes the element vanish in Chrome and Safari, so the defs go in before
+   anything wears the class. */
+function roughInkDefs() {
+  if (document.getElementById("rough-ink")) return;
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("width", "0");
+  svg.setAttribute("height", "0");
+  svg.style.cssText = "position:absolute;pointer-events:none";
+  svg.innerHTML =
+    '<filter id="rough-ink" x="-6%" y="-10%" width="112%" height="120%" color-interpolation-filters="sRGB">' +
+    '<feTurbulence type="fractalNoise" baseFrequency="0.019 0.034" numOctaves="3" seed="7" result="n"/>' +
+    '<feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/>' +
+    '</filter>';
+  document.body.appendChild(svg);
+}
+
+/* Wrap the two named fragments so the arrow has something to aim at. If the
+   copy ever stops containing them, this returns the plain line and the arrow
+   quietly does not draw — the headline still reads. */
+function markedLine(line, L) {
+  const span = h("span", "lh-soft");
+  const a = line.indexOf(L.headlineFrom), b = line.indexOf(L.headlineTo);
+  if (a < 0 || b < 0 || b < a) { span.textContent = line; return span; }
+  const mk = (cls, text) => { const e = h("span", cls, text); return e; };
+  span.appendChild(document.createTextNode(line.slice(0, a)));
+  span.appendChild(mk("lh-from", L.headlineFrom));
+  span.appendChild(document.createTextNode(line.slice(a + L.headlineFrom.length, b)));
+  span.appendChild(mk("lh-to", L.headlineTo));
+  span.appendChild(document.createTextNode(line.slice(b + L.headlineTo.length)));
+  return span;
+}
+
+/* Draw the arrow between them and run a payload along it. Re-measured
+   whenever the headline reflows, because where those two words sit depends
+   on the window. */
+function headArrow(head) {
+  const from = head.querySelector(".lh-from"), to = head.querySelector(".lh-to");
+  if (!from || !to) return;
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("class", "lh-arrow");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(NS, "path");   // the exact curve: geometry
+  const inked = document.createElementNS(NS, "path");  // the roughened copy: what shows
+  inked.setAttribute("class", "lh-ink");
+  const headArr = document.createElementNS(NS, "path");
+  headArr.setAttribute("class", "lh-ink lh-head");
+  path.setAttribute("class", "lh-true");
+  const tok = document.createElementNS(NS, "circle");
+  tok.setAttribute("r", "4.5");
+  tok.setAttribute("class", "lh-tok");
+  svg.append(path, inked, headArr, tok);
+  head.appendChild(svg);
+
+  /* Roughened like every other line in the app. The exact path stays in the
+     DOM but unpainted, because the token has to travel the true curve — a
+     payload riding a wobble would wander off the arrow it is meant to be on. */
+  const gen = (typeof rough !== "undefined" && rough.generator) ? rough.generator() : null;
+  const ink = d => {
+    if (!gen) return d;
+    try {
+      const ps = gen.toPaths(gen.path(d, { seed: 19, roughness: 0.8, bowing: 1,
+                                           disableMultiStroke: true, preserveVertices: true }));
+      return ps.length && ps[0].d ? ps.map(x => x.d).join(" ") : d;
+    } catch (e) { return d; }
+  };
+
+  let raf = 0, timer = 0, len = 0;
+  const RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function measure() {
+    const H = head.getBoundingClientRect();
+    const A = from.getBoundingClientRect(), B = to.getBoundingClientRect();
+    if (!A.width || !B.width) return false;
+    /* under both words, dipping between them. When the line wraps and the
+       second word sits lower, the dip simply becomes a longer fall. */
+    const x1 = A.left - H.left + A.width / 2, y1 = A.bottom - H.top + 3;
+    const x2 = B.left - H.left + B.width / 2, y2 = B.bottom - H.top + 3;
+    const drop = Math.max(14, Math.abs(y2 - y1) * 0.5 + 14);
+    /* The dip falls below the headline's own box, so the canvas is sized to
+       hold it rather than relying on overflow surviving every browser. The
+       h1 carries matching bottom padding, so nothing below gets covered. */
+    const need = Math.ceil(Math.max(y1, y2) + drop + 8);
+    svg.setAttribute("viewBox", `0 0 ${Math.round(H.width)} ${need}`);
+    svg.setAttribute("width", Math.round(H.width));
+    svg.setAttribute("height", need);
+    const d = `M ${x1.toFixed(1)} ${y1.toFixed(1)} C ${x1.toFixed(1)} ${(y1 + drop).toFixed(1)}, ` +
+              `${x2.toFixed(1)} ${(y2 + drop).toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+    path.setAttribute("d", d);
+    len = path.getTotalLength();
+    if (!(len > 0)) return false;
+    inked.setAttribute("d", ink(d));
+    /* an arrowhead on the true tangent, so it points where the curve actually
+       arrives rather than where the wobble left off */
+    const tip = path.getPointAtLength(len);
+    const back = path.getPointAtLength(Math.max(0, len - 8));
+    const ang = Math.atan2(tip.y - back.y, tip.x - back.x);
+    const wing = (off, L) => `M ${tip.x.toFixed(1)} ${tip.y.toFixed(1)} ` +
+      `L ${(tip.x - Math.cos(ang + off) * L).toFixed(1)} ${(tip.y - Math.sin(ang + off) * L).toFixed(1)}`;
+    headArr.setAttribute("d", ink(wing(0.45, 11) + " " + wing(-0.45, 11)));
+    return true;
+  }
+
+  function place(u) {
+    const p = path.getPointAtLength(len * u);
+    tok.setAttribute("cx", p.x);
+    tok.setAttribute("cy", p.y);
+  }
+
+  function run() {
+    if (!measure()) return;
+    if (RM) { from.classList.add("lit"); to.classList.add("lit"); tok.style.opacity = "0"; return; }
+    cancelAnimationFrame(raf); clearTimeout(timer);
+    from.classList.add("lit"); to.classList.remove("lit");
+    tok.style.opacity = "1";
+    place(0);
+    const DUR = 1500, HOLD = 2600;
+    const t0 = performance.now();
+    const step = now => {
+      const u = Math.min(1, (now - t0) / DUR);
+      place(u);
+      /* the green travels rather than spreading: the idea arrives somewhere,
+         it does not simply light everything up */
+      if (u > 0.22) from.classList.remove("lit");
+      if (u >= 1) {
+        to.classList.add("lit");
+        tok.style.opacity = "0";
+        timer = setTimeout(run, HOLD);
+        return;
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+  }
+
+  /* fonts land after first paint and move the words; re-measure then */
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => run());
+  requestAnimationFrame(run);
+  if (typeof ResizeObserver === "function") {
+    let ro = 0;
+    new ResizeObserver(() => { cancelAnimationFrame(ro); ro = requestAnimationFrame(run); }).observe(head);
+  }
+}
+
 function renderLanding() {
   stopHero();
   const root = $("screen-landing").firstElementChild;
@@ -306,8 +459,21 @@ function renderLanding() {
   eyebrow.appendChild(document.createTextNode(L.kicker));
   copy.appendChild(eyebrow);
   const head = h("h1", "landing-head");
-  L.headline.split("\n").forEach((line, i) => { head.appendChild(h("span", i ? "lh-soft" : null, line)); });
+  const lines = L.headline.split("\n");
+  lines.forEach((line, i) => {
+    if (i === 0) {
+      /* roughened letterforms: the filter is a displacement map, so the text
+         stays real text — selectable, searchable, read aloud by a screen
+         reader. It is on the display line only; at body size the same filter
+         turns the edges to mush. */
+      head.appendChild(h("span", "lh-rough", line));
+      return;
+    }
+    head.appendChild(markedLine(line, L));
+  });
   copy.appendChild(head);
+  roughInkDefs();
+  headArrow(head);
   copy.appendChild(h("p", "landing-lede", L.lede));
   const actions = h("div", "hero-actions");
   const cta = ctaButton(L.cta, "landing-cta");
