@@ -12,11 +12,13 @@
    ═══════════════════════════════════════════════════════════════ */
 
 
-.lab-shell { display:grid; grid-template-rows:auto minmax(0,1fr); height:100vh; overflow:hidden; }
+.lab-shell { display:grid; grid-template-rows:auto minmax(0,1fr); height:100vh; height:100dvh; overflow:hidden; }
 .lab-main  { display:grid; grid-template-columns:minmax(0,1fr) clamp(340px,38%,540px); min-height:0; }
 
 /* ── topbar: the app's translucent header, slimmer ── */
-.lab-top { display:flex; align-items:center; gap:12px; padding:0 16px; height:56px;
+.lab-top { display:flex; align-items:center; gap:12px;
+  padding:env(safe-area-inset-top) 16px 0;
+  height:calc(56px + env(safe-area-inset-top));
   background:color-mix(in srgb,var(--paper) 82%,transparent); color:var(--ink);
   -webkit-backdrop-filter:blur(20px) saturate(180%); backdrop-filter:blur(20px) saturate(180%);
   border-bottom:1px solid var(--hair); position:relative; z-index:20; }

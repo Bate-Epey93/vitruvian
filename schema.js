@@ -83,7 +83,10 @@ var Schema = (() => {
     }
 
     // engineering-vocabulary ids, for layer tags and design gaps
-    const vocabIds = new Set((typeof VOCAB_LIBRARY !== "undefined" ? VOCAB_LIBRARY : []).map(v => v.id));
+    const vocabList = typeof VOCAB_LIBRARY !== "undefined" ? VOCAB_LIBRARY : [];
+    const vocabIds = new Set(vocabList.map(v => v.id));
+    const softwareOnlyVocabIds = new Set(vocabList.filter(v => v.software_only).map(v => v.id));
+    const isNonSoftwareDomain = isObj(meta) && isFullStr(meta.domain) && meta.domain !== "software";
 
     /* ── strip_down ── */
     const invariantIds = new Set();
@@ -227,7 +230,11 @@ var Schema = (() => {
         if (dev.vocab != null) {
           if (!isArr(dev.vocab) || dev.vocab.length > B.vocabPerLayerMax)
             err(`${w}.developer.vocab must be an array of at most ${B.vocabPerLayerMax} vocabulary ids`);
-          else dev.vocab.forEach(v => { if (!vocabIds.has(v)) err(`${w}.developer.vocab: "${v}" is not an engineering-vocabulary id`); });
+          else dev.vocab.forEach(v => {
+            if (!vocabIds.has(v)) err(`${w}.developer.vocab: "${v}" is not an engineering-vocabulary id`);
+            else if (isNonSoftwareDomain && softwareOnlyVocabIds.has(v))
+              err(`${w}.developer.vocab: "${v}" is software_only and cannot be attached to domain "${meta.domain}"`);
+          });
         }
       }
       if (!isFullStr(L.beginner_analogy)) err(`${w}.beginner_analogy must be a non-empty string`);

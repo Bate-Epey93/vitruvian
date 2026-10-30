@@ -60,9 +60,29 @@ var LabPage = (function () {
        mirrors it to localStorage for its own splash. Writing it here
        would desync that mirror, so a study just flips the attribute. */
     function currentTheme() { return document.documentElement.dataset.theme === "dark" ? "dark" : "light"; }
+    function buildThemeIcon(kind) {
+      var NS = "http://www.w3.org/2000/svg";
+      var svg = document.createElementNS(NS, "svg");
+      svg.setAttribute("viewBox", "0 0 20 20");
+      svg.setAttribute("aria-hidden", "true");
+      svg.setAttribute("class", "ico");
+      if (kind === "sun") {
+        var c = document.createElementNS(NS, "circle");
+        c.setAttribute("cx", "10"); c.setAttribute("cy", "10"); c.setAttribute("r", "3.2");
+        var p = document.createElementNS(NS, "path");
+        p.setAttribute("d", "M10 2.5v1.8M10 15.7v1.8M2.5 10h1.8M15.7 10h1.8M4.7 4.7l1.3 1.3M14 14l1.3 1.3M4.7 15.3L6 14M14 6l1.3-1.3");
+        svg.append(c, p);
+      } else {
+        var m = document.createElementNS(NS, "path");
+        m.setAttribute("d", "M16.2 12.4A6.6 6.6 0 0 1 7.6 3.8a6.6 6.6 0 1 0 8.6 8.6z");
+        svg.appendChild(m);
+      }
+      return svg;
+    }
     function paintThemeBtn() {
       var b = $("themeBtn"), dark = currentTheme() === "dark";
-      b.textContent = dark ? "☀" : "☾";
+      b.textContent = "";
+      b.appendChild(buildThemeIcon(dark ? "sun" : "moon"));
       b.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
     }
     $("themeBtn").addEventListener("click", function () {
@@ -402,8 +422,21 @@ var LabPage = (function () {
 
     /* ═══ layout ═══ */
     function fit() {
+      var cam = ctl.scene && ctl.scene.camera;
+      var yaw = cam ? cam.yaw : null, pitch = cam ? cam.pitch : null;
+      var oldFit = ctl.scene && ctl.scene._w ? ctl.scene.fitDistance(1) : 0;
+      var distRatio = (cam && oldFit > 0) ? (cam.dist / oldFit) : 0;
       ctl.scene.resize();
-      ctl.resetCamera();
+      if (yaw != null && oldFit > 0) {
+        ctl.resetCamera();
+        cam.yaw = yaw;
+        cam.pitch = pitch;
+        var newFit = ctl.scene.fitDistance(1);
+        if (distRatio > 0 && newFit > 0) cam.dist = newFit * distRatio;
+        ctl.scene.dirty = true;
+      } else {
+        ctl.resetCamera();
+      }
     }
     if (window.ResizeObserver) new ResizeObserver(fit).observe($("stageWrap"));
     else window.addEventListener("resize", fit);

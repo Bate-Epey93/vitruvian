@@ -93,6 +93,141 @@ function ctaButton(label, cls, iconName) {
 let meta = {};                    // cached meta map
 let currentView = null;           // DocView instance when reading
 let currentRec = null;            // open breakdown record
+let suppressRoute = false;        // prevents hash sync feedback loops during popstate
+let activeModelId = null;         // current model detail id on #/models/<id>
+let activeVocabId = null;         // current vocab focus id on #/vocab/<id>
+
+function studySlug(rec) {
+  if (!rec) return "";
+  return rec.source === "flagship" ? rec.id.replace(/^flagship-/, "") : rec.id;
+}
+function buildRouteHash(screen) {
+  if (screen === "reader" && currentRec) {
+    const slug = studySlug(currentRec);
+    const p = currentView ? currentView.position : (currentRec.progress && currentRec.progress.position) || 0;
+    const s = currentView ? currentView.step : (currentRec.progress && currentRec.progress.step) || 1;
+    const tail = (p > 0 || s > 1) ? `/${p}.${s}` : "";
+    return `#/study/${encodeURIComponent(slug)}${tail}`;
+  }
+  if (screen === "models") return activeModelId ? `#/models/${encodeURIComponent(activeModelId)}` : "#/models";
+  if (screen === "vocab") return activeVocabId ? `#/vocab/${encodeURIComponent(activeVocabId)}` : "#/vocab";
+  if (screen === "drill") return "#/practice";
+  if (screen === "settings") return "#/settings";
+  if (screen === "tutorial") return "#/guide";
+  if (screen === "landing") return "#/intro";
+  if (screen === "whatif" && currentRec) return `#/graft/${encodeURIComponent(studySlug(currentRec))}`;
+  return "#/";
+}
+function syncRoute(mode = "push") {
+  if (suppressRoute || typeof history === "undefined") return;
+  const screen = document.body.dataset.screen || "library";
+  if (screen === "generate") return;
+  const hash = buildRouteHash(screen);
+  const state = {
+    screen,
+    drillStack: drillStack.map(x => ({ id: x.id, system: x.system }))
+  };
+  if (location.hash === hash && mode === "push") {
+    try { history.replaceState(state, "", hash); } catch (e) {}
+    return;
+  }
+  try {
+    if (mode === "replace") history.replaceState(state, "", hash);
+    else history.pushState(state, "", hash);
+  } catch (e) {}
+}
+async function resolveStudySlug(slugOrId) {
+  if (!slugOrId) return null;
+  const decoded = decodeURIComponent(slugOrId);
+  const direct = await Store.getBreakdown(decoded).catch(() => null);
+  if (direct) return direct;
+  const flag = await Store.getBreakdown("flagship-" + decoded).catch(() => null);
+  if (flag) return flag;
+  const want = decoded.trim().toLowerCase();
+  const all = await Store.getBreakdowns();
+  return all.find(b => (b.system || "").trim().toLowerCase() === want) || null;
+}
+async function applyUrlRoute(hashStr, histState) {
+  const hStr = (hashStr || location.hash || "#/").replace(/^#/, "");
+  suppressRoute = true;
+  try {
+    const studyMatch = hStr.match(/^\/study\/([^/]+)(?:\/(\d+)(?:\.(\d+))?)?/);
+    if (studyMatch) {
+      const rec = await resolveStudySlug(studyMatch[1]);
+      if (rec) {
+        if (histState && Array.isArray(histState.drillStack) && histState.drillStack.length) {
+          drillStack = histState.drillStack;
+        }
+        const pos = studyMatch[2] != null ? parseInt(studyMatch[2], 10) : null;
+        const stp = studyMatch[3] != null ? parseInt(studyMatch[3], 10) : 1;
+        if (currentRec && currentRec.id === rec.id && currentView && document.body.dataset.screen === "reader") {
+          if (pos != null) currentView.goToPosStep(pos, stp);
+        } else {
+          await openReader(rec.id, null, {
+            keepStack: !!(histState && Array.isArray(histState.drillStack) && histState.drillStack.length),
+            posStep: pos != null ? [pos, stp] : null,
+            noRoute: true
+          });
+        }
+        return true;
+      }
+    }
+    const modelsMatch = hStr.match(/^\/models(?:\/([^/]+))?/);
+    if (modelsMatch) {
+      await renderModels(modelsMatch[1] ? decodeURIComponent(modelsMatch[1]) : undefined);
+      show("models", { noRoute: true });
+      return true;
+    }
+    const vocabMatch = hStr.match(/^\/vocab(?:\/([^/]+))?/);
+    if (vocabMatch) {
+      await renderVocab(vocabMatch[1] ? decodeURIComponent(vocabMatch[1]) : undefined);
+      show("vocab", { noRoute: true });
+      return true;
+    }
+    if (hStr === "/practice" || hStr === "/drill") {
+      await renderDrill();
+      show("drill", { noRoute: true });
+      return true;
+    }
+    if (hStr === "/settings") {
+      renderSettings();
+      show("settings", { noRoute: true });
+      return true;
+    }
+    if (hStr === "/guide" || hStr === "/tutorial") {
+      renderTutorial("library");
+      show("tutorial", { noRoute: true });
+      return true;
+    }
+    if (hStr === "/intro" || hStr === "/landing") {
+      renderLanding();
+      show("landing", { noRoute: true });
+      return true;
+    }
+    const graftMatch = hStr.match(/^\/graft\/([^/]+)/);
+    if (graftMatch) {
+      const rec = await resolveStudySlug(graftMatch[1]);
+      if (rec) {
+        currentRec = rec;
+        renderWhatif(rec);
+        show("whatif", { noRoute: true, keepRec: true });
+        return true;
+      }
+    }
+    if (hStr === "/" || hStr === "") {
+      await renderLibrary();
+      show("library", { noRoute: true });
+      return true;
+    }
+    return false;
+  } finally {
+    suppressRoute = false;
+  }
+}
+window.addEventListener("popstate", async ev => {
+  await flushSaves();
+  await applyUrlRoute(location.hash, ev.state);
+});
 
 // The reader mutates currentRec in place (attempts/progress) and debounces the
 // IndexedDB write. On teardown — pagehide, tab background, PWA update reload —
@@ -121,7 +256,7 @@ async function toggleTheme() {
 
 /* ═══ Screen switching ═══ */
 const SCREENS = ["landing", "library", "reader", "generate", "models", "vocab", "drill", "tutorial", "whatif", "settings"];
-function show(screen) {
+function show(screen, opts = {}) {
   SCREENS.forEach(s => { $("screen-" + s).hidden = s !== screen; });
   document.body.classList.toggle("reading", screen === "reader");   // frees topbar room for the audience switch
   $("audSwitch").hidden = screen !== "reader";
@@ -140,9 +275,11 @@ function show(screen) {
   document.body.dataset.screen = screen;
   featureTips.close();
   if (screen !== "reader") setTimeout(() => { if (document.body.dataset.screen === screen) featureTips.visit(screen); }, 650);
+  if (!opts.noRoute) syncRoute(opts.replace ? "replace" : "push");
   if (screen !== "reader") {
     if (currentView) currentView.destroy();   // cancel any pending debounce timer
-    currentView = null; currentRec = null;
+    currentView = null;
+    if (!opts.keepRec) currentRec = null;
   }
 }
 
@@ -184,19 +321,21 @@ async function boot() {
   await seedFlagships();
   wireTopbar();
   renderAudSwitch();
-  // deep link: #/study/<slug> opens a library Deconstruct directly (share pages
-  // land here). Only library studies have stable ids on every device.
-  const deep = location.hash.match(/^#\/study\/([a-z0-9-]+)/);
-  const deepRec = deep && (await Store.getBreakdown("flagship-" + deep[1]).catch(() => null));
-  if (deepRec) {
+  // deep link: #/study/<slug>[/<pos>.<step>], #/models[/<id>], #/vocab, #/practice, etc.
+  const hasExplicitHash = location.hash && location.hash !== "#" && location.hash !== "#/";
+  let handled = false;
+  if (hasExplicitHash) {
     await renderLibrary();                // back button needs a library behind it
-    openReader(deepRec.id);
-  } else if (!meta.landingSeen) {
-    renderLanding();
-    show("landing");
-  } else {
-    await renderLibrary();
-    show("library");
+    handled = await applyUrlRoute(location.hash, history.state);
+  }
+  if (!handled) {
+    if (!meta.landingSeen) {
+      renderLanding();
+      show("landing", { replace: true });
+    } else {
+      await renderLibrary();
+      show("library", { replace: true });
+    }
   }
   dismissSplash();
   window.dispatchEvent(new Event("sdc:ready"));
@@ -263,7 +402,7 @@ function wireTopbar() {
   $("themeBtn").onclick = () => toggleTheme();
   $("seqBtn").onclick = () => { if (currentRec) openSequence(currentRec); };
   $("sheetBtn").onclick = () => { if (currentView) currentView.openSheet(); };
-  $("graftBtn").onclick = () => { if (currentRec) { renderWhatif(currentRec); show("whatif"); } };
+  $("graftBtn").onclick = () => { if (currentRec) { renderWhatif(currentRec); show("whatif", { keepRec: true }); } };
   $("readerMenuBtn").onclick = e => { e.stopPropagation(); $("menuPop").hidden = !$("menuPop").hidden; };
   document.addEventListener("click", () => { $("menuPop").hidden = true; });
 }
@@ -793,6 +932,45 @@ async function labCandidates() {
   return out;
 }
 
+let libFilter = "all";
+let libQuery = "";
+
+function recProgressPct(rec) {
+  const n = (rec.doc && rec.doc.layers && rec.doc.layers.length) || 1;
+  const done = (rec.doc && rec.doc.layers ? rec.doc.layers.filter(L => rec.attempts && rec.attempts[L.index] && rec.attempts[L.index].revealed).length : 0);
+  return Math.round(100 * done / n);
+}
+function recDomain(rec) {
+  return (rec.doc && rec.doc.meta && rec.doc.meta.domain) || "software";
+}
+function matchesRecQuery(rec, q) {
+  if (!q) return true;
+  const s = q.toLowerCase();
+  const sys = (rec.system || "").toLowerCase();
+  const slug = studySlug(rec).toLowerCase().replace(/-/g, " ");
+  const ess = (rec.doc && rec.doc.essence && ((rec.doc.essence.beginner || "") + " " + (rec.doc.essence.text || "")) || "").toLowerCase();
+  if (sys.includes(s) || slug.includes(s) || ess.includes(s)) return true;
+  const layers = (rec.doc && rec.doc.layers) || [];
+  return layers.some(L => (L.name || "").toLowerCase().includes(s) || (L.developer && L.developer.vocab || []).some(v => v.toLowerCase().includes(s)));
+}
+function matchesFieldStudyQuery(st, q) {
+  if (!q) return true;
+  const s = q.toLowerCase();
+  return st.name.toLowerCase().includes(s) || st.sub.toLowerCase().includes(s) || st.terms.some(t => t.toLowerCase().includes(s));
+}
+function findBestInstantMatch(all, q) {
+  const s = (q || "").trim().toLowerCase();
+  if (s.length < 2) return null;
+  // 1. Exact or prefix or substring breakdown match
+  const exactRec = all.find(r => (r.system || "").trim().toLowerCase() === s || studySlug(r).toLowerCase().replace(/-/g, " ") === s);
+  if (exactRec) return { kind: "rec", rec: exactRec };
+  const fs = fieldStudyFor(s) || FIELD_STUDIES.find(st => st.name.toLowerCase().includes(s) || st.terms.some(t => t.includes(s)));
+  const subRec = all.find(r => (r.system || "").toLowerCase().includes(s) || studySlug(r).toLowerCase().replace(/-/g, " ").includes(s));
+  if (subRec) return { kind: "rec", rec: subRec, fs };
+  if (fs) return { kind: "lab", st: fs };
+  return null;
+}
+
 async function renderLibrary() {
   const root = $("screen-library").firstElementChild;
   root.textContent = "";
@@ -801,6 +979,10 @@ async function renderLibrary() {
   head.appendChild(h("p", "subtitle", COPY.libraryLede));
   root.appendChild(head);
 
+  const all = (await Store.getBreakdowns()).sort((a, b) => (b.lastOpen || b.created) - (a.lastOpen || a.created));
+  const flagships = all.filter(b => b.source === "flagship");
+  const yours = all.filter(b => b.source !== "flagship");
+
   const bar = h("div", "deconstruct-bar");
   const field = h("label", "db-field");
   field.appendChild(icon("sparkle", "db-ico"));
@@ -808,12 +990,12 @@ async function renderLibrary() {
   input.id = "deconInput";
   input.placeholder = COPY.deconstructPlaceholder;
   input.maxLength = 120;
-  input.setAttribute("aria-label", "System to deconstruct");
+  input.value = libQuery;
+  input.setAttribute("aria-label", "Search library or enter a system to deconstruct");
   input.autocomplete = "off";
   field.appendChild(input);
   const go = ctaButton(COPY.deconstructBtn);
-  const launch = () => {
-    const name = input.value.trim();
+  const launchGenerate = name => {
     if (!name) return;
     if (!meta.apiKey) {
       renderSettings("Add your Anthropic API key to generate Deconstructs.");
@@ -823,62 +1005,219 @@ async function renderLibrary() {
     renderGenerate(name);
     show("generate");
   };
+  const launch = () => {
+    const name = input.value.trim();
+    if (!name) return;
+    const hit = findBestInstantMatch(all, name);
+    // When no API key is configured, pressing Enter or Deconstruct on a matching
+    // offline study opens it immediately instead of hitting the Settings wall.
+    if (hit && !meta.apiKey) {
+      if (hit.kind === "rec") { openReader(hit.rec.id); return; }
+      if (hit.kind === "lab") { location.href = hit.st.href; return; }
+    }
+    launchGenerate(name);
+  };
   go.onclick = launch;
-  input.onkeydown = e => { if (e.key === "Enter") launch(); };
+  input.onkeydown = e => {
+    if (e.key === "Enter") launch();
+    else if (e.key === "Escape" && input.value) {
+      e.stopPropagation();
+      input.value = "";
+      libQuery = "";
+      paintBody();
+    }
+  };
   field.appendChild(go);
   bar.appendChild(field);
   root.appendChild(bar);
 
+  const matchSlot = h("div", "omni-match-slot");
+  root.appendChild(matchSlot);
+
   // second path: deconstruct a design you're building (not a known system)
+  const subBar = h("div", "lib-subbar");
   const ownLink = setFace(h("button", "gbtn own-design-btn"), "pencil", COPY.ownDesignLink.replace(/\s*→$/, ""));
   ownLink.onclick = () => {
     if (!meta.apiKey) { renderSettings("Add your Anthropic API key to generate Deconstructs."); show("settings"); return; }
     renderGenerate("", "design");
     show("generate");
   };
-  root.appendChild(ownLink);
+  subBar.appendChild(ownLink);
 
-  const all = (await Store.getBreakdowns()).sort((a, b) => (b.lastOpen || b.created) - (a.lastOpen || a.created));
-  const flagships = all.filter(b => b.source === "flagship");
-  const yours = all.filter(b => b.source !== "flagship");
-
-  // Your own Deconstructs are the point of the app; the samples only show
-  // what one looks like.
-  root.appendChild(sectionHead(COPY.yoursHeading, yours.length ? yours.length + " so far" : null));
-  if (yours.length) root.appendChild(cardGrid(yours));
-  else {
-    const empty = h("div", "empty-panel");
-    empty.appendChild(h("p", null, COPY.yoursEmpty));
-    root.appendChild(empty);
-  }
-  root.appendChild(sectionHead(COPY.sampleHeading, flagships.length + " systems"));
-  root.appendChild(h("p", "lib-note", COPY.sampleNote));
-  root.appendChild(cardGrid(flagships));
-
-  // Field studies: self-contained lab pages rather than schema documents,
-  // so they live outside the breakdown store and link out as plain pages.
-  const n = FIELD_STUDIES.length;
-  root.appendChild(sectionHead(COPY.labHeading, n + (n === 1 ? " study" : " studies")));
-  root.appendChild(h("p", "lib-note", COPY.labNote));
-  const labGrid = h("div", "card-grid");
-  FIELD_STUDIES.forEach(st => {
-    const lab = h("a", "bd-card lab-card");
-    lab.href = st.href;
-    const top = h("div", "bd-top");
-    top.appendChild(h("span", "chip lab-chip", "Field study"));
-    top.appendChild(h("span", "chip", COPY.labChip));
-    const go = h("span", "bd-go");
-    go.appendChild(icon("arrowUpRight"));
-    top.appendChild(go);
-    lab.appendChild(top);
-    const art = h("span", "lab-art");
-    art.appendChild(icon("cube"));
-    lab.appendChild(art);
-    lab.appendChild(h("div", "bd-name", st.name));
-    lab.appendChild(h("p", "bd-essence", st.sub));
-    labGrid.appendChild(lab);
+  const filterBar = h("div", "lib-filters");
+  filterBar.setAttribute("role", "group");
+  filterBar.setAttribute("aria-label", "Filter library");
+  const filters = [
+    ["all", "All"],
+    ...(yours.length ? [["yours", "Yours"]] : []),
+    ["progress", "In progress"],
+    ["done", "Completed"],
+    ["software", "Software"],
+    ["mech", "Mechanical & 3D"]
+  ];
+  if (!filters.some(([id]) => id === libFilter)) libFilter = "all";
+  const filterBtns = {};
+  filters.forEach(([id, label]) => {
+    const b = h("button", "lib-fchip" + (libFilter === id ? " on" : ""), label);
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(libFilter === id));
+    b.onclick = () => {
+      libFilter = id;
+      Object.entries(filterBtns).forEach(([k, btn]) => {
+        btn.classList.toggle("on", k === libFilter);
+        btn.setAttribute("aria-pressed", String(k === libFilter));
+      });
+      paintBody();
+    };
+    filterBtns[id] = b;
+    filterBar.appendChild(b);
   });
-  root.appendChild(labGrid);
+  subBar.appendChild(filterBar);
+  root.appendChild(subBar);
+
+  const bodyWrap = h("div", "lib-body");
+  root.appendChild(bodyWrap);
+
+  const passesFilter = rec => {
+    if (libFilter === "yours") return rec.source !== "flagship";
+    if (libFilter === "progress") { const p = recProgressPct(rec); return p > 0 && p < 100; }
+    if (libFilter === "done") return recProgressPct(rec) === 100;
+    if (libFilter === "software") return recDomain(rec) === "software";
+    if (libFilter === "mech") return recDomain(rec) !== "software" || !!fieldStudyFor(rec.system);
+    return true;
+  };
+
+  function paintMatchBanner(q) {
+    matchSlot.textContent = "";
+    const hit = findBestInstantMatch(all, q);
+    if (!hit) return;
+    const banner = h("div", "omni-match");
+    const info = h("div", "omni-match-info");
+    if (hit.kind === "rec") {
+      const rec = hit.rec;
+      info.appendChild(h("span", "chip flagship", rec.source === "flagship" ? "Ready in library" : "Your study"));
+      info.appendChild(h("span", "omni-match-title", rec.system));
+      info.appendChild(h("span", "omni-match-sub", `${rec.doc.layers.length} layers · works offline`));
+      const acts = h("div", "omni-match-actions");
+      const openBtn = h("button", "gbtn primary", "Open study →");
+      openBtn.type = "button";
+      openBtn.onclick = () => openReader(rec.id);
+      acts.appendChild(openBtn);
+      if (hit.fs) {
+        const labLink = h("a", "gbtn", "Open 3D study ↗");
+        labLink.href = hit.fs.href;
+        acts.appendChild(labLink);
+      }
+      const genBtn = h("button", "gbtn ghost", "Generate fresh");
+      genBtn.type = "button";
+      genBtn.onclick = () => launchGenerate(q.trim());
+      acts.appendChild(genBtn);
+      banner.append(info, acts);
+    } else if (hit.kind === "lab") {
+      const st = hit.st;
+      info.appendChild(h("span", "chip lab-chip", "3D Field Study"));
+      info.appendChild(h("span", "omni-match-title", st.name));
+      info.appendChild(h("span", "omni-match-sub", st.sub));
+      const acts = h("div", "omni-match-actions");
+      const openLink = h("a", "gbtn primary", "Open 3D study →");
+      openLink.href = st.href;
+      acts.appendChild(openLink);
+      const genBtn = h("button", "gbtn ghost", "Deconstruct in 2D");
+      genBtn.type = "button";
+      genBtn.onclick = () => launchGenerate(q.trim());
+      acts.appendChild(genBtn);
+      banner.append(info, acts);
+    }
+    matchSlot.appendChild(banner);
+  }
+
+  function paintBody() {
+    const q = libQuery.trim();
+    paintMatchBanner(q);
+    bodyWrap.textContent = "";
+
+    const fYours = yours.filter(r => passesFilter(r) && matchesRecQuery(r, q));
+    const fFlags = flagships.filter(r => passesFilter(r) && matchesRecQuery(r, q));
+    const showLabs = (libFilter === "all" || libFilter === "mech") && FIELD_STUDIES.some(st => matchesFieldStudyQuery(st, q));
+    const fLabs = (libFilter === "all" || libFilter === "mech") ? FIELD_STUDIES.filter(st => matchesFieldStudyQuery(st, q)) : [];
+
+    const isFiltered = q.length > 0 || libFilter !== "all";
+
+    // Your own Deconstructs are the point of the app; the samples only show
+    // what one looks like.
+    if (!isFiltered || fYours.length || libFilter === "yours") {
+      bodyWrap.appendChild(sectionHead(COPY.yoursHeading, fYours.length ? fYours.length + (isFiltered ? " matching" : " so far") : null));
+      if (fYours.length) bodyWrap.appendChild(cardGrid(fYours));
+      else {
+        const empty = h("div", "empty-panel");
+        empty.appendChild(h("p", null, isFiltered ? "No saved studies match this filter." : COPY.yoursEmpty));
+        bodyWrap.appendChild(empty);
+      }
+    }
+
+    if (libFilter !== "yours" && (fFlags.length || !isFiltered)) {
+      bodyWrap.appendChild(sectionHead(COPY.sampleHeading, fFlags.length + (fFlags.length === 1 ? " system" : " systems")));
+      if (!isFiltered) bodyWrap.appendChild(h("p", "lib-note", COPY.sampleNote));
+      bodyWrap.appendChild(cardGrid(fFlags));
+    }
+
+    // Field studies: self-contained lab pages rather than schema documents,
+    // so they live outside the breakdown store and link out as plain pages.
+    if (showLabs && fLabs.length) {
+      const n = fLabs.length;
+      bodyWrap.appendChild(sectionHead(COPY.labHeading, n + (n === 1 ? " study" : " studies")));
+      if (!isFiltered) bodyWrap.appendChild(h("p", "lib-note", COPY.labNote));
+      const labGrid = h("div", "card-grid");
+      fLabs.forEach(st => {
+        const lab = h("a", "bd-card lab-card");
+        lab.href = st.href;
+        const top = h("div", "bd-top");
+        top.appendChild(h("span", "chip lab-chip", "Field study"));
+        top.appendChild(h("span", "chip", COPY.labChip));
+        const go = h("span", "bd-go");
+        go.appendChild(icon("arrowUpRight"));
+        top.appendChild(go);
+        lab.appendChild(top);
+        const art = h("span", "lab-art");
+        art.appendChild(icon("cube"));
+        lab.appendChild(art);
+        lab.appendChild(h("div", "bd-name", st.name));
+        lab.appendChild(h("p", "bd-essence", st.sub));
+        labGrid.appendChild(lab);
+      });
+      bodyWrap.appendChild(labGrid);
+    }
+
+    if (isFiltered && !fYours.length && !fFlags.length && !fLabs.length) {
+      const none = h("div", "empty-panel");
+      none.appendChild(h("p", null, q
+        ? `No offline studies match "${q}". Press Deconstruct above to generate a fresh breakdown.`
+        : "No studies match this filter yet."));
+      if (libFilter !== "all" || q) {
+        const rst = h("button", "gbtn", "Show all studies");
+        rst.type = "button";
+        rst.style.marginTop = "10px";
+        rst.onclick = () => {
+          libFilter = "all";
+          libQuery = "";
+          input.value = "";
+          Object.entries(filterBtns).forEach(([k, btn]) => {
+            btn.classList.toggle("on", k === "all");
+            btn.setAttribute("aria-pressed", String(k === "all"));
+          });
+          paintBody();
+        };
+        none.appendChild(rst);
+      }
+      bodyWrap.appendChild(none);
+    }
+  }
+
+  input.oninput = () => {
+    libQuery = input.value;
+    paintBody();
+  };
+  paintBody();
 
   /* Candidates: flagged by the model, none of them built. Rendered as plain
      rows rather than cards on purpose — a card here would read as something
@@ -1191,9 +1530,58 @@ function sheetDrag(wrap, sheet, grip) {
   });
 }
 
+function paneSplitDrag(wrap, split) {
+  let pct = 58;
+  try {
+    const v = parseFloat(localStorage.getItem("vitruvian_pane_split"));
+    if (Number.isFinite(v) && v >= 34 && v <= 70) pct = v;
+  } catch (e) {}
+  const apply = (val, persist) => {
+    pct = Math.max(34, Math.min(70, val));
+    wrap.style.setProperty("--split-left", pct.toFixed(2) + "%");
+    split.setAttribute("aria-valuenow", String(Math.round(pct)));
+    if (persist) {
+      try { localStorage.setItem("vitruvian_pane_split", pct.toFixed(2)); } catch (e) {}
+    }
+  };
+  apply(pct, false);
+  let dragging = false;
+  split.addEventListener("pointerdown", e => {
+    if (e.button && e.button !== 0) return;
+    dragging = true;
+    wrap.classList.add("split-moving");
+    split.setPointerCapture(e.pointerId);
+  });
+  split.addEventListener("pointermove", e => {
+    if (!dragging) return;
+    const r = wrap.getBoundingClientRect();
+    if (r.width > 100) apply(((e.clientX - r.left) / r.width) * 100, false);
+  });
+  const stop = () => {
+    if (!dragging) return;
+    dragging = false;
+    wrap.classList.remove("split-moving");
+    apply(pct, true);
+  };
+  split.addEventListener("pointerup", stop);
+  split.addEventListener("pointercancel", stop);
+  split.addEventListener("dblclick", e => {
+    e.stopPropagation();
+    apply(58, true);
+  });
+  split.addEventListener("keydown", e => {
+    if (e.key === "ArrowLeft") { e.preventDefault(); e.stopPropagation(); apply(pct - 3, true); }
+    else if (e.key === "ArrowRight") { e.preventDefault(); e.stopPropagation(); apply(pct + 3, true); }
+    else if (e.key === "Home") { e.preventDefault(); e.stopPropagation(); apply(58, true); }
+  });
+}
+
 async function openReader(id, layerIndex, opts = {}) {
-  const rec = await Store.getBreakdown(id);
+  const allBreakdowns = await Store.getBreakdowns();
+  const rec = allBreakdowns.find(b => b.id === id) || await Store.getBreakdown(id);
   if (!rec) return;
+  const knownSystemNames = new Set(allBreakdowns.map(b => (b.system || "").trim().toLowerCase()));
+  const hasStudy = sub => knownSystemNames.has(String(sub || "").trim().toLowerCase());
   if (currentView) currentView.destroy();   // re-open (e.g. from Models index) skips show()'s teardown
   currentRec = rec;
   // a plain open (library, Models, deep link) starts a fresh breadcrumb; a
@@ -1350,12 +1738,18 @@ async function openReader(id, layerIndex, opts = {}) {
      until now the one thing you could not ask the drawing. */
   const originCard = h("div", "dg-origin");
   originCard.hidden = true;
+  const oHead = h("div", "org-head");
   const oTitle = h("div", "org-name");
+  const oClose = h("button", "org-close", "\u00d7");
+  oClose.type = "button";
+  oClose.title = "Close (Esc)";
+  oClose.setAttribute("aria-label", "Close card");
+  oHead.append(oTitle, oClose);
   const oWhen = h("div", "org-when");
   const oDoes = h("div", "org-does");
   const oGo = h("button", "gbtn org-go");
   oGo.type = "button";
-  originCard.append(oTitle, oWhen, oDoes, oGo);
+  originCard.append(oHead, oWhen, oDoes, oGo);
 
   const foldPill = h("button", "dg-fold-pill");
   foldPill.type = "button";
@@ -1375,13 +1769,23 @@ async function openReader(id, layerIndex, opts = {}) {
   const grip = h("button", "sheet-grip");
   grip.appendChild(h("span", "sheet-grip-bar"));
   docSheet.append(grip, docPane);
-  wrap.append(dpane, docSheet);
+  const paneSplit = h("div", "pane-split");
+  paneSplit.tabIndex = 0;
+  paneSplit.setAttribute("role", "separator");
+  paneSplit.setAttribute("aria-orientation", "vertical");
+  paneSplit.setAttribute("aria-label", "Resize diagram and reading panes. Drag, double-click to reset, or use Left and Right arrow keys.");
+  paneSplit.setAttribute("aria-valuemin", "34");
+  paneSplit.setAttribute("aria-valuemax", "70");
+  paneSplit.title = "Drag to resize panes · Double-click to reset";
+  paneSplit.appendChild(h("span", "pane-split-bar"));
+  wrap.append(dpane, paneSplit, docSheet);
   sheetDrag(wrap, docSheet, grip);
+  paneSplitDrag(wrap, paneSplit);
   // breadcrumb: only while nested (drilled at least one level deep)
   if (drillStack.length > 1) pane.appendChild(drillCrumb());
   pane.appendChild(wrap);
 
-  const diagram = Diagram.mount(dscroll, rec.doc);
+  const diagram = Diagram.mount(dscroll, rec.doc, { hasStudy });
   diagram.onDrill((sub) => drillInto(sub));
   // the key lists only the glyphs this state actually uses, and tapping one
   // lights the nodes that carry it. onRender holds a single callback, so the
@@ -1495,6 +1899,17 @@ async function openReader(id, layerIndex, opts = {}) {
 
   /* ── why is this part here ── */
   const closeOrigin = () => { originCard.hidden = true; };
+  oClose.onclick = () => {
+    closeOrigin();
+    diagram.spotlight(null);
+  };
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && !originCard.hidden && originCard.isConnected) {
+      e.stopPropagation();
+      closeOrigin();
+      diagram.spotlight(null);
+    }
+  });
   diagram.onSelect(sel => {
     if (!sel) { closeOrigin(); return; }
     oTitle.textContent = sel.label;
@@ -1510,7 +1925,7 @@ async function openReader(id, layerIndex, opts = {}) {
       oGo.textContent = COPY.originGo;
       oGo.onclick = () => {
         closeOrigin();
-        if (currentView && currentView.goToLayer) currentView.goToLayer(sel.layerIndex);
+        if (currentView && currentView.goToLayer) currentView.goToLayer(sel.layerIndex + 1);
       };
     }
     /* Sit on the drawing's own bottom edge, not the pane's: the key, the
@@ -1606,6 +2021,9 @@ async function openReader(id, layerIndex, opts = {}) {
     autoReplay: meta.autoReplay !== false,
     onReplay: runReplay,
     onTools,
+    onNavigate() {
+      if (document.body.dataset.screen === "reader") syncRoute("replace");
+    },
     async onOpen(id) { await flushSaves(); openReader(id); },
     async onFinish() { await flushSaves(); await renderLibrary(); show("library"); },
     onSave(r) { Store.saveBreakdownLight(r); },
@@ -1623,8 +2041,10 @@ async function openReader(id, layerIndex, opts = {}) {
   });
 
   buildReaderMenu(rec, challengeOn);
-  show("reader");
+  show("reader", { noRoute: true });
   if (layerIndex != null) currentView.goToLayer(layerIndex);
+  else if (Array.isArray(opts.posStep)) currentView.goToPosStep(opts.posStep[0], opts.posStep[1]);
+  if (!opts.noRoute) syncRoute("push");
   setTimeout(() => { if (currentRec === rec) featureTips.visit("reader"); }, 750);
 }
 
@@ -1727,6 +2147,7 @@ function openSequence(rec) {
    WHY a layer is forced, this is what the profession CALLS it. ═══ */
 let vocabFilter = "all";
 async function renderVocab(focusId) {
+  activeVocabId = focusId || null;
   const root = $("screen-vocab").firstElementChild;
   root.textContent = "";
   root.appendChild(h("div", "kicker", "The engineering vocabulary"));
@@ -2401,10 +2822,15 @@ function modelUses(recs, id) {
   return out;
 }
 async function renderModels(detailId) {
+  activeModelId = detailId || null;
   const root = $("screen-models").firstElementChild;
   root.textContent = "";
   const recs = await Store.getBreakdowns();
-  if (detailId) return renderModel(root, recs, detailId);
+  if (detailId) {
+    renderModel(root, recs, detailId);
+    if (document.body.dataset.screen === "models" && !suppressRoute) syncRoute("push");
+    return;
+  }
 
   root.appendChild(h("div", "kicker", "Cross-system pattern recognition"));
   root.appendChild(h("h1", "title", "The 14 thinking models"));
@@ -2422,6 +2848,7 @@ async function renderModels(detailId) {
     grid.appendChild(card);
   });
   root.appendChild(grid);
+  if (document.body.dataset.screen === "models" && !suppressRoute) syncRoute("push");
 }
 
 function renderModel(root, recs, id) {
@@ -2805,9 +3232,7 @@ function renderSettings(banner) {
   abBtn.onclick = () => { renderLanding(); show("landing"); };
   const tutBtn = h("button", "gbtn", "Field guide →");
   tutBtn.onclick = () => { renderTutorial("settings"); show("tutorial"); };
-  const tipsBtn = h("button", "gbtn", "Show the first-run tips again");
-  tipsBtn.onclick = async () => { meta.tipsSeen = false; await Store.saveMeta({ tipsSeen: false }); toast("Tips will show next time you open a Deconstruct"); };
-  abRow.append(abBtn, tutBtn, tipsBtn);
+  abRow.append(abBtn, tutBtn);
   ab.appendChild(abRow);
 
   /* API key */
@@ -2864,8 +3289,18 @@ function renderSettings(banner) {
   /* how you learn: everything that changes what reading feels like */
   const toggle = (on, label, flip) => {
     const t = h("div", "toggle" + (on ? " on" : ""));
+    t.setAttribute("role", "switch");
+    t.setAttribute("aria-checked", String(!!on));
+    t.tabIndex = 0;
     t.append(h("span", "tg-track"), h("span", "tg-label", label));
     t.onclick = async () => { await flip(); renderSettings(); };
+    t.onkeydown = async e => {
+      if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        await flip();
+        renderSettings();
+      }
+    };
     return t;
   };
   const db = h("div", "set-block");
@@ -2941,7 +3376,7 @@ function renderSettings(banner) {
   const bexp = h("button", "gbtn primary", "Backup .json");
   bexp.onclick = async () => {
     const state = await Store.exportAll();
-    download("system-deconstructor-backup.json", JSON.stringify(state, null, 2));
+    download("vitruvian-backup.json", JSON.stringify(state, null, 2));
     meta.lastBackup = Date.now();
     await Store.saveMeta({ lastBackup: meta.lastBackup });
     toast("Backup downloaded");

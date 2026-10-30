@@ -104,7 +104,7 @@ function ogCard(slug) {
 
 const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 function page(slug, title, desc) {
-  const url = `${SITE}#/study/${slug}`;
+  const url = `../#/study/${slug}`;
   const img = `${SITE}share/og/${slug}.png`;
   return `<!DOCTYPE html>
 <html lang="en">

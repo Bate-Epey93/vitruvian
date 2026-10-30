@@ -152,10 +152,11 @@ var Store = (() => {
     async exportAll() {
       const [breakdowns, meta] = await Promise.all([readAll("breakdowns"), getMetaMap()]);
       LOCAL_ONLY_META.forEach(k => delete meta[k]);
-      return { app: "system-deconstructor", schemaVersion: SCHEMA_VERSION, breakdowns, meta };
+      return { app: "vitruvian", tool: "vitruvian", schemaVersion: SCHEMA_VERSION, breakdowns, meta };
     },
     async importAll(state) {
-      if (!state || !Array.isArray(state.breakdowns)) throw new Error("not a System Deconstructor backup");
+      if (!state || !Array.isArray(state.breakdowns)) throw new Error("not a Vitruvian backup");
+      if (state.app && state.app !== "vitruvian" && state.app !== "system-deconstructor") throw new Error("not a Vitruvian backup");
       if (state.schemaVersion > SCHEMA_VERSION) throw new Error("backup from a newer version");
       const results = [];
       const good = [];

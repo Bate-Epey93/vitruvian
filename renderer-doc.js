@@ -1019,6 +1019,7 @@ var DocView = (() => {
       // audience flips keep the reader anchored; moving on starts at the top
       docPane.scrollTop = render._keepScroll ? scroll : 0;
       render._keepScroll = false;
+      if (typeof opts.onNavigate === "function") opts.onNavigate({ position: pos, step });
       // the first time a layer's failure is on screen, play it once by itself
       // (it only counts once it has actually played, so passing through doesn't use it up)
       if (!onePage && pos >= 1 && pos <= N && step === 1 && !replayed.has(pos) && opts.canReplay && opts.autoReplay !== false && !RM && opts.onReplay) {
@@ -1144,6 +1145,7 @@ var DocView = (() => {
       get before() { return before; },
       // from Models, Vocabulary and links: open a layer at its fix if it's been read
       goToLayer(idx) { goTo(idx, attemptFor(idx).revealed ? 3 : 1); },
+      goToPosStep(p, s = 1) { goTo(p, s); },
       get position() { return pos; },
       get step() { return step; },
       // the state the diagram is ACTUALLY showing (pos-1 before the fix).

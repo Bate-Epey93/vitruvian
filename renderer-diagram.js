@@ -208,7 +208,8 @@ var Diagram = (() => {
       if (hit) {
         hit.n++;
         if (hit.label !== e.label) hit.label = hit.n + " paths";
-        if (e.kind === "flow") hit.kind = "flow";    // payload outranks control on a merged line
+        if (e.kind === "payload") hit.kind = "payload";    // payload outranks money/control on a merged line
+        else if (e.kind === "money" && hit.kind !== "payload") hit.kind = "money";
         return;
       }
       merged.set(key, Object.assign({}, e, { id: "fold:" + key, from, to, n: 1 }));
@@ -429,7 +430,7 @@ var Diagram = (() => {
   }
 
   /* ── Mount ── */
-  function mount(container, doc) {
+  function mount(container, doc, mountOpts = {}) {
     const layout = computeLayout(doc);
     const laneColor = id => LANE_COLORS[(layout.laneIndex[id] || 0) % LANE_COLORS.length];
     container.textContent = "";
@@ -529,7 +530,13 @@ var Diagram = (() => {
         if (sub && onDrillCb) { ev.stopPropagation(); onDrillCb(sub, dg.getAttribute("data-id")); return; }
       }
       const g = ev.target.closest && ev.target.closest(".dg-node");
-      if (!g || !svg.contains(g) || !lastState) return;
+      if (!g || !svg.contains(g) || !lastState) {
+        if (traced) {
+          traced = null; spotlight(null);
+          if (onSelectCb) onSelectCb(null);
+        }
+        return;
+      }
       const id = g.getAttribute("data-id");
       if (!id) return;
       // mid-sim, a node tap KILLS the node — chaos engineering: watch tokens
@@ -704,13 +711,17 @@ var Diagram = (() => {
         // semantic zoom: a node that is a system in its own right gets a drill
         // badge (⊕) at its top-right corner; tapping it opens the nested study
         if (typeof n.expands_to === "string" && n.expands_to.trim()) {
+          const sub = n.expands_to.trim();
+          const built = typeof mountOpts.hasStudy === "function" ? mountOpts.hasStudy(sub) : true;
           g.classList.add("dg-drillable");
-          g.setAttribute("data-expand", n.expands_to.trim());
+          g.setAttribute("data-expand", sub);
           const bx = (n.kind === "actor" ? ACTOR_R : NODE_W / 2) - 3;
           const by = -(n.kind === "actor" ? ACTOR_R : NODE_H / 2) + 3;
-          const badge = el("g", { class: "dg-drill-badge", transform: `translate(${bx} ${by})` }, g);
-          txt(el("title", {}, badge), `Zoom into "${n.expands_to.trim()}"`);
-          el("circle", { r: 7.5, class: "dg-drill-disc" }, badge).style.fill = laneColor(n.lane);
+          const badge = el("g", { class: "dg-drill-badge" + (built ? "" : " dg-drill-gen"), transform: `translate(${bx} ${by})` }, g);
+          badge.style.setProperty("--lane-c", laneColor(n.lane));
+          txt(el("title", {}, badge), built ? `Zoom into "${sub}"` : `Generate "${sub}" (uses API key)`);
+          el("circle", { r: 16, class: "dg-drill-hit" }, badge);
+          el("circle", { r: 7.5, class: "dg-drill-disc" }, badge);
           el("line", { x1: -3.2, y1: 0, x2: 3.2, y2: 0, class: "dg-drill-plus" }, badge);
           el("line", { x1: 0, y1: -3.2, x2: 0, y2: 3.2, class: "dg-drill-plus" }, badge);
         }
@@ -1161,6 +1172,7 @@ var Diagram = (() => {
         pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (pinch && pts.size === 2) {
           e.preventDefault();                              // we own the pinch (touch-action allows pans only)
+          autoFit = false;
           const [a, b2] = [...pts.values()];
           const cR = container.getBoundingClientRect();
           apply(pinch.z0 * Math.hypot(a.x - b2.x, a.y - b2.y) / pinch.d0,
@@ -1171,6 +1183,14 @@ var Diagram = (() => {
         if (!pts.delete(e.pointerId)) return;
         if (pinch && pts.size < 2) { pinch = null; pinchEndedAt = performance.now(); settle(); }
       }
+      function toggleQuickZoom(clientX, clientY) {
+        const cR = container.getBoundingClientRect();
+        const fz = fitZ();
+        const zoomIn = Math.min(MAXZ, Math.max(1.5, fz * 1.65));
+        const isZoomedIn = current() > fz * 1.15;
+        autoFit = isZoomedIn;
+        animateTo(isZoomedIn ? fz : zoomIn, clientX - cR.left, clientY - cR.top, 200);
+      }
       container.addEventListener("pointercancel", lift);
       container.addEventListener("pointerup", e => {
         lift(e);
@@ -1178,14 +1198,12 @@ var Diagram = (() => {
         const now = performance.now();
         if (now - pinchEndedAt < 400) { lastTap = 0; return; }   // pinch release ≠ tap
         if (now - lastTap < 320 && Math.hypot(e.clientX - lastX, e.clientY - lastY) < 26) {
-          const cR = container.getBoundingClientRect();
-          animateTo(current() > fitZ() * 1.15 ? fitZ() : 1, e.clientX - cR.left, e.clientY - cR.top, 200);
+          toggleQuickZoom(e.clientX, e.clientY);
           lastTap = 0;
         } else { lastTap = now; lastX = e.clientX; lastY = e.clientY; }
       });
       container.addEventListener("dblclick", e => {         // desktop parity
-        const cR = container.getBoundingClientRect();
-        animateTo(current() > fitZ() * 1.15 ? fitZ() : 1, e.clientX - cR.left, e.clientY - cR.top, 200);
+        toggleQuickZoom(e.clientX, e.clientY);
       });
       /* Fit is the default the renderer wants; anything the reader does by
          hand turns it off until they ask for it back.
@@ -1207,6 +1225,7 @@ var Diagram = (() => {
         svg.style.minWidth = "0";
         svg.style.width = (layout.width * z) + "px";
         container.scrollLeft = 0;
+        container.scrollTop = 0;
         return z;
       }
       /* the frame changes size when the sheet is dragged or the window is

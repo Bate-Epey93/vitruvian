@@ -360,6 +360,7 @@ h1.title{font-family:var(--display);font-weight:650;font-size:clamp(32px,4.4vw,4
 .chip.flagship{color:var(--accent-deep);background:var(--accent-wash);}
 .chip.lab-chip{color:var(--proposal);background:color-mix(in srgb,var(--proposal) 11%,transparent);}
 .chip.design{color:var(--money);background:var(--money-wash);}
+.chip.tone-ink{color:var(--ink);background:color-mix(in srgb,var(--ink) 7%,transparent);}
 
 /* inputs (shared) */
 input,textarea{font-family:var(--sans);}
@@ -486,7 +487,23 @@ input,textarea{font-family:var(--sans);}
   font-size:16.5px;color:var(--ink);padding:11px 4px;}
 .deconstruct-bar input::placeholder{color:var(--faint);}
 :root[data-theme="dark"] .deconstruct-bar input::placeholder{color:var(--muted);}
-.own-design-btn{margin:0 0 8px 8px;}
+.own-design-btn{margin:0;}
+.lib-subbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:2px 0 8px;}
+.lib-filters{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.lib-fchip{font-size:12.5px;font-weight:600;border:none;border-radius:var(--r-pill);padding:6px 13px;cursor:pointer;
+  background:var(--panel);color:var(--muted);box-shadow:inset 0 0 0 1px var(--hair);
+  transition:background .2s var(--ease),color .2s var(--ease),box-shadow .2s var(--ease);}
+.lib-fchip:hover{color:var(--ink);box-shadow:inset 0 0 0 1px var(--hair-strong);}
+.lib-fchip.on{background:var(--ink);color:var(--paper);box-shadow:var(--sh-1);}
+.omni-match-slot:empty{display:none;}
+.omni-match{max-width:760px;margin:0 0 14px;padding:12px 16px;border-radius:var(--r-lg);
+  background:var(--panel);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 28%,var(--hair)),var(--sh-2);
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  animation:pop-in .22s var(--ease) both;}
+.omni-match-info{display:flex;align-items:center;gap:9px;flex-wrap:wrap;min-width:0;}
+.omni-match-title{font-family:var(--display);font-weight:650;font-size:16px;letter-spacing:-.02em;color:var(--ink);}
+.omni-match-sub{font-size:13px;color:var(--muted);}
+.omni-match-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
 
 .lib-section-head{display:flex;align-items:baseline;gap:12px;margin:64px 0 6px;}
 .lib-section-head:first-of-type{margin-top:40px;}
@@ -587,12 +604,23 @@ input,textarea{font-family:var(--sans);}
    The diagram is the protagonist: it takes the room, sits on a fine drafting
    grid, and keeps its tools in a dock along the bottom. The text pane is
    capped so wide screens don't turn the prose into a ribbon. */
-.reader{display:grid;grid-template-columns:minmax(0,1fr) clamp(360px,40%,580px);height:100%;overflow:hidden;min-width:0;}
+.reader{display:grid;grid-template-columns:minmax(320px,var(--split-left,58%)) 10px minmax(340px,1fr);height:100%;overflow:hidden;min-width:0;--split-left:58%;}
+.reader.split-moving{cursor:col-resize;-webkit-user-select:none;user-select:none;}
 .diagram-pane{
-  border-right:1px solid var(--hair);
+  border-right:none;
   background:var(--panel-2);
   display:flex;flex-direction:column;overflow:hidden;min-width:0;position:relative;
 }
+.pane-split{
+  position:relative;z-index:12;cursor:col-resize;touch-action:none;
+  display:grid;place-items:center;background:var(--panel-2);
+  border-left:1px solid var(--hair);
+  transition:background .2s var(--ease);
+}
+.pane-split:hover,.reader.split-moving .pane-split{background:color-mix(in srgb,var(--accent) 10%,var(--panel-2));}
+.pane-split:focus-visible{outline:none;background:color-mix(in srgb,var(--accent) 14%,var(--panel-2));}
+.pane-split-bar{width:3px;height:36px;border-radius:2px;background:var(--hair-strong);transition:background .2s,height .2s var(--ease);}
+.pane-split:hover .pane-split-bar,.pane-split:focus-visible .pane-split-bar,.reader.split-moving .pane-split-bar{background:var(--accent);height:48px;}
 /* safe center: centred when it fits, top-aligned the instant it is taller */
 /* safe center on both axes: centred when the drawing fits its frame, and
    still scrolling from the top-left corner when it does not */
@@ -693,7 +721,12 @@ input,textarea{font-family:var(--sans);}
   -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(160%);backdrop-filter:blur(var(--glass-blur)) saturate(160%);
   box-shadow:inset 0 0 0 1px var(--hair), var(--sh-2);
   animation:pop-in .2s var(--ease) both;}
+.org-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
 .org-name{font-weight:650;font-size:13.5px;color:var(--ink);line-height:1.25;}
+.org-close{border:none;background:color-mix(in srgb,var(--ink) 6%,transparent);color:var(--muted);
+  width:20px;height:20px;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;flex-shrink:0;
+  display:grid;place-items:center;margin:-2px -4px 0 0;transition:background .15s,color .15s;}
+.org-close:hover{background:color-mix(in srgb,var(--ink) 12%,transparent);color:var(--ink);}
 .org-when{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.4;}
 /* what it does, from its own edges — a notch quieter than the layer line
    because it is derived, not authored */
@@ -736,9 +769,14 @@ input,textarea{font-family:var(--sans);}
 .sim-btn.spine-on{color:var(--accent-deep);background:var(--panel);box-shadow:var(--sh-1), inset 0 0 0 1px color-mix(in srgb,var(--accent) 40%,transparent);}
 @media(max-width:1280px){.cap-tools .sim-btn:not(.sim-primary) .btn-label{display:none;}.cap-tools .sim-btn:not(.sim-primary){padding:5px 7px;}}
 
+@media(max-width:1080px) and (min-width:861px){
+  .reader{grid-template-columns:minmax(280px,var(--split-left,52%)) 8px minmax(300px,1fr);}
+  .doc-inner{padding:24px 22px 0;}
+}
 @media(max-width:860px){
   /* the diagram fills the reader; the step card is a sheet over its lower part */
   .reader{display:block;position:relative;--sheet:52%;}
+  .pane-split{display:none;}
   .diagram-pane{position:absolute;left:0;right:0;top:0;bottom:calc(var(--sheet) - 6px);border-right:none;transition:bottom .32s var(--ease);}
   .doc-sheet{position:absolute;left:0;right:0;bottom:0;height:var(--sheet);z-index:30;border-radius:18px 18px 0 0;
     box-shadow:0 -1px 0 var(--hair),0 -12px 32px -12px rgba(0,0,0,.22);transition:height .32s var(--ease);}
@@ -982,6 +1020,8 @@ details.analogy-fold summary{font-size:13px;font-weight:600;color:var(--muted);c
   box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .4s var(--ease-spring);}
 .toggle.on .tg-track{background:var(--accent);}
 .toggle.on .tg-track::after{transform:translateX(16px);}
+.toggle:focus-visible{outline:none;}
+.toggle:focus-visible .tg-track{outline:2px solid var(--accent);outline-offset:2px;}
 .toggle .tg-label{font-size:14px;color:var(--ink-soft);}
 
 /* ── Diagram SVG ── */
@@ -1057,10 +1097,13 @@ g.dg-node.dg-enter{animation:dg-fade .45s var(--ease) both;}
 
 /* semantic-zoom drill badge (⊕ at a node's corner) */
 .dg-drill-badge{cursor:zoom-in;}
-.dg-drill-disc{fill:var(--node-fill);stroke:var(--diagram-ink);stroke-width:1.2;transition:transform .2s var(--ease-spring);transform-box:fill-box;transform-origin:center;}
-.dg-drill-plus{stroke:var(--diagram-ink);stroke-width:1.5;stroke-linecap:round;}
-.dg-drill-badge:hover .dg-drill-disc{fill:var(--accent-wash);stroke:var(--accent);}
-.dg-drill-badge:hover .dg-drill-disc{transform:scale(1.18);}
+.dg-drill-hit{fill:transparent;stroke:none;}
+.dg-drill-disc{fill:var(--lane-c,var(--node-fill));stroke:var(--diagram-ink);stroke-width:1.2;transition:transform .2s var(--ease-spring),fill .15s,stroke .15s;transform-box:fill-box;transform-origin:center;}
+.dg-drill-plus{stroke:var(--diagram-ink);stroke-width:1.5;stroke-linecap:round;pointer-events:none;}
+.dg-drill-badge.dg-drill-gen .dg-drill-disc{fill:var(--node-fill);stroke:var(--proposal);stroke-dasharray:2.2 1.6;stroke-width:1.35;}
+.dg-drill-badge.dg-drill-gen .dg-drill-plus{stroke:var(--proposal);}
+.dg-drill-badge:hover .dg-drill-disc{fill:var(--accent-wash);stroke:var(--accent);transform:scale(1.18);}
+.dg-drill-badge.dg-drill-gen:hover .dg-drill-disc{fill:color-mix(in srgb,var(--proposal) 16%,var(--node-fill));stroke:var(--proposal);}
 .dg-drillable .dg-shape{stroke-dasharray:none;}
 
 /* ═══ Toasts, modals, hints ═══ */
@@ -1753,13 +1796,13 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 /* ═══ Dissect form and the Meet you read while generating ═══ */
 .dissect-form{display:grid;gap:18px;margin:22px 0 16px;}
 .dissect-q{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 12px;align-items:baseline;}
-.dissect-n{font:600 12px/1 var(--mono, ui-monospace, monospace);color:var(--ink-3);width:22px;height:22px;border-radius:50%;display:grid;place-items:center;box-shadow:inset 0 0 0 1px var(--hair);}
+.dissect-n{font:600 12px/1 var(--mono, ui-monospace, monospace);color:var(--muted);width:22px;height:22px;border-radius:50%;display:grid;place-items:center;box-shadow:inset 0 0 0 1px var(--hair);}
 .dissect-label{font-weight:600;font-size:15.5px;color:var(--ink);}
 .dissect-q .design-input{grid-column:2;min-height:0;margin:0;}
 .early-meet{margin-top:26px;padding:22px;border-radius:var(--r-lg);background:var(--panel);box-shadow:inset 0 0 0 1px var(--hair),var(--sh-1);animation:fadeUp .4s ease both;}
 .early-essence{font-size:17px;line-height:1.6;color:var(--ink);margin:8px 0 0;}
-.early-sub{margin-top:20px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);}
-.early-rules{margin:10px 0 0;padding-left:22px;display:grid;gap:8px;font-size:15px;line-height:1.5;color:var(--ink-2);}
+.early-sub{margin-top:20px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
+.early-rules{margin:10px 0 0;padding-left:22px;display:grid;gap:8px;font-size:15px;line-height:1.5;color:var(--ink-soft);}
 .early-rules li{animation:fadeUp .35s ease both;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.early-meet,.early-rules li{animation:none;}}
@@ -1769,7 +1812,7 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 .set-group{margin-top:34px;}
 .set-group:first-of-type{margin-top:18px;}
 .set-group-title{font-size:20px;font-weight:650;letter-spacing:-.01em;margin:0 0 4px;color:var(--ink);}
-.set-group-note{font-size:14px;color:var(--ink-3);margin:0 0 12px;}
+.set-group-note{font-size:14px;color:var(--muted);margin:0 0 12px;}
 .set-toggles .toggle + .toggle{margin-top:12px;}
 
 @media(prefers-reduced-motion:reduce){.doc-sheet,.diagram-pane{transition:none!important;}}
