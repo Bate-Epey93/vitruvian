@@ -2289,7 +2289,6 @@ async function openReader(id, layerIndex, opts = {}) {
     zFit.disabled = whole && diagram.isAutoFit();
     zoomBar.hidden = whole && diagram.isAutoFit() && !diagram.doc.layers.length;
     zFit.textContent = (diagram.isAutoFit() || Math.abs(currentZ - fitZ) < 0.03) ? "FIT" : `${pct}% ↺`;
-    syncRadar();
   };
   zOut.onclick = () => { diagram.zoomBy(1 / 1.25); paintZoom(); };
   zIn.onclick = () => { diagram.zoomBy(1.25); paintZoom(); };

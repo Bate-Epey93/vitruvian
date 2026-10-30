@@ -4,6 +4,13 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [2.13.3] — 2026-10-30 · Fix card click-to-open and resolve leftover radar reference
+
+### Fixed
+- **Card click-to-open failure**:
+  - Removed lingering `syncRadar()` call inside `paintZoom()` in `engine.js` that was left behind when Viewport Radar was removed in v2.13.2. Because `syncRadar()` was called during the initial diagram render in `openReader()`, it threw an unhandled `ReferenceError: syncRadar is not defined`, aborting reader mounting before the screen could transition.
+  - Added `.bd-card > * { pointer-events: none; }` in `styles.css` ensuring touches and clicks on child elements (including inline topography SVGs, tags, labels, and badges) cleanly target the card button directly without event interception.
+
 ## [2.13.2] — 2026-10-30 · Remove radar and fix mobile button hiding/flicker
 
 ### Removed

@@ -574,6 +574,7 @@ input,textarea{font-family:var(--sans);}
   display:flex;flex-direction:column;gap:10px;min-height:212px;
   transition:transform .5s var(--ease-spring),box-shadow .5s var(--ease);
 }
+.bd-card > * { pointer-events: none; }
 /* Domain data-attribute mapping for library cards (Wave F · Proposal #1) */
 .bd-card[data-domain="software"]   { --card-accent: var(--dom-software); --card-wash: var(--dom-software-wash); }
 .bd-card[data-domain="economics"]  { --card-accent: var(--dom-economics); --card-wash: var(--dom-economics-wash); }
