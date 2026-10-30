@@ -967,14 +967,7 @@ var DocView = (() => {
 
     // 1 · It breaks: the problem, with the failure replaying on the diagram
     function stepBreak(root, L, a) {
-      const pCard = h("div", "problem-card");
-      const pHead = h("div", "problem-label", "Failure mode");
-      pCard.appendChild(pHead);
-      pCard.appendChild(h("p", "step-text", audience === "beginner" ? L.problem.beginner : L.problem.statement));
-      if (L.diff.highlight && L.diff.highlight.length) {
-        wireSpot(pCard, L.diff.highlight, "problem");
-      }
-      root.appendChild(pCard);
+      root.appendChild(h("p", "step-text", audience === "beginner" ? L.problem.beginner : L.problem.statement));
       const tools = h("div", "step-tools");
       if (opts.canReplay) {
         const rp = h("button", "gbtn");

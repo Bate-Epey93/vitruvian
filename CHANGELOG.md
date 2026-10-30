@@ -4,6 +4,18 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [2.13.1] — 2026-10-30 · Fix: Layer step action button positioning and mobile visibility
+
+### Fixed
+- **Mobile sheet action buttons visibility**:
+  - Removed CSS `mask-image` / `-webkit-mask-image` from `.doc-pane`. The mask was establishing an ancestor containing block that disabled CSS `position: sticky; bottom: 0;` on `.step-foot`, hiding primary actions ("What would you do?", "Show me the solution", "Next failure · Layer N") completely below the fold on mobile bottom sheets.
+  - Stripped persisting `transform: translateY(0)` containing block from `.doc-inner rise` keyframes by switching animation to an opacity-only fade (`rise .24s var(--ease)`), ensuring sticky footers reliably dock to the scrollport.
+  - Reduced mobile `.move-sketch` textarea min-height from 120px to 86px on narrow screens (`<=860px`), preserving ergonomic sheet real estate.
+- **Desktop reading pane action buttons ergonomics**:
+  - Replaced `margin-top: auto; padding-top: 28px;` on `.step-body > .step-foot` with natural reading proximity (`margin-top: 24px; padding-top: 14px;`) and removed artificial `min-height: calc(100% - 4px)` stretching on `.step-body`. Action buttons on short step cards now sit comfortably right beneath the content rather than being shoved 500px down to the bottom border of the screen.
+  - Retained `position: sticky; bottom: 0;` so tall scrolling steps automatically dock the action buttons at the bottom of the viewport as intended.
+  - Cleaned up Step 1 `stepBreak` layout by rendering direct, editorial `p.step-text` typography rather than an overly heavy card wrapper.
+
 ## [2.13.0] — 2026-10-30 · Wave E & Wave F: Aesthetic craft, direct manipulation, and shelf identity
 
 ### Added
