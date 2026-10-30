@@ -1149,7 +1149,7 @@ var DocView = (() => {
     function render(animateDiagram) {
       const scroll = docPane.scrollTop;
       activeSpotCard = null;                 // cards are rebuilt; syncDiagram clears the diagram spotlight
-      const inner = h("div", "doc-inner rise");
+      const inner = h("div", "doc-inner");
       const body = h("div", "step-body");
       if (pos === 0) {
         renderOverview(body);

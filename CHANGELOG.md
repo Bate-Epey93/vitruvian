@@ -4,6 +4,18 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [2.13.2] — 2026-10-30 · Remove radar and fix mobile button hiding/flicker
+
+### Removed
+- **Viewport Radar Minimap**: Completely removed `.dg-radar` UI, SVG nodes minimap, scroll sync listeners, and minimap click-panning to streamline the canvas workspace.
+
+### Fixed
+- **Mobile sheet button permanence**:
+  - Eliminated `.rise` animation on `.doc-inner` re-renders, preventing the `opacity: 0` flash that caused action buttons to vanish and reappear whenever clicking tabs, buttons, or timeline segments.
+  - On mobile (`<=860px`), anchored `.step-foot` at `position: absolute; bottom: 0; left: 0; right: 0;` within `.doc-sheet` with frosted glass backing, paired with `padding-bottom: 76px` on `.doc-pane`. Action buttons are now permanently visible on mobile without ever hiding below the fold.
+  - Default mobile sheet snap set to `52%` ("half and half"), ensuring comfortable reading height on first open.
+  - Hidden `.step-foot-note` on compact screens (`<=560px`) to prevent crowding out action buttons.
+
 ## [2.13.1] — 2026-10-30 · Fix: Layer step action button positioning and mobile visibility
 
 ### Fixed

@@ -1807,7 +1807,7 @@ function sheetDrag(wrap, sheet, grip) {
      old half-and-half default gave the signature artifact 29% of the screen.
      Narrow screens open on "mostly diagram"; the reader's own choice, once
      made, still wins. */
-  let snap = (window.matchMedia && window.matchMedia("(max-width:720px)").matches) ? 0 : 1;
+  let snap = 1;
   try { const v = parseInt(localStorage.getItem("vitruvian_sheet_snap"), 10); if (v >= 0 && v < SHEET_SNAPS.length) snap = v; } catch (e) {}
   const RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const MIN_SNAP = SHEET_SNAPS[0], MAX_SNAP = SHEET_SNAPS[SHEET_SNAPS.length - 1];
@@ -2187,68 +2187,6 @@ async function openReader(id, layerIndex, opts = {}) {
     const mark = h("div", "reg-mark " + pos);
     mark.setAttribute("aria-hidden", "true");
     dpane.appendChild(mark);
-  });
-
-  // Viewport Radar (Wave E · Proposal #5)
-  const dgRadar = h("div", "dg-radar");
-  dgRadar.innerHTML = `
-    <span class="dg-radar-label">Radar</span>
-    <svg class="dg-radar-svg" viewBox="0 0 ${diagram.layout.width} ${diagram.layout.height}" width="100%" height="100%">
-      <g class="dg-radar-nodes"></g>
-      <rect class="dg-radar-viewport" x="0" y="0" width="${diagram.layout.width}" height="${diagram.layout.height}" rx="6"/>
-    </svg>
-  `;
-  const rGroup = dgRadar.querySelector(".dg-radar-nodes");
-  const allNodesList = [...(diagram.doc.visual.nodes || [])];
-  diagram.doc.layers.forEach(l => { if (l.diff && l.diff.add_nodes) allNodesList.push(...l.diff.add_nodes); });
-  allNodesList.forEach(n => {
-    const p = diagram.layout.pos[n.id];
-    if (p) {
-      const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      r.setAttribute("x", p.x - 30);
-      r.setAttribute("y", p.y - 18);
-      r.setAttribute("width", 60);
-      r.setAttribute("height", 36);
-      r.setAttribute("rx", 6);
-      r.setAttribute("fill", "var(--muted)");
-      r.setAttribute("opacity", "0.4");
-      rGroup.appendChild(r);
-    }
-  });
-  dpane.appendChild(dgRadar);
-
-  let radarTimer = null;
-  const syncRadar = () => {
-    const z = diagram.zoom.current();
-    const fz = diagram.zoom.fitZ();
-    const vp = dgRadar.querySelector(".dg-radar-viewport");
-    if (!vp) return;
-    const vx = Math.max(0, dscroll.scrollLeft / z);
-    const vy = Math.max(0, dscroll.scrollTop / z);
-    const vw = Math.min(diagram.layout.width, dscroll.clientWidth / z);
-    const vh = Math.min(diagram.layout.height, dscroll.clientHeight / z);
-    vp.setAttribute("x", vx.toFixed(1));
-    vp.setAttribute("y", vy.toFixed(1));
-    vp.setAttribute("width", vw.toFixed(1));
-    vp.setAttribute("height", vh.toFixed(1));
-
-    dgRadar.classList.add("visible");
-    clearTimeout(radarTimer);
-    if (Math.abs(z - fz) < 0.05 && dscroll.scrollLeft < 10 && dscroll.scrollTop < 10) {
-      radarTimer = setTimeout(() => dgRadar.classList.remove("visible"), 1200);
-    }
-  };
-  dscroll.addEventListener("scroll", syncRadar, { passive: true });
-
-  dgRadar.addEventListener("click", e => {
-    const rRect = dgRadar.getBoundingClientRect();
-    const rx = (e.clientX - rRect.left) / rRect.width;
-    const ry = (e.clientY - rRect.top) / rRect.height;
-    const targetX = rx * diagram.layout.width;
-    const targetY = ry * diagram.layout.height;
-    const z = diagram.zoom.current();
-    dscroll.scrollLeft = targetX * z - dscroll.clientWidth / 2;
-    dscroll.scrollTop = targetY * z - dscroll.clientHeight / 2;
   });
 
   diagram.onDrill((sub) => drillInto(sub));

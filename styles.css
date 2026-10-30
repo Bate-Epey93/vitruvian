@@ -746,31 +746,6 @@ input,textarea{font-family:var(--sans);}
 .diagram-pane .reg-mark.br::before{bottom:0;right:0;width:10px;height:1.5px;}
 .diagram-pane .reg-mark.br::after{bottom:0;right:0;width:1.5px;height:10px;}
 
-/* Viewport Radar Minimap (Wave E · Proposal #5) */
-.dg-radar{
-  position:absolute;right:14px;bottom:14px;z-index:12;
-  width:136px;height:84px;border-radius:var(--r-sm);
-  background:color-mix(in srgb,var(--panel) 84%,transparent);
-  -webkit-backdrop-filter:blur(12px) saturate(160%);
-  backdrop-filter:blur(12px) saturate(160%);
-  box-shadow:inset 0 0 0 1px var(--hair-strong),var(--sh-2);
-  padding:5px;opacity:0;transform:translateY(4px) scale(0.96);
-  transition:opacity .22s var(--ease),transform .22s var(--ease);
-  pointer-events:none;
-}
-.dg-radar.visible{
-  opacity:1;transform:translateY(0) scale(1);
-  pointer-events:auto;cursor:crosshair;
-}
-.dg-radar-label{
-  position:absolute;left:7px;top:4px;
-  font-family:var(--mono);font-size:8.5px;font-weight:700;
-  letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
-}
-.dg-radar-viewport{
-  fill:color-mix(in srgb,var(--accent) 15%,transparent);
-  stroke:var(--accent);stroke-width:12;
-}
 .doc-inner{max-width:600px;margin:0 auto;padding:32px 32px 0;}
 
 /* the dock: legend, scrubber and tools, one surface */
@@ -920,7 +895,8 @@ input,textarea{font-family:var(--sans);}
   .pane-split{display:none;}
   .diagram-pane{position:absolute;left:0;right:0;top:0;bottom:calc(var(--sheet) - 6px);border-right:none;transition:bottom .32s var(--ease);}
   .doc-sheet{position:absolute;left:0;right:0;bottom:0;height:var(--sheet);z-index:30;border-radius:18px 18px 0 0;
-    box-shadow:0 -1px 0 var(--hair),0 -12px 32px -12px rgba(0,0,0,.22);transition:height .32s var(--ease);}
+    box-shadow:0 -1px 0 var(--hair),0 -12px 32px -12px rgba(0,0,0,.22);transition:height .32s var(--ease);
+    display:flex;flex-direction:column;overflow:hidden;}
   .reader.sheet-moving .doc-sheet,.reader.sheet-moving .diagram-pane{transition:none;}
   .sheet-grip{display:grid;place-items:center;flex:none;width:100%;height:24px;border:none;background:none;cursor:grab;touch-action:none;padding:0;}
   .sheet-grip:active{cursor:grabbing;}
@@ -929,8 +905,17 @@ input,textarea{font-family:var(--sans);}
   .sheet-grip:focus-visible .sheet-grip-bar{background:var(--accent);box-shadow:0 0 0 3px var(--accent-wash);}
   .cap-toggle{display:none;}
   .diagram-scroll{padding:10px;place-items:start;}
+  .doc-pane{flex:1;overflow-y:auto;padding-bottom:76px;}
   .doc-inner{padding:4px 18px 16px;}
   .move-sketch{min-height:86px;}
+  .step-foot{
+    position:absolute;bottom:0;left:0;right:0;z-index:35;margin-top:0;
+    padding:10px 18px calc(10px + env(safe-area-inset-bottom));
+    background:color-mix(in srgb,var(--canvas) 92%,transparent);
+    -webkit-backdrop-filter:blur(16px) saturate(160%);
+    backdrop-filter:blur(16px) saturate(160%);
+    box-shadow:0 -1px 0 var(--hair),0 -8px 20px -6px rgba(0,0,0,.12);
+  }
   /* the key collapses to a chip over the diagram's corner: zero rows when closed */
   .dgl-tog{display:inline-flex;align-items:center;flex-shrink:0;position:relative;
     font-size:11.5px;font-weight:600;background:var(--glass-heavy);border:none;border-radius:var(--r-pill);
@@ -1851,6 +1836,7 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
   .step-tab{padding:5px 9px 5px 18px;font-size:12px;}
   .step-tab::before{left:7px;}
   .step-foot .step-next{flex:1 1 auto;}
+  .step-foot-note{display:none;}
   .tl-seg{height:36px;min-width:30px;padding:0 8px;}
 }
 @media(prefers-reduced-motion:reduce){.move-sketch.nudge,.lab-menu{animation:none;}}
