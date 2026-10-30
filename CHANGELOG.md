@@ -4,6 +4,30 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [2.13.0] — 2026-10-30 · Wave E & Wave F: Aesthetic craft, direct manipulation, and shelf identity
+
+### Added
+- **Interactive Layer Scrubber with hover preview popovers and step micro-dots (Wave E · Proposal #2).**
+  - Hovering or focusing any `.tl-seg` pill in the timeline now reveals an architectural summary popover displaying the layer's role, thinking model, invariants defended, and delta additions (`+N parts · +N flows`).
+  - Four micro-dots beneath each layer pill indicate progress through its 4-step loop (`Problem → Guess → Solution → Tradeoff`), with an Enso vermillion micro-dot celebrating answered gate predictions.
+- **Bidirectional Prose ↔ Diagram hover tethering & explicit trace pills (Wave E · Proposal #3).**
+  - Hovering any problem card, solution card, scale band, or component row softly pre-glows linked diagram nodes and pulses payload edges at 38% background opacity; clicking locks the spotlight with an explicit `🔒 N parts · locked` indicator pill.
+  - Hovering nodes directly on the SVG canvas reverse-highlights their corresponding component rows and mentions in the prose pane.
+- **Drafting-table corner registration marks, live zoom readout, and auto-hiding Viewport Radar (Wave E · Proposal #5).**
+  - Subtle corner registration marks and a drafting-grid dot matrix give physical scale and panning cues on the diagram canvas.
+  - The zoom control displays a live tabular percentage readout (`FIT` when fitted, `${pct}% ↺` when zoomed, resetting on click).
+  - An auto-hiding Viewport Radar (minimap) appears in the bottom-right corner when zooming or panning and auto-fades 1.2s after settling.
+- **Topological miniature blueprint headers & domain ink on Library cards (Wave F · Proposal #1).**
+  - Each library card now displays a lightweight architectural silhouette header showing its topology, inking unlocked layers in solid domain color and upcoming layers in ghosted dashed wireframes as the reader progresses.
+  - Domain-specific ink accents for *Software* (teal), *Economics* (amber), *Operations* (rust), *Living systems* (sage), and *Machines* (slate).
+- **Segmented control sliding pill indicator & tactile press physics (Wave F · Proposal #4).**
+  - Spring-physics sliding pills behind audience switches, step tabs, and navigation controls glide with `--ease-spring`, paired with tactile pointer-down compression (`transform: scale(0.96)`).
+- **Scroll-edge luminance fade masks & smooth 240ms theme transitions (Wave F · Proposal #6).**
+  - Top/bottom fade masks on the prose pane and horizontal edge masks on the timeline eliminate harsh 1px borders.
+  - Toggling `#themeBtn` initiates a 240ms cross-fade between warm paper and dark slate ink.
+- **Enso vermillion seal & causal completion choreography (Wave F · Proposal #7).**
+  - Revealing a layer solution or completing all layers triggers an animated Enso vermillion stamp bounce with an ink-ring ripple.
+
 ## [2.12.0] — 2026-10-30 · Beyond software: economics, operations, biology, and 3D companions
 
 ### Added

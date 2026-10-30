@@ -418,10 +418,13 @@ function applyTheme(t) {
   if (btn) btn.setAttribute("aria-label", t === "dark" ? "Switch to light mode" : "Switch to dark mode");   // the sun/moon swap is CSS, keyed off data-theme
 }
 async function toggleTheme() {
-  const next = (document.documentElement.dataset.theme === "dark") ? "light" : "dark";
+  const root = document.documentElement;
+  root.classList.add("theme-transitioning");
+  const next = (root.dataset.theme === "dark") ? "light" : "dark";
   applyTheme(next);
   meta.theme = next;
   await Store.saveMeta({ theme: next });
+  setTimeout(() => root.classList.remove("theme-transitioning"), 260);
 }
 
 /* ═══ Screen switching ═══ */
@@ -580,18 +583,37 @@ function wireTopbar() {
 
 function renderAudSwitch() {
   const box = $("audSwitch");
-  box.textContent = "";
-  COPY.audienceModes.forEach(m => {
-    const b = h("button", meta.audienceMode === m.id ? "on" : "");
-    b.append(h("span", "aud-full", m.label), h("span", "aud-abbr", m.label[0]));  // full text ↔ single letter on mobile
-    b.setAttribute("aria-label", m.label);
-    b.onclick = async () => {
-      meta.audienceMode = m.id;
-      await Store.saveMeta({ audienceMode: m.id });
-      renderAudSwitch();
-      if (currentView) currentView.setAudience(m.id);
-    };
-    box.appendChild(b);
+  let pill = box.querySelector(".sliding-seg-pill");
+  if (!pill) {
+    box.textContent = "";
+    pill = h("div", "sliding-seg-pill");
+    box.appendChild(pill);
+    COPY.audienceModes.forEach(m => {
+      const b = h("button", meta.audienceMode === m.id ? "on" : "");
+      b.dataset.aud = m.id;
+      b.append(h("span", "aud-full", m.label), h("span", "aud-abbr", m.label[0]));  // full text ↔ single letter on mobile
+      b.setAttribute("aria-label", m.label);
+      b.onclick = async () => {
+        meta.audienceMode = m.id;
+        await Store.saveMeta({ audienceMode: m.id });
+        renderAudSwitch();
+        if (currentView) currentView.setAudience(m.id);
+      };
+      box.appendChild(b);
+    });
+  } else {
+    box.querySelectorAll("button").forEach(b => {
+      b.classList.toggle("on", b.dataset.aud === meta.audienceMode);
+    });
+  }
+  requestAnimationFrame(() => {
+    const onBtn = box.querySelector("button.on");
+    if (onBtn && pill) {
+      const bRect = onBtn.getBoundingClientRect();
+      const cRect = box.getBoundingClientRect();
+      pill.style.width = `${bRect.width}px`;
+      pill.style.transform = `translateX(${bRect.left - cRect.left}px)`;
+    }
   });
 }
 
@@ -1025,21 +1047,115 @@ function sectionHead(title, sub) {
   if (sub) wrap.appendChild(h("span", "lib-section-sub", sub));
   return wrap;
 }
+/* ── Topological Miniature Blueprint Header (Wave F · Proposal #1) ── */
+function buildCardTopo(doc, doneLayers, dom) {
+  const header = h("div", "bd-topo-header");
+  const totalLayers = (doc && doc.layers && doc.layers.length) || 1;
+  header.appendChild(h("span", "bd-topo-badge", `${doneLayers}/${totalLayers} layers`));
+
+  if (!doc || !doc.visual) return header;
+  const lanes = doc.visual.lanes || [{ id: "l0" }];
+  const laneIndex = {};
+  lanes.forEach((l, idx) => { laneIndex[l.id] = idx; });
+  const laneCount = Math.max(1, lanes.length);
+
+  const allNodes = [...(doc.visual.nodes || [])];
+  doc.layers.forEach(L => {
+    if (L.diff && L.diff.add_nodes) allNodes.push(...L.diff.add_nodes);
+  });
+  let maxOrder = 1;
+  allNodes.forEach(n => { if (n.order != null && n.order > maxOrder) maxOrder = n.order; });
+
+  const W = 220, H = 76;
+  const padX = 22, padY = 16;
+  const colStep = (W - padX * 2) / Math.max(1, maxOrder);
+  const rowStep = (H - padY * 2) / Math.max(1, laneCount - 1 || 1);
+
+  const nodePos = {};
+  allNodes.forEach(n => {
+    const col = n.order != null ? n.order : 0;
+    const row = laneIndex[n.lane] != null ? laneIndex[n.lane] : 0;
+    nodePos[n.id] = {
+      x: Math.round(padX + col * colStep),
+      y: Math.round(laneCount === 1 ? H / 2 : padY + row * rowStep),
+      layer: 0
+    };
+  });
+  doc.layers.forEach((L, idx) => {
+    if (L.diff && L.diff.add_nodes) {
+      L.diff.add_nodes.forEach(n => {
+        if (nodePos[n.id]) nodePos[n.id].layer = idx + 1;
+      });
+    }
+  });
+
+  const allEdges = [...(doc.visual.edges || [])];
+  doc.layers.forEach((L, idx) => {
+    if (L.diff && L.diff.add_edges) {
+      L.diff.add_edges.forEach(e => {
+        allEdges.push(Object.assign({}, e, { layer: idx + 1 }));
+      });
+    }
+  });
+
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", "bd-topo-svg");
+
+  allEdges.forEach(e => {
+    const p1 = nodePos[e.from], p2 = nodePos[e.to];
+    if (!p1 || !p2) return;
+    const edgeLayer = e.layer || Math.max(p1.layer, p2.layer);
+    const unlocked = edgeLayer <= doneLayers;
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.setAttribute("x1", p1.x);
+    line.setAttribute("y1", p1.y);
+    line.setAttribute("x2", p2.x);
+    line.setAttribute("y2", p2.y);
+    line.setAttribute("class", "topo-edge " + (unlocked ? "unlocked" : "ghost"));
+    svg.appendChild(line);
+  });
+
+  allNodes.forEach(n => {
+    const p = nodePos[n.id];
+    if (!p) return;
+    const unlocked = p.layer <= doneLayers;
+    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    rect.setAttribute("x", p.x - 9);
+    rect.setAttribute("y", p.y - 6);
+    rect.setAttribute("width", 18);
+    rect.setAttribute("height", 12);
+    rect.setAttribute("rx", 3.5);
+    rect.setAttribute("class", "topo-node " + (unlocked ? "unlocked" : "ghost"));
+    svg.appendChild(rect);
+  });
+
+  header.appendChild(svg);
+  return header;
+}
+
 function cardGrid(recs) {
   const grid = h("div", "card-grid");
   recs.forEach(rec => {
     const card = h("button", "bd-card");
+    const dom = (rec.doc && rec.doc.meta && rec.doc.meta.domain) || "software";
+    card.dataset.domain = dom;
+
     const n = rec.doc.layers.length;
     const done = rec.doc.layers.filter(L => rec.attempts[L.index] && rec.attempts[L.index].revealed).length;
     const pct = Math.round(100 * done / n);
+
+    // Topological Miniature Header (Proposal #1)
+    card.appendChild(buildCardTopo(rec.doc, done, dom));
+
     const top = h("div", "bd-top");
     const chipCls = rec.source === "flagship" ? " flagship" : (rec.source === "design" ? " design" : "");
     const chipLabel = rec.source === "flagship" ? "Sample" : (rec.source === "design" ? "Your design" : "Your Deconstruct");
     top.appendChild(h("span", "chip" + chipCls, chipLabel));
-    const dom = rec.doc && rec.doc.meta && rec.doc.meta.domain;
     if (dom && dom !== "software" && typeof domainLabel === "function") {
       const dl = domainLabel(dom);
-      if (dl) top.appendChild(h("span", "chip", dl));
+      if (dl) top.appendChild(h("span", "chip dom-chip", dl));
     }
     // this subject also exists as a machine you can turn over
     if (fieldStudyFor(rec.system)) top.appendChild(h("span", "chip lab-chip", COPY.labChip));
@@ -2053,7 +2169,88 @@ async function openReader(id, layerIndex, opts = {}) {
   if (drillStack.length > 1) pane.appendChild(drillCrumb());
   pane.appendChild(wrap);
 
-  const diagram = Diagram.mount(dscroll, rec.doc, { hasStudy });
+  const diagram = Diagram.mount(dscroll, rec.doc, {
+    hasStudy,
+    onNodeHover: (nodeId, isOver) => {
+      // Reverse tethering: highlight matching cards in prose pane (Wave E · Proposal #3)
+      const pane = document.querySelector(".doc-pane");
+      if (!pane) return;
+      pane.querySelectorAll(".spot-card").forEach(c => {
+        const ids = (c.dataset.spotIds || "").split(",");
+        c.classList.toggle("card-reverse-highlight", isOver && ids.includes(nodeId));
+      });
+    }
+  });
+
+  // Corner Registration Marks (Wave E · Proposal #5)
+  ["tl", "tr", "bl", "br"].forEach(pos => {
+    const mark = h("div", "reg-mark " + pos);
+    mark.setAttribute("aria-hidden", "true");
+    dpane.appendChild(mark);
+  });
+
+  // Viewport Radar (Wave E · Proposal #5)
+  const dgRadar = h("div", "dg-radar");
+  dgRadar.innerHTML = `
+    <span class="dg-radar-label">Radar</span>
+    <svg class="dg-radar-svg" viewBox="0 0 ${diagram.layout.width} ${diagram.layout.height}" width="100%" height="100%">
+      <g class="dg-radar-nodes"></g>
+      <rect class="dg-radar-viewport" x="0" y="0" width="${diagram.layout.width}" height="${diagram.layout.height}" rx="6"/>
+    </svg>
+  `;
+  const rGroup = dgRadar.querySelector(".dg-radar-nodes");
+  const allNodesList = [...(diagram.doc.visual.nodes || [])];
+  diagram.doc.layers.forEach(l => { if (l.diff && l.diff.add_nodes) allNodesList.push(...l.diff.add_nodes); });
+  allNodesList.forEach(n => {
+    const p = diagram.layout.pos[n.id];
+    if (p) {
+      const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      r.setAttribute("x", p.x - 30);
+      r.setAttribute("y", p.y - 18);
+      r.setAttribute("width", 60);
+      r.setAttribute("height", 36);
+      r.setAttribute("rx", 6);
+      r.setAttribute("fill", "var(--muted)");
+      r.setAttribute("opacity", "0.4");
+      rGroup.appendChild(r);
+    }
+  });
+  dpane.appendChild(dgRadar);
+
+  let radarTimer = null;
+  const syncRadar = () => {
+    const z = diagram.zoom.current();
+    const fz = diagram.zoom.fitZ();
+    const vp = dgRadar.querySelector(".dg-radar-viewport");
+    if (!vp) return;
+    const vx = Math.max(0, dscroll.scrollLeft / z);
+    const vy = Math.max(0, dscroll.scrollTop / z);
+    const vw = Math.min(diagram.layout.width, dscroll.clientWidth / z);
+    const vh = Math.min(diagram.layout.height, dscroll.clientHeight / z);
+    vp.setAttribute("x", vx.toFixed(1));
+    vp.setAttribute("y", vy.toFixed(1));
+    vp.setAttribute("width", vw.toFixed(1));
+    vp.setAttribute("height", vh.toFixed(1));
+
+    dgRadar.classList.add("visible");
+    clearTimeout(radarTimer);
+    if (Math.abs(z - fz) < 0.05 && dscroll.scrollLeft < 10 && dscroll.scrollTop < 10) {
+      radarTimer = setTimeout(() => dgRadar.classList.remove("visible"), 1200);
+    }
+  };
+  dscroll.addEventListener("scroll", syncRadar, { passive: true });
+
+  dgRadar.addEventListener("click", e => {
+    const rRect = dgRadar.getBoundingClientRect();
+    const rx = (e.clientX - rRect.left) / rRect.width;
+    const ry = (e.clientY - rRect.top) / rRect.height;
+    const targetX = rx * diagram.layout.width;
+    const targetY = ry * diagram.layout.height;
+    const z = diagram.zoom.current();
+    dscroll.scrollLeft = targetX * z - dscroll.clientWidth / 2;
+    dscroll.scrollTop = targetY * z - dscroll.clientHeight / 2;
+  });
+
   diagram.onDrill((sub) => drillInto(sub));
   // the key lists only the glyphs this state actually uses, and tapping one
   // lights the nodes that carry it. onRender holds a single callback, so the
@@ -2144,14 +2341,17 @@ async function openReader(id, layerIndex, opts = {}) {
             : (info && info.boxes) ? COPY.foldSet(keep) : COPY.foldNothing);
     }
   };
-  /* ── zoom ── */
+  /* ── zoom (Wave E · Proposal #5) ── */
   const paintZoom = () => {
     const whole = diagram.fitsWhole();
+    const currentZ = diagram.zoom.current();
+    const fitZ = diagram.zoom.fitZ();
+    const pct = Math.round((currentZ / fitZ) * 100);
     zFit.classList.toggle("on", diagram.isAutoFit());
-    /* when the drawing already fits there is nothing for Fit to do, and a
-       control that does nothing should not look live */
     zFit.disabled = whole && diagram.isAutoFit();
     zoomBar.hidden = whole && diagram.isAutoFit() && !diagram.doc.layers.length;
+    zFit.textContent = (diagram.isAutoFit() || Math.abs(currentZ - fitZ) < 0.03) ? "FIT" : `${pct}% ↺`;
+    syncRadar();
   };
   zOut.onclick = () => { diagram.zoomBy(1 / 1.25); paintZoom(); };
   zIn.onclick = () => { diagram.zoomBy(1.25); paintZoom(); };

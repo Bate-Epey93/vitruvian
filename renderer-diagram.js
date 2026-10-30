@@ -591,7 +591,8 @@ var Diagram = (() => {
         const id = g && g.getAttribute("data-id");
         if (!id || id === hovered) return;
         hovered = id;
-        spotlight(relate(id), "trace");
+        spotlight(relate(id), "trace", { preview: true });
+        if (opts.onNodeHover) opts.onNodeHover(id, true);
       });
       svg.addEventListener("pointerout", ev => {
         if (traced || !hovered) return;
@@ -602,8 +603,10 @@ var Diagram = (() => {
         const to = ev.relatedTarget;
         const toNode = to && to.closest && to.closest(".dg-node");
         if (from && toNode === from) return;
+        const prev = hovered;
         hovered = null;
         spotlight(null);
+        if (opts.onNodeHover) opts.onNodeHover(prev, false);
       });
     }
 
@@ -906,17 +909,30 @@ var Diagram = (() => {
       ids.forEach(id => { const m = lastFold.memberOf.get(id); out.push(m || id); });
       return out;
     }
-    function spotlight(ids, kind) {
+    function spotlight(ids, kind, opts) {
       ids = viaFold(ids);
-      // strip every dg-spot* class (problem/solution/load/future kinds), or a
+      const isPreview = !!(opts && opts.preview);
+      // strip every dg-spot* class (problem/solution/load/future kinds, preview or locked), or a
       // leftover kind class keeps its stroke on after toggle-off
-      svg.querySelectorAll(".dg-spot").forEach(e => [...e.classList].filter(c => c.indexOf("dg-spot") === 0).forEach(c => e.classList.remove(c)));
-      if (!ids || !ids.length) { svg.classList.remove("dg-has-spot"); return; }
+      svg.querySelectorAll(".dg-spot, .dg-spot-preview").forEach(e => [...e.classList].filter(c => c.indexOf("dg-spot") === 0).forEach(c => e.classList.remove(c)));
+      if (!ids || !ids.length) {
+        svg.classList.remove("dg-has-spot", "dg-has-spot-preview");
+        return;
+      }
       const set = new Set(ids);
-      svg.classList.add("dg-has-spot");
-      svg.querySelectorAll("[data-id]").forEach(e => {
-        if (set.has(e.getAttribute("data-id"))) e.classList.add("dg-spot", "dg-spot-" + kind);
-      });
+      if (isPreview) {
+        svg.classList.remove("dg-has-spot");
+        svg.classList.add("dg-has-spot-preview");
+        svg.querySelectorAll("[data-id]").forEach(e => {
+          if (set.has(e.getAttribute("data-id"))) e.classList.add("dg-spot-preview", "dg-spot-preview-" + kind);
+        });
+      } else {
+        svg.classList.remove("dg-has-spot-preview");
+        svg.classList.add("dg-has-spot");
+        svg.querySelectorAll("[data-id]").forEach(e => {
+          if (set.has(e.getAttribute("data-id"))) e.classList.add("dg-spot", "dg-spot-" + kind);
+        });
+      }
     }
 
     /* ── Race spotlight: a node with ≥2 incoming PAYLOAD edges has concurrent

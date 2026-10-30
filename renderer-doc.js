@@ -77,22 +77,58 @@ var DocView = (() => {
       return rec.attempts[idx];
     }
 
-    /* Link a reader card to its diagram parts: tap to spotlight those ids in
-       the card's colour (and dim the rest); tap again to clear. One active
-       card at a time. Reset every render (cards are rebuilt). */
+    /* Link a reader card to its diagram parts: hover to preview, tap to lock (Wave E · Proposal #3). */
     let activeSpotCard = null;
-    function wireSpot(cardEl, ids, kind) {
+    function wireSpot(cardEl, ids, kind, customLabel) {
       ids = (ids || []).filter(Boolean);
       if (!ids.length) return;                       // nothing to locate (e.g. a layer with no highlights)
       cardEl.classList.add("spot-card");
-      cardEl.title = "Tap to locate on the diagram";
-      cardEl.addEventListener("click", () => {
-        if (activeSpotCard === cardEl) { diagram.spotlight(null); cardEl.classList.remove("spot-on"); activeSpotCard = null; return; }
-        if (activeSpotCard) activeSpotCard.classList.remove("spot-on");
+      cardEl.dataset.spotIds = ids.join(",");
+      cardEl.title = "Hover to preview, click to lock on diagram";
+
+      const countLabel = ids.length === 1 ? "1 part" : `${ids.length} parts`;
+      const pillText = customLabel || `◎ ${countLabel}`;
+      let tracePill = cardEl.querySelector(".trace-pill");
+      if (!tracePill) {
+        tracePill = h("span", "trace-pill", pillText);
+        const head = cardEl.querySelector(".sc-label, .sb-label, .problem-label, .db-label");
+        if (head) head.appendChild(tracePill);
+        else cardEl.appendChild(tracePill);
+      }
+
+      cardEl.addEventListener("pointerenter", () => {
+        if (!activeSpotCard) {
+          diagram.spotlight(ids, kind, { preview: true });
+          cardEl.classList.add("spot-preview");
+        }
+      });
+      cardEl.addEventListener("pointerleave", () => {
+        if (!activeSpotCard) {
+          diagram.spotlight(null);
+          cardEl.classList.remove("spot-preview");
+        }
+      });
+
+      cardEl.addEventListener("click", ev => {
+        if (ev.target.closest("button:not(.trace-pill), a, input, textarea")) return;
+        if (activeSpotCard === cardEl) {
+          diagram.spotlight(null);
+          cardEl.classList.remove("spot-on", "spot-preview");
+          activeSpotCard = null;
+          tracePill.textContent = pillText;
+          return;
+        }
+        if (activeSpotCard) {
+          activeSpotCard.classList.remove("spot-on", "spot-preview");
+          const oldPill = activeSpotCard.querySelector(".trace-pill");
+          if (oldPill && oldPill._defaultText) oldPill.textContent = oldPill._defaultText;
+        }
         diagram.spotlight(ids, kind);
         diagram.focus(ids);                  // pan the spotlighted parts into view (mobile)
         cardEl.classList.add("spot-on");
         activeSpotCard = cardEl;
+        tracePill._defaultText = pillText;
+        tracePill.textContent = `🔒 ${countLabel} · locked`;
       });
     }
     function diffAddedIds(L) {
@@ -157,25 +193,115 @@ var DocView = (() => {
     /* ── The timeline: one control for place. Meet, every layer, Trials,
        Transfer. Finished layers are teal; the current one opens up to show
        its four steps. It replaces the step dots and the old scrubber, which
-       moved the picture without moving your place. ── */
+       moved the picture without moving your place. (Wave E · Proposal #2) ── */
     function renderTimeline() {
       if (!scrubEl) return;
       scrubEl.textContent = "";
       scrubEl.className = "scrub-wrap timeline" + (onePage ? " one-page" : "");
+
+      // Floating hover preview popover (Wave E · Proposal #2)
+      const popover = h("div", "tl-popover");
+      popover.setAttribute("role", "tooltip");
+      popover.innerHTML = `
+        <div class="tl-pop-head">
+          <span class="tl-pop-layer"></span>
+          <span class="tl-pop-delta"></span>
+        </div>
+        <div class="tl-pop-title"></div>
+        <div class="tl-pop-sub"></div>
+        <div class="tl-pop-meta"></div>
+      `;
+      scrubEl.appendChild(popover);
+
       const row = h("div", "tl-row");
-      const seg = (p, label, state, aria) => {
-        const b = h("button", "tl-seg tl-" + state, label);
+      const seg = (p, label, state, aria, layerObj) => {
+        const b = h("button", "tl-seg tl-" + state);
         b.setAttribute("aria-label", aria);
         if (p === pos) b.setAttribute("aria-current", "step");
-        b.onclick = () => goTo(p, (p >= 1 && p <= N && attemptFor(doc.layers[p - 1].index).revealed) ? 3 : 1);
+
+        const topSpan = h("span", "tl-seg-top", label);
+        b.appendChild(topSpan);
+
+        // 4 step micro-dots for numbered layers
+        if (layerObj && p >= 1 && p <= N) {
+          const dotsWrap = h("span", "tl-microdots");
+          const a = attemptFor(layerObj.index);
+          const currentStep = (p === pos && !onePage) ? step : (a.revealed ? 4 : 1);
+          for (let s = 1; s <= 4; s++) {
+            const dot = h("span", "tl-dot" + (s <= currentStep ? " done" : ""));
+            dotsWrap.appendChild(dot);
+          }
+          if (a.predict || a.revealed) {
+            const ensoDot = h("span", "tl-dot enso");
+            ensoDot.title = "Gate prediction answered";
+            dotsWrap.appendChild(ensoDot);
+          }
+          b.appendChild(dotsWrap);
+        }
+
+        // Hover popover events
+        b.addEventListener("pointerenter", () => {
+          const popLayer = popover.querySelector(".tl-pop-layer");
+          const popDelta = popover.querySelector(".tl-pop-delta");
+          const popTitle = popover.querySelector(".tl-pop-title");
+          const popSub = popover.querySelector(".tl-pop-sub");
+          const popMeta = popover.querySelector(".tl-pop-meta");
+
+          if (p === 0) {
+            popLayer.textContent = "MEET THE SYSTEM";
+            popDelta.textContent = "Overview";
+            popTitle.textContent = doc.meta.system;
+            popSub.textContent = (doc.essence && (doc.essence.beginner || doc.essence.text)) || "Baseline system architecture and rules.";
+            popMeta.innerHTML = `<span>${doc.strip_down.invariants.length} invariants to defend</span>`;
+          } else if (p === N + 1) {
+            popLayer.textContent = "TRIALS";
+            popDelta.textContent = "Stress Tests";
+            popTitle.textContent = "Architectural Stress Tests";
+            popSub.textContent = "Test how this system survives sudden spikes, partitioned links, and cascade failures.";
+            popMeta.innerHTML = `<span style="color:var(--accent)">✦ Failure Mode Analysis</span>`;
+          } else if (p === N + 2) {
+            popLayer.textContent = "TRANSFER";
+            popDelta.textContent = "Synthesis";
+            popTitle.textContent = "Where Else This Pattern Lives";
+            popSub.textContent = "Cross-domain models that repeat this design move in other engineering disciplines.";
+            popMeta.innerHTML = `<span style="color:var(--accent)">✦ Cross-Domain Transfer</span>`;
+          } else if (layerObj) {
+            popLayer.textContent = `LAYER ${p} OF ${N}`;
+            const addN = (layerObj.diff.add_nodes || []).length;
+            const addE = (layerObj.diff.add_edges || []).length;
+            popDelta.textContent = `+${addN} parts · +${addE} flows`;
+            const a = attemptFor(layerObj.index);
+            popTitle.textContent = a.revealed || (p === pos && step >= 3) ? layerObj.name : failurePart(layerObj);
+            popSub.textContent = layerObj.problem ? (audience === "beginner" ? layerObj.problem.beginner : layerObj.problem.statement) : "";
+            const modelName = layerObj.thinking_model || (layerObj.problem && layerObj.problem.model && layerObj.problem.model.name) || "";
+            popMeta.innerHTML = (modelName ? `<span style="color:var(--accent)">✦ ${modelName}</span>` : "") +
+              (layerObj.defends && layerObj.defends.length ? `<span> · Defends ${layerObj.defends.map(ruleLabel).join(", ")}</span>` : "");
+          }
+
+          const sRect = scrubEl.getBoundingClientRect();
+          const bRect = b.getBoundingClientRect();
+          const left = Math.max(8, Math.min(sRect.width - 280, bRect.left - sRect.left));
+          popover.style.left = `${left}px`;
+          popover.classList.add("show");
+        });
+
+        b.addEventListener("pointerleave", () => {
+          popover.classList.remove("show");
+        });
+
+        b.onclick = () => {
+          popover.classList.remove("show");
+          goTo(p, (p >= 1 && p <= N && attemptFor(doc.layers[p - 1].index).revealed) ? 3 : 1);
+        };
         row.appendChild(b);
       };
+
       seg(0, "Meet", pos === 0 ? "on" : "done", "Meet the system");
       doc.layers.forEach(L => {
         const p = L.index, a = attemptFor(L.index);
         const state = p === pos ? "on" : a.revealed ? "done" : "todo";
         const name = a.revealed || (p === pos && step >= 3) ? L.name.split(":")[0] : failurePart(L);
-        seg(p, p === pos && !onePage ? `${p}  ${name}` : String(p), state, `Layer ${p}: ${name}`);
+        seg(p, p === pos && !onePage ? `${p}  ${name}` : String(p), state, `Layer ${p}: ${name}`, L);
       });
       seg(N + 1, "Trials", pos === N + 1 ? "on" : pos > N + 1 ? "done" : "todo", "Trials: stress tests");
       seg(N + 2, "Transfer", pos === N + 2 ? "on" : "todo", "Transfer: what to take with you");
@@ -183,12 +309,14 @@ var DocView = (() => {
     }
 
     /* ── The step card's chrome: where you are, the four steps, and one
-       sticky footer that always holds the next move. ── */
+       sticky footer that always holds the next move. (Wave F · Proposal #4) ── */
     function stepHead(root, L) {
       const head = h("div", "step-head");
       head.appendChild(h("div", "step-where", `Layer ${L.index} of ${N}`));
       const tabs = h("div", "step-tabs");
       tabs.setAttribute("role", "tablist");
+      const pill = h("div", "step-tabs-pill");
+      tabs.appendChild(pill);
       STEPS.forEach((st, i) => {
         const t = h("button", `step-tab tone-${st.tone}` + (i + 1 === step ? " on" : i + 1 < step ? " past" : ""), st.short);
         t.setAttribute("role", "tab");
@@ -201,6 +329,16 @@ var DocView = (() => {
       root.appendChild(head);
       const st = STEPS[step - 1];
       root.appendChild(h("div", `step-kick tone-${st.tone}`, st.label));
+
+      requestAnimationFrame(() => {
+        const onTab = tabs.querySelector(".step-tab.on");
+        if (onTab && pill) {
+          const tRect = tabs.getBoundingClientRect();
+          const bRect = onTab.getBoundingClientRect();
+          pill.style.width = `${bRect.width}px`;
+          pill.style.transform = `translateX(${bRect.left - tRect.left}px)`;
+        }
+      });
     }
     function footer(primary, secondary, note) {
       const f = h("div", "step-foot");
@@ -222,15 +360,15 @@ var DocView = (() => {
     }
 
     /* ── Meet the system (position 0): two short steps instead of one long
-       page. Essence first, then the rules it must never break. Who wants
-       what, the pieces, the flows and the limits are reference material, so
-       they live in the System sheet, one tap away from anywhere. ── */
+       page. Essence first, then the rules it must never break. ── */
     const MEET = [{ label: "Essence", tone: "teal" }, { label: "Rules", tone: "vio" }];
     function meetHead(root) {
       const head = h("div", "step-head");
       head.appendChild(h("div", "step-where", "Meet the system"));
       const tabs = h("div", "step-tabs");
       tabs.setAttribute("role", "tablist");
+      const pill = h("div", "step-tabs-pill");
+      tabs.appendChild(pill);
       MEET.forEach((st, i) => {
         const t = h("button", `step-tab tone-${st.tone}` + (i + 1 === step ? " on" : i + 1 < step ? " past" : ""), st.label);
         t.setAttribute("role", "tab");
@@ -240,13 +378,23 @@ var DocView = (() => {
       });
       head.appendChild(tabs);
       root.appendChild(head);
+
+      requestAnimationFrame(() => {
+        const onTab = tabs.querySelector(".step-tab.on");
+        if (onTab && pill) {
+          const tRect = tabs.getBoundingClientRect();
+          const bRect = onTab.getBoundingClientRect();
+          pill.style.width = `${bRect.width}px`;
+          pill.style.transform = `translateX(${bRect.left - tRect.left}px)`;
+        }
+      });
     }
     function renderOverview(root) {
       meetHead(root);
       root.appendChild(h("div", "kicker", "Deconstruct · " + doc.meta.history_confidence + " historical confidence"));
       const titleRow = h("h1", "title", doc.meta.system);
       if (doc.layers.every(L => attemptFor(L.index).revealed)) {
-        const stamp = h("img", "enso-stamp complete");
+        const stamp = h("img", "enso-stamp complete stamped");
         stamp.src = "assets/enso-complete.svg";
         stamp.alt = "Deconstruct complete";
         stamp.title = "Every layer rebuilt";
@@ -705,6 +853,12 @@ var DocView = (() => {
         row.appendChild(h("span", "dm-mech", m.mechanism));
         row.appendChild(h("span", "dm-arrow", "→"));
         row.appendChild(h("span", "dm-sw", m.software_concept));
+        const matched = [...doc.visual.nodes, ...doc.layers.flatMap(ly => (ly.diff && ly.diff.add_nodes) || [])]
+          .filter(n => n.label.toLowerCase().includes(m.mechanism.toLowerCase()) || m.mechanism.toLowerCase().includes(n.label.toLowerCase()))
+          .map(n => n.id);
+        if (matched.length) {
+          wireSpot(row, matched, "solution", `◎ ${matched.length} parts`);
+        }
         dev.appendChild(row);
       });
       // what the profession calls what this layer does; a chip opens the ladder
@@ -803,7 +957,7 @@ var DocView = (() => {
       stepHead(root, L);
       const title = h("h1", "step-title", step >= 3 ? L.name : failurePart(L));
       if (step >= 3 && a.revealed) {
-        const stamp = h("img", "enso-stamp");
+        const stamp = h("img", "enso-stamp stamped");
         stamp.src = "assets/enso-gate.svg"; stamp.alt = ""; stamp.title = "Layer rebuilt";
         title.appendChild(stamp);
       }
@@ -813,7 +967,14 @@ var DocView = (() => {
 
     // 1 · It breaks: the problem, with the failure replaying on the diagram
     function stepBreak(root, L, a) {
-      root.appendChild(h("p", "step-text", audience === "beginner" ? L.problem.beginner : L.problem.statement));
+      const pCard = h("div", "problem-card");
+      const pHead = h("div", "problem-label", "Failure mode");
+      pCard.appendChild(pHead);
+      pCard.appendChild(h("p", "step-text", audience === "beginner" ? L.problem.beginner : L.problem.statement));
+      if (L.diff.highlight && L.diff.highlight.length) {
+        wireSpot(pCard, L.diff.highlight, "problem");
+      }
+      root.appendChild(pCard);
       const tools = h("div", "step-tools");
       if (opts.canReplay) {
         const rp = h("button", "gbtn");
