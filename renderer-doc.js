@@ -1120,15 +1120,26 @@ var DocView = (() => {
       goTo(p, (p >= 1 && p <= N && attemptFor(doc.layers[p - 1].index).revealed) ? 3 : 1);
     }
     function typing(t) { return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable); }
+    let bDownAt = 0, bWasBefore = false;
     function onKey(ev) {
       if (!docPane.isConnected || !docPane.offsetParent || typing(ev.target) || ev.metaKey || ev.ctrlKey || ev.altKey) return;
       if (ev.key === "ArrowRight" || ev.key === "ArrowLeft") {
         ev.preventDefault();
         const dir = ev.key === "ArrowRight" ? 1 : -1;
         if (ev.shiftKey) jumpLayer(dir); else move(dir);
-      } else if ((ev.key === "b" || ev.key === "B") && !ev.repeat) setBefore(true);
+      } else if ((ev.key === "b" || ev.key === "B") && !ev.repeat) {
+        bDownAt = performance.now();
+        bWasBefore = before;
+        if (!before) setBefore(true);
+      }
     }
-    function onKeyUp(ev) { if (ev.key === "b" || ev.key === "B") setBefore(false); }
+    function onKeyUp(ev) {
+      if (ev.key !== "b" && ev.key !== "B") return;
+      if (!bDownAt) { setBefore(false); return; }
+      const held = performance.now() - bDownAt;
+      bDownAt = 0;
+      if (held >= 220 || bWasBefore) setBefore(false);
+    }
     document.addEventListener("keydown", onKey);
     document.addEventListener("keyup", onKeyUp);
 

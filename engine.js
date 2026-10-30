@@ -96,6 +96,159 @@ let currentRec = null;            // open breakdown record
 let suppressRoute = false;        // prevents hash sync feedback loops during popstate
 let activeModelId = null;         // current model detail id on #/models/<id>
 let activeVocabId = null;         // current vocab focus id on #/vocab/<id>
+let activeGen = null;             // background generation state { controller, systemName, phaseText, readyRec }
+
+function bytesToBase64Url(bytes) {
+  let bin = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function base64UrlToBytes(b64u) {
+  const b64 = String(b64u).replace(/-/g, "+").replace(/_/g, "/");
+  const pad = b64.length % 4 ? "=".repeat(4 - (b64.length % 4)) : "";
+  const bin = atob(b64 + pad);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+async function streamBytes(stream) {
+  const reader = stream.getReader();
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    total += value.byteLength;
+  }
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) { out.set(c, off); off += c.byteLength; }
+  return out;
+}
+async function encodeSharePayload(doc) {
+  const raw = new TextEncoder().encode(JSON.stringify(doc));
+  if (typeof CompressionStream === "function") {
+    try {
+      const cs = new CompressionStream("deflate-raw");
+      const w = cs.writable.getWriter();
+      w.write(raw);
+      w.close();
+      const compressed = await streamBytes(cs.readable);
+      return "z." + bytesToBase64Url(compressed);
+    } catch (e) {}
+  }
+  return "u." + bytesToBase64Url(raw);
+}
+async function decodeSharePayload(token) {
+  const str = String(token || "").trim();
+  const isDeflated = str.startsWith("z.");
+  const payload = (str.startsWith("z.") || str.startsWith("u.")) ? str.slice(2) : str;
+  const bytes = base64UrlToBytes(payload);
+  let rawBytes = bytes;
+  if (isDeflated) {
+    if (typeof DecompressionStream !== "function") throw new Error("This browser cannot decompress portable links.");
+    const ds = new DecompressionStream("deflate-raw");
+    const w = ds.writable.getWriter();
+    w.write(bytes);
+    w.close();
+    rawBytes = await streamBytes(ds.readable);
+  }
+  return JSON.parse(new TextDecoder().decode(rawBytes));
+}
+async function saveOrReuseImportedDoc(doc) {
+  const res = Schema.validate(doc);
+  if (!res.ok) {
+    const err = new Error("Not a valid Deconstruct:\n" + res.errors.slice(0, 6).join("\n"));
+    err.validationErrors = res.errors;
+    throw err;
+  }
+  const all = await Store.getBreakdowns();
+  const sysWant = (doc.meta && doc.meta.system || "").trim().toLowerCase();
+  const essWant = (doc.essence && doc.essence.text || "").trim();
+  const existing = all.find(b =>
+    (b.system || "").trim().toLowerCase() === sysWant &&
+    b.doc && b.doc.essence && b.doc.essence.text === essWant
+  );
+  if (existing) return { rec: existing, existed: true };
+  const rec = {
+    id: "imp_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+    system: doc.meta.system, created: Date.now(),
+    source: "generated", schemaVersion: 1, doc,
+    attempts: {}, progress: { layersRead: 0, gatesAnswered: 0, position: 0 }
+  };
+  await Store.saveBreakdown(rec);
+  return { rec, existed: false };
+}
+async function importBreakdownJsonText(rawText) {
+  const parsed = JSON.parse(rawText);
+  if (parsed && Array.isArray(parsed.breakdowns) && (parsed.app === "vitruvian" || parsed.tool === "vitruvian" || parsed.tool === "system-deconstructor")) {
+    const results = await Store.importAll(parsed);
+    const okCount = results.filter(r => r.ok).length;
+    await renderLibrary();
+    toast(`Imported ${okCount}/${results.length} Deconstructs from backup`);
+    return null;
+  }
+  const doc = (parsed && parsed.doc && parsed.doc.meta) ? parsed.doc : parsed;
+  const { rec, existed } = await saveOrReuseImportedDoc(doc);
+  await renderLibrary();
+  toast(existed ? `Opened "${rec.system}" (already in your library)` : `Imported: ${rec.system}`);
+  return rec;
+}
+
+function syncGenBgPill() {
+  let pill = $("genBgPill");
+  const screen = document.body.dataset.screen || "library";
+  const shouldShow = !!activeGen && (screen !== "generate" || !!activeGen.readyRec);
+  if (!shouldShow) {
+    if (pill) pill.hidden = true;
+    return;
+  }
+  if (!pill) {
+    pill = h("div", "gen-bg-pill");
+    pill.id = "genBgPill";
+    pill.setAttribute("role", "status");
+    pill.setAttribute("aria-live", "polite");
+    document.body.appendChild(pill);
+  }
+  pill.hidden = false;
+  pill.textContent = "";
+  if (activeGen.readyRec) {
+    const rec = activeGen.readyRec;
+    pill.classList.add("ready");
+    const dot = h("span", "gbp-dot ready");
+    const txt = h("span", "gbp-text", `"${rec.system}" is ready`);
+    const openBtn = h("button", "gbtn primary gbp-btn", "Open →");
+    openBtn.onclick = () => {
+      activeGen = null;
+      syncGenBgPill();
+      openReader(rec.id);
+    };
+    const closeBtn = h("button", "gbp-close", "×");
+    closeBtn.setAttribute("aria-label", "Dismiss notification");
+    closeBtn.onclick = () => {
+      activeGen = null;
+      syncGenBgPill();
+    };
+    pill.append(dot, txt, openBtn, closeBtn);
+  } else {
+    pill.classList.remove("ready");
+    const dot = h("span", "gbp-dot");
+    const txt = h("span", "gbp-text", `Deconstructing "${activeGen.systemName}" · ${activeGen.phaseText || "Working…"}`);
+    const viewBtn = h("button", "gbtn gbp-btn", "View");
+    viewBtn.onclick = () => show("generate");
+    const cancelBtn = h("button", "gbp-close", "×");
+    cancelBtn.title = "Cancel generation";
+    cancelBtn.setAttribute("aria-label", "Cancel generation");
+    cancelBtn.onclick = () => {
+      if (activeGen && activeGen.controller) activeGen.controller.abort();
+    };
+    pill.append(dot, txt, viewBtn, cancelBtn);
+  }
+}
 
 function studySlug(rec) {
   if (!rec) return "";
@@ -204,6 +357,23 @@ async function applyUrlRoute(hashStr, histState) {
       show("landing", { noRoute: true });
       return true;
     }
+    const importMatch = hStr.match(/^\/import\/(.+)$/);
+    if (importMatch) {
+      try {
+        const doc = await decodeSharePayload(importMatch[1]);
+        const { rec, existed } = await saveOrReuseImportedDoc(doc);
+        await renderLibrary();
+        toast(existed ? `Opened "${rec.system}"` : `Imported shared Deconstruct: ${rec.system}`);
+        await openReader(rec.id, null, { noRoute: true });
+        try { history.replaceState({ screen: "reader", drillStack: [{ id: rec.id, system: rec.system }] }, "", `#/study/${encodeURIComponent(studySlug(rec))}`); } catch (e) {}
+        return true;
+      } catch (e) {
+        alert("Could not import shared Deconstruct:\n" + e.message);
+        await renderLibrary();
+        show("library", { noRoute: true });
+        return true;
+      }
+    }
     const graftMatch = hStr.match(/^\/graft\/([^/]+)/);
     if (graftMatch) {
       const rec = await resolveStudySlug(graftMatch[1]);
@@ -273,6 +443,7 @@ function show(screen, opts = {}) {
     if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
   });
   document.body.dataset.screen = screen;
+  syncGenBgPill();
   featureTips.close();
   if (screen !== "reader") setTimeout(() => { if (document.body.dataset.screen === screen) featureTips.visit(screen); }, 650);
   if (!opts.noRoute) syncRoute(opts.replace ? "replace" : "push");
@@ -1241,21 +1412,14 @@ async function renderLibrary() {
     });
   });
 
-  // quiet foundation of future sharing: single-breakdown import
+  // quiet foundation of sharing: single-breakdown or full-backup .json import + drag-and-drop
   const importRow = h("div", "lib-foot");
   const imp = setFace(h("button", "gbtn ghost"), "upload", "Import a Deconstruct (.json)");
+  imp.title = "Pick or drag & drop any .json Deconstruct or backup file";
   imp.onclick = () => pickFile(async file => {
     try {
-      const doc = JSON.parse(await file.text());
-      const res = Schema.validate(doc);
-      if (!res.ok) { alert("Not a valid Deconstruct:\n" + res.errors.slice(0, 6).join("\n")); return; }
-      await Store.saveBreakdown({
-        id: "imp_" + Date.now(), system: doc.meta.system, created: Date.now(),
-        source: "generated", schemaVersion: 1, doc,
-        attempts: {}, progress: { layersRead: 0, gatesAnswered: 0, position: 0 }
-      });
-      await renderLibrary();
-      toast("Imported: " + doc.meta.system);
+      const rec = await importBreakdownJsonText(await file.text());
+      if (rec) openReader(rec.id);
     } catch (e) { alert("Could not import: " + e.message); }
   });
   importRow.appendChild(imp);
@@ -1266,10 +1430,45 @@ async function renderLibrary() {
   const req = h("a", "gbtn", COPY.requestLink);   // demand signal, no backend: a GitHub issue
   req.href = CONFIG.repoUrl + "/issues/new?template=request-a-system.md&title=Deconstruct%3A+";
   req.target = "_blank";
+  req.target = "_blank";
   req.rel = "noopener";
   importRow.appendChild(req);
   */
   root.appendChild(importRow);
+
+  const libScreen = $("screen-library");
+  if (libScreen && !libScreen._dropWired) {
+    libScreen._dropWired = true;
+    let dragDepth = 0;
+    const clearCue = () => { dragDepth = 0; libScreen.classList.remove("drop-active"); };
+    libScreen.addEventListener("dragenter", e => {
+      if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes("Files")) return;
+      e.preventDefault();
+      dragDepth++;
+      libScreen.classList.add("drop-active");
+    });
+    libScreen.addEventListener("dragover", e => {
+      if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes("Files")) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+      libScreen.classList.add("drop-active");
+    });
+    libScreen.addEventListener("dragleave", () => {
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (!dragDepth) libScreen.classList.remove("drop-active");
+    });
+    libScreen.addEventListener("drop", async e => {
+      clearCue();
+      if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+      e.preventDefault();
+      const file = Array.from(e.dataTransfer.files).find(f => /\.json$/i.test(f.name)) || e.dataTransfer.files[0];
+      if (!file) return;
+      try {
+        const rec = await importBreakdownJsonText(await file.text());
+        if (rec) openReader(rec.id);
+      } catch (err) { alert("Could not import dropped file: " + err.message); }
+    });
+  }
 }
 
 function timeAgo(ts) {
@@ -1487,46 +1686,108 @@ function sheetDrag(wrap, sheet, grip) {
      made, still wins. */
   let snap = (window.matchMedia && window.matchMedia("(max-width:720px)").matches) ? 0 : 1;
   try { const v = parseInt(localStorage.getItem("vitruvian_sheet_snap"), 10); if (v >= 0 && v < SHEET_SNAPS.length) snap = v; } catch (e) {}
-  const apply = (frac, animate) => {
-    wrap.classList.toggle("sheet-moving", !animate);
+  const RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const MIN_SNAP = SHEET_SNAPS[0], MAX_SNAP = SHEET_SNAPS[SHEET_SNAPS.length - 1];
+  const rubberband = (over, dim, c = 0.55) => (over * dim * c) / (dim + c * Math.abs(over));
+  const softClamp = raw => {
+    if (raw < MIN_SNAP) return MIN_SNAP - rubberband(MIN_SNAP - raw, 0.22);
+    if (raw > MAX_SNAP) return MAX_SNAP + rubberband(raw - MAX_SNAP, 0.14);
+    return raw;
+  };
+  let liveFrac = SHEET_SNAPS[snap], vel = 0, springRaf = 0;
+  const apply = (frac, moving) => {
+    liveFrac = frac;
+    wrap.classList.toggle("sheet-moving", !!moving);
     wrap.style.setProperty("--sheet", (frac * 100).toFixed(2) + "%");
   };
-  const setSnap = i => {
+  const springTo = (target, initVel = 0) => {
+    if (springRaf) { cancelAnimationFrame(springRaf); springRaf = 0; }
+    if (RM || Math.abs(target - liveFrac) < 0.001 && Math.abs(initVel) < 0.005) {
+      vel = 0;
+      apply(target, false);
+      return;
+    }
+    vel = initVel;
+    const response = 0.30;
+    const damping = Math.abs(initVel) > 0.35 ? 0.84 : 1.0;
+    const omega = (2 * Math.PI) / response;
+    const k = omega * omega, c = 2 * damping * omega;
+    let lastT = performance.now();
+    const step = now => {
+      const dt = Math.min(0.032, Math.max(0.001, (now - lastT) / 1000));
+      lastT = now;
+      const disp = liveFrac - target;
+      const acc = -k * disp - c * vel;
+      vel += acc * dt;
+      liveFrac += vel * dt;
+      if (Math.abs(target - liveFrac) < 0.0008 && Math.abs(vel) < 0.005) {
+        vel = 0;
+        springRaf = 0;
+        apply(target, false);
+        return;
+      }
+      apply(liveFrac, true);
+      springRaf = requestAnimationFrame(step);
+    };
+    springRaf = requestAnimationFrame(step);
+  };
+  const setSnap = (i, initVel = 0, immediate = false) => {
     snap = Math.max(0, Math.min(SHEET_SNAPS.length - 1, i));
-    apply(SHEET_SNAPS[snap], true);
+    const target = SHEET_SNAPS[snap];
+    if (immediate) apply(target, false);
+    else springTo(target, initVel);
     grip.setAttribute("aria-label", `Reading panel: ${SHEET_NAMES[snap]}. Tap or use the arrow keys to resize.`);
     try { localStorage.setItem("vitruvian_sheet_snap", String(snap)); } catch (e) {}
   };
-  setSnap(snap);
-  let start = null, moved = false;
+  setSnap(snap, 0, true);
+  let start = null, moved = false, samples = [];
   grip.addEventListener("pointerdown", e => {
-    start = { y: e.clientY, frac: SHEET_SNAPS[snap], h: wrap.clientHeight || 1 };
+    if (springRaf) { cancelAnimationFrame(springRaf); springRaf = 0; }
+    vel = 0;
+    start = { y: e.clientY, frac: liveFrac, h: wrap.clientHeight || 1 };
     moved = false;
+    samples = [{ t: performance.now(), frac: liveFrac }];
     grip.setPointerCapture(e.pointerId);
   });
   grip.addEventListener("pointermove", e => {
     if (!start) return;
     const dy = start.y - e.clientY;
     if (Math.abs(dy) > 4) moved = true;
-    if (moved) apply(Math.max(0.2, Math.min(0.95, start.frac + dy / start.h)), false);
+    if (moved) {
+      const next = softClamp(start.frac + dy / start.h);
+      apply(next, true);
+      const now = performance.now();
+      samples.push({ t: now, frac: next });
+      while (samples.length > 2 && now - samples[0].t > 100) samples.shift();
+    }
   });
-  const end = e => {
+  const end = () => {
     if (!start) return;
     if (moved) {
-      const frac = start.frac + (start.y - e.clientY) / start.h;
+      let releaseVel = 0;
+      const now = performance.now();
+      while (samples.length > 2 && now - samples[0].t > 110) samples.shift();
+      if (samples.length >= 2) {
+        const a = samples[0], b = samples[samples.length - 1];
+        const dt = (b.t - a.t) / 1000;
+        if (dt > 0.008) releaseVel = Math.max(-5, Math.min(5, (b.frac - a.frac) / dt));
+      }
+      // Apple exponential deceleration projection (decelerationRate = 0.994)
+      const projected = liveFrac + (releaseVel / 1000) * (0.994 / (1 - 0.994));
       let best = 0;
-      SHEET_SNAPS.forEach((f, i) => { if (Math.abs(f - frac) < Math.abs(SHEET_SNAPS[best] - frac)) best = i; });
-      setSnap(best);
+      SHEET_SNAPS.forEach((f, i) => { if (Math.abs(f - projected) < Math.abs(SHEET_SNAPS[best] - projected)) best = i; });
+      setSnap(best, releaseVel, false);
     }
     start = null;
+    samples = [];
   };
   grip.addEventListener("pointerup", end);
   grip.addEventListener("pointercancel", end);
   // a tap steps up and wraps back down; the drag already ended without a click
-  grip.addEventListener("click", () => { if (moved) { moved = false; return; } setSnap(snap === SHEET_SNAPS.length - 1 ? 0 : snap + 1); });
+  grip.addEventListener("click", () => { if (moved) { moved = false; return; } setSnap(snap === SHEET_SNAPS.length - 1 ? 0 : snap + 1, 0, false); });
   grip.addEventListener("keydown", e => {
-    if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); setSnap(snap + 1); }
-    if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); setSnap(snap - 1); }
+    if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); setSnap(snap + 1, 0, false); }
+    if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); setSnap(snap - 1, 0, false); }
   });
 }
 
@@ -1888,12 +2149,17 @@ async function openReader(id, layerIndex, opts = {}) {
   zOut.onclick = () => { diagram.zoomBy(1 / 1.25); paintZoom(); };
   zIn.onclick = () => { diagram.zoomBy(1.25); paintZoom(); };
   zFit.onclick = () => { diagram.fitNow(); paintZoom(); };
-  /* desktop: the modifier-wheel gesture every map and canvas uses. A plain
-     wheel keeps scrolling the page, which is what a reader expects. */
+  /* desktop: the modifier-wheel gesture every map and canvas uses (and how
+     macOS delivers two-finger trackpad pinch). Continuous 1:1 factor anchored
+     at the cursor keeps trackpad pinches fluid instead of jumping by fixed
+     steps around the center. */
   dscroll.addEventListener("wheel", e => {
     if (!(e.ctrlKey || e.metaKey)) return;
     e.preventDefault();
-    diagram.zoomBy(e.deltaY < 0 ? 1.12 : 1 / 1.12);
+    const modeScale = e.deltaMode === 1 ? 16 : (e.deltaMode === 2 ? 120 : 1);
+    const dy = Math.max(-80, Math.min(80, e.deltaY * modeScale));
+    const factor = Math.exp(-dy * 0.0045);
+    diagram.zoomAtFactor(factor, e.clientX, e.clientY);
     paintZoom();
   }, { passive: false });
 
@@ -2349,9 +2615,21 @@ function buildReaderMenu(rec, challengeOn) {
   add("Field guide", () => { renderTutorial("reader"); show("tutorial"); });
   pop.appendChild(h("div", "menu-sep"));
   add(COPY.shareMenu, async () => {
-    if (rec.source !== "flagship") { toast(COPY.shareLocalNote); return; }
-    const url = CONFIG.siteUrl + "#/study/" + rec.id.replace("flagship-", "");
-    try { await navigator.clipboard.writeText(url); toast(COPY.shareCopied); }
+    let url = "";
+    let msg = COPY.shareCopied;
+    if (rec.source === "flagship") {
+      url = CONFIG.siteUrl + "#/study/" + rec.id.replace("flagship-", "");
+    } else {
+      try {
+        const token = await encodeSharePayload(rec.doc);
+        url = CONFIG.siteUrl + "#/import/" + token;
+        msg = "Portable share link copied (works offline, no server)";
+      } catch (err) {
+        toast(COPY.shareLocalNote);
+        return;
+      }
+    }
+    try { await navigator.clipboard.writeText(url); toast(msg); }
     catch (e) { prompt("Copy this link:", url); }
   });
   add(COPY.exportPngMenu, () => exportDiagramPNG(rec));
@@ -2632,6 +2910,23 @@ function bridgeNotes(doc) {
   return lines.join("\n");
 }
 
+function modelCostEstimate(modelId, speed, voiceOn) {
+  const m = String(modelId || CONFIG.defaultModel || "").toLowerCase();
+  const fast = speed === "fast";
+  const speedTag = fast ? "Fast" : "Balanced";
+  const voiceTag = voiceOn ? " + voice pass" : "";
+  if (m.includes("sonnet")) {
+    return `${speedTag}${voiceTag} · ~25–45s · typically $0.08–$0.16 on your key`;
+  }
+  if (m.includes("haiku")) {
+    return `${speedTag}${voiceTag} · ~15–25s · typically $0.02–$0.05 on your key`;
+  }
+  if (fast) {
+    return `${speedTag}${voiceTag} · ~30–50s · typically $0.22–$0.38 on your key`;
+  }
+  return `${speedTag}${voiceTag} · ~45–80s · typically $0.32–$0.55 on your key`;
+}
+
 /* ═══ Generation screen (§8, §11.3) ═══ */
 function renderGenerate(systemName, mode) {
   const design = mode === "design";
@@ -2670,7 +2965,9 @@ function renderGenerate(systemName, mode) {
     focusRow.appendChild(focus);
     root.appendChild(focusRow);
   }
-  root.appendChild(h("p", "lib-note", `Model: ${meta.modelId} · ${COPY.costNote}`));
+  const activeModel = meta.modelId || CONFIG.defaultModel;
+  const est = modelCostEstimate(activeModel, meta.genSpeed || "balanced", meta.voicePass !== false);
+  root.appendChild(h("p", "lib-note", `Model: ${activeModel} · ${est}`));
 
   const startBtn = h("button", "big-btn", design ? COPY.ownDesignBtn : "Generate (1–3 minutes)");
   root.appendChild(startBtn);
@@ -2683,17 +2980,39 @@ function renderGenerate(systemName, mode) {
       if (dq.what.value.trim().length < 12) { dq.what.focus(); toast("Say a little more about what it does"); return; }
       subject = COPY.dissectQuestions.map(([id, label]) => dq[id].value.trim() ? label + "\n" + dq[id].value.trim() : "").filter(Boolean).join("\n\n");
     }
+    if (activeGen && activeGen.controller) {
+      try { activeGen.controller.abort(); } catch (e) {}
+    }
+    const controller = new AbortController();
+    const displaySubject = design ? (dq.what.value.trim().split(/[\n.]/)[0].slice(0, 42) || "Design review") : systemName;
+    activeGen = { controller, systemName: displaySubject, phaseText: COPY.genPhases.start, readyRec: null };
+    syncGenBgPill();
+
     startBtn.disabled = true;
     if (dq) Object.values(dq).forEach(t => t.disabled = true);
     if (focus) focus.disabled = true;
     prog.textContent = "";
+    const headRow = h("div", "gen-head-row");
     const phaseEl = h("div", "gen-phase", COPY.genPhases.start);
+    const cancelBtn = h("button", "gbtn ghost gen-cancel-btn", "Cancel");
+    cancelBtn.type = "button";
+    cancelBtn.onclick = () => controller.abort();
+    headRow.append(phaseEl, cancelBtn);
     const barEl = h("div", "gen-bar");
     const fill = h("div");
     barEl.appendChild(fill);
-    const tok = h("div", "gen-tokens", "");
-    prog.append(phaseEl, barEl, tok);
-    const early = earlyMeet();
+    const tok = h("div", "gen-tokens", "You can browse other systems while this runs.");
+    prog.append(headRow, barEl, tok);
+    const early = earlyMeet((idx, name) => {
+      const layerLabel = `Layer ${idx} · ${name}`;
+      phaseEl.textContent = `Building ${layerLabel}…`;
+      if (activeGen && activeGen.controller === controller) {
+        activeGen.phaseText = layerLabel;
+        syncGenBgPill();
+      }
+      const layerPct = Math.min(76, 42 + idx * 5);
+      fill.style.width = layerPct + "%";
+    });
     prog.appendChild(early.el);
 
     const PHASE_PCT = { start: 4, strip_down: 18, visual: 30, layers: 42, stress: 78, transfer: 88, repair: 92, voice: 96 };
@@ -2702,12 +3021,18 @@ function renderGenerate(systemName, mode) {
         apiKey: meta.apiKey, modelId: meta.modelId, voice: meta.voicePass !== false,
         system: subject, focus: focus ? focus.value.trim() : "", mode,
         speed: meta.genSpeed || "balanced",
+        signal: controller.signal,
         onProgress(p) {
           if (p.phase) {
-            phaseEl.textContent = p.phase === "repair" ? "Repairing validation errors…" : (COPY.genPhases[p.phase] || phaseEl.textContent);
+            const label = p.phase === "repair" ? "Repairing validation errors…" : (COPY.genPhases[p.phase] || phaseEl.textContent);
+            phaseEl.textContent = label;
             fill.style.width = (PHASE_PCT[p.phase] || 0) + "%";
+            if (activeGen && activeGen.controller === controller) {
+              activeGen.phaseText = label;
+              syncGenBgPill();
+            }
           }
-          if (p.tokens) tok.textContent = "~" + p.tokens.toLocaleString() + " tokens";
+          if (p.tokens) tok.textContent = "~" + p.tokens.toLocaleString() + " tokens · you can browse your library while this finishes";
           if (p.partial) early.update(p.partial);
         }
       });
@@ -2720,9 +3045,30 @@ function renderGenerate(systemName, mode) {
       await Store.saveBreakdown(rec);
       if (repaired) toast("Validated after one repair pass");
       else if (voice && voice.fixed) toast(`Edited ${voice.fixed} passage${voice.fixed > 1 ? "s" : ""} for voice`);
-      openReader(rec.id);
+      if (document.body.dataset.screen === "generate") {
+        activeGen = null;
+        syncGenBgPill();
+        openReader(rec.id);
+      } else {
+        if (activeGen && activeGen.controller === controller) {
+          activeGen.readyRec = rec;
+          syncGenBgPill();
+        }
+        if (document.body.dataset.screen === "library") await renderLibrary();
+      }
     } catch (e) {
+      if (activeGen && activeGen.controller === controller) {
+        activeGen = null;
+        syncGenBgPill();
+      }
       prog.textContent = "";
+      if (e.kind === "aborted") {
+        prog.appendChild(h("p", "lib-note", "Generation cancelled. No further tokens will be billed."));
+        startBtn.disabled = false;
+        if (focus) focus.disabled = false;
+        if (dq) Object.values(dq).forEach(t => t.disabled = false);
+        return;
+      }
       const box = h("div", "gen-error");
       const titles = {
         key: "Invalid API key", rate: "Rate limited", overloaded: "Anthropic is overloaded",
@@ -2762,18 +3108,26 @@ function renderGenerate(systemName, mode) {
   };
 }
 
-/* While a Deconstruct streams in, the essence and the rules arrive first.
-   Show them as soon as each string is complete so there's something to
-   read during the wait; it's the same Meet you'd open afterwards. */
-function earlyMeet() {
+/* While a Deconstruct streams in, the essence, rules, and layer titles arrive
+   in order. Show them as soon as each string is complete so there's something
+   substantive to read during the wait. */
+function earlyMeet(onLayer) {
   const el = h("section", "early-meet");
   el.hidden = true;
   const ess = h("p", "early-essence");
+  const rulesSub = h("div", "early-sub", "The rules it lives by");
   const rules = h("ol", "early-rules");
-  el.append(h("div", "step-kick tone-ink", "Meet the system, while the rest is written"), ess,
-    h("div", "early-sub", "The rules it lives by"), rules);
+  const layersSub = h("div", "early-sub", "The failure ladder taking shape");
+  const layersOl = h("ol", "early-layers");
+  rulesSub.hidden = true;
   rules.hidden = true;
-  let shownRules = 0;
+  layersSub.hidden = true;
+  layersOl.hidden = true;
+  el.append(
+    h("div", "step-kick tone-ink", "Meet the system, while the rest is written"),
+    ess, rulesSub, rules, layersSub, layersOl
+  );
+  let shownRules = 0, shownLayers = 0;
   const STR = '"((?:[^"\\\\]|\\\\.)*)"';
   const dec = x => { try { return JSON.parse('"' + x + '"'); } catch (e) { return x; } };
   function update(text) {
@@ -2782,17 +3136,40 @@ function earlyMeet() {
       if (m) { ess.textContent = dec(m[1]); el.hidden = false; }
     }
     const at = text.indexOf('"invariants"');
-    if (at < 0) return;
-    const end = text.indexOf('"entities"', at);
-    const chunk = text.slice(at, end < 0 ? undefined : end);
-    const re = new RegExp('"text"\\s*:\\s*' + STR, "g");
-    const found = [];
-    let m;
-    while ((m = re.exec(chunk))) found.push(dec(m[1]));
-    for (; shownRules < found.length; shownRules++) {
-      rules.appendChild(h("li", null, found[shownRules]));
-      rules.hidden = false;
-      el.hidden = false;
+    if (at >= 0) {
+      const end = text.indexOf('"entities"', at);
+      const chunk = text.slice(at, end < 0 ? undefined : end);
+      const re = new RegExp('"text"\\s*:\\s*' + STR, "g");
+      const found = [];
+      let m;
+      while ((m = re.exec(chunk))) found.push(dec(m[1]));
+      for (; shownRules < found.length; shownRules++) {
+        rules.appendChild(h("li", null, found[shownRules]));
+        rulesSub.hidden = false;
+        rules.hidden = false;
+        el.hidden = false;
+      }
+    }
+    const lAt = text.indexOf('"layers"');
+    if (lAt >= 0) {
+      const lEnd = text.indexOf('"stress_tests"', lAt);
+      const lChunk = text.slice(lAt, lEnd < 0 ? undefined : lEnd);
+      const lRe = new RegExp('"index"\\s*:\\s*(\\d+)\\s*,\\s*"name"\\s*:\\s*' + STR, "g");
+      const lFound = [];
+      let lm;
+      while ((lm = lRe.exec(lChunk))) {
+        lFound.push({ idx: parseInt(lm[1], 10), name: dec(lm[2]) });
+      }
+      for (; shownLayers < lFound.length; shownLayers++) {
+        const item = lFound[shownLayers];
+        const li = h("li", null);
+        li.append(h("span", "early-layer-n", `Layer ${item.idx}`), document.createTextNode(" · " + item.name));
+        layersOl.appendChild(li);
+        layersSub.hidden = false;
+        layersOl.hidden = false;
+        el.hidden = false;
+        if (onLayer) onLayer(item.idx, item.name);
+      }
     }
   }
   return { el, update };

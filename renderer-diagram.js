@@ -518,9 +518,12 @@ var Diagram = (() => {
       return m;
     })();
 
+    let suppressClickUntil = 0, flipRaf = 0;
+
     /* trace: tap a node to light it + every edge touching it and dim the
        rest — follow one part's responsibilities. Tap again to clear. */
     svg.addEventListener("click", ev => {
+      if (performance.now() < suppressClickUntil) return;
       // semantic zoom takes priority: a tap on the ⊕ badge drills into the
       // node's nested Deconstruct rather than tracing or faulting it
       const badge = ev.target.closest && ev.target.closest(".dg-drill-badge");
@@ -604,6 +607,7 @@ var Diagram = (() => {
       });
     }
 
+    const RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let foldKeep = 0;                        // 0 = off; otherwise layers kept open
     let lastFold = null;
     let openLanes = new Set();               // folded lanes the reader has opened back up
@@ -704,6 +708,9 @@ var Diagram = (() => {
 
       // nodes (colored by their own lane)
       const nodeRects = [];
+      const prevPos = lastPos || null;
+      const flipItems = [];
+      if (flipRaf) { cancelAnimationFrame(flipRaf); flipRaf = 0; }
       st.nodes.forEach(n => {
         const p = pos[n.id];
         const g = el("g", { transform: `translate(${p.x} ${p.y})`, "data-id": n.id }, nodesG);
@@ -731,10 +738,33 @@ var Diagram = (() => {
         if (stressSet.has(n.id)) g.classList.add("dg-stress");
         if (animate && !prev.has(n.id)) g.classList.add("dg-enter");
         else if (animate) g.classList.add("dg-prior");
+        if (!RM && prevPos && prevPos[n.id] && prev.has(n.id)) {
+          const ox = prevPos[n.id].x, oy = prevPos[n.id].y;
+          if (Math.hypot(ox - p.x, oy - p.y) > 1.5) {
+            flipItems.push({ g, x0: ox, y0: oy, x1: p.x, y1: p.y });
+          }
+        }
         const hw = n.kind === "actor" ? ACTOR_R : NODE_W / 2;
         const hh = n.kind === "actor" ? ACTOR_R : NODE_H / 2;
         nodeRects.push({ x0: p.x - hw, y0: p.y - hh, x1: p.x + hw, y1: p.y + hh });
       });
+      if (flipItems.length) {
+        const t0 = performance.now(), dur = 240;
+        flipItems.forEach(it => it.g.setAttribute("transform", `translate(${it.x0} ${it.y0})`));
+        const stepFlip = now => {
+          const p = Math.min(1, (now - t0) / dur);
+          const e = 1 - Math.pow(1 - p, 3);
+          flipItems.forEach(it => {
+            if (!it.g.isConnected) return;
+            const nx = it.x0 + (it.x1 - it.x0) * e;
+            const ny = it.y0 + (it.y1 - it.y0) * e;
+            it.g.setAttribute("transform", `translate(${nx.toFixed(2)} ${ny.toFixed(2)})`);
+          });
+          if (p < 1) flipRaf = requestAnimationFrame(stepFlip);
+          else flipRaf = 0;
+        };
+        flipRaf = requestAnimationFrame(stepFlip);
+      }
 
       // Labels last, on top. A label may sit ANYWHERE along the edge it names,
       // so the search is 2-D: candidate anchors sampled along the path itself,
@@ -1128,6 +1158,12 @@ var Diagram = (() => {
         return Math.max(0.2, Math.min(MAXUP, byW, byH));
       };
       const current = () => (svg.getBoundingClientRect().width || layout.width) / layout.width;
+      function syncPanClass() {
+        const canPan = current() > fitZ() * 1.03 ||
+          container.scrollWidth > container.clientWidth + 4 ||
+          container.scrollHeight > container.clientHeight + 4;
+        container.classList.toggle("dg-pannable", canPan);
+      }
       function apply(nz, cx, cy) {
         nz = Math.max(fitZ() * 0.85, Math.min(MAXZ * 1.15, nz));   // soft overshoot beyond bounds
         const zOld = current();
@@ -1137,6 +1173,7 @@ var Diagram = (() => {
         svg.style.width = (layout.width * nz) + "px";
         container.scrollLeft = contentX * nz - cx;
         container.scrollTop = contentY * nz - cy;
+        syncPanClass();
         return nz;
       }
       function animateTo(target, cx, cy, ms = 160) {
@@ -1159,8 +1196,23 @@ var Diagram = (() => {
 
       const pts = new Map();
       let pinch = null, pinchEndedAt = 0, lastTap = 0, lastX = 0, lastY = 0;
+      let panState = null, panCoastRaf = 0;
+      const stopCoast = () => { if (panCoastRaf) { cancelAnimationFrame(panCoastRaf); panCoastRaf = 0; } };
       container.addEventListener("pointerdown", e => {
-        if (e.pointerType !== "touch") return;
+        stopCoast();
+        if (e.pointerType !== "touch") {
+          if (e.button !== 0) return;
+          if (e.target.closest && e.target.closest(".dg-node, .dg-drill-badge, button, a")) return;
+          const canPan = container.scrollWidth > container.clientWidth + 2 ||
+            container.scrollHeight > container.clientHeight + 2;
+          if (!canPan) return;
+          panState = {
+            id: e.pointerId, x0: e.clientX, y0: e.clientY,
+            sl0: container.scrollLeft, st0: container.scrollTop,
+            moved: false, samples: [{ t: performance.now(), x: e.clientX, y: e.clientY }]
+          };
+          return;
+        }
         pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (pts.size === 2) {
           const [a, b2] = [...pts.values()];
@@ -1168,6 +1220,23 @@ var Diagram = (() => {
         }
       });
       container.addEventListener("pointermove", e => {
+        if (panState && e.pointerId === panState.id) {
+          const dx = e.clientX - panState.x0, dy = e.clientY - panState.y0;
+          if (!panState.moved && Math.hypot(dx, dy) > 4) {
+            panState.moved = true;
+            container.classList.add("dg-panning");
+            try { container.setPointerCapture(e.pointerId); } catch (_) {}
+          }
+          if (panState.moved) {
+            e.preventDefault();
+            container.scrollLeft = panState.sl0 - dx;
+            container.scrollTop = panState.st0 - dy;
+            const now = performance.now();
+            panState.samples.push({ t: now, x: e.clientX, y: e.clientY });
+            while (panState.samples.length > 2 && now - panState.samples[0].t > 90) panState.samples.shift();
+          }
+          return;
+        }
         if (!pts.has(e.pointerId)) return;
         pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (pinch && pts.size === 2) {
@@ -1179,11 +1248,42 @@ var Diagram = (() => {
                 (a.x + b2.x) / 2 - cR.left, (a.y + b2.y) / 2 - cR.top);
         }
       }, { passive: false });
+      function endPan(e) {
+        if (!panState || e.pointerId !== panState.id) return;
+        const st = panState;
+        panState = null;
+        container.classList.remove("dg-panning");
+        if (!st.moved) return;
+        suppressClickUntil = performance.now() + 80;
+        if (RM) return;
+        const now = performance.now();
+        while (st.samples.length > 2 && now - st.samples[0].t > 100) st.samples.shift();
+        if (st.samples.length < 2) return;
+        const a = st.samples[0], b = st.samples[st.samples.length - 1];
+        const dt0 = (b.t - a.t) / 1000;
+        if (!(dt0 > 0.008)) return;
+        let vx = (b.x - a.x) / dt0, vy = (b.y - a.y) / dt0;
+        if (Math.hypot(vx, vy) < 60) return;
+        let lastT = now;
+        const coast = t => {
+          const dt = Math.min(0.032, Math.max(0.001, (t - lastT) / 1000));
+          lastT = t;
+          const decay = Math.pow(0.03, dt);
+          vx *= decay; vy *= decay;
+          container.scrollLeft -= vx * dt;
+          container.scrollTop -= vy * dt;
+          if (Math.hypot(vx, vy) > 15) panCoastRaf = requestAnimationFrame(coast);
+          else panCoastRaf = 0;
+        };
+        panCoastRaf = requestAnimationFrame(coast);
+      }
       function lift(e) {
+        endPan(e);
         if (!pts.delete(e.pointerId)) return;
         if (pinch && pts.size < 2) { pinch = null; pinchEndedAt = performance.now(); settle(); }
       }
       function toggleQuickZoom(clientX, clientY) {
+        stopCoast();
         const cR = container.getBoundingClientRect();
         const fz = fitZ();
         const zoomIn = Math.min(MAXZ, Math.max(1.5, fz * 1.65));
@@ -1226,6 +1326,7 @@ var Diagram = (() => {
         svg.style.width = (layout.width * z) + "px";
         container.scrollLeft = 0;
         container.scrollTop = 0;
+        syncPanClass();
         return z;
       }
       /* the frame changes size when the sheet is dragged or the window is
@@ -1241,15 +1342,26 @@ var Diagram = (() => {
       function full() {
         svg.style.minWidth = "0";
         svg.style.width = layout.width + "px";
+        syncPanClass();
         return 1;
       }
       function by(f, animate) {
+        stopCoast();
         const cx = container.clientWidth / 2, cy = container.clientHeight / 2;
         const target = Math.max(fitZ(), Math.min(MAXZ, current() * f));
         if (animate === false) apply(target, cx, cy); else animateTo(target, cx, cy);
         return target;
       }
-      return { fitZ, current, fit, full, by,
+      function atFactor(f, clientX, clientY) {
+        stopCoast();
+        if (settleRaf) { cancelAnimationFrame(settleRaf); settleRaf = null; }
+        const cR = container.getBoundingClientRect();
+        const cx = clientX != null ? clientX - cR.left : container.clientWidth / 2;
+        const cy = clientY != null ? clientY - cR.top : container.clientHeight / 2;
+        const target = Math.max(fitZ(), Math.min(MAXZ, current() * f));
+        return apply(target, cx, cy);
+      }
+      return { fitZ, current, fit, full, by, atFactor,
                /* whether the drawing is already sitting at its fitted size, so
                   a Fit control can say whether tapping it would do anything */
                fits: () => Math.abs(current() - fitZ()) < 0.02 };
@@ -1261,7 +1373,6 @@ var Diagram = (() => {
        Load mode multiplies spawn rate; ≥3 tokens on one edge slows them and
        marks the edge congested — saturation you can see. Honors
        prefers-reduced-motion by refusing to start. ── */
-    const RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const sim = (() => {
       let running = false, load = false, mode = "free", raf = null, last = 0, spawnAcc = 0;
       let tokens = [], onStopCb = null, onCrashCb = null, replayCrashed = 0;
@@ -1664,6 +1775,7 @@ var Diagram = (() => {
              /* fit is the default; a hand zoom suspends it until Fit is asked for */
              fitNow() { autoFit = true; zoomCtl.fit(); },
              zoomBy(f) { autoFit = false; return zoomCtl.by(f); },
+             zoomAtFactor(f, cx, cy) { autoFit = false; return zoomCtl.atFactor(f, cx, cy); },
              zoomFull() { autoFit = false; return zoomCtl.full(); },
              isAutoFit() { return autoFit; },
              fitsWhole() { return zoomCtl.fits(); },

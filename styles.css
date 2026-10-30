@@ -712,6 +712,8 @@ input,textarea{font-family:var(--sans);}
 .zbtn.zfit{font-size:9.5px;letter-spacing:1px;text-transform:uppercase;min-width:38px;}
 .zbtn.on{color:var(--accent-deep);}
 .zbtn:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+.diagram-scroll.dg-pannable{cursor:grab;}
+.diagram-scroll.dg-panning,.diagram-scroll.dg-panning *{cursor:grabbing!important;user-select:none;-webkit-user-select:none;}
 
 /* ── Why this part is here ──
    Anchored bottom-centre so it never covers the zoom cluster or the Lab menu. */
@@ -1799,13 +1801,37 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 .dissect-n{font:600 12px/1 var(--mono, ui-monospace, monospace);color:var(--muted);width:22px;height:22px;border-radius:50%;display:grid;place-items:center;box-shadow:inset 0 0 0 1px var(--hair);}
 .dissect-label{font-weight:600;font-size:15.5px;color:var(--ink);}
 .dissect-q .design-input{grid-column:2;min-height:0;margin:0;}
+.gen-head-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:4px;}
+.gen-head-row .gen-phase{margin-bottom:0;flex:1;min-width:0;}
+.gen-cancel-btn{flex-shrink:0;font-size:12.5px;padding:6px 12px;}
 .early-meet{margin-top:26px;padding:22px;border-radius:var(--r-lg);background:var(--panel);box-shadow:inset 0 0 0 1px var(--hair),var(--sh-1);animation:fadeUp .4s ease both;}
 .early-essence{font-size:17px;line-height:1.6;color:var(--ink);margin:8px 0 0;}
 .early-sub{margin-top:20px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
-.early-rules{margin:10px 0 0;padding-left:22px;display:grid;gap:8px;font-size:15px;line-height:1.5;color:var(--ink-soft);}
+.early-rules,.early-layers{margin:10px 0 0;padding-left:22px;display:grid;gap:8px;font-size:15px;line-height:1.5;color:var(--ink-soft);}
+.early-layers{list-style:none;padding-left:0;}
+.early-layers li{padding:8px 12px;border-radius:var(--r-sm);background:var(--panel-2);box-shadow:inset 0 0 0 1px var(--hair);font-size:14px;color:var(--ink);animation:fadeUp .35s ease both;}
+.early-layer-n{font-family:var(--mono);font-size:11.5px;font-weight:600;color:var(--accent-deep);}
 .early-rules li{animation:fadeUp .35s ease both;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){.early-meet,.early-rules li{animation:none;}}
+@media (prefers-reduced-motion:reduce){.early-meet,.early-rules li,.early-layers li{animation:none;}}
+
+/* ═══ Background generation pill & library drag-drop cue ═══ */
+.gen-bg-pill{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:180;
+  display:flex;align-items:center;gap:10px;max-width:min(440px,calc(100vw - 32px));
+  padding:9px 12px 9px 14px;border-radius:var(--r-pill);
+  background:var(--glass-heavy);-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(160%);backdrop-filter:blur(var(--glass-blur)) saturate(160%);
+  box-shadow:var(--sh-3),inset 0 0 0 1px var(--hair-strong);font-size:13px;color:var(--ink);animation:fadeUp .28s var(--ease) both;}
+.gen-bg-pill[hidden]{display:none!important;}
+.gen-bg-pill.ready{box-shadow:var(--sh-3),inset 0 0 0 1.5px var(--accent);}
+.gbp-dot{width:8px;height:8px;border-radius:50%;background:var(--proposal);flex-shrink:0;animation:gbp-pulse 1.3s ease-in-out infinite;}
+.gbp-dot.ready{background:var(--accent);animation:none;}
+@keyframes gbp-pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.4;transform:scale(.85);}}
+.gbp-text{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:550;}
+.gbp-btn{padding:5px 11px;font-size:12px;flex-shrink:0;}
+.gbp-close{width:24px;height:24px;border-radius:50%;border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;display:grid;place-items:center;flex-shrink:0;}
+.gbp-close:hover{background:color-mix(in srgb,var(--ink) 8%,transparent);color:var(--ink);}
+@media(max-width:760px){.gen-bg-pill{bottom:calc(74px + env(safe-area-inset-bottom));right:16px;left:16px;max-width:none;}}
+#screen-library.drop-active{outline:2px dashed var(--accent);outline-offset:-12px;background:color-mix(in srgb,var(--accent-wash) 28%,transparent);}
 
 
 /* ═══ Settings groups ═══ */

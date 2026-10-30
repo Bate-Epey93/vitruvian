@@ -68,13 +68,18 @@ var Generator = (() => {
     return fail("http", `API error ${res.status}${detail ? ": " + detail : ""}`);
   }
 
+  function isAbort(e, signal) {
+    return !!(signal && signal.aborted) || !!(e && (e.name === "AbortError" || e.kind === "aborted"));
+  }
+
   /* ── streaming call; returns full text; reports phases ── */
-  async function streamCall(apiKey, modelId, body, onProgress, seen = new Set()) {
+  async function streamCall(apiKey, modelId, body, onProgress, seen = new Set(), signal) {
     if (!navigator.onLine) throw fail("offline", COPY.offlineGenNote);
     let res;
     try {
-      res = await fetch(API, { method: "POST", headers: headers(apiKey, modelId), body: JSON.stringify({ ...body, ...fallbackFor(modelId), model: modelId, stream: true }) });
+      res = await fetch(API, { method: "POST", headers: headers(apiKey, modelId), signal, body: JSON.stringify({ ...body, ...fallbackFor(modelId), model: modelId, stream: true }) });
     } catch (e) {
+      if (isAbort(e, signal)) throw fail("aborted", "Cancelled.");
       throw fail("offline", "Could not reach Anthropic. Check your connection.");
     }
     if (!res.ok) throw await httpError(res);
@@ -90,35 +95,40 @@ var Generator = (() => {
       ['"stress_tests"', "stress"],
       ['"transfer"', "transfer"]
     ];
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split("\n");
-      buf = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith("data:")) continue;
-        const payload = line.slice(5).trim();
-        if (!payload || payload === "[DONE]") continue;
-        let ev;
-        try { ev = JSON.parse(payload); } catch (e) { continue; }
-        if (ev.type === "content_block_delta" && ev.delta && ev.delta.text) {
-          text += ev.delta.text;
-          tokens += 1;                                     // ~1 token per delta chunk is close enough for a trickle
-          if (onProgress) {
-            for (const [needle, phase] of PHASES) {
-              if (!seen.has(phase) && text.includes(needle)) { seen.add(phase); onProgress({ phase, tokens: 0 }); }
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          const payload = line.slice(5).trim();
+          if (!payload || payload === "[DONE]") continue;
+          let ev;
+          try { ev = JSON.parse(payload); } catch (e) { continue; }
+          if (ev.type === "content_block_delta" && ev.delta && ev.delta.text) {
+            text += ev.delta.text;
+            tokens += 1;                                     // ~1 token per delta chunk is close enough for a trickle
+            if (onProgress) {
+              for (const [needle, phase] of PHASES) {
+                if (!seen.has(phase) && text.includes(needle)) { seen.add(phase); onProgress({ phase, tokens: 0 }); }
+              }
+              onProgress({ tokens: Math.round(text.length / 4), partial: text });
             }
-            onProgress({ tokens: Math.round(text.length / 4), partial: text });
           }
+          if (ev.type === "message_delta" && ev.delta && ev.delta.stop_reason === "max_tokens")
+            throw fail("toobig", "The breakdown hit the output limit. Try narrowing the system.", text);
+          // Fable/Mythos: whole fallback chain declined — partial text is not a document
+          if (ev.type === "message_delta" && ev.delta && ev.delta.stop_reason === "refusal")
+            throw fail("refusal", "The model declined this request (safety classifiers). Try a different model, or rephrase the system.");
+          if (ev.type === "error") throw fail("http", (ev.error && ev.error.message) || "stream error", text);
         }
-        if (ev.type === "message_delta" && ev.delta && ev.delta.stop_reason === "max_tokens")
-          throw fail("toobig", "The breakdown hit the output limit. Try narrowing the system.", text);
-        // Fable/Mythos: whole fallback chain declined — partial text is not a document
-        if (ev.type === "message_delta" && ev.delta && ev.delta.stop_reason === "refusal")
-          throw fail("refusal", "The model declined this request (safety classifiers). Try a different model, or rephrase the system.");
-        if (ev.type === "error") throw fail("http", (ev.error && ev.error.message) || "stream error", text);
       }
+    } catch (e) {
+      if (isAbort(e, signal)) throw fail("aborted", "Cancelled.");
+      throw e;
     }
     return text;
   }
@@ -138,10 +148,10 @@ var Generator = (() => {
      long, and only if the whole document still validates afterwards. Any
      failure here keeps the original text: the pass can improve a result,
      never break one. ── */
-  async function rewriteStrings(apiKey, modelId, items, context) {
+  async function rewriteStrings(apiKey, modelId, items, context, signal) {
     if (!navigator.onLine || !items.length) return [];
     const res = await fetch(API, {
-      method: "POST", headers: headers(apiKey, modelId),
+      method: "POST", headers: headers(apiKey, modelId), signal,
       body: JSON.stringify({
         model: modelId, max_tokens: 16000, ...effortFor(modelId, "fast"), ...fallbackFor(modelId),
         system: `You are the copy editor for Vitruvian, an app that explains how systems work. You get numbered passages from ${context}, each with the writing problems a checker found in it. Rewrite each passage to fix exactly those problems. Keep every fact, number, name and technical term, keep about the same length and the same reading level, and change as little as you can. ${Voice.SHORT_RULES}
@@ -167,14 +177,17 @@ Return ONLY a JSON array of {"i": <number>, "text": "<rewritten passage>"}, one 
     const ratio = next.length / orig.length;
     return ratio > 0.6 && ratio < 1.6 && Voice.lint(next).length < Voice.lint(orig).length;
   }
-  async function voicePass({ apiKey, modelId, doc, onProgress, validate }) {
+  async function voicePass({ apiKey, modelId, doc, onProgress, validate, signal }) {
     Voice.straighten(doc);
     const flagged = Voice.lintDoc(doc).slice(0, 60);
     if (!flagged.length) return { doc, flagged: 0, fixed: 0 };
     if (onProgress) onProgress({ phase: "voice", tokens: 0 });
     let out;
-    try { out = await rewriteStrings(apiKey, modelId, flagged, "one document"); }
-    catch (e) { return { doc, flagged: flagged.length, fixed: 0 }; }
+    try { out = await rewriteStrings(apiKey, modelId, flagged, "one document", signal); }
+    catch (e) {
+      if (isAbort(e, signal)) throw fail("aborted", "Cancelled.");
+      return { doc, flagged: flagged.length, fixed: 0 };
+    }
     const trial = JSON.parse(JSON.stringify(doc));
     let fixed = 0;
     flagged.forEach((f, i) => { if (better(f.text, out[i])) { Voice.set(trial, f.path, out[i]); fixed++; } });
@@ -183,26 +196,29 @@ Return ONLY a JSON array of {"i": <number>, "text": "<rewritten passage>"}, one 
   }
   // short replies: rewrite only when the lint finds more than one tell, and
   // keep the reply's first line when the caller says it carries structure
-  async function polishShort(apiKey, modelId, text, keepFirstLine) {
+  async function polishShort(apiKey, modelId, text, keepFirstLine, signal) {
     const issues = Voice.lint(text);
     if (issues.length < 2) return text;
     try {
       const [next] = await rewriteStrings(apiKey, modelId, [{ text, issues }],
-        keepFirstLine ? "a short graded answer; keep its first line and its RIGHT:/MISSED:/VERDICT: labels exactly" : "a short answer");
+        keepFirstLine ? "a short graded answer; keep its first line and its RIGHT:/MISSED:/VERDICT: labels exactly" : "a short answer", signal);
       if (!better(text, next)) return text;
       if (keepFirstLine && next.split("\n")[0].trim() !== text.split("\n")[0].trim()) return text;
       return next;
-    } catch (e) { return text; }
+    } catch (e) {
+      if (isAbort(e, signal)) throw fail("aborted", "Cancelled.");
+      return text;
+    }
   }
 
   /* ── the full pipeline: generate → validate → one repair → voice ── */
-  async function generate({ apiKey, modelId, system, focus, speed, mode, onProgress, voice = true }) {
-    const result = await generateRaw({ apiKey, modelId, system, focus, speed, mode, onProgress });
+  async function generate({ apiKey, modelId, system, focus, speed, mode, onProgress, voice = true, signal }) {
+    const result = await generateRaw({ apiKey, modelId, system, focus, speed, mode, onProgress, signal });
     if (!voice) return { ...result, voice: { flagged: 0, fixed: 0, off: true } };
-    const v = await voicePass({ apiKey, modelId, doc: result.doc, onProgress, validate: d => Schema.validate(d, { strict: true }).ok });
+    const v = await voicePass({ apiKey, modelId, doc: result.doc, onProgress, signal, validate: d => Schema.validate(d, { strict: true }).ok });
     return { doc: v.doc, repaired: result.repaired, voice: { flagged: v.flagged, fixed: v.fixed } };
   }
-  async function generateRaw({ apiKey, modelId, system, focus, speed, mode, onProgress }) {
+  async function generateRaw({ apiKey, modelId, system, focus, speed, mode, onProgress, signal }) {
     const sys = SKILL.text(mode);
     const userMsg = (mode === "design"
       ? `Review and deconstruct this design I'm building:\n\n${system}`
@@ -216,7 +232,7 @@ Return ONLY a JSON array of {"i": <number>, "text": "<rewritten passage>"}, one 
 
     if (onProgress) onProgress({ phase: "start", tokens: 0 });
     const seen = new Set();                                 // shared across both calls: no phase replays on repair
-    const text = await streamCall(apiKey, modelId, base, onProgress, seen);
+    const text = await streamCall(apiKey, modelId, base, onProgress, seen, signal);
 
     let doc, errors = null;
     try {
@@ -237,7 +253,7 @@ Return ONLY a JSON array of {"i": <number>, "text": "<rewritten passage>"}, one 
       // omit the assistant turn when the first response was blank — an empty
       // content block would make a malformed request instead of retrying cleanly
       messages: [...base.messages, ...(text.trim() ? [{ role: "assistant", content: text }] : []), { role: "user", content: repairMsg }]
-    }, onProgress, seen);
+    }, onProgress, seen, signal);
 
     const doc2 = parseDoc(text2);                          // throws kind:"invalid" with raw attached
     const res2 = Schema.validate(doc2, { strict: true });
@@ -246,7 +262,7 @@ Return ONLY a JSON array of {"i": <number>, "text": "<rewritten passage>"}, one 
   }
 
   /* ── AI-compare: the small second-type call (§7) ── */
-  async function compare({ apiKey, modelId, layer, attempt, voice = true }) {
+  async function compare({ apiKey, modelId, layer, attempt, voice = true, signal }) {
     if (!navigator.onLine) throw fail("offline", "AI comparison needs a connection.");
     const p = SKILL.comparePrompt(layer, attempt);
     let res;
@@ -254,33 +270,39 @@ Return ONLY a JSON array of {"i": <number>, "text": "<rewritten passage>"}, one 
       // 1500 not 400: on adaptive-thinking models the ceiling covers thinking
       // + verdict together — 400 would truncate the verdict mid-sentence
       res = await fetch(API, {
-        method: "POST", headers: headers(apiKey, modelId),
+        method: "POST", headers: headers(apiKey, modelId), signal,
         body: JSON.stringify({ model: modelId, max_tokens: 1500, ...effortFor(modelId, "fast"), ...fallbackFor(modelId), system: p.system, messages: [{ role: "user", content: p.user }] })
       });
-    } catch (e) { throw fail("offline", "Could not reach Anthropic. Check your connection."); }
+    } catch (e) {
+      if (isAbort(e, signal)) throw fail("aborted", "Cancelled.");
+      throw fail("offline", "Could not reach Anthropic. Check your connection.");
+    }
     if (!res.ok) throw await httpError(res);
     const data = await res.json();
     if (data.stop_reason === "refusal") throw fail("refusal", "The model declined this request. Try a different model.");
     const text = data.content.map(b => b.text || "").join("").trim();
-    return voice ? polishShort(apiKey, modelId, text, true) : text;
+    return voice ? polishShort(apiKey, modelId, text, true, signal) : text;
   }
 
   /* ── Ask-this-layer: one bounded Q&A call (§value-add) ── */
-  async function ask({ apiKey, modelId, doc, layer, question, voice = true }) {
+  async function ask({ apiKey, modelId, doc, layer, question, voice = true, signal }) {
     if (!navigator.onLine) throw fail("offline", "Asking needs a connection.");
     const p = SKILL.askPrompt(doc, layer, question);
     let res;
     try {
       res = await fetch(API, {
-        method: "POST", headers: headers(apiKey, modelId),
+        method: "POST", headers: headers(apiKey, modelId), signal,
         body: JSON.stringify({ model: modelId, max_tokens: 1200, ...effortFor(modelId, "fast"), ...fallbackFor(modelId), system: p.system, messages: [{ role: "user", content: p.user }] })
       });
-    } catch (e) { throw fail("offline", "Could not reach Anthropic. Check your connection."); }
+    } catch (e) {
+      if (isAbort(e, signal)) throw fail("aborted", "Cancelled.");
+      throw fail("offline", "Could not reach Anthropic. Check your connection.");
+    }
     if (!res.ok) throw await httpError(res);
     const data = await res.json();
     if (data.stop_reason === "refusal") throw fail("refusal", "The model declined this question. Try a different model.");
     const text = data.content.map(b => b.text || "").join("").trim();
-    return voice ? polishShort(apiKey, modelId, text, false) : text;
+    return voice ? polishShort(apiKey, modelId, text, false, signal) : text;
   }
 
   /* ── What-if: propose a change → verdict + ghost diff (§value-add) ── */
@@ -313,17 +335,20 @@ Return ONLY a JSON array of {"i": <number>, "text": "<rewritten passage>"}, one 
     w.alternatives = (Array.isArray(w.alternatives) ? w.alternatives : []).filter(a => a && a.name && a.note);
     return w;
   }
-  async function whatif({ apiKey, modelId, doc, change, speed, voice = true }) {
+  async function whatif({ apiKey, modelId, doc, change, speed, voice = true, signal }) {
     if (!navigator.onLine) throw fail("offline", "What-if needs a connection.");
     const p = SKILL.whatifPrompt(doc, change);
     async function call() {
       let res;
       try {
         res = await fetch(API, {
-          method: "POST", headers: headers(apiKey, modelId),
+          method: "POST", headers: headers(apiKey, modelId), signal,
           body: JSON.stringify({ model: modelId, max_tokens: 4000, ...effortFor(modelId, speed), ...fallbackFor(modelId), system: p.system, messages: [{ role: "user", content: p.user }] })
         });
-      } catch (e) { throw fail("offline", "Could not reach Anthropic. Check your connection."); }
+      } catch (e) {
+        if (isAbort(e, signal)) throw fail("aborted", "Cancelled.");
+        throw fail("offline", "Could not reach Anthropic. Check your connection.");
+      }
       if (!res.ok) throw await httpError(res);
       const data = await res.json();
       if (data.stop_reason === "refusal") throw fail("refusal", "The model declined this proposal. Try a different model.");
@@ -337,7 +362,7 @@ Return ONLY a JSON array of {"i": <number>, "text": "<rewritten passage>"}, one 
       w = sanitizeWhatif(parseDoc(text), doc);
     }
     if (!voice) return w;
-    const v = await voicePass({ apiKey, modelId, doc: w });
+    const v = await voicePass({ apiKey, modelId, doc: w, signal });
     return v.doc;
   }
 

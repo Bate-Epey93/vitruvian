@@ -337,13 +337,57 @@ var LabPage = (function () {
       els.play.textContent = RM ? C.controls.restart : C.controls.pause;
     }
 
+    var inertiaRaf = 0, camRaf = 0;
+    function stopCameraMotion() {
+      if (inertiaRaf) { cancelAnimationFrame(inertiaRaf); inertiaRaf = 0; }
+      if (camRaf) { cancelAnimationFrame(camRaf); camRaf = 0; }
+    }
+    function snapshotCam(cam) {
+      if (!cam) return null;
+      return {
+        yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist,
+        target: cam.target ? [cam.target[0], cam.target[1], cam.target[2]] : [0, 0, 0]
+      };
+    }
+    function smoothCameraChange(fn) {
+      stopCameraMotion();
+      var cam = ctl.scene && ctl.scene.camera;
+      var from = snapshotCam(cam);
+      fn();
+      var to = snapshotCam(cam);
+      if (RM || !from || !to) return;
+      var dyaw = ((to.yaw - from.yaw + Math.PI) % (2 * Math.PI)) - Math.PI;
+      if (dyaw < -Math.PI) dyaw += 2 * Math.PI;
+      var dpitch = to.pitch - from.pitch;
+      var ddist = to.dist - from.dist;
+      var dtx = to.target[0] - from.target[0], dty = to.target[1] - from.target[1], dtz = to.target[2] - from.target[2];
+      if (Math.hypot(dyaw, dpitch) < 0.005 && Math.abs(ddist) < 1 && Math.hypot(dtx, dty, dtz) < 0.5) return;
+      var t0 = performance.now(), dur = 380;
+      function tick(now) {
+        var p = Math.min(1, (now - t0) / dur);
+        var e = 1 - Math.pow(1 - p, 3);
+        cam.yaw = from.yaw + dyaw * e;
+        cam.pitch = from.pitch + dpitch * e;
+        cam.dist = from.dist + ddist * e;
+        if (cam.target) {
+          cam.target[0] = from.target[0] + dtx * e;
+          cam.target[1] = from.target[1] + dty * e;
+          cam.target[2] = from.target[2] + dtz * e;
+        }
+        ctl.scene.dirty = true;
+        if (p < 1) camRaf = requestAnimationFrame(tick);
+        else camRaf = 0;
+      }
+      camRaf = requestAnimationFrame(tick);
+    }
+
     function goto(i, s) {
       if (i < 0 || i >= L.length) return;
       var newLayer = i !== layerIndex;
       layerIndex = i;
       step = Math.max(1, Math.min(4, s || 1));
       if (newLayer) {
-        ctl.applyLayer(L[i]);
+        smoothCameraChange(function () { ctl.applyLayer(L[i]); });
         els.scrub.value = "0";
         if (location.hash !== "#" + L[i].id) history.replaceState(null, "", "#" + L[i].id);
         if (!RM && step === 1) setTimeout(startDemo, 420);
@@ -375,11 +419,13 @@ var LabPage = (function () {
     });
 
     /* ═══ pointer: orbit on the canvas, page scroll everywhere else ═══ */
-    var drag = null, pointers = {}, pinch = 0;
+    var drag = null, pointers = {}, pinch = 0, orbitSamples = [];
     canvas.addEventListener("pointerdown", function (e) {
+      stopCameraMotion();
       pointers[e.pointerId] = [e.clientX, e.clientY];
       canvas.setPointerCapture(e.pointerId);
       drag = [e.clientX, e.clientY];
+      orbitSamples = [{ t: performance.now(), x: e.clientX, y: e.clientY }];
       $("hint").classList.add("gone");
     });
     canvas.addEventListener("pointermove", function (e) {
@@ -390,11 +436,15 @@ var LabPage = (function () {
         var d = Math.hypot(a[0] - b[0], a[1] - b[1]);
         if (pinch) ctl.dolly(pinch / d);
         pinch = d;
+        orbitSamples = [];
         return;
       }
       if (drag) {
         ctl.orbit(e.clientX - drag[0], e.clientY - drag[1]);
         drag = [e.clientX, e.clientY];
+        var now = performance.now();
+        orbitSamples.push({ t: now, x: e.clientX, y: e.clientY });
+        while (orbitSamples.length > 2 && now - orbitSamples[0].t > 85) orbitSamples.shift();
         return;
       }
       var r = canvas.getBoundingClientRect();
@@ -409,16 +459,45 @@ var LabPage = (function () {
     });
     function endPointer(e) {
       delete pointers[e.pointerId];
-      if (!Object.keys(pointers).length) { drag = null; pinch = 0; }
+      if (!Object.keys(pointers).length) {
+        var hadDrag = !!drag;
+        drag = null; pinch = 0;
+        if (hadDrag && !RM && orbitSamples.length >= 2) {
+          var now = performance.now();
+          while (orbitSamples.length > 2 && now - orbitSamples[0].t > 95) orbitSamples.shift();
+          if (orbitSamples.length >= 2) {
+            var s0 = orbitSamples[0], s1 = orbitSamples[orbitSamples.length - 1];
+            var dt0 = (s1.t - s0.t) / 1000;
+            if (dt0 > 0.008) {
+              var vx = (s1.x - s0.x) / dt0, vy = (s1.y - s0.y) / dt0;
+              if (Math.hypot(vx, vy) > 25) {
+                var lastT = now;
+                var coast = function (t) {
+                  var dt = Math.min(0.032, Math.max(0.001, (t - lastT) / 1000));
+                  lastT = t;
+                  var decay = Math.pow(0.035, dt);
+                  vx *= decay; vy *= decay;
+                  ctl.orbit(vx * dt, vy * dt);
+                  if (Math.hypot(vx, vy) > 8) inertiaRaf = requestAnimationFrame(coast);
+                  else inertiaRaf = 0;
+                };
+                inertiaRaf = requestAnimationFrame(coast);
+              }
+            }
+          }
+        }
+        orbitSamples = [];
+      }
     }
     canvas.addEventListener("pointerup", endPointer);
     canvas.addEventListener("pointercancel", endPointer);
     canvas.addEventListener("pointerleave", function () { $("tip").classList.remove("on"); });
     canvas.addEventListener("wheel", function (e) {
       e.preventDefault();
+      stopCameraMotion();
       ctl.dolly(e.deltaY > 0 ? 1.09 : 0.92);
     }, { passive: false });
-    canvas.addEventListener("dblclick", function () { ctl.resetCamera(); });
+    canvas.addEventListener("dblclick", function () { smoothCameraChange(function () { ctl.resetCamera(); }); });
 
     /* ═══ layout ═══ */
     function fit() {

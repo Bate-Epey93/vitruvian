@@ -4,6 +4,18 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [2.11.0] — 2026-10-30 · Fluid physics, background generation, and portable sharing
+
+### Added
+- **Non-blocking generation with live layer titles, Cancel, and a background status pill.** You can now cancel an in-flight Deconstruct at any moment (`AbortController`), watch the failure ladder's layer names stream in as they are written, see an honest time and cost estimate before starting, and browse your library or read another system while generation finishes in the background without losing your place.
+- **Zero-backend portable share links (`#/import/…`) and drag-and-drop `.json` import.** Your own Deconstructs now share via self-contained `#/import/<deflate-base64url>` links compressed in-browser with `CompressionStream("deflate-raw")`, and you can drag and drop any `.json` Deconstruct or backup file directly onto Home to validate and open it.
+- **Desktop grab-to-pan with momentum coast and cursor-anchored 1:1 trackpad zoom.** When zoomed in on desktop, drag empty diagram paper to pan with natural release coasting, and use trackpad pinch or `Cmd`/`Ctrl` + wheel for continuous 1:1 zooming anchored at the pointer.
+- **3D field study orbit inertia and smooth camera transitions.** Releasing an orbit drag in `transmission.html` and `escapement.html` carries angular momentum that decays naturally, and switching layers or double-clicking to reset glides the camera smoothly over 380ms.
+
+### Changed
+- **Velocity-projected, rubber-banded, interruptible mobile sheet.** Dragging the reading sheet on narrow screens now resists softly past its top and bottom stops, projects release velocity to pick the natural detent on a flick, settles with a velocity-aware spring, and can be grabbed mid-flight at its live on-screen height.
+- **Spatial continuity across `Before / After` and layer steps.** Surviving diagram nodes that shift slot coordinates between layers or during `Before / After` flips now interpolate smoothly over 240ms instead of jumping, and the `B` key supports both quick tap-to-toggle (`< 220ms`) and hold-to-peek (`≥ 220ms`).
+
 ## [2.10.0] — 2026-10-30 · Deep links, search, and honest drill badges
 
 ### Added
