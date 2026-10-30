@@ -1,0 +1,658 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "The manual gearbox",
+  "narrowing": "A five-speed automotive synchromesh manual transmission: coupling a narrow-powerband combustion engine to road wheels across selectable torque ratios without stripping gear teeth or locking the axle. Left out are planetary automatic torque converters, dual-clutch hydraulics, and the rear differential.",
+  "ordering_note": "The layers follow the exact historical failures that built the modern manual gearbox, matching the 3D Field Study 'The Gear Change': from Levassor's 1894 sliding-gear crash box, to 1920s constant-mesh dog clutches, to Cadillac's 1928 cone synchromesh, to selector-rail interlocks, and finally to the reverse idler lockout.",
+  "history_confidence": "high",
+  "domain": "mechanical",
+  "field_study": {
+   "motion": "Input shaft, countershaft, free-spinning gears, brass cones, and sliding dog sleeves.",
+   "ladder": "Sliding-gear clash, constant-mesh dogs, cone synchromesh, selector interlock pins, and reverse idler.",
+   "effort": "medium"
+  }
+ },
+ "essence": {
+  "text": "An internal combustion engine only makes useful torque across a narrow band of rotational speeds, while a car's road wheels must turn from zero to two thousand rpm. A manual gearbox bridges that gap with a rack of fixed gear pairs, but changing ratios while the car is moving means disconnecting a spinning shaft from one spinning gear and locking it to another that is turning at a completely different speed. Force two spinning toothed wheels together at mismatched speeds and steel teeth shear off with a rifle-shot bang. Over thirty-five years, mechanical engineers solved that collision in four moves: first uncoupling the engine's inertia with a friction clutch, then leaving the delicate helical gears permanently meshed and moving a coarse dog collar instead, then placing a tiny brass cone brake in front of the collar that physically refuses to let the shift finish until friction brings the speeds to zero difference, and finally pinning the selector rails so the lever can never lock two ratios at once.",
+  "beginner": "A car engine only works well in a narrow range of speeds, so a gearbox lets you swap between different-sized gears as you speed up. The hard part is switching gears while the car is already rolling, because the new gear and the shaft are spinning at different speeds. Shoving two spinning metal wheels together grinds their teeth off, so a manual gearbox uses a sequence of clever mechanical locks and tiny cone-shaped brakes that bring the two speeds into exact agreement before the metal teeth are allowed to touch.",
+  "deep_facts": [
+   "When Emile Levassor demonstrated the sliding-gear transmission on the 1894 Panhard, critics called it brutal; Levassor famously replied, 'C'est brutal, mais ca marche' (It is brutal, but it works).",
+   "Inside a modern manual gearbox, the gears themselves never move when you move the stick: all five forward gear pairs stay permanently meshed and spinning the whole time you drive, spinning freely on needle bearings until a collar locks one of them to the output shaft.",
+   "Cadillac introduced the synchromesh in 1928 (designed by Earl Thompson): a tiny brass cone ring only a few millimeters wide that acts as both a friction brake and a mechanical bouncer, twisting slightly out of alignment to block your hand until the gear and shaft reach the exact same rpm.",
+   "Engaging two gears at once on the same shaft does not average their ratios; it welds the shaft solid and locks the rear wheels instantly at highway speed, which is why steel interlock pins sit between the selector rods.",
+   "Reverse in many manual gearboxes still omits synchromesh and uses a straight-cut sliding idler gear straight out of 1894, which is why reverse whines when you back up and crunches if the car is still creeping forward."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Connect a spinning engine to spinning road wheels through exactly one chosen torque ratio at a time, switching ratios on demand without clashing teeth or locking the drivetrain.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Driver",
+    "want": "Move one lever and press one pedal to pick any gear smoothly, without needing race-driver timing to avoid grinding metal"
+   },
+   {
+    "id": "a2",
+    "name": "Engine",
+    "want": "Stay inside my 1,500 to 6,000 rpm operating band whether the car is creeping uphill at 5 mph or cruising at 75 mph"
+   },
+   {
+    "id": "a3",
+    "name": "Gear teeth",
+    "want": "Carry heavy continuous torque along our whole face width without ever being slammed edge-first into a tooth moving at a different speed"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "Zero-delta engagement: positive metal teeth (spur teeth or dog teeth) never enter mesh while a rotational speed difference exists between the shaft and the target gear."
+   },
+   {
+    "id": "inv2",
+    "text": "Inertia isolation: the heavy spinning flywheel is never directly coupled to the gearbox input shaft while a ratio change is in progress."
+   },
+   {
+    "id": "inv3",
+    "text": "Mutual exclusion of ratios: at most one gear ratio is locked to the output mainshaft at any instant; two ratios can never be engaged simultaneously."
+   },
+   {
+    "id": "inv4",
+    "text": "Directional safety: the reverse idler cannot be slid into mesh while the output shaft is spinning forward at road speed."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Clutch disc",
+    "note": "A spring-loaded friction plate between engine flywheel and gearbox input shaft that cuts the engine's inertia loose when the pedal is pressed"
+   },
+   {
+    "id": "en2",
+    "name": "Countershaft (layshaft)",
+    "note": "An intermediate shaft geared to the input shaft that carries the fixed driving gears for every ratio"
+   },
+   {
+    "id": "en3",
+    "name": "Free-spinning gear & dog ring",
+    "note": "A helical gear riding on needle bearings on the output mainshaft, permanently meshed with the countershaft and ringed with blunt dog teeth on its side"
+   },
+   {
+    "id": "en4",
+    "name": "Synchro sleeve & blocker ring",
+    "note": "A splined collar that slides along the mainshaft, pushing a brass friction cone against the target gear to equalize speeds before locking over its dog teeth"
+   },
+   {
+    "id": "en5",
+    "name": "Selector rails & interlock pins",
+    "note": "Three parallel steel rods moved by the shift lever, separated by floating steel pins that lock the other two rods whenever one rod leaves neutral"
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Torque path: engine rotation flows through the closed clutch into the input shaft, down to the countershaft, across the one locked gear pair to the mainshaft, and out to the wheels."
+   },
+   {
+    "id": "f2",
+    "text": "Shift control: driver hand force travels down the shift linkage to one selector rail, sliding a synchro sleeve to synchronize and lock the target gear."
+   }
+  ],
+  "constraints": [
+   "Two rigid steel bodies rotating on the same axis at different angular velocities cannot lock together without an infinite torque spike unless one slips or yields.",
+   "The output mainshaft is mechanically tied to the car's road wheels and 1,500 kg of vehicle momentum, so its speed cannot change instantly during a shift.",
+   "Helical gear teeth run quietly under load, but because they are cut at an angle they cannot be slid axially in and out of mesh."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "driver",
+    "label": "Driver & gate"
+   },
+   {
+    "id": "control",
+    "label": "Shift control"
+   },
+   {
+    "id": "torque",
+    "label": "Shafts & gears"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "driver_hand",
+    "label": "Driver",
+    "kind": "actor",
+    "lane": "driver",
+    "order": 0
+   },
+   {
+    "id": "shift_lever",
+    "label": "Shift lever",
+    "kind": "channel",
+    "lane": "control",
+    "order": 2
+   },
+   {
+    "id": "engine_fly",
+    "label": "Engine flywheel",
+    "kind": "actor",
+    "lane": "torque",
+    "order": 0
+   },
+   {
+    "id": "sliding_gear",
+    "label": "Sliding spur gears",
+    "kind": "process",
+    "lane": "torque",
+    "order": 3
+   },
+   {
+    "id": "road_wheels",
+    "label": "Mainshaft & wheels",
+    "kind": "store",
+    "lane": "torque",
+    "order": 6
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_hand_lev",
+    "from": "driver_hand",
+    "to": "shift_lever",
+    "kind": "control",
+    "label": "pushes stick"
+   },
+   {
+    "id": "e_lev_slide",
+    "from": "shift_lever",
+    "to": "sliding_gear",
+    "kind": "control",
+    "label": "slides gear"
+   },
+   {
+    "id": "e_eng_gear",
+    "from": "engine_fly",
+    "to": "sliding_gear",
+    "kind": "payload",
+    "label": "engine torque"
+   },
+   {
+    "id": "e_gear_road",
+    "from": "sliding_gear",
+    "to": "road_wheels",
+    "kind": "payload",
+    "label": "drives road"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "The Friction Clutch & Constant-Mesh Dogs: Stop Sliding the Gears",
+   "problem": {
+    "statement": "In the 1894 sliding-gear 'crash box,' shifting means pushing a spinning steel spur gear sideways along a shaft until its teeth slam into the teeth of a spinning gear on the countershaft. Worse, if the heavy engine flywheel is still bolted to the input shaft, you are trying to instantly speed up or slow down 20 kilograms of spinning cast iron using the tips of two gear teeth. Every imperfect shift chips hardened steel corners off the torque-carrying teeth until the gearbox strips.",
+    "beginner": "In the earliest cars, moving the gearstick pushed two spinning toothed wheels sideways into each other. If their speeds didn't match to the exact rpm, the teeth smashed together like two spinning buzzsaws.",
+    "model": {
+     "id": "separation-of-concerns",
+     "application": "Separate three jobs that the crash box mashed into one part: use a pedal-operated friction clutch to uncouple engine inertia, leave the delicate helical torque gears permanently meshed, and move a sacrificial ring of blunt dog teeth to select which gear is locked to the shaft."
+    }
+   },
+   "gate": {
+    "question": "Sliding spinning gear teeth sideways into each other chips the very teeth that have to carry the engine's load, and prevents you from using quiet angled (helical) teeth. How do you change ratios without ever unmeshing a single gear pair?",
+    "hint": "Let every pair of gears stay meshed and spinning freely on bearings the whole time, and slide a separate splined collar along the shaft to lock just one gear to the shaft."
+   },
+   "solution": "Put a spring-loaded dry friction clutch between the engine flywheel and the gearbox input shaft, and rebuild the gearbox as a constant-mesh dog-clutch transmission. Stepping on the clutch pedal disconnects the heavy engine flywheel so only the light input shaft and countershaft need to change speed. Inside the box, every gear pair stays permanently meshed from the day the car is built, allowing strong, quiet helical teeth. The gears on the output mainshaft ride on free-spinning bearings, doing no work until a splined sliding collar (the dog sleeve), which turns with the mainshaft, slides sideways so its inner splines lock onto a ring of coarse, blunt dog teeth on the side of the chosen gear.",
+   "user_lens": {
+    "gives": "Gears run quietly on angled helical teeth and no longer strip their load-bearing faces on a clumsy shift.",
+    "costs": "The driver still has to match the shaft speeds by foot using 'double-declutching' (clutch in, neutral, clutch out, blip throttle to match speed, clutch in, engage dogs), or the blunt dogs clank and refuse to go in."
+   },
+   "tech_lens": {
+    "mechanism": "Axial engagement is decoupled from radial torque transfer: helical gear pairs stay in continuous conjugate mesh on needle bearings, while a splined dog collar engages face dogs on the target gear after the input clutch isolates flywheel inertia I_engine.",
+    "principle": "Decouple the load-bearing path from the switching mechanism; never use precision working surfaces as impact bumpers."
+   },
+   "tradeoff": "Dog teeth are tougher than gear teeth, but they still meet with zero speed-matching assistance: shifting smoothly requires a four-step pedal dance that most everyday drivers never master.",
+   "at_scale": "Because plain dog rings engage in milliseconds without waiting for a friction cone, racing sequential gearboxes and motorcycles still stop at this exact layer today, trading street politeness for instant shifts.",
+   "defends": [
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "constant-mesh gears + sliding dog collar",
+      "software_concept": "keeping worker pools warm and pre-connected while flipping a lightweight routing pointer instead of tearing down and re-initializing TCP/TLS sockets per request"
+     },
+     {
+      "mechanism": "friction clutch isolating flywheel inertia",
+      "software_concept": "draining an upstream ingress connection before reconfiguring a stateful worker"
+     }
+    ],
+    "interview_probes": [
+     "Where in your system are you tearing down and rebuilding expensive stateful connections on every switch when you could keep them permanently connected and move a lightweight selector?"
+    ],
+    "approach": "Keep all ratio workers permanently initialized and spinning in parallel; isolate upstream load via an ingress gate, then move a single splined pointer to bind the active worker to the output bus.",
+    "vocab": [
+     "load-balancing",
+     "communication-protocols"
+    ]
+   },
+   "beginner_analogy": "Like having five record turntables already spinning at five different speeds and moving the speaker wire plug from one turntable to the next, instead of trying to swap the heavy vinyl record while the needle is down.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "clutch_pedal",
+      "label": "Clutch & input shaft",
+      "kind": "process",
+      "lane": "torque",
+      "order": 1
+     },
+     {
+      "id": "const_gears",
+      "label": "Constant-mesh gears",
+      "kind": "process",
+      "lane": "torque",
+      "order": 4
+     },
+     {
+      "id": "dog_sleeve",
+      "label": "Sliding dog sleeve",
+      "kind": "process",
+      "lane": "control",
+      "order": 4
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_pedal_cut",
+      "from": "driver_hand",
+      "to": "clutch_pedal",
+      "kind": "control",
+      "label": "depresses clutch"
+     },
+     {
+      "id": "e_fly_clutch",
+      "from": "engine_fly",
+      "to": "clutch_pedal",
+      "kind": "payload",
+      "label": "flywheel torque"
+     },
+     {
+      "id": "e_clutch_gears",
+      "from": "clutch_pedal",
+      "to": "const_gears",
+      "kind": "payload",
+      "label": "countershaft"
+     },
+     {
+      "id": "e_lev_dog",
+      "from": "shift_lever",
+      "to": "dog_sleeve",
+      "kind": "control",
+      "label": "slides collar"
+     },
+     {
+      "id": "e_dog_lock",
+      "from": "dog_sleeve",
+      "to": "const_gears",
+      "kind": "control",
+      "label": "locks dog teeth"
+     },
+     {
+      "id": "e_const_road",
+      "from": "const_gears",
+      "to": "road_wheels",
+      "kind": "payload",
+      "label": "locked ratio"
+     }
+    ],
+    "highlight": [
+     "engine_fly",
+     "sliding_gear",
+     "shift_lever",
+     "e_lev_slide",
+     "e_eng_gear",
+     "e_gear_road"
+    ],
+    "remove": [
+     "sliding_gear",
+     "e_lev_slide",
+     "e_eng_gear",
+     "e_gear_road"
+    ]
+   }
+  },
+  {
+   "index": 2,
+   "name": "Cone Synchromesh: The Brake That Blocks Until Speeds Agree",
+   "problem": {
+    "statement": "Constant-mesh dog clutches still rely on a human driver to guess when the free-spinning gear and the mainshaft collar are turning at the same speed. If the driver shifts from 2nd to 3rd without double-declutching, the mainshaft collar is spinning at 2,000 rpm while the 3rd-gear wheel (tied to the fast-spinning input shaft) is spinning at 3,200 rpm. Pushing the dog sleeve across produces an awful metallic buzz as the dog teeth bounce off each other.",
+    "beginner": "Even with tough little dog teeth, the collar and the gear are still spinning at different speeds. If the driver just shoves the stick across, the teeth grind and refuse to mesh.",
+    "model": {
+     "id": "mutual-exclusion",
+     "application": "Place a friction-cone blocker ring between the sleeve and the gear that uses the speed difference itself to generate a blocking torque, physically barring the sleeve from advancing until the speed difference reaches zero."
+    }
+   },
+   "gate": {
+    "question": "You want any driver to push the gear lever straight from 2nd into 3rd without matching speeds by foot, and you must guarantee the steel dog teeth CANNOT touch while a speed difference remains. How do you make the speed difference itself hold the gate shut?",
+    "hint": "Put a brass ring with a tapered cone brake inside it between the sliding sleeve and the gear. What happens while the gear is dragging on that brass cone?"
+   },
+   "solution": "Earl Thompson's Baulk-Ring Synchromesh (1928). Between the sliding steel sleeve and the target gear sits a free-floating brass blocker ring with a conical inner brake surface and outer teeth that match the sleeve's splines. As the driver pushes the lever, small spring-loaded strut keys push the brass blocker ring's cone against the steel cone on the target gear. Because the gear and the sleeve are turning at different speeds, cone friction drags the brass ring rotationally half a tooth-width to one side against its stop lugs. In that twisted position, the angled chamfers of the brass ring's teeth sit directly in the path of the oncoming sleeve's teeth: the harder the driver pushes on the stick, the harder the sleeve presses the brass cone onto the gear, braking the gear faster while physically baulking the sleeve. The instant the gear's speed matches the sleeve's speed, the friction torque drops to zero, the angled tooth chamfers cam the brass ring back into alignment, and the sleeve slides straight through over the brass ring onto the steel dog teeth.",
+   "user_lens": {
+    "gives": "Silent, single-movement gear shifts for every driver, without double-declutching or guessing engine rpm.",
+    "costs": "Every shift now has a brief pause you can feel through the knob while the tiny brass cone drags the input shaft up or down to speed."
+   },
+   "tech_lens": {
+    "mechanism": "Self-energizing cone clutch paired with a baulk-ring escapement: while |omega_gear - omega_hub| > 0, hydrodynamic/Coulomb friction torque T_f twists the blocker ring into a half-pitch offset where axial force F_hand on the 35-degree tooth chamfers generates a restoring cone force F_cone > F_index; at delta_omega = 0, T_f vanishes and F_index rotates the ring into spline alignment.",
+    "principle": "Use the error signal itself to power the physical lock that blocks completion until the error reaches zero."
+   },
+   "tradeoff": "Brass blocker rings wear down over hundreds of thousands of shifts (especially if gearbox oil has the wrong friction modifiers), and they add 100 to 250 milliseconds of synchronization delay to every shift.",
+   "at_scale": "On difficult low-gear downshifts (like 3rd to 2nd or 2nd to 1st, where the speed jump and rotational inertia are largest), a single cone takes too much hand effort, so modern gearboxes stack double-cone and triple-cone synchros to double or triple the friction surface inside the same diameter.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "baulk ring blocking sleeve while delta_rpm > 0",
+      "software_concept": "live-migration cutover barrier that blocks pointer flip while dirty-page delta > 0, using write pressure to throttle cutover until replicas converge"
+     },
+     {
+      "mechanism": "cone friction bringing input shaft to mainshaft speed",
+      "software_concept": "background state catch-up / WAL tailing before promoting a standby node to primary"
+     }
+    ],
+    "interview_probes": [
+     "When cutting traffic over from an old primary to a new replica, how do you construct the synchronization barrier so the pointer physically cannot flip while replication lag is non-zero?"
+    ],
+    "approach": "Before binding the output pointer to the target worker, engage a synchronization phase that measures state delta_omega; while delta_omega !== 0, apply proportional catch-up torque and reject the commit transition; complete the lock atomically the tick delta_omega crosses zero.",
+    "vocab": [
+     "consensus",
+     "optimistic-concurrency",
+     "pessimistic-locking"
+    ]
+   },
+   "beginner_analogy": "Like a revolving door with a speed sensor that locks the door latch while the inside and outside are moving at different speeds, and uses your own push on the handle to bring the two sides to the same speed before the latch clicks open.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "synchro_cone",
+      "label": "Brass blocker synchro",
+      "kind": "process",
+      "lane": "control",
+      "order": 5
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_slv_sync",
+      "from": "dog_sleeve",
+      "to": "synchro_cone",
+      "kind": "control",
+      "label": "pushes cone"
+     },
+     {
+      "id": "e_sync_match",
+      "from": "synchro_cone",
+      "to": "const_gears",
+      "kind": "control",
+      "label": "matches speed"
+     }
+    ],
+    "highlight": [
+     "dog_sleeve",
+     "const_gears",
+     "e_dog_lock"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 3,
+   "name": "H-Gate Selector & Interlock Pins: One Gear at a Time",
+   "problem": {
+    "statement": "A five-speed gearbox has three separate sliding sleeves on the shafts: one for 1st/2nd, one for 3rd/4th, and one for 5th/Reverse, each moved by its own steel selector rail. If vibration, a worn linkage, or a hurried diagonal shove on the gearstick moves the 3rd-gear rail into gear before the 1st-gear rail has fully returned to neutral, two different gear pairs lock the countershaft to the mainshaft at the same time. Because 1st gear demands a 3.5:1 ratio and 3rd gear demands 1.4:1 on the same two shafts, the gearbox instantly welds itself into a solid block of metal, locking the drive wheels at speed.",
+    "beginner": "Inside the gearbox are three separate sliding rods for the different pairs of gears. If two rods ever slide into gear at the same time, the gearbox tries to spin one shaft at two speeds at once and locks the car's wheels solid.",
+    "model": {
+     "id": "inversion",
+     "application": "Drill cross-bores between the three selector rails and fill them with floating steel pins sized so that moving any one rail out of neutral physically wedges the pins into locking notches in the other two rails."
+    }
+   },
+   "gate": {
+    "question": "Three parallel steel rods sit inside the top of the gearbox, and each rod slides a different gear sleeve. If any two rods ever leave their center neutral position at the same time, the transmission explodes. With zero electronics, how do you make it physically impossible for two rods to move at once?",
+    "hint": "Drill a hole sideways through the casing between Rod 1 and Rod 2, and drop a steel pin in the hole that is just long enough to reach from the edge of Rod 1 to a shallow dimple in the side of Rod 2."
+   },
+   "solution": "Install a mechanical Three-Rail Interlock and Detent Assembly. Each of the three parallel selector rods has a machined semicircular notch on its side at the exact neutral position. In the casing wall between Rod 1 and Rod 2 (and between Rod 2 and Rod 3) sits a hardened steel interlock pin whose length equals the wall thickness plus the depth of ONE notch. When all three rods are in neutral, the notches line up and any rod can move. The instant Rod 1 slides forward into 1st gear, its un-notched full diameter pushes the interlock pin sideways into the neutral notch of Rod 2, which in turn pushes the second pin through a small bore in Rod 2 into the neutral notch of Rod 3. Rods 2 and 3 are now mechanically pinned to the casing until Rod 1 returns to exact center. Spring-loaded detent balls drop into grooves on the active rod to hold the chosen gear in place against vibration.",
+   "user_lens": {
+    "gives": "A crisp H-pattern gate where each gear clicks positively into home and it is mechanically impossible to cross-select two gears at once.",
+    "costs": "You cannot take diagonal shortcuts across the H-gate: every shift between rails must pass cleanly through the exact neutral line to release the interlock pins."
+   },
+   "tech_lens": {
+    "mechanism": "Mutual exclusion enforced by conservation of volume in a shared cross-bore: pin length L_pin = D_wall + d_notch allows at most one rail to displace the pin from its neutral notch, locking the remaining N-1 rails against axial translation.",
+    "principle": "Enforce mutual exclusion in physical geometry so conflicting states cannot be represented."
+   },
+   "tradeoff": "If a selector fork bends or a detent spring breaks, the interlock pin prevents you from selecting any other rail until the stuck rail is returned to neutral.",
+   "at_scale": "This three-pin geometry has run inside hundreds of millions of road cars, tractors, and heavy trucks for a century without a single sensor, relay, or line of firmware.",
+   "defends": [
+    "inv3"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "floating steel interlock pins between selector rails",
+      "software_concept": "hardware test-and-set mutex / algebraic sum type (enum Gear { Neutral, First, Second, ... }) where holding one state structurally precludes all others"
+     },
+     {
+      "mechanism": "spring-loaded detent ball",
+      "software_concept": "hysteresis / Schmitt trigger that prevents state chatter near a boundary"
+     }
+    ],
+    "interview_probes": [
+     "How can you refactor a set of boolean flags (is_first_gear, is_second_gear, is_reverse) into a single state representation where two flags being true at once cannot even be compiled?"
+    ],
+    "approach": "Represent the active ratio as a single atomic state machine (or mutex-guarded slot) that requires a verified transition through the Neutral state before acquiring any other rail.",
+    "vocab": [
+     "pessimistic-locking",
+     "contention",
+     "data-modeling"
+    ]
+   },
+   "beginner_analogy": "Like an old cassette player or desk fan where pushing the 'Fast Forward' button mechanically pops the 'Play' button back up, because one sliding bar underneath only has room for one button to be down at a time.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "interlock_rails",
+      "label": "Selector rails & pins",
+      "kind": "process",
+      "lane": "control",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_lev_rails",
+      "from": "shift_lever",
+      "to": "interlock_rails",
+      "kind": "control",
+      "label": "selects 1 rail"
+     },
+     {
+      "id": "e_rail_dog",
+      "from": "interlock_rails",
+      "to": "dog_sleeve",
+      "kind": "control",
+      "label": "pins other 2"
+     }
+    ],
+    "highlight": [
+     "shift_lever",
+     "dog_sleeve",
+     "e_lev_dog"
+    ],
+    "remove": [
+     "e_lev_dog"
+    ]
+   }
+  },
+  {
+   "index": 4,
+   "name": "Reverse Idler & Lockout: The Deliberate Throwback",
+   "problem": {
+    "statement": "To back the car up, the output mainshaft must spin in the opposite direction to the forward gears while the engine keeps turning the same way. Adding a third gear (the reverse idler) between the countershaft and the mainshaft reverses the rotation. Because reverse is only used once a trip from a dead stop, engineers often leave it as a straight-cut sliding gear without a synchromesh cone to save length and cost. But on a 5-speed H-gate, Reverse sits right behind 5th gear: a driver shifting down from 5th at 70 mph who pulls straight back out of habit will ram the reverse idler into a shaft spinning forward at 4,000 rpm.",
+    "beginner": "On a 5-speed gearstick, Reverse sits right behind 5th gear. If you pull straight back from 5th gear on the highway thinking you are going into 4th or 6th, you will slam the backwards gear into a car moving 70 miles an hour forward.",
+    "model": {
+     "id": "trust-boundary",
+     "application": "Put a mechanical one-way gate on the 5th-to-Reverse path that blocks a direct pull from 5th and requires either a deliberate return to neutral or a collar lift/push-down to enter the reverse plane."
+    }
+   },
+   "gate": {
+    "question": "Reverse shares the rightmost selector rail with 5th gear, and accidentally pulling straight back from 5th into Reverse at highway speed destroys the gearbox. Without removing Reverse from that rail, how do you make the 5th-to-Reverse move impossible unless the driver first goes back to the center of the gate?",
+    "hint": "Put a spring-loaded cam finger on the selector shaft that swings into the reverse slot whenever you enter 5th gear, and only resets when the stick springs sideways back into the 3rd/4th neutral plane."
+   },
+   "solution": "Install a Reverse Idler Gear paired with a 5th-to-Reverse Cam Lockout and Shifter Gate Guard. To reverse rotation, a small straight-cut idler gear slides into mesh between the countershaft and the reverse gear ring on the outside of the 1st/2nd synchro sleeve, turning two meshes in series so the output reverses direction. To protect it at road speed, a spring-loaded lockout pawl sits on the selector mechanism: whenever the shift finger moves right and forward into 5th gear, it cocks the lockout cam directly across the back of the slot, physically blocking a straight pull rearward into Reverse. The cam only unlatches when the driver returns the lever to neutral and lets the centering springs pull the stick sideways back into the 3rd/4th plane first; many shifters add a collar lift or push-down detent at the stick so entering the reverse plane requires a deliberate two-axis gesture.",
+   "user_lens": {
+    "gives": "You can never accidentally pull straight from 5th into Reverse on the highway, and pulling out of a parking spot reverses the car cleanly.",
+    "costs": "Because the straight-cut reverse idler has no helical angle and often no synchro cone, reverse whines like a race car when backing up and crunches if you select it before the car has completely stopped rolling."
+   },
+   "tech_lens": {
+    "mechanism": "Three-gear train (countershaft -> idler -> mainshaft ring) inverts the sign of the angular velocity ratio, guarded by a ratcheting cam pawl on the 5/R selector rail that latches on +Y translation (5th) and resets only on -X lateral translation to the 3/4 neutral plane.",
+    "principle": "Require a deliberate out-of-plane confirmation gesture and state reset before allowing entry into a destructive, non-idempotent mode."
+   },
+   "tradeoff": "Omitting a synchro cone on reverse saves 15 millimeters of gearbox casing length and several parts, at the price of an occasional crunch when an impatient driver shifts into reverse while still creeping forward at 2 mph.",
+   "at_scale": "This is a textbook engineering cost-benefit boundary: five forward gears used thousands of times at speed earn full cone synchros and helical teeth, while the one gear used at 0 mph keeps the compact 1894 sliding-gear mechanism behind a safety lockout.",
+   "defends": [
+    "inv4",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "5th-to-Reverse cam lockout requiring return to center",
+      "software_concept": "two-step confirmation modal / state-machine guard that forbids transitioning directly from Production-Run to Drop-Database without passing through an explicit Disarm state"
+     },
+     {
+      "mechanism": "un-synchronized straight-cut reverse idler",
+      "software_concept": "cold-path administrative maintenance routine that skips hot-path optimizations because it only runs while traffic is stopped"
+     }
+    ],
+    "interview_probes": [
+     "Where in your system can you simplify a rarely-used maintenance operation by requiring the system to be drained/stopped first instead of building complex live-synchronization machinery for it?"
+    ],
+    "approach": "Guard the reverse state transition behind a latch that sets whenever a forward high-speed state is entered and clears only when the state machine returns to the neutral origin and receives an out-of-band confirmation bit.",
+    "vocab": [
+     "api-design",
+     "multi-step-processes"
+    ]
+   },
+   "beginner_analogy": "Like a child-proof medicine cap or the safety catch on a kitchen food processor that requires you to push down and twist at the same time so you can never bump it on by accident.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "rev_lockout",
+      "label": "Reverse cam lockout",
+      "kind": "process",
+      "lane": "driver",
+      "order": 3
+     },
+     {
+      "id": "rev_idler",
+      "label": "Reverse idler gear",
+      "kind": "process",
+      "lane": "torque",
+      "order": 5
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_gate_guard",
+      "from": "driver_hand",
+      "to": "rev_lockout",
+      "kind": "control",
+      "label": "lifts collar"
+     },
+     {
+      "id": "e_lock_rail",
+      "from": "rev_lockout",
+      "to": "interlock_rails",
+      "kind": "control",
+      "label": "blocks 5->R pull"
+     },
+     {
+      "id": "e_rail_idler",
+      "from": "interlock_rails",
+      "to": "rev_idler",
+      "kind": "control",
+      "label": "slides idler"
+     },
+     {
+      "id": "e_idler_rev",
+      "from": "const_gears",
+      "to": "rev_idler",
+      "kind": "payload",
+      "label": "inverts spin"
+     },
+     {
+      "id": "e_rev_road",
+      "from": "rev_idler",
+      "to": "road_wheels",
+      "kind": "payload",
+      "label": "reverse drive"
+     }
+    ],
+    "highlight": [
+     "driver_hand",
+     "shift_lever",
+     "interlock_rails",
+     "const_gears"
+    ],
+    "remove": []
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "The 'money shift': 5th to 2nd at 85 mph",
+   "scenario": "Accelerating onto a highway at 85 mph at the top of 3rd gear, the driver intends to shift into 4th but accidentally pulls the lever into 2nd gear and dumps the clutch pedal.",
+   "reveal": "Every invariant inside the gearbox actually does its job, and the engine still dies. The double-cone synchro on 2nd gear dutifully drags the light input shaft up to 9,500 rpm so the dog teeth engage cleanly without grinding (inv1 holds). The disaster happens one step later when the driver releases the clutch pedal: the road wheels, backed by 1,500 kg of car momentum, mechanically force the engine flywheel up to 9,500 rpm regardless of the throttle or fuel cutoff, floating the engine valves into the pistons. Synchromesh protects the gearbox from the engine; it cannot protect the engine from the road wheels if the driver picks a ratio whose road speed exceeds redline."
+  },
+  {
+   "id": "st2",
+   "title": "Clutch hydraulic slave cylinder leaks dry in city traffic",
+   "scenario": "A rubber seal fails in the clutch slave cylinder; pressing the clutch pedal to the floor no longer disconnects the engine flywheel from the input shaft (inv2 is violated).",
+   "reveal": "With the engine flywheel permanently coupled to the input shaft, the tiny brass synchro cone (Layer 2) is asked to brake the entire running engine, which it cannot do: pushing the stick against a gear simply holds the blocker ring locked until the brass burns. Yet a skilled driver can still drive the car home using Layer 1's physics: start the starter motor in 1st gear to get rolling, lift off the gas to unload the dog teeth and slip into neutral, then match engine rpm to road speed by ear with the throttle pedal so delta_omega crosses zero on its own and the sleeve drops straight past the synchro into the next gear."
+  },
+  {
+   "id": "st3",
+   "title": "Wrong GL-5 hypoid oil poured into a brass-synchro gearbox",
+   "scenario": "A mechanic fills the gearbox with slippery extreme-pressure differential oil instead of the specified manual transmission fluid.",
+   "reveal": "Synchromesh (Layer 2) relies on a Goldilocks friction coefficient: slippery enough not to weld the brass cone to the steel gear, but grippy enough that cone friction twists the blocker ring into its blocking position before the sleeve arrives. Overly slick oil prevents the brass cone from generating enough friction torque to baulk the sleeve, so the sleeve pushes the blocker ring aside while the gear is still spinning at the wrong speed, and every fast shift into 2nd or 3rd crunches the steel dog teeth."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "Decouple the load-carrying structure from the switching mechanism: leave heavy working surfaces permanently connected and move a coarse, replaceable selector.",
+   "Isolate upstream inertia before reconfiguring internal state: cut the heavy flywheel loose while the light shaft changes speed.",
+   "Use the error signal itself to power the safety lock: a baulk ring blocks the transition using the friction of the speed mismatch and opens the instant the mismatch reaches zero.",
+   "Enforce mutual exclusion in the geometry of the substrate: three pins in a cross-bore make selecting two gears at once physically unrepresentable.",
+   "Match mechanism complexity to invocation context: forward gears shifted at 70 mph earn cone synchros, while reverse shifted at 0 mph needs only a sliding idler and a safety lockout."
+  ],
+  "mappings": [
+   {
+    "mechanism": "constant-mesh gears + sliding dog collar",
+    "elsewhere": "Connection pooling and blue-green router switches that keep backend workers permanently initialized and move a pointer rather than re-handshaking on every switch."
+   },
+   {
+    "mechanism": "baulk-ring cone synchromesh",
+    "elsewhere": "Database primary-failover barriers that stream WAL catch-up and physically block DNS/VIP promotion until replication lag reaches zero."
+   },
+   {
+    "mechanism": "three-rail selector interlock pins",
+    "elsewhere": "Railway mechanical interlocking frames, electrical transfer switches that cannot bridge utility and generator power, and Rust/TypeScript discriminated unions."
+   },
+   {
+    "mechanism": "5th-to-Reverse cam lockout",
+    "elsewhere": "Two-step hardware safety catches and CLI confirmation guards that require returning to a neutral state before executing a destructive command."
+   }
+  ]
+ }
+}

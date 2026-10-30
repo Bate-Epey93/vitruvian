@@ -159,5 +159,11 @@ var ESC_COPY = {
     drive: "Mainspring force, from nearly run down to fully wound.",
     rmNote: "Reduced motion is on: nothing animates on its own. Use the scrubber to move through each beat."
   },
+  companion: {
+    kicker: "2D Deconstruct",
+    text: "Read the companion architecture Deconstruct of the mechanical clock escapement, with software mappings, invariants, and stress tests.",
+    cta: "Open the Deconstruct \u2192",
+    href: "../#/study/clock-escapement"
+  },
   footer: "Drawn from primitives, not from a model file. No library, no build step — the same discipline as the rest of Vitruvian."
 };

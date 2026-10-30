@@ -131,5 +131,11 @@ var TX_COPY = {
     gate: "Gear selector. Use the arrow keys to move through the gate, or press 1 to 5, R, or N.",
     rmNote: "Reduced motion is on: nothing animates on its own. Use the scrubber to move through each shift."
   },
+  companion: {
+    kicker: "2D Deconstruct",
+    text: "Read the companion architecture Deconstruct of the manual gearbox, with software mappings, invariants, and stress tests.",
+    cta: "Open the Deconstruct \u2192",
+    href: "../#/study/manual-gearbox"
+  },
   footer: "Drawn from primitives, not from a model file. No library, no build step — the same discipline as the rest of Vitruvian."
 };

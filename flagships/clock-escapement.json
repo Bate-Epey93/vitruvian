@@ -1,0 +1,716 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "The mechanical clock escapement",
+  "narrowing": "The mechanical timekeeping escapement from 1300 to 1800: how a wound weight or mainspring is let down one tooth at a time without its changing drive force corrupting the oscillation period of the timekeeper. Left out are striking chimes, calendar complications, and quartz electronic oscillators.",
+  "ordering_note": "The five layers walk the exact six-hundred-year historical ladder drawn in the 3D Field Study 'The Beat': from the c.1300 verge-and-foliot, to Huygens's 1656 pendulum, to Clement's c.1670 recoil anchor, to Graham's 1715 deadbeat escapement, and finally to Mudge's 1754 detached lever escapement.",
+  "history_confidence": "high",
+  "domain": "mechanical",
+  "field_study": {
+   "motion": "Crown wheel, verge pallets, pendulum, recoil anchor, deadbeat arcs, and detached lever.",
+   "ladder": "Verge and foliot, Huygens pendulum, recoil anchor, Graham deadbeat, and Mudge detached lever.",
+   "effort": "medium"
+  }
+ },
+ "essence": {
+  "text": "A mechanical clock is two hostile machines forced to share one shaft: a wound spring or falling weight that wants to dump all its stored energy in four violent seconds, and a counting wheel train that needs to step forward at one exact, unchanging rate all day long. The escapement is the joint between them. Every beat, it must do two contradictory things: lock the gear train so it cannot run away, and give the oscillator one tiny push so friction does not stop it. The catch that drove five centuries of horology is that any hand that touches an oscillator to push it or sense it also changes its speed: as the mainspring winds down or winter oil thickens, a harder or softer push changes the length of the tick. Every great leap in timekeeping, from fifteen minutes of error a day in 1300 to a tenth of a second in 1750, came from severing another path through which the drive force was leaking into the oscillator's period.",
+  "beginner": "If you hang a weight on a string wrapped around a gear wheel and let go, the wheel spins wildly and hits the floor in four seconds. To make a clock, you need a catch that lets the wheel turn just one tooth at a time: tick, tock, tick, tock. The hard problem is that when the spring is freshly wound it pushes hard, and by evening it pushes softly; six hundred years of clockmaking was a quest to build a catch that keeps the exact same beat no matter how hard the spring is pushing.",
+  "deep_facts": [
+   "The English word 'clock' comes from the Medieval Latin 'clocca' (bell): the earliest mechanical tower clocks of the 1300s had no dial and no hands at all, existing only to trip a hammer against a bell at the canonical hours.",
+   "A verge-and-foliot tower clock from 1350 varied by 15 minutes a day and sped up whenever a heavier weight was hung on the rope, because the foliot bar has no natural restoring force of its own.",
+   "Christiaan Huygens's 1656 pendulum cut daily error sixty-fold overnight (from 15 minutes to 15 seconds) by giving the clock a gravity-restored harmonic oscillator whose period depends on its length, not on how hard the gears push it.",
+   "Watch the second hand of a 1680 grandfather clock closely and you will see it twitch slightly backward after every tick: that 'recoil' is the pendulum pushing the entire gear train and falling weight backward at the end of each swing.",
+   "Thomas Mudge's 1754 detached lever escapement, still ticking inside virtually every mechanical wristwatch made today, touches the swinging balance wheel for less than ten percent of its arc and leaves it completely free for the other ninety percent."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Meter the release of stored mechanical energy into discrete, equal time steps while isolating the oscillator's period from variations in drive torque, friction, and orientation.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Clock user / navigator",
+    "want": "Read the true time day after day, whether the clock is freshly wound or nearly run down, and whether it sits in a cellar or rides in a pocket"
+   },
+   {
+    "id": "a2",
+    "name": "Drive weight / mainspring",
+    "want": "Unwind all my stored potential energy through the gear train as fast as the escapement will let me go"
+   },
+   {
+    "id": "a3",
+    "name": "Oscillator (pendulum / balance)",
+    "want": "Swing at my natural harmonic period with zero external interference, receiving only enough energy per beat to replace air and pivot friction"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "Bounded step metering: the escape wheel advances by at most one tooth per half-oscillation and can never free-run."
+   },
+   {
+    "id": "inv2",
+    "text": "Energy sustainment: each oscillation cycle transfers enough impulse from the train to the oscillator to offset damping losses so the clock does not stall."
+   },
+   {
+    "id": "inv3",
+    "text": "Isochronism (drive independence): the duration of a beat remains constant even as mainspring torque drops or lubrication viscosity changes."
+   },
+   {
+    "id": "inv4",
+    "text": "Positional & shock invariance: in a portable timepiece, turning the watch on its side or jarring the case neither alters the restoring force nor releases a tooth out of turn."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Mainspring / falling weight",
+    "note": "The energy reservoir driving the wheel train; its output torque varies over the winding cycle and through imperfect gear teeth"
+   },
+   {
+    "id": "en2",
+    "name": "Escape wheel",
+    "note": "The final, fastest wheel of the gear train whose specialized teeth lock against and impulse the pallets"
+   },
+   {
+    "id": "en3",
+    "name": "Pallets (verge / anchor / lever)",
+    "note": "The two steel or jeweled locking and impulse surfaces that alternate catching the escape wheel's teeth"
+   },
+   {
+    "id": "en4",
+    "name": "Harmonic oscillator",
+    "note": "A gravity-restored pendulum or a hairspring-restored balance wheel possessing a natural resonant frequency"
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Drive torque & impulse: stored energy flows from the weight or mainspring through the gear train to the escape wheel, delivering one mechanical impulse per beat to the oscillator."
+   },
+   {
+    "id": "f2",
+    "text": "Timing gate control: the oscillator's swing releases and re-locks the pallets, gating the escape wheel's rotation into discrete ticks displayed on the dial hands."
+   }
+  ],
+  "constraints": [
+   "Without a mechanical stop, a falling weight or uncoiling spring accelerates the wheel train until friction or structural failure stops it.",
+   "Real pivots and air resistance dissipate energy every swing, so a passive oscillator cannot swing forever without being touched.",
+   "By Airy's condition, any force applied to an oscillator away from the dead-center of its swing alters its instantaneous phase and period."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "power",
+    "label": "Power & train"
+   },
+   {
+    "id": "escapement",
+    "label": "Escapement"
+   },
+   {
+    "id": "oscillator",
+    "label": "Oscillator"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "drive_weight",
+    "label": "Weight / mainspring",
+    "kind": "actor",
+    "lane": "power",
+    "order": 0
+   },
+   {
+    "id": "wheel_train",
+    "label": "Gear wheel train",
+    "kind": "process",
+    "lane": "power",
+    "order": 3
+   },
+   {
+    "id": "dial_hands",
+    "label": "Dial hands",
+    "kind": "store",
+    "lane": "power",
+    "order": 6
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_torque",
+    "from": "drive_weight",
+    "to": "wheel_train",
+    "kind": "payload",
+    "label": "raw torque"
+   },
+   {
+    "id": "e_runaway",
+    "from": "wheel_train",
+    "to": "dial_hands",
+    "kind": "payload",
+    "label": "unmetered spin"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "The Verge & Foliot: Metering Runaway Into Beats",
+   "problem": {
+    "statement": "A weight hung on a drum turns a train of gears connected to a dial hand. Left to itself, gravity pulls the weight straight to the floor, the gears scream up to speed, and twenty-four hours of stored winding energy vanishes in four seconds. Nothing in a gear train knows what a second is.",
+    "beginner": "If you hang a heavy weight on a gear wheel and let go, the wheel spins like a fan and hits the floor in seconds. You need a mechanical catch that forces the wheel to wait and step one tooth at a time.",
+    "model": {
+     "id": "mutual-exclusion",
+     "application": "Mount two pallet flags at roughly 90 degrees on one vertical staff across a crown wheel so that as one tooth pushes Flag A out of the way, Flag B is forced directly into the path of a tooth on the opposite side."
+    }
+   },
+   "gate": {
+    "question": "It is the year 1300. You have a falling weight turning a toothed wheel, and it spins out of control in seconds. Using only iron bars and toothed wheels, how do you force the wheel to advance strictly one tooth at a time, reversing a crossbar back and forth?",
+    "hint": "Use a crown-shaped wheel with teeth pointing sideways like a circular saw, and place a vertical rod across its face with two little paddles set at a right angle to each other."
+   },
+   "solution": "The Verge and Foliot escapement (c. 1300). The final gear is shaped like a crown with saw-teeth standing upright around its rim. Across the face of the crown wheel sits a vertical iron staff (the verge) carrying two flat paddles (pallets) set about 90 degrees apart, topped by a horizontal crossbar with sliding weights (the foliot). A tooth on the top of the crown wheel pushes the upper pallet outward, swinging the foliot bar in one direction; that very rotation swings the lower pallet into the path of a tooth on the bottom of the crown wheel. The heavy foliot bar's momentum briefly drives the crown wheel backward until the crown wheel stops it and pushes the lower pallet the other way. The wheel can only advance one tooth per swing.",
+   "user_lens": {
+    "gives": "A mechanical tower clock that ticks steadily through the day and night without freezing in winter like a water clock.",
+    "costs": "Fifteen minutes of error a day is normal: only an hour hand is worth fitting, and the sexton has to reset the clock by a sundial every sunny noon."
+   },
+   "tech_lens": {
+    "mechanism": "Two pallets fixed at ~90 degrees on a single verge arbor engage opposing sides of a crown wheel, converting unidirectional torque T_drive into alternating angular acceleration alpha = T_drive / I_foliot of an inertial dumb-bell bar with zero restoring force.",
+    "principle": "Convert continuous runaway into discrete steps by coupling each release to the geometric insertion of the next lock."
+   },
+   "tradeoff": "The foliot has inertia (I) but no restoring spring or gravity return: its swing speed is governed entirely by how hard the crown wheel pushes it, so any change in drive force or pivot friction changes the clock's rate proportionally.",
+   "at_scale": "Because rate scales with the square root of drive torque, switching from a constant-weight tower clock to a coiled mainspring (whose torque drops by half as it unwinds) makes a verge-and-foliot clock run hours slow by evening unless paired with a complex conical pulley (the fusee).",
+   "defends": [
+    "inv1",
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "verge pallets alternating across crown wheel",
+      "software_concept": "two-phase alternating spinlock / flip-flop latch that steps a counter by one unit per phase alternation"
+     },
+     {
+      "mechanism": "foliot inertial bar without restoring clock",
+      "software_concept": "busy-wait delay loop (for (i=0; i<N; i++)) whose duration speeds up or slows down whenever CPU clock speed or load changes"
+     }
+    ],
+    "interview_probes": [
+     "Why is pacing a protocol with a CPU busy-loop or uncalibrated queue drain brittle in the exact same way a foliot clock is?"
+    ],
+    "approach": "Gate each state advance of the wheel behind an alternating two-stage latch where releasing stage A mechanically arms stage B, bounding advance to 1 tooth per half-cycle.",
+    "vocab": [
+     "rate-limiting",
+     "pessimistic-locking"
+    ]
+   },
+   "beginner_analogy": "Like a subway turnstile linked to a heavy revolving door: the turnstile can only click one notch forward each time a person pushes the heavy door around, but if people push harder, the door spins faster.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "crown_verge",
+      "label": "Crown wheel & verge",
+      "kind": "process",
+      "lane": "escapement",
+      "order": 3
+     },
+     {
+      "id": "foliot_bar",
+      "label": "Foliot inertia bar",
+      "kind": "process",
+      "lane": "oscillator",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_train_esc",
+      "from": "wheel_train",
+      "to": "crown_verge",
+      "kind": "payload",
+      "label": "tooth torque"
+     },
+     {
+      "id": "e_verge_fol",
+      "from": "crown_verge",
+      "to": "foliot_bar",
+      "kind": "payload",
+      "label": "pushes pallets"
+     },
+     {
+      "id": "e_fol_gate",
+      "from": "foliot_bar",
+      "to": "crown_verge",
+      "kind": "control",
+      "label": "1 tooth / swing"
+     },
+     {
+      "id": "e_metered_dial",
+      "from": "crown_verge",
+      "to": "dial_hands",
+      "kind": "control",
+      "label": "metered ticks"
+     }
+    ],
+    "highlight": [
+     "drive_weight",
+     "wheel_train",
+     "dial_hands",
+     "e_runaway"
+    ],
+    "remove": [
+     "e_runaway"
+    ]
+   }
+  },
+  {
+   "index": 2,
+   "name": "Huygens's Pendulum: Replace Inertia With a Natural Period",
+   "problem": {
+    "statement": "The foliot bar is a dumb weight with no opinion of its own about how long a swing should take. If cold winter morning oil thickens in the gear pivots, the crown wheel pushes the foliot more gently, and the clock loses twenty minutes before lunch. If you hang a heavier lead weight on the rope, the clock races ahead. The drive train is dictating the time.",
+    "beginner": "A weighted bar on a pivot has no natural rhythm of its own; push it twice as hard and it swings much faster. As long as the gears set the speed of the swing, dirty oil or a fading spring makes the clock lie.",
+    "model": {
+     "id": "separation-of-concerns",
+     "application": "Separate the energy source from the time standard by replacing the free-floating foliot with a gravity-restored harmonic oscillator (the pendulum) whose period T = 2*pi*sqrt(L/g) is set by its length and Earth's gravity."
+    }
+   },
+   "gate": {
+    "question": "For three hundred years, every mechanical clock ran fast when pushed hard and slow when pushed gently because the foliot bar has no natural period. What simple physical object takes the exact same time to complete a swing whether you push it gently or hard?",
+    "hint": "Galileo watched a bronze chandelier swinging in the Pisa cathedral and timed it against his own pulse."
+   },
+   "solution": "Christiaan Huygens's Pendulum Clock (1656). Take the weighted foliot bar off the verge staff, turn the crown wheel 90 degrees, and couple the verge pallets through a wire fork (the crutch) to a hanging pendulum bob of length L. Unlike the foliot, a pendulum has a conservative restoring force: gravity pulls the bob back toward bottom dead center with a force proportional to sin(theta). For small swings, a bigger push from the gear train makes the pendulum swing slightly higher and faster through the middle in equal proportion, so the time per swing T = 2*pi*sqrt(L/g) stays nearly constant. Overnight, daily clock error drops sixty-fold, from 15 minutes a day to 15 seconds a day, and clocks earn their minute hand.",
+   "user_lens": {
+    "gives": "A domestic clock accurate to 15 seconds a day, making the minute hand and scientific astronomy measurements practical for the first time.",
+    "costs": "The clock must now stand upright and motionless on a firm wall or floor; tilt it or carry it on a rolling ship and gravity's reference vanishes."
+   },
+   "tech_lens": {
+    "mechanism": "Harmonic oscillator with gravitational restoring torque T_r = -m*g*L*sin(theta) coupled to the verge crutch; Q-factor jumps by orders of magnitude as stored kinetic/potential energy per cycle greatly exceeds per-beat train impulse.",
+    "principle": "Anchor timing to a high-Q physical resonance whose period is governed by geometry and fundamental constants, not by actuator effort."
+   },
+   "tradeoff": "Because the verge pallets still sit across the crown wheel's face, the pendulum is forced to swing through a wide 40-to-80-degree arc where sin(theta) diverges from theta ('circular error'): wider swings take measurably longer, letting drive-force changes sneak back into the rate through amplitude.",
+   "at_scale": "At a 50-degree half-arc, a 10 percent change in swing amplitude still shifts the clock's rate by dozens of seconds a day, blocking the path to sub-second precision until the swing angle can be shrunk.",
+   "defends": [
+    "inv3",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "gravity-restored pendulum replacing foliot",
+      "software_concept": "replacing a CPU-speed-dependent busy-wait loop with an external hardware crystal timer interrupt ( monotonic clock )"
+     },
+     {
+      "mechanism": "circular error at wide 80-degree verge arcs",
+      "software_concept": "non-linear tail latency jitter when an oscillator or control loop is driven outside its linear operating region"
+     }
+    ],
+    "interview_probes": [
+     "Where in your distributed system does workload pressure (the drive train) still leak into your scheduling or heartbeat clock?"
+    ],
+    "approach": "Decouple tick generation from worker throughput by slaving the state-advance latch to an autonomous harmonic oscillator whose period depends only on fixed physical parameters L and g.",
+    "vocab": [
+     "consensus",
+     "leader-election"
+    ]
+   },
+   "beginner_analogy": "Like pushing a child on a playground swing: whether you give a tiny tap or a big shove, the swing still takes the exact same two seconds to go out and come back; only the height of the swing changes.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "pendulum",
+      "label": "Huygens pendulum",
+      "kind": "process",
+      "lane": "oscillator",
+      "order": 4
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_verge_pend",
+      "from": "crown_verge",
+      "to": "pendulum",
+      "kind": "payload",
+      "label": "wide-arc impulse"
+     },
+     {
+      "id": "e_pend_gate",
+      "from": "pendulum",
+      "to": "crown_verge",
+      "kind": "control",
+      "label": "gravity period"
+     }
+    ],
+    "highlight": [
+     "crown_verge",
+     "foliot_bar",
+     "e_verge_fol",
+     "e_fol_gate"
+    ],
+    "remove": [
+     "foliot_bar",
+     "e_verge_fol",
+     "e_fol_gate"
+    ]
+   }
+  },
+  {
+   "index": 3,
+   "name": "The Recoil Anchor & Graham Deadbeat: Shrinking the Arc and Killing Recoil",
+   "problem": {
+    "statement": "A pendulum is only truly isochronous (same time at any width) when it swings through a tiny arc of 3 to 5 degrees, where sin(theta) almost equals theta. The old verge-and-crown-wheel geometry physically cannot work at 4 degrees: its paddles sit across the wheel's face and require a huge 60-degree swing to clear a tooth. And when William Clement replaces the verge with an iron 'anchor' straddling the rim of a flat escape wheel (~1670) to shrink the swing to 5 degrees, a new flaw appears: after a tooth drops onto a flat anchor pallet, the heavy pendulum's remaining swing shoves the pallet deeper into the wheel and drives the entire gear train backward ('recoil'), coupling the drive weight straight back onto the pendulum.",
+    "beginner": "To make a pendulum super accurate, it needs to swing through a tiny 4-degree arc. An anchor hook over the top of the gear wheel lets it take tiny swings, but flat hook faces push the whole gear wheel backward at the end of every tick.",
+    "model": {
+     "id": "first-principles",
+     "application": "Separate each pallet face into two distinct geometric zones: a circular locking arc centered on the pallet pivot (which applies zero torque to the wheel while the pendulum finishes its swing) and a short angled impulse face."
+    }
+   },
+   "gate": {
+    "question": "An anchor straddling the rim of the escape wheel lets the pendulum swing through a tiny 4-degree arc, but as the pendulum swings past the drop point, its flat pallet face pushes the escape wheel backward against the drive weight. How do you shape the pallet so the pendulum can keep swinging while the escape wheel sits completely still?",
+    "hint": "If a tooth is resting against a curved surface whose center of curvature is the exact pivot pin of the anchor, does turning the anchor push the tooth in or out?"
+   },
+   "solution": "First, Clement's Anchor (~1670) moves the pallets from the face of a crown wheel to the rim of a flat escape wheel, using leverage so a 4-degree pendulum swing clears a tooth, giving birth to the longcase ('grandfather') clock with a one-meter seconds pendulum. Second, George Graham's Deadbeat Escapement (1715) cures the anchor's recoil: instead of one flat surface per pallet, Graham grinds each pallet into two distinct faces. The tooth first lands on a 'locking face' curved as an exact circular arc centered on the anchor's own pivot axis. While the pendulum completes its outward 'supplementary' swing and returns, the tooth slides along that concentric arc at a constant radius: the wheel cannot push the pendulum, and the pendulum does not push the wheel backward. Only as the pendulum passes right through the center of its swing does the tooth cross the corner onto the angled 'impulse face' for one brief push. Between impulses, the wheel sits dead still.",
+   "user_lens": {
+    "gives": "Accuracy leaps to a single second per day (and a quarter-second in observatory regulators), and the second hand steps cleanly without twitching backward.",
+    "costs": "The escape wheel tooth now slides under full train pressure along the steel locking arc on every beat, demanding jewel pallets and clean oil."
+   },
+   "tech_lens": {
+    "mechanism": "Rim-straddling anchor reduces pendulum half-angle to ~2 degrees (eliminating circular error delta_T/T ~= theta^2 / 16); concentric locking faces (dr/dtheta = 0 about the pallet arbor) eliminate recoil work W_recoil = 0 and confine impulse near theta = 0 (satisfying Airy's condition).",
+    "principle": "Make the holding state orthogonal to the motion coordinate: when dr/dtheta = 0, normal force between lock and actuator performs zero work on the oscillator."
+   },
+   "tradeoff": "Zero recoil means zero backward push, but the tooth tip still rests on the circular locking arc throughout the swing, creating continuous sliding friction proportional to drive torque.",
+   "at_scale": "Graham's deadbeat escapement was so insensitive to drive variations that it served as the master time standard for Greenwich and world observatories for nearly two hundred years.",
+   "defends": [
+    "inv3",
+    "inv1",
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "deadbeat concentric locking face (dr/dtheta = 0)",
+      "software_concept": "read-only snapshot isolation / orthogonal state plane where concurrent readers slide past the lock without mutating or pushing back on writer progress"
+     },
+     {
+      "mechanism": "confining impulse to dead-center (Airy's condition)",
+      "software_concept": "performing GC or clock-skew adjustments strictly at the zero-crossing idle boundary where phase perturbation is minimal"
+     }
+    ],
+    "interview_probes": [
+     "Why does applying a synchronization nudge at the zero-crossing of a periodic loop cause far less frequency jitter than applying the same nudge at the extremes of the cycle?"
+    ],
+    "approach": "Partition the pallet interface into an orthogonal locking surface (radius constant relative to the pivot, zero torque coupling) and a narrow impulse ramp active only within epsilon of the oscillator's zero-crossing.",
+    "vocab": [
+     "optimistic-concurrency",
+     "contention"
+    ]
+   },
+   "beginner_analogy": "Like bracing a swinging gate with a curved fender centered on the gate's own hinge: the fender slides smoothly past the gate without shoving the gate backward or forward.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "deadbeat_anchor",
+      "label": "Deadbeat anchor",
+      "kind": "process",
+      "lane": "escapement",
+      "order": 4
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_train_db",
+      "from": "wheel_train",
+      "to": "deadbeat_anchor",
+      "kind": "payload",
+      "label": "rim teeth"
+     },
+     {
+      "id": "e_db_impulse",
+      "from": "deadbeat_anchor",
+      "to": "pendulum",
+      "kind": "payload",
+      "label": "center impulse"
+     },
+     {
+      "id": "e_db_lock",
+      "from": "pendulum",
+      "to": "deadbeat_anchor",
+      "kind": "control",
+      "label": "zero-recoil arc"
+     },
+     {
+      "id": "e_db_dial",
+      "from": "deadbeat_anchor",
+      "to": "dial_hands",
+      "kind": "control",
+      "label": "deadbeat 1s step"
+     }
+    ],
+    "highlight": [
+     "crown_verge",
+     "pendulum",
+     "e_train_esc",
+     "e_verge_pend",
+     "e_pend_gate",
+     "e_metered_dial"
+    ],
+    "remove": [
+     "crown_verge",
+     "e_train_esc",
+     "e_verge_pend",
+     "e_pend_gate",
+     "e_metered_dial"
+    ]
+   }
+  },
+  {
+   "index": 4,
+   "name": "The Detached Lever & Balance Wheel: Let Go of the Oscillator",
+   "problem": {
+    "statement": "A Graham deadbeat pendulum regulator keeps quarter-second time bolted to a stone cellar wall, but take it into a pocket or onto a ship at sea and it fails immediately: gravity cannot restore a pendulum that is tilted on its side or pitching in waves. Replacing the pendulum with a coiled hairspring and balance wheel (Huygens, 1675) solves gravity, but on a deadbeat or cylinder escapement the escape wheel tooth STILL rubs continuously against the oscillator throughout its entire swing. In a tiny pocket watch where the balance wheel has a fraction of a pendulum's momentum, sticky aged oil on that continuous rubbing contact drags the rate all over the map.",
+    "beginner": "A pendulum stops working the moment you tilt it in your pocket. A spring-loaded balance wheel works upside down, but if the gears rub against that tiny wheel the whole time it swings, old sticky oil slows the watch down.",
+    "model": {
+     "id": "trust-boundary",
+     "application": "Insert an intermediate latching lever between the escape wheel and the balance wheel so the escape wheel rests against a stationary banking pin for 90 percent of the cycle, touching the balance wheel only for a millisecond at dead center."
+    }
+   },
+   "gate": {
+    "question": "In every escapement so far, an escape-wheel tooth rubs against the oscillator (or a crutch permanently tied to it) for 100 percent of every swing, so thick oil slows the oscillator down. How do you redesign the joint so the balance wheel swings completely untouched for 90 percent of its arc?",
+    "hint": "Put a separate pivoted lever with its own pallet stones between the escape wheel and the balance wheel, and let the balance wheel carry a single tiny ruby pin that flicks the lever only as it passes through the middle."
+   },
+   "solution": "Thomas Mudge's Detached Lever Escapement (1754). First, replace the gravity pendulum with a circular Balance Wheel and spiral Hairspring whose restoring torque comes from elasticity, working in any orientation. Second, detach the balance wheel from the pallets: the ruby pallets sit on an independent pivoted Lever parked against stationary banking pins. For 90 percent of the balance wheel's 500-degree swing, the escape wheel tooth is locked on the stationary lever stone and NOTHING touches the balance wheel at all ('free supplementary arc'). Only as the balance wheel streaks through bottom dead center at maximum speed does a tiny ruby 'impulse pin' on its roller table enter the fork of the lever, flick the lever across to release the tooth, receive one crisp impulse across the center, and exit the fork on the other side, leaving the lever locked against the opposite banking pin while the balance swings free again.",
+   "user_lens": {
+    "gives": "A wristwatch or pocket watch that keeps time to a few seconds a day while being carried, tilted, and swung on a human wrist.",
+    "costs": "Watchmaking becomes precision micro-engineering: fifteen microscopic surfaces on the lever, stones, and roller must be jeweled and adjusted within microns."
+   },
+   "tech_lens": {
+    "mechanism": "Bistable intermediate lever decouples locking friction from the harmonic oscillator: during the supplementary arc, the escape tooth locks on the stationary pallet stone (zero friction on the balance wheel); coupling occurs only across a ~30-degree unlocking/impulse window out of a ~540-degree total swing.",
+    "principle": "Isolate a sensitive time standard from noisy actuators by placing a bistable latch between them and coupling only via brief impulses at peak kinetic energy."
+   },
+   "tradeoff": "Because the lever and balance wheel are physically disconnected for 90 percent of the beat, a sharp knock to the wrist while the balance is away could bounce the unlocked lever across to the wrong side ('overbanking') unless a safety interlock is added.",
+   "at_scale": "This detachment shrinks drive-force sensitivity by another order of magnitude in portable watches, making the detached lever the universal architecture of mechanical wristwatches for the next 250 years.",
+   "defends": [
+    "inv3",
+    "inv4",
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "detached lever parked on banking pins while balance swings free",
+      "software_concept": "interrupt-driven I/O latch that buffers noisy external state on a peripheral register and touches the real-time kernel thread only for a microsecond edge-triggered interrupt"
+     },
+     {
+      "mechanism": "hairspring + balance wheel (orientation independent)",
+      "software_concept": "self-contained local state invariant that does not depend on external ambient environment coordinates"
+     }
+    ],
+    "interview_probes": [
+     "How do you prevent slow or variable I/O lock contention from holding a lock on your inner real-time event loop for the entire duration of a tick?"
+    ],
+    "approach": "Place a bistable intermediate latch between the wheel train and the oscillator; hold the train lock on the stationary latch while the oscillator executes 90% of its trajectory uncoupled, exchanging state only during a narrow impulse window around theta = 0.",
+    "vocab": [
+     "realtime-updates",
+     "bulkhead",
+     "optimistic-concurrency"
+    ]
+   },
+   "beginner_analogy": "Like keeping a merry-go-round spinning by standing back with your hands in your pockets for almost the whole turn and giving one quick slap to a handle as it flies past you, instead of dragging your hands along the rail the entire time.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "detached_lever",
+      "label": "Detached lever & fork",
+      "kind": "process",
+      "lane": "escapement",
+      "order": 5
+     },
+     {
+      "id": "balance_wheel",
+      "label": "Balance & hairspring",
+      "kind": "process",
+      "lane": "oscillator",
+      "order": 5
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_train_lev",
+      "from": "wheel_train",
+      "to": "detached_lever",
+      "kind": "payload",
+      "label": "locks on stone"
+     },
+     {
+      "id": "e_lev_imp",
+      "from": "detached_lever",
+      "to": "balance_wheel",
+      "kind": "payload",
+      "label": "brief 10% flick"
+     },
+     {
+      "id": "e_bal_unlock",
+      "from": "balance_wheel",
+      "to": "detached_lever",
+      "kind": "control",
+      "label": "90% free arc"
+     },
+     {
+      "id": "e_lev_dial",
+      "from": "detached_lever",
+      "to": "dial_hands",
+      "kind": "control",
+      "label": "5-10 Hz beat"
+     }
+    ],
+    "highlight": [
+     "deadbeat_anchor",
+     "pendulum",
+     "e_train_db",
+     "e_db_impulse",
+     "e_db_lock",
+     "e_db_dial"
+    ],
+    "remove": [
+     "deadbeat_anchor",
+     "pendulum",
+     "e_train_db",
+     "e_db_impulse",
+     "e_db_lock",
+     "e_db_dial"
+    ]
+   }
+  },
+  {
+   "index": 5,
+   "name": "Draw Angle & The Safety Roller: Locking the Detached Lever Against Shock",
+   "problem": {
+    "statement": "Detaching the lever from the balance wheel created a dangerous vulnerability. For 90 percent of every beat, the lever sits alone against its banking pin while the balance wheel is off swinging by itself. If the wearer claps their hands or bumps their wrist against a desk during that free window, the jolt can bounce the lever off its banking pin: either letting an escape tooth slip past prematurely ('tripping') or flipping the lever fork to the opposite side so that when the balance wheel's ruby impulse pin comes back around, it slams into the solid outside of the fork ('overbanking') and stops the watch dead.",
+    "beginner": "Because the lever lets go of the balance wheel for most of every tick, bumping your wrist while the wheel is away can jolt the lever to the wrong side so the doorway is shut when the wheel comes back.",
+    "model": {
+     "id": "inversion",
+     "application": "Tilt the pallet locking faces by 12 degrees ('draw') so the escape wheel's own torque pulls the lever into its banking stop, and add a guard pin riding a notched safety roller on the balance staff so the lever is physically blocked from crossing over except at the exact instant the balance passes center."
+    }
+   },
+   "gate": {
+    "question": "While the balance wheel is swinging freely away from center, a bump to the watch can jolt the detached lever across to the other side, jamming the watch when the balance returns. Without adding springs that would fight the balance wheel during unlocking, how do you hold the lever locked and guarantee it can NEVER cross the center line unless the balance wheel is at dead center?",
+    "hint": "Use two tricks: angle the ruby pallet stone slightly so the escape wheel's own push pulls the lever tighter against its stop pin, and put a smooth brass collar on the balance axle with a single Crescent notch right under the impulse jewel."
+   },
+   "solution": "The Swiss Lever Safety Action: Draw and the Guard Pin / Safety Roller. First, 'Draw': the locking face of each ruby pallet stone is angled by about 12 degrees off the radial line so that the escape wheel tooth pressing on the stone doesn't push the lever out; it pulls the lever inward against its stationary banking pin like a self-closing latch. Second, the Safety Roller and Guard Pin (the 'dart'): below the lever fork sits a tiny brass finger (the guard pin) that rides hair-thin microns away from the rim of a smooth steel cylinder (the safety roller) mounted on the balance staff. If a violent shock overcomes Draw while the balance is out on its free swing, the guard pin immediately bumps into the solid rim of the safety roller and cannot move far enough to unlatch the escape tooth. Only at the exact millisecond the balance passes dead center does a crescent-shaped 'passing hollow' cut into the safety roller line up with the guard pin, allowing the lever to flip cleanly across.",
+   "user_lens": {
+    "gives": "A mechanical watch that survives tennis, running, and everyday knocks on a wrist without skipping a beat or jamming.",
+    "costs": "The balance wheel must pay a tiny extra bit of energy at unlocking to overcome the 12-degree Draw angle that was holding the lever safe."
+   },
+   "tech_lens": {
+    "mechanism": "12-degree positive draw angle uses train torque T_wheel to generate a bistable holding torque T_draw toward the banking pin; a coaxial safety roller with a single crescent passing hollow at theta = 0 mechanically blocks guard-pin translation for all |theta| > theta_unlock.",
+    "principle": "Harvest the system's own drive pressure to hold the latch closed, and key the state transition geometrically to the phase of the master clock."
+   },
+   "tradeoff": "Draw introduces a tiny, deliberate recoil during the 1-millisecond unlocking phase, trading a microscopic slice of theoretical cellar precision for complete immunity to real-world shocks.",
+   "at_scale": "This five-part safety geometry (draw, banking pins, fork horn, guard pin, and passing hollow) is why a purely mechanical watch with zero electronics can tick 691,200 times a day on a moving wrist for fifty years.",
+   "defends": [
+    "inv4",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "safety roller with crescent passing hollow at theta = 0",
+      "software_concept": "phase-locked hardware enable window / time-triggered state guard that physically blocks state transitions outside the designated clock edge"
+     },
+     {
+      "mechanism": "12-degree pallet draw angle",
+      "software_concept": "positive-feedback hysteresis latch that uses line pressure to keep a valve or switch seated until a deliberate threshold is crossed"
+     }
+    ],
+    "interview_probes": [
+     "In an asynchronous interrupt-driven state machine, how do you prevent a spurious noise spike between clock edges from flipping the state latch out of phase with the main loop?"
+    ],
+    "approach": "Bias the bistable latch with positive holding hysteresis proportional to line load, and interlock latch transitions against a phase mask on the oscillator shaft that evaluates to true only when |theta| < epsilon.",
+    "vocab": [
+     "pessimistic-locking",
+     "idempotency-keys"
+    ]
+   },
+   "beginner_analogy": "Like a train crossing gate that rests against a solid rotating drum on the train's axle with a single slot cut in it, so the gate is physically blocked from dropping except at the exact moment the slot rolls past.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "safety_roller",
+      "label": "Draw & safety roller",
+      "kind": "process",
+      "lane": "escapement",
+      "order": 6
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_bal_roller",
+      "from": "balance_wheel",
+      "to": "safety_roller",
+      "kind": "control",
+      "label": "hollow at 0 deg"
+     },
+     {
+      "id": "e_guard_lock",
+      "from": "safety_roller",
+      "to": "detached_lever",
+      "kind": "control",
+      "label": "blocks shock"
+     }
+    ],
+    "highlight": [
+     "detached_lever",
+     "balance_wheel",
+     "e_bal_unlock"
+    ],
+    "remove": []
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "Rewinding a tower clock drops drive torque to zero for 60 seconds",
+   "scenario": "To wind a heavy tower clock or marine chronometer, the winding crank must pull the weight or mainspring backward, briefly removing all forward torque from the gear train.",
+   "reveal": "On a naive clock, removing drive torque for sixty seconds stops the escape wheel and costs a minute of time (or stalls the oscillator). John Harrison's 'maintaining power' (1730s) solves this with an auxiliary spring ratcheted inside the main gear wheel: while you wind the main weight backward, the pre-loaded maintaining spring pushes the gear train forward for those sixty seconds so the escapement never notices the main drive was absent."
+  },
+  {
+   "id": "st2",
+   "title": "A 30-degree desert afternoon expands the pendulum rod and softens the hairspring",
+   "scenario": "Ambient temperature rises by 25 degrees Celsius: a steel pendulum rod expands by 0.3 millimeters, and a steel watch hairspring loses elasticity.",
+   "reveal": "Even with a perfect deadbeat or detached lever escapement (Layers 3 and 4) isolating the oscillator from drive force, thermal expansion directly mutates the oscillator's own physical constants L and k, making a steel pendulum clock lose ~11 seconds a day per 25C and a steel-hairspring watch lose ~250 seconds a day! Clockmakers answered with Harrison's bi-metallic gridiron pendulum and Graham's mercury-jar bob (where mercury expands upward inside the bob by the exact distance the steel rod expands downward, keeping the center of oscillation fixed), and later Charles Edouard Guillaume's Invar and Elinvar alloys (1896, Nobel Prize 1920) whose thermal expansion and elasticity change near zero."
+  },
+  {
+   "id": "st3",
+   "title": "An over-wound or surging mainspring makes the balance wheel spin 360 degrees ('rebanking')",
+   "scenario": "A sudden torque surge drives the balance wheel's swing past 330 degrees in each direction until the ruby impulse pin flies all the way around and hits the back outside of the lever fork.",
+   "reveal": "This is 'knocking' or 'rebanking': instead of unlocking the lever from the inside of the fork, the impulse pin slams into the back of the fork horn at the extreme of its swing, abruptly cutting the oscillation period short and making the watch race violently fast. The lever escapement's geometry sets a hard upper ceiling on amplitude (~330 degrees) just as stall sets a lower floor (~160 degrees), which is why automatic watches use a slipping bridle in the mainspring barrel to shed excess winding torque before it can over-drive the balance."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "Meter runaway energy by coupling every release to the geometric insertion of the next lock.",
+   "Never let the actuator's power supply set the clock rate: slave timing to a high-Q physical resonance with its own independent restoring force.",
+   "Make the holding lock orthogonal to the oscillator's motion (dr/dtheta = 0) so holding the load performs zero backward work on the clock.",
+   "Deliver energy impulses strictly across dead center (Airy's condition), where phase perturbation cancels out.",
+   "Detach the oscillator from the lock via a bistable intermediate latch so the time standard swings untouched for 90 percent of its cycle."
+  ],
+  "mappings": [
+   {
+    "mechanism": "Huygens pendulum replacing the foliot",
+    "elsewhere": "Replacing software busy-wait delay loops with hardware quartz crystal timers and monotonic kernel clocks whose rate is independent of CPU load."
+   },
+   {
+    "mechanism": "Graham deadbeat concentric locking arc",
+    "elsewhere": "Read-copy-update (RCU) and MVCC snapshot isolation where concurrent readers inspect state along an orthogonal plane without pushing back on writer progress."
+   },
+   {
+    "mechanism": "Mudge detached lever escapement",
+    "elsewhere": "Interrupt-driven DMA latches that hold noisy peripheral buses off the real-time CPU core and exchange state only in a microsecond edge interrupt."
+   },
+   {
+    "mechanism": "Safety roller & passing hollow",
+    "elsewhere": "Hardware clock-domain crossing flip-flops and phase-locked enable windows that reject state transitions outside the valid clock edge."
+   }
+  ]
+ }
+}

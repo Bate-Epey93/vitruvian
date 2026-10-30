@@ -299,6 +299,14 @@ var LabPage = (function () {
       } else {
         card.appendChild(band("tradeoff", C.bands.tradeoff, t.tradeoff));
         card.appendChild(band("scale", C.bands.atScale, t.atScale));
+        if (last && C.companion) {
+          var comp = h("a", "lab-offer");
+          comp.href = C.companion.href;
+          comp.appendChild(h("div", "mono-label", C.companion.kicker));
+          comp.appendChild(h("p", "lab-offer-text", C.companion.text));
+          comp.appendChild(h("span", "lab-offer-cta", C.companion.cta));
+          card.appendChild(comp);
+        }
         card.appendChild(footer(last ? { label: "Back to Vitruvian", href: "../" } : { label: "Next layer", fn: function () { goto(layerIndex + 1, 1); } },
           { label: "Back to the solution", fn: function () { goto(layerIndex, 3); } }));
       }

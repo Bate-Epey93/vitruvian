@@ -1036,6 +1036,11 @@ function cardGrid(recs) {
     const chipCls = rec.source === "flagship" ? " flagship" : (rec.source === "design" ? " design" : "");
     const chipLabel = rec.source === "flagship" ? "Sample" : (rec.source === "design" ? "Your design" : "Your Deconstruct");
     top.appendChild(h("span", "chip" + chipCls, chipLabel));
+    const dom = rec.doc && rec.doc.meta && rec.doc.meta.domain;
+    if (dom && dom !== "software" && typeof domainLabel === "function") {
+      const dl = domainLabel(dom);
+      if (dl) top.appendChild(h("span", "chip", dl));
+    }
     // this subject also exists as a machine you can turn over
     if (fieldStudyFor(rec.system)) top.appendChild(h("span", "chip lab-chip", COPY.labChip));
     const go = h("span", "bd-go");
@@ -1224,6 +1229,7 @@ async function renderLibrary() {
     ["progress", "In progress"],
     ["done", "Completed"],
     ["software", "Software"],
+    ["beyond", "Beyond software"],
     ["mech", "Mechanical & 3D"]
   ];
   if (!filters.some(([id]) => id === libFilter)) libFilter = "all";
@@ -1254,7 +1260,8 @@ async function renderLibrary() {
     if (libFilter === "progress") { const p = recProgressPct(rec); return p > 0 && p < 100; }
     if (libFilter === "done") return recProgressPct(rec) === 100;
     if (libFilter === "software") return recDomain(rec) === "software";
-    if (libFilter === "mech") return recDomain(rec) !== "software" || !!fieldStudyFor(rec.system);
+    if (libFilter === "beyond") return recDomain(rec) !== "software";
+    if (libFilter === "mech") return recDomain(rec) === "mechanical" || !!fieldStudyFor(rec.system);
     return true;
   };
 

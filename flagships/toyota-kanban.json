@@ -1,0 +1,726 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "The Toyota production line",
+  "narrowing": "The shop-floor coordination and quality control spine of the Toyota Production System (TPS): how parts flow from stamping to weld to paint to final assembly without mountains of warehouse inventory or hidden defects. Left out are corporate accounting, dealer financing, and CAD vehicle styling.",
+  "ordering_note": "The layers follow the historical sequence built by Sakichi Toyoda, Kiichiro Toyoda, and Taiichi Ohno between 1902 and the 1960s: first automatic defect stopping (Jidoka), then reversing push into downstream pull (Kanban), then quick die changes (SMED) to eliminate large batches, then level-loading the mix (Heijunka), and finally physical error-proofing (Poka-Yoke).",
+  "history_confidence": "high",
+  "domain": "operations"
+ },
+ "essence": {
+  "text": "Traditional mass production optimizes every machine in isolation: run each stamping press as fast as it can go, build ten thousand left doors in one run, and pile them in a warehouse until the assembly line needs them. That strategy hides two fatal costs: capital sits frozen in mountains of work-in-process inventory, and a single warped die stamps ten thousand bad doors before anyone tries to bolt one onto a car. The Toyota Production System flips the factory's control signals backward. Instead of a central forecast pushing parts downstream, final assembly pulls only what just left the line using physical kanban cards, setups are shrunk from hours to minutes so machines can switch models every few minutes, and any worker who spots a defect pulls an overhead cord that stops the line before the flaw can move one station forward.",
+  "beginner": "Most factories work by running every machine at top speed and stacking thousands of spare parts in warehouses just in case. Toyota discovered that huge piles of parts hide mistakes: if a machine is slightly out of adjustment, you find out two weeks later after making ten thousand bad parts. Instead, Toyota linked stations like a supermarket shelf, where each station makes a new bin of parts only when the next station picks one up, and any worker can pull a cord to stop the line the instant something goes wrong.",
+  "deep_facts": [
+   "TPS began in a textile mill, not a car plant: in 1896 Sakichi Toyoda invented a power loom that automatically stopped the instant a single thread snapped, allowing one operator to supervise dozens of looms because no machine could weave defective cloth unattended.",
+   "Taiichi Ohno modeled Kanban on American supermarkets in the 1950s after reading how shoppers take two milk cartons off a shelf and dairy clerks restock only the empty slots rather than shipping a month of milk to every house.",
+   "In the 1950s, changing a heavy stamping press die took Detroit automakers four to eight hours, forcing them to stamp weeks of fenders at once; Shigeo Shingo's SMED method cut Toyota's die change to under ten minutes, then under three.",
+   "A Toyota assembly plant pulls the andon cord thousands of times per week; most pulls are resolved by a team leader within the 60-second station cycle (takt time) before the conveyor actually halts.",
+   "Lowering inventory on purpose is a diagnostic tool: Ohno compared work-in-process piles to high water in a river that hides the jagged rocks of machine breakdowns, long setups, and quality defects underneath."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Build a changing mix of customer vehicles at the exact pace of real orders, with zero defective work passed downstream and minimal work-in-process inventory.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Customer",
+    "want": "Receive the exact vehicle model and color I ordered, free of defects, without paying for months of warehouse storage"
+   },
+   {
+    "id": "a2",
+    "name": "Line operator",
+    "want": "Have the right part within arm's reach at every cycle and the authority to call for help the moment a part does not fit"
+   },
+   {
+    "id": "a3",
+    "name": "Upstream workcell",
+    "want": "A steady, predictable rhythm of replenishment signals rather than sudden feast-or-famine batch orders"
+   },
+   {
+    "id": "a4",
+    "name": "Plant manager",
+    "want": "Every defect and bottleneck exposed immediately at its source so the plant never builds a warehouse full of scrap"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "No defect passes forward: a station never knowingly hands a defective part to the next station, nor accepts one from the station before it."
+   },
+   {
+    "id": "inv2",
+    "text": "No production without a pull token: an upstream process never fabricates a part unless it holds a detached kanban card authorizing that exact container."
+   },
+   {
+    "id": "inv3",
+    "text": "Bounded work-in-process: the total inventory between any two stations never exceeds the number of circulating kanban cards issued for that loop."
+   },
+   {
+    "id": "inv4",
+    "text": "Takt-time pacing: smoothed production matches the average rate of customer demand without starving assembly or whiplash-overloading upstream suppliers."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Workpiece / subassembly",
+    "note": "A stamped panel, engine, or chassis moving from raw steel to finished vehicle"
+   },
+   {
+    "id": "en2",
+    "name": "Kanban card",
+    "note": "A physical card attached to a standard parts bin; when the bin is opened downstream, the card travels upstream as permission to make one more bin"
+   },
+   {
+    "id": "en3",
+    "name": "Supermarket rack",
+    "note": "A small, fixed-capacity flow rack holding a few bins of each part variant between an upstream cell and a downstream consumer"
+   },
+   {
+    "id": "en4",
+    "name": "Andon cord & board",
+    "note": "An overhead pull-cord and lighted scoreboard that alerts the team lead to an abnormality and halts the line at the end of the cycle if unresolved"
+   },
+   {
+    "id": "en5",
+    "name": "Heijunka box",
+    "note": "A pigeonhole schedule board slotted by pitch increments (every 15 or 30 minutes) that interleaves model variants into a smooth heartbeat"
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Material flow: stamped panels and subassemblies move forward from press shop to body weld to final assembly to the customer."
+   },
+   {
+    "id": "f2",
+    "text": "Information flow: detached kanban cards and andon stop signals travel backward from downstream consumers to upstream producers."
+   }
+  ],
+  "constraints": [
+   "Factory floor space and working capital are finite; storing weeks of car bodies costs more than the machines that make them.",
+   "Fixing a defect buried inside a finished car at the end of the line costs ten to a hundred times more than fixing it at the station that made it.",
+   "Suppliers and stamping presses cannot teleport between part types instantaneously without physical die and fixture changes."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "demand",
+    "label": "Demand & plan"
+   },
+   {
+    "id": "shop",
+    "label": "Shop floor"
+   },
+   {
+    "id": "signals",
+    "label": "Pull & quality"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "customer",
+    "label": "Customer order",
+    "kind": "actor",
+    "lane": "demand",
+    "order": 6
+   },
+   {
+    "id": "mrp_plan",
+    "label": "Monthly forecast",
+    "kind": "process",
+    "lane": "demand",
+    "order": 1
+   },
+   {
+    "id": "press_shop",
+    "label": "Stamping press",
+    "kind": "process",
+    "lane": "shop",
+    "order": 1
+   },
+   {
+    "id": "wip_pile",
+    "label": "Warehouse pile",
+    "kind": "store",
+    "lane": "shop",
+    "order": 3
+   },
+   {
+    "id": "body_weld",
+    "label": "Body weld",
+    "kind": "process",
+    "lane": "shop",
+    "order": 4
+   },
+   {
+    "id": "final_assy",
+    "label": "Final assembly",
+    "kind": "process",
+    "lane": "shop",
+    "order": 6
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_push1",
+    "from": "mrp_plan",
+    "to": "press_shop",
+    "kind": "control",
+    "label": "push schedule"
+   },
+   {
+    "id": "e_push2",
+    "from": "mrp_plan",
+    "to": "body_weld",
+    "kind": "control",
+    "label": "push schedule"
+   },
+   {
+    "id": "e_batch1",
+    "from": "press_shop",
+    "to": "wip_pile",
+    "kind": "payload",
+    "label": "10k batch"
+   },
+   {
+    "id": "e_pile_weld",
+    "from": "wip_pile",
+    "to": "body_weld",
+    "kind": "payload",
+    "label": "panels"
+   },
+   {
+    "id": "e_weld_assy",
+    "from": "body_weld",
+    "to": "final_assy",
+    "kind": "payload",
+    "label": "car body"
+   },
+   {
+    "id": "e_deliver",
+    "from": "final_assy",
+    "to": "customer",
+    "kind": "payload",
+    "label": "vehicle"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "Jidoka & The Andon Cord: Stop the Line on First Defect",
+   "problem": {
+    "statement": "In a traditional mass-production plant, the sacred rule is 'never stop the moving line.' If a stamping press drifts out of tolerance or a weld gun misfires, the machine keeps running to hit its hourly quota and dumps thousands of slightly warped panels into the warehouse pile. Weeks later, final assembly workers try to bolt doors onto twisted frames with rubber mallets, and a graveyard of finished cars sits in a rework lot waiting to be torn back apart.",
+    "beginner": "If a machine starts making crooked parts and nobody is allowed to stop the conveyor belt, you end up with five thousand crooked cars that have to be taken apart by hand at the end of the building.",
+    "model": {
+     "id": "feedback-loop",
+     "application": "Shorten the error-detection feedback loop from weeks to seconds by wiring every machine and station to halt at the first abnormal cycle while the physical evidence is still warm."
+    }
+   },
+   "gate": {
+    "question": "Your factory's rework yard is overflowing with finished cars that have bad welds buried under three coats of paint. Inspected at the end of the line, fixing one bad weld takes four hours. How do you stop the factory from ever burying a defect again?",
+    "hint": "Move the authority to stop the line from the plant manager's office down to every machine sensor and every worker's overhead reach."
+   },
+   "solution": "Install Jidoka (automation with a human touch) and the overhead Andon cord. Every machine is fitted with mechanical limit switches and current sensors that trip the machine off the instant a tool chatters, overloads, or misses a stroke. Above every human workstation hangs the Andon cord: when an operator spots a stripped thread, a missing clip, or a part that will not seat cleanly, they pull the cord. The overhead Andon board lights yellow at that station number and chimes; the team leader has until the end of the 60-second takt cycle to reach the station and fix the issue, or the line turns red and stops cleanly at the cycle boundary.",
+   "user_lens": {
+    "gives": "Every vehicle leaving the line was inspected at every single bolt and weld by the person who put it there, not sampled one-in-fifty at the shipping dock.",
+    "costs": "A line stop halts dozens of stations at once, so supervisors cannot hide a broken tool or an under-trained station behind a pile of buffer stock."
+   },
+   "tech_lens": {
+    "mechanism": "Inline anomaly detection (machine limit switches + human Andon pull) triggers a two-stage state transition: yellow alert on pull (alerting the cell lead within the remaining cycle window), escalating to a deterministic stop at the fixed position boundary if unacknowledged.",
+    "principle": "Fail fast at the point of origin; never spend downstream capacity processing a known-corrupt upstream payload."
+   },
+   "tradeoff": "Stopping the line sacrifices immediate station utilization for system-wide yield: a single misbehaving fixture can idle an entire zone until its root cause is fixed.",
+   "at_scale": "Because stopping at the end of the cycle gives the team lead a 30-to-50-second window to assist, over 90 percent of Andon pulls are resolved without a full line stop, turning thousands of daily micro-signals into a live map of where tooling or training needs help.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "Jidoka automatic machine stop",
+      "software_concept": "fail-fast assertions and schema validation at ingress before a corrupt record enters the storage pipeline"
+     },
+     {
+      "mechanism": "yellow-then-red Andon escalation",
+      "software_concept": "soft-timeout warning alert followed by a circuit-breaker trip at the transaction boundary"
+     }
+    ],
+    "interview_probes": [
+     "When a stage in your data pipeline starts producing malformed output, does it silently write nulls downstream or trip a circuit breaker before polluting downstream tables?"
+    ],
+    "approach": "Validate invariants immediately after each stage's transform; on violation, emit a structured alert with the offending state and halt downstream dispatch for that partition until the fault clears.",
+    "vocab": [
+     "circuit-breaker"
+    ]
+   },
+   "beginner_analogy": "Like a spell-checker that underlines a typo the moment you type the word instead of waiting until you have printed and bound ten thousand copies of the book.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "andon_board",
+      "label": "Andon cord & board",
+      "kind": "channel",
+      "lane": "signals",
+      "order": 4
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_andon_weld",
+      "from": "body_weld",
+      "to": "andon_board",
+      "kind": "control",
+      "label": "pulls cord"
+     },
+     {
+      "id": "e_andon_assy",
+      "from": "final_assy",
+      "to": "andon_board",
+      "kind": "control",
+      "label": "pulls cord"
+     },
+     {
+      "id": "e_andon_halt",
+      "from": "andon_board",
+      "to": "press_shop",
+      "kind": "control",
+      "label": "stops line"
+     }
+    ],
+    "highlight": [
+     "press_shop",
+     "wip_pile",
+     "body_weld",
+     "final_assy"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 2,
+   "name": "Kanban & Supermarket Pull: Produce Only What Was Just Taken",
+   "problem": {
+    "statement": "Even with Jidoka catching bad parts, a central planning office still pushes monthly schedules to every department independently. Because real customer orders shift every day and machines hiccup at different rates, the stamping press builds thousands of sedan roofs while final assembly is starved for wagon doors. Walk the aisle and you cannot tell whether a pile of 500 fenders is needed in ten minutes or is surplus from a cancelled forecast.",
+    "beginner": "When a central office guesses what every station should make a month in advance, one aisle floods with parts nobody needs today while the next aisle runs out of the part that is holding up the car.",
+    "model": {
+     "id": "queue-and-buffer",
+     "application": "Replace open-loop forecast push with a bounded FIFO buffer (the supermarket) whose physical slots and circulating cards act as a backpressure credit loop."
+    }
+   },
+   "gate": {
+    "question": "Upstream stations keep burying the plant in parts that final assembly doesn't need today, while running out of the parts it does need. With zero computers on the 1953 shop floor, how do you make it physically impossible for an upstream station to overproduce?",
+    "hint": "Think of a supermarket shelf and a fixed stack of laminated cards. What if a machine is forbidden to run unless it is holding an empty bin's card?"
+   },
+   "solution": "Delete the push schedule to upstream shops and install a Supermarket and Kanban loop. Between Body Weld and the Stamping Press sits a small flow rack holding a fixed number of standard bins for each panel, each bin carrying a laminated Kanban card. When Body Weld opens a bin of doors, the operator detaches its Kanban card and drops it into the return post for the Stamping Press. The press is governed by one iron rule: no Kanban card, no stamping. If Body Weld slows down or stops, no cards return, the supermarket rack fills to its small cap, and the press stops automatically.",
+   "user_lens": {
+    "gives": "Upstream stations always build the exact part that was just consumed minutes ago, never guessing what next week's market might want.",
+    "costs": "With the big warehouse pile gone, an upstream breakdown is felt downstream within minutes instead of days."
+   },
+   "tech_lens": {
+    "mechanism": "Credit-based flow control using a fixed pool of physical tokens (K circulating kanban cards per SKU): consumption detaches a token that travels upstream to authorize one replenishment batch of size Q, bounding work-in-process to at most K * Q units.",
+    "principle": "Bound every buffer and drive production from downstream consumption credits rather than upstream forecasts."
+   },
+   "tradeoff": "Thin buffers remove the shock absorber that used to hide unreliable machines: if a supplier or press goes down for two hours, the whole line feels the starvation unless reliability is fixed.",
+   "at_scale": "Inventory in the loop is mathematically capped at K cards times bin size, and the plant manager tunes buffer depth in plain sight by simply adding or removing physical cards from the loop.",
+   "defends": [
+    "inv2",
+    "inv3"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "circulating kanban card pool",
+      "software_concept": "credit-based backpressure (TCP receive window, bounded ring buffer, or semaphore permits)"
+     },
+     {
+      "mechanism": "supermarket flow rack",
+      "software_concept": "bounded work queue between producer and consumer stages"
+     }
+    ],
+    "interview_probes": [
+     "How does credit-based pull backpressure differ from a rate limiter when a downstream consumer suddenly slows down by 80 percent?"
+    ],
+    "approach": "Initialize a bounded channel with N permits per item type; a downstream consumer releases one permit back to the upstream producer only when it dequeues a unit, blocking the producer whenever available permits reach zero.",
+    "vocab": [
+     "backpressure",
+     "rate-limiting"
+    ]
+   },
+   "beginner_analogy": "Like a coat check with only fifty numbered brass tags: when all fifty tags are hanging on coats, the attendant cannot take a fifty-first coat until somebody leaves and hands a tag back.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "supermarket",
+      "label": "Supermarket rack",
+      "kind": "store",
+      "lane": "shop",
+      "order": 2
+     },
+     {
+      "id": "kanban_loop",
+      "label": "Kanban card post",
+      "kind": "channel",
+      "lane": "signals",
+      "order": 2
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_fill_rack",
+      "from": "press_shop",
+      "to": "supermarket",
+      "kind": "payload",
+      "label": "1 bin per card"
+     },
+     {
+      "id": "e_withdraw",
+      "from": "supermarket",
+      "to": "body_weld",
+      "kind": "payload",
+      "label": "withdraws bin"
+     },
+     {
+      "id": "e_card_detach",
+      "from": "body_weld",
+      "to": "kanban_loop",
+      "kind": "control",
+      "label": "detaches card"
+     },
+     {
+      "id": "e_card_auth",
+      "from": "kanban_loop",
+      "to": "press_shop",
+      "kind": "control",
+      "label": "authorizes 1 bin"
+     }
+    ],
+    "highlight": [
+     "mrp_plan",
+     "press_shop",
+     "wip_pile",
+     "body_weld",
+     "e_batch1",
+     "e_pile_weld"
+    ],
+    "remove": [
+     "wip_pile",
+     "e_push1",
+     "e_push2",
+     "e_batch1",
+     "e_pile_weld"
+    ]
+   }
+  },
+  {
+   "index": 3,
+   "name": "SMED Quick Changeover: Crushing Setup Time to Kill Batching",
+   "problem": {
+    "statement": "The Kanban rack wants the stamping press to make 50 sedan doors, then 50 truck fenders, then 50 coupe hoods. But changing the five-ton steel die inside the stamping press takes six hours of unbolting, crane hoisting, shimming, and trial hits. If you spend six hours changing dies after every 50 parts, the press sits idle 90 percent of the day. The press foreman rebels: 'With a six-hour changeover, I HAVE to stamp 10,000 doors at once or we go broke!'",
+    "beginner": "If it takes six hours to swap the heavy metal mold inside a stamping machine, you cannot afford to swap it every twenty minutes to refill a small supermarket shelf.",
+    "model": {
+     "id": "bottleneck",
+     "application": "Attack the changeover time itself by moving every preparation step outside the machine's stopped window and replacing threaded bolts with single-turn clamps."
+    }
+   },
+   "gate": {
+    "question": "Downstream pull wants small batches of 50 parts, but changing the five-ton stamping die takes six hours. You cannot buy ten new presses. How do you make small batches economical on the one press you have?",
+    "hint": "Watch a six-hour die change with a stopwatch: how much of that time is spent fetching tools, pre-heating dies, and turning thirty bolts while the press is stopped, versus work that could happen while the old die is still stamping?"
+   },
+   "solution": "Shigeo Shingo's Single-Minute Exchange of Die (SMED). First, separate 'internal' setup (work that can only happen while the press is stopped) from 'external' setup (fetching the next die, pre-inspecting it, setting its shut height on a standard bolster plate while the press is still running the last batch). Second, convert internal steps to external: mount every die on standardized sub-plates of identical thickness so zero shimming or trial stamping is needed after the swap. Third, eliminate adjustments: replace thirty multi-turn bolts with pear-shaped keyhole slots and quarter-turn hydraulic clamps, and roll the old die out one side on roller tracks while the new die rolls in the other. A six-hour ordeal drops to under nine minutes.",
+   "user_lens": {
+    "gives": "The factory can switch from sedans to wagons to trucks on the same day without piling up a month of spare body panels.",
+    "costs": "Press crews must rehearse changeovers like a Formula 1 pit stop, and every die in the plant must be retrofitted to strict standard dimensions."
+   },
+   "tech_lens": {
+    "mechanism": "Economic Order Quantity (EOQ) scales with the square root of setup cost S; slashing S from 360 minutes to 9 minutes reduces optimal batch size by a factor of sqrt(40) (~6.3x) at identical machine utilization, achieved by pre-staging external state and standardizing mechanical interfaces.",
+    "principle": "When high switching cost forces large batches, engineer the switching cost down rather than accepting the batch."
+   },
+   "tradeoff": "Standardizing bolster plates, quick-release clamps, and parallel staging tables requires upfront capital and strict fixture discipline across every toolmaker.",
+   "at_scale": "Once changeover drops under ten minutes, the press can switch dies ten times a shift while keeping 90+ percent uptime, allowing the supermarket rack to hold hours of stock instead of weeks.",
+   "defends": [
+    "inv3",
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "external vs internal setup separation",
+      "software_concept": "blue-green deployment and container image pre-warming before flipping the load-balancer pointer"
+     },
+     {
+      "mechanism": "standardized bolster heights + quarter-turn clamps",
+      "software_concept": "zero-copy memory-mapped snapshots and standardized ABI contracts that eliminate boot-time calibration"
+     }
+    ],
+    "interview_probes": [
+     "Where in your system are you batching writes or deployments only because the per-operation setup overhead was treated as a fixed law of nature?"
+    ],
+    "approach": "Pre-stage the next configuration or snapshot out-of-band while the worker is still processing the current batch, then swap the active pointer atomically so stop-the-world cutover time is O(1).",
+    "vocab": [
+     "long-running-tasks",
+     "caching"
+    ]
+   },
+   "beginner_analogy": "Like a Formula 1 pit crew that has the four fresh tires warmed up and the impact wrenches cocked before the car enters the pit lane, changing all four wheels in two seconds instead of forty-five minutes at a corner garage.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "smed_rig",
+      "label": "SMED quick-change rig",
+      "kind": "process",
+      "lane": "shop",
+      "order": 0
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_smed_swap",
+      "from": "smed_rig",
+      "to": "press_shop",
+      "kind": "control",
+      "label": "3-min die swap"
+     }
+    ],
+    "highlight": [
+     "press_shop",
+     "supermarket",
+     "kanban_loop"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 4,
+   "name": "Heijunka & Takt Time: Leveling the Heartbeat",
+   "problem": {
+    "statement": "Even with Kanban pull and 9-minute die changes, raw customer orders arrive in lumps: fleet buyers order 200 V6 vans on Monday morning, and suburban dealers order 200 four-cylinder sedans on Tuesday. If Final Assembly builds 200 V6 vans in a row on Monday, two bad things happen: first, the V6 engine bay takes 75 seconds of wiring while the sedan takes 45, so Monday's line operators fall behind and pull the Andon cord every cycle; second, the V6 supplier gets slammed with a massive Kanban wave on Monday and sits idle on Tuesday (the bullwhip effect).",
+    "beginner": "If you build all the complicated V6 vans on Monday and all the simple four-cylinder cars on Tuesday, the workers and part suppliers get crushed on Monday and have nothing to do on Tuesday.",
+    "model": {
+     "id": "separation-of-concerns",
+     "application": "Insert a leveling damper (the Heijunka box) between lumpy customer arrivals and the physical line so the line beats at one steady takt time and interleaves heavy and light models every cycle."
+    }
+   },
+   "gate": {
+    "question": "Customer demand over the week is 60 percent sedans, 20 percent wagons, and 20 percent V6 vans, arriving in random bursts. If you feed those bursts straight into final assembly, your stations and suppliers alternate between overtime panic and idle starvation. How do you pace the line so every hour looks the same?",
+    "hint": "Don't average the week by running three days of sedans and one day of vans. Shrink the repeating pattern down to the smallest possible sequence."
+   },
+   "solution": "Pace the line to Takt Time (available working seconds per shift divided by daily customer demand, say 60 seconds per car) and feed Final Assembly through a Heijunka (level-loading) box. Instead of building 300 sedans, 100 wagons, and 100 vans in three giant blocks, the Heijunka box interleaves both volume and model mix into a repeating five-car micro-pattern: Sedan, Sedan, Wagon, Sedan, Van, repeating every five minutes all day long. A runner withdraws one Kanban card from the Heijunka box at a fixed 'pitch' interval (say, every 15 minutes), releasing a steady, metronomic pulse to Final Assembly. Heavy-work V6 vans never arrive back-to-back, and every upstream supermarket sees a smooth, predictable draw.",
+   "user_lens": {
+    "gives": "A custom order still ships within days, while the factory floor and its suppliers run at a calm, sustainable heartbeat without end-of-month crunch chaos.",
+    "costs": "A fleet buyer who orders 200 identical vans gets them trickled out across the week's mixed sequence rather than all in one Monday afternoon."
+   },
+   "tech_lens": {
+    "mechanism": "Weighted fair queueing / token-bucket traffic shaping at the assembly head: lumpy arrival streams are re-sequenced into a minimum-period repeating mix (A-A-B-A-C) dispatched at a fixed clock period T_takt = T_available / D_daily.",
+    "principle": "Smooth variance at the ingress boundary; downstream throughput and buffer sizing depend on peak variance, not just mean load."
+   },
+   "tradeoff": "Heijunka adds a small scheduling buffer (usually a few days of sequenced orders) between the customer click and the first weld, trading instant burst dispatch for zero bullwhip amplification.",
+   "at_scale": "Because variance is damped at Final Assembly, hundreds of tier-1 and tier-2 suppliers can size their own supermarkets and trucks to a flat daily rate instead of provisioning for 5x demand spikes.",
+   "defends": [
+    "inv4",
+    "inv3"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "Heijunka mixed-model interleaving (A-A-B-A-C)",
+      "software_concept": "weighted fair queueing (WFQ) and stride scheduling that interleave heavy and light jobs to prevent head-of-line blocking"
+     },
+     {
+      "mechanism": "Takt-time pitch release",
+      "software_concept": "leaky-bucket pacer that smooths bursty ingress traffic into a constant dispatch rate"
+     }
+    ],
+    "interview_probes": [
+     "Why does interleaving expensive jobs with cheap jobs (stride scheduling) allow much smaller downstream queues than running all the expensive jobs in a contiguous burst?"
+    ],
+    "approach": "Compute each job class's share of daily demand and assign a stride inversely proportional to its weight; dequeue the job class with the minimum pass value at a fixed clock interval equal to takt_time.",
+    "vocab": [
+     "load-balancing",
+     "rate-limiting",
+     "contention"
+    ]
+   },
+   "beginner_analogy": "Like a teacher lining up kids for the cafeteria who alternates one kid ordering a custom hot panini with two kids grabbing a ready-made apple and milk, so the panini press never backs up the whole hallway.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "heijunka_box",
+      "label": "Heijunka leveler",
+      "kind": "store",
+      "lane": "demand",
+      "order": 4
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_ord_in",
+      "from": "customer",
+      "to": "heijunka_box",
+      "kind": "control",
+      "label": "orders"
+     },
+     {
+      "id": "e_takt_pace",
+      "from": "heijunka_box",
+      "to": "final_assy",
+      "kind": "control",
+      "label": "takt pulse"
+     },
+     {
+      "id": "e_assy_pull",
+      "from": "final_assy",
+      "to": "body_weld",
+      "kind": "control",
+      "label": "pulls next body"
+     }
+    ],
+    "highlight": [
+     "mrp_plan",
+     "final_assy",
+     "body_weld",
+     "customer"
+    ],
+    "remove": [
+     "mrp_plan"
+    ]
+   }
+  },
+  {
+   "index": 5,
+   "name": "Poka-Yoke: Making the Wrong Move Physically Unsayable",
+   "problem": {
+    "statement": "With Heijunka interleaving sedan, wagon, and van bodies every 60 seconds, a human operator at Final Assembly now faces a new trap: Car 1 needs a sedan airbag harness, Car 2 needs a wagon harness, and the two connectors look almost identical at 6:00 AM. Telling the operator 'pay closer attention' fails; even a 99.9 percent careful human makes one mistake every thousand cars, and an Andon cord only helps if the human notices they grabbed the wrong part.",
+    "beginner": "When a worker puts together a sedan at 9:01 and a minivan at 9:02, it is easy to grab the sedan bolt or wire for the minivan by mistake if both fit into the same hole.",
+    "model": {
+     "id": "inversion",
+     "application": "Instead of training humans not to make mistakes, list the mistakes a tired human can make on a mixed line and shape the jigs, plugs, and bins so the wrong move will not physically fit."
+    }
+   },
+   "gate": {
+    "question": "Your leveled line alternates three car models every three minutes, and once a week an operator accidentally bolts a left-hand bracket upside down or plugs a sedan wire into a wagon socket. More inspection signs on the wall haven't helped. How do you bring that defect count to zero forever?",
+    "hint": "Look at why a three-prong electrical plug or a SIM card with one notched corner can only go in one way."
+   },
+   "solution": "Shigeo Shingo's Poka-Yoke (mistake-proofing): embed physical constraints into the parts and fixtures themselves. Give the left-hand bracket two asymmetric locator pins of different diameters so it physically cannot sit against the frame upside down. Key the wagon and sedan wiring connectors with different plastic tabs so they refuse to mate with the wrong body. Wire the parts rack with photoelectric light curtains (pick-to-light): when a wagon enters the station, a green lamp lights over the wagon bin, and if the operator's hand breaks the light beam of the sedan bin, a buzzer sounds and the torque wrench disables itself before a single bolt can be driven.",
+   "user_lens": {
+    "gives": "Zero-defect assembly across dozens of mixed vehicle options without turning the operator's job into an anxious memory test.",
+    "costs": "Every part revision requires engineering asymmetric tabs, guide pins, and interlocked jigs before production starts."
+   },
+   "tech_lens": {
+    "mechanism": "Mechanical keying (asymmetric datum pins, incompatible connector geometry) and sensor-interlocked tools (pick-to-light beam verification + torque-spindle counter that refuses to release the car until N bolts reach target Nm).",
+    "principle": "Enforce invariants in the geometry of the interface rather than in operator vigilance."
+   },
+   "tradeoff": "Upfront tooling and part-design complexity rises: parts that could once be symmetrical now carry keying tabs, and fixtures must be wired into the station's PLC interlock.",
+   "at_scale": "Poka-Yoke scales with zero runtime cognitive load: an operator on their ten-thousandth shift at 3:00 AM gets the exact same mechanical protection as on their first day, keeping defect rates measured in single parts per million.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "asymmetric locator pins & keyed connectors",
+      "software_concept": "phantom types, branded IDs (UserId vs OrderId), and compile-time type states that make passing the wrong argument a syntax error"
+     },
+     {
+      "mechanism": "pick-to-light torque wrench interlock",
+      "software_concept": "capability token required by a mutating API so the call cannot even be invoked until the precondition step returns the token"
+     }
+    ],
+    "interview_probes": [
+     "Where in your codebase do two functions take raw strings or integers that a caller could swap by accident, and how would you redesign the signature so the compiler rejects the swap?"
+    ],
+    "approach": "Wrap distinct domain identifiers in distinct opaque types (e.g., SedanHarnessId vs WagonHarnessId) and require state-transition functions to consume a proof token returned only by the preceding validation step.",
+    "vocab": [
+     "api-design",
+     "data-modeling"
+    ]
+   },
+   "beginner_analogy": "Like a SIM card with one diagonal clipped corner, or a diesel fuel nozzle that is made too wide to fit into the filler neck of an unleaded gasoline car.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "poka_yoke",
+      "label": "Poka-yoke jig & light",
+      "kind": "process",
+      "lane": "signals",
+      "order": 6
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_py_check",
+      "from": "poka_yoke",
+      "to": "final_assy",
+      "kind": "control",
+      "label": "interlocks tool"
+     },
+     {
+      "id": "e_py_andon",
+      "from": "poka_yoke",
+      "to": "andon_board",
+      "kind": "control",
+      "label": "trips on error"
+     }
+    ],
+    "highlight": [
+     "final_assy",
+     "andon_board"
+    ],
+    "remove": []
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "A fire at a sole-source brake-valve supplier",
+   "scenario": "On Saturday morning, a fire destroys the plant of the tier-1 supplier that makes a brake proportioning valve used across every Toyota model. Because supermarkets hold only four hours of stock (inv3), every assembly line stops by Monday afternoon.",
+   "reveal": "This happened for real at Aisin Seiki on February 1, 1997. Thin buffers exposed the single point of failure within hours, halting 70,000 vehicles of output. Yet the same TPS discipline that made the line vulnerable made recovery astonishingly fast: because the part interface and tooling drawings were standardized and twenty other suppliers already ran small-lot SMED cells (Layer 3), a swarm of 200 partner workshops set up temporary tooling and restored full brake-valve supply in just five days. Afterwards, Toyota added geographic dual-sourcing across separate factories while keeping shop-floor buffers lean."
+  },
+  {
+   "id": "st2",
+   "title": "A new model launch spikes Andon pulls to every second car",
+   "scenario": "During the first week of building a redesigned SUV, a tight wiring-harness route causes operators at Station 14 to pull the Andon cord on 40 percent of cycles, threatening to cut daily plant output in half.",
+   "reveal": "The line is divided into decoupled buffer zones separated by small 5-to-10-car accumulators between weld, paint, and trim sub-lines. When Station 14 stops at its fixed cycle boundary (Layer 1), only that 15-station zone halts for 30 seconds while adjacent zones keep moving, and Kaizen engineers stand right at Station 14 watching the exact clip that binds. Within 48 hours they redesign the clip into a snap-in Poka-Yoke fixture (Layer 5), permanently removing the bottleneck instead of hiding it with overtime."
+  },
+  {
+   "id": "st3",
+   "title": "Gas prices double overnight and SUV demand drops 50 percent",
+   "scenario": "A sudden fuel-price shock flips buyer demand from large SUVs to compact hybrids within two weeks.",
+   "reveal": "A traditional push factory is caught with 60 days of stamped SUV panels in warehouses and weeks of dedicated tooling locked in place. Under TPS, the supermarket racks (Layer 2) hold only hours of SUV panels, SMED rigs (Layer 3) let stamping presses change dies to hybrid panels in minutes, and the Heijunka box (Layer 4) simply adjusts its repeating pitch ratio from 3-SUV-to-2-Hybrid to 1-SUV-to-4-Hybrid without stranding a warehouse of obsolete steel."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "Build quality in at the source: halting on the first corrupt unit is vastly cheaper than inspecting and reworking a finished batch.",
+   "Drive production from downstream pull credits rather than upstream forecasts; a bounded buffer turns downstream slowdowns into automatic upstream backpressure.",
+   "Never treat high switching or setup cost as a law of nature: engineer the changeover down so you can run small batches without losing throughput.",
+   "Level variance at the ingress gate: interleaving heavy and light work into a steady heartbeat prevents bullwhip waves across every dependency.",
+   "Make the wrong move physically impossible in the interface geometry rather than relying on human attention at 3:00 AM."
+  ],
+  "mappings": [
+   {
+    "mechanism": "Kanban card & supermarket rack",
+    "elsewhere": "TCP sliding-window flow control, Reactive Streams request(n) credits, and bounded Go channels that block producers until consumers free a slot."
+   },
+   {
+    "mechanism": "Jidoka & the Andon cord",
+    "elsewhere": "Continuous integration pipelines that block merges on the first failing unit test, and circuit breakers that trip when error rates cross a threshold."
+   },
+   {
+    "mechanism": "SMED quick die changeover",
+    "elsewhere": "Container image pre-pulling, warm serverless sandboxes, and zero-downtime blue-green pointer swaps that move setup work off the critical path."
+   },
+   {
+    "mechanism": "Heijunka mixed-model box",
+    "elsewhere": "Weighted fair queueing in network routers and stride CPU schedulers that interleave CPU-heavy and I/O-light tasks to prevent starvation."
+   },
+   {
+    "mechanism": "Poka-Yoke asymmetric fixtures",
+    "elsewhere": "Compile-time type systems, Rust ownership lifetimes, and SQL foreign-key constraints that make invalid state transitions unrepresentable."
+   }
+  ]
+ }
+}

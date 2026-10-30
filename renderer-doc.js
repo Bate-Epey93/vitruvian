@@ -966,6 +966,15 @@ var DocView = (() => {
 
     function renderTransfer(root) {
       renderRecap(root);
+      const study = fieldStudyFor(doc.meta.system);
+      if (study) {
+        const box = h("a", "lab-offer");
+        box.href = study.href;
+        box.appendChild(h("div", "mono-label", COPY.labKicker));
+        box.appendChild(h("p", "lab-offer-text", study.blurb));
+        box.appendChild(h("span", "lab-offer-cta", COPY.labOpen));
+        root.appendChild(box);
+      }
       root.appendChild(h("h2", "section-head", "Take it with you"));
       const pr = h("div", "principles");
       doc.transfer.principles.forEach(p => pr.appendChild(h("div", "principle", p)));

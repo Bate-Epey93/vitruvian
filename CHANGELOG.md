@@ -4,6 +4,17 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [2.12.0] — 2026-10-30 · Beyond software: economics, operations, biology, and 3D companions
+
+### Added
+- **Five non-software flagship Deconstructs**, expanding the shipped offline library to 25 studies across five domains:
+  - **The clearinghouse & card network** (`clearinghouse`, *Markets & money*): from 1770s London walk clerks and multilateral netting to central-bank book-entry reserves, CCP novation and default waterfalls, dual-message ISO 8583 authorization holds versus batch settlement, and interchange/chargeback incentive loops.
+  - **The Toyota production line** (`toyota-kanban`, *Operations*): from Jidoka automatic loom stops and the overhead Andon cord to supermarket pull and Kanban card backpressure, Shigeo Shingo's single-minute die exchange (SMED), Heijunka mixed-model leveling at Takt time, and Poka-Yoke physical mistake-proofing.
+  - **The adaptive immune response** (`immune-system`, *Living systems*): from V(D)J random gene splicing and thymic negative selection to lymph-node rendezvous routing, two-signal B7 co-stimulation, exponential clonal expansion and germinal-center hypermutation, and Treg checkpoint contraction with lifelong memory caching.
+  - **The manual gearbox** (`manual-gearbox`, *Machines*): 2D architectural companion to the 3D field study *The Gear Change* (`lab/transmission.html`), walking from the 1894 sliding-gear crash box to constant-mesh dogs, Earl Thompson's 1928 baulk-ring cone synchromesh, three-rail interlock pins, and the reverse idler lockout.
+  - **The mechanical clock escapement** (`clock-escapement`, *Machines*): 2D architectural companion to the 3D field study *The Beat* (`lab/escapement.html`), walking from the c.1300 verge-and-foliot to Huygens's 1656 pendulum, Clement's recoil anchor and Graham's 1715 deadbeat locking arcs, Mudge's 1754 detached lever, and the Swiss draw-angle safety roller.
+- **Cross-links between 2D Deconstructs and 3D Field Studies.** Both **Meet** (Position 0) and **Transfer** (Position N+2) on *The manual gearbox* and *The mechanical clock escapement* offer direct cards into `lab/transmission.html` and `lab/escapement.html`, and Library cards now display domain chips (*Markets & money*, *Operations*, *Living systems*, *Machines*) alongside a **Beyond software** filter chip.
+
 ## [2.11.0] — 2026-10-30 · Fluid physics, background generation, and portable sharing
 
 ### Added

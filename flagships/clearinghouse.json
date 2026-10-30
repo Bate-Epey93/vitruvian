@@ -1,0 +1,739 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "The clearinghouse & card network",
+  "narrowing": "The core interbank clearing and card-network spine: moving claims between hundreds of banks without shipping vaults of cash for every swipe, and settling defaults and consumer disputes across institutions that do not trust each other. Left out are central-bank monetary policy, foreign exchange pricing, and credit underwriting; they sit above or beside this clearing mechanism.",
+  "ordering_note": "The layers follow the historical evolution of interbank clearing, from eighteenth-century London walk clerks carrying paper checks between coffeehouses to the London Clearing House of 1770, to modern CCP margin waterfalls, and finally to the 1970s BankAmericard / Visa dual-message card network.",
+  "history_confidence": "high",
+  "domain": "economics"
+ },
+ "essence": {
+  "text": "Every time a customer at Bank A pays a merchant at Bank B, Bank A owes Bank B money. Across N banks, settling every payment one-by-one requires N*(N-1)/2 bilateral relationships and forces banks to hold mountains of idle cash just in case payments flow one way before they flow back. A clearinghouse replaces that tangle of bilateral debts with one central counterparty and one end-of-day mathematical sum: only the net difference between everything a bank owes the room and everything the room owes that bank ever moves in real money. Modern card networks layer a two-speed protocol on top of that clearinghouse: a sub-second authorization message reserves funds at the checkout counter while the actual money waits for the overnight multilateral batch.",
+  "beginner": "When you tap your card at a coffee shop, your bank and the coffee shop's bank are rarely the same company. Moving real cash between hundreds of banks for every three-dollar coffee would gridlock the banking system. Instead, a card network checks that you have the money in less than a second, collects millions of IOUs all day, cancels out the ones going in opposite directions, and moves only the leftover difference once a night.",
+  "deep_facts": [
+   "Before the London Clearing House opened on Lombard Street in 1770, runner clerks walked from bank to bank with satchels of checks and banknotes; legend holds the clearinghouse began because two clerks decided to swap their bundles over a pint at the Five Bells tavern instead of walking the rest of their routes.",
+   "Multilateral netting compresses gross payment volume by 85 to 98 percent in real interbank systems, meaning a trillion dollars of daily purchases settles with only tens of billions of actual central-bank reserve transfers.",
+   "Through legal novation, a central counterparty steps into the middle of every trade, splitting one contract between Bank A and Bank B into two: Bank A owes the clearinghouse, and the clearinghouse owes Bank B.",
+   "When you tap a card, no money moves. That tap is only an authorization hold; the real funds move hours or days later in an overnight clearing file, which is why a restaurant tip added after you sign can still be included in the final settlement.",
+   "Interchange fees flow backward from the direction of the payment: the merchant's bank pays the cardholder's bank a percentage of every sale to subsidize fraud losses, the interest-free grace period, and card rewards."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Settle millions of daily payment claims across thousands of competing banks while moving the minimum possible cash, guaranteeing payment at checkout, and surviving the bankruptcy of a participating bank.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Cardholder",
+    "want": "Tap once at any merchant, get an instant yes, and have a way to recover my money if the merchant is a fraud or never delivers"
+   },
+   {
+    "id": "a2",
+    "name": "Merchant",
+    "want": "Know in under two seconds at the register that I will get paid, without having to evaluate the credit of a stranger's bank"
+   },
+   {
+    "id": "a3",
+    "name": "Issuing bank",
+    "want": "Settle my customers' spending across thousands of merchant banks without keeping huge cash reserves parked at every single one"
+   },
+   {
+    "id": "a4",
+    "name": "Acquiring bank",
+    "want": "Collect funds owed to my merchants from every issuing bank even if an issuer fails before the overnight wire"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "Zero-sum clearing: across every settlement cycle, the sum of all net credits paid out equals the sum of all net debits collected. The clearinghouse never creates or destroys money."
+   },
+   {
+    "id": "inv2",
+    "text": "Bounded liquidity: a solvent bank can settle its daily obligations using a fraction of its gross payment volume, without maintaining bilateral accounts at every other bank."
+   },
+   {
+    "id": "inv3",
+    "text": "Default containment: the failure of one member bank to pay its end-of-day net debit never cascades into a failure of the settlement run for the surviving banks."
+   },
+   {
+    "id": "inv4",
+    "text": "Checkout finality: once an issuer approves an authorization request, the acquirer is guaranteed that the issuer cannot repudiate a valid, timely clearing presentation for that amount."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Draft / IOU",
+    "note": "A signed instruction ordering the payer's bank to pay a specified sum to the payee's bank"
+   },
+   {
+    "id": "en2",
+    "name": "Net position",
+    "note": "A bank's single end-of-day number: total incoming claims from all banks minus total outgoing claims to all banks"
+   },
+   {
+    "id": "en3",
+    "name": "Guarantee fund",
+    "note": "Collateral posted upfront by every member bank to cover the largest member's potential default"
+   },
+   {
+    "id": "en4",
+    "name": "Authorization hold",
+    "note": "A temporary reservation on a cardholder's balance that reduces available funds before any money moves"
+   },
+   {
+    "id": "en5",
+    "name": "Clearing batch",
+    "note": "The end-of-day file of captured transactions submitted by acquirers to compute net settlement"
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Authorization: a real-time request travels from merchant to acquirer to network to issuer, returning an approval code that locks cardholder funds."
+   },
+   {
+    "id": "f2",
+    "text": "Clearing & settlement: captured sales batch into the clearinghouse, collapse into one net position per bank, and settle via reserve accounts."
+   }
+  ],
+  "constraints": [
+   "N banks require N*(N-1)/2 bilateral relationships if they settle directly with one another.",
+   "Moving actual central-bank reserves or physical specie has a hard opportunity cost and cannot happen millions of times per second.",
+   "Checkout approval must complete while the customer is standing at the counter, under two seconds across global links."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "commerce",
+    "label": "Commerce"
+   },
+   {
+    "id": "banks",
+    "label": "Member banks"
+   },
+   {
+    "id": "clearing",
+    "label": "Clearinghouse"
+   },
+   {
+    "id": "settlement",
+    "label": "Settlement"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "buyer",
+    "label": "Buyer",
+    "kind": "actor",
+    "lane": "commerce",
+    "order": 0
+   },
+   {
+    "id": "merchant",
+    "label": "Merchant",
+    "kind": "actor",
+    "lane": "commerce",
+    "order": 6
+   },
+   {
+    "id": "issuer",
+    "label": "Issuer Bank A",
+    "kind": "process",
+    "lane": "banks",
+    "order": 1
+   },
+   {
+    "id": "bank_c",
+    "label": "Member Bank C",
+    "kind": "process",
+    "lane": "banks",
+    "order": 3
+   },
+   {
+    "id": "acquirer",
+    "label": "Acquirer Bank B",
+    "kind": "process",
+    "lane": "banks",
+    "order": 5
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_iou",
+    "from": "buyer",
+    "to": "merchant",
+    "kind": "payload",
+    "label": "paper draft"
+   },
+   {
+    "id": "e_deposit",
+    "from": "merchant",
+    "to": "acquirer",
+    "kind": "payload",
+    "label": "deposits draft"
+   },
+   {
+    "id": "e_runner_ba",
+    "from": "acquirer",
+    "to": "issuer",
+    "kind": "money",
+    "label": "demands specie"
+   },
+   {
+    "id": "e_runner_ac",
+    "from": "issuer",
+    "to": "bank_c",
+    "kind": "money",
+    "label": "demands specie"
+   },
+   {
+    "id": "e_runner_cb",
+    "from": "bank_c",
+    "to": "acquirer",
+    "kind": "money",
+    "label": "demands specie"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "Multilateral Netting: One Room, One Sum",
+   "problem": {
+    "statement": "In 1770s London, dozens of banks accept checks drawn on one another. Every afternoon, each bank sends walk clerks across the city to every other bank to present bundles of checks and carry back bags of gold coin. Across N banks, clerks walk N*(N-1) routes a day. Worse, Bank A must pay Bank B 10,000 pounds in gold at 2:00 PM even though Bank B's clerk is walking toward Bank A with 9,800 pounds of checks that arrive at 2:30 PM. Every bank hoards huge piles of dead cash just to survive the afternoon timing lottery.",
+    "beginner": "If thirty banks each send couriers to the other twenty-nine banks with bags of cash every afternoon, the streets are full of couriers passing each other with the same gold going in opposite directions.",
+    "model": {
+     "id": "single-source-of-truth",
+     "application": "Replace N*(N-1)/2 bilateral cash runs with one central ledger where every claim is recorded first and only the single net difference per bank is paid at the close."
+    }
+   },
+   "gate": {
+    "question": "Thirty banks owe each other thousands of checks every day, and each bank is running out of gold coin by mid-afternoon waiting for other banks' couriers to arrive. Without lending anyone new money, how do you cut the gold needed by ninety percent?",
+    "hint": "Stop paying check by check or even bank pair by bank pair. What happens if everyone brings their checks to one room at 4:00 PM and does arithmetic before anyone opens a purse?"
+   },
+   "solution": "Establish a clearinghouse: one room where clerks from all member banks meet at a fixed hour. Each clerk delivers the bundles of drafts drawn on every other bank, and an inspector tallies a single sheet for each member: total claims owed TO this bank by the entire room minus total claims owed BY this bank to the entire room. Because every check is a debit to one member and an equal credit to another, the room's net positions sum to zero. A bank that handled a million pounds of checks all day now pays or receives one small transfer for its net difference.",
+   "user_lens": {
+    "gives": "A check drawn on any member bank becomes as good as cash at any merchant in the city, because every bank can clear against every other bank in one afternoon stop.",
+    "costs": "Settlement is no longer instant: everyone waits for the daily clearing bell to learn whether the day's checks actually cleared."
+   },
+   "tech_lens": {
+    "mechanism": "All-to-all bilateral edges collapse into a hub-and-spoke star topology. Gross obligations G_ij are summed into a single vector of multilateral net positions N_i = sum_j(G_ji - G_ij), where sum_i(N_i) === 0 by construction.",
+    "principle": "Aggregate opposing flows before moving physical state; arithmetic is cheaper than transport."
+   },
+   "tradeoff": "Netting saves massive liquidity, but it tangles everyone's fate together: until the 4:00 PM net sheet is settled, no individual check is finally paid, and everyone is exposed to the afternoon balance sheet.",
+   "at_scale": "Adding a 101st bank adds one desk in the clearing room instead of 100 new bilateral courier routes, reducing topology growth from O(N^2) to O(N). The more volume flows through the room in both directions, the higher the netting compression ratio climbs.",
+   "defends": [
+    "inv1",
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "multilateral netting",
+      "software_concept": "write-combining and in-memory aggregation before flushing a single delta to disk"
+     },
+     {
+      "mechanism": "clearinghouse hub",
+      "software_concept": "star-topology message broker replacing an O(N^2) mesh of point-to-point RPCs"
+     }
+    ],
+    "interview_probes": [
+     "When your system processes high-frequency counter updates between pairs of accounts, how do you batch and net them in memory without losing crash consistency?"
+    ],
+    "approach": "Accumulate signed deltas in an in-memory hash map keyed by participant_id during the window, verify that the sum of all values equals zero at window close, and emit at most one settlement transfer per participant.",
+    "vocab": [
+     "scaling-writes",
+     "contention"
+    ]
+   },
+   "beginner_analogy": "Like four friends on a weekend trip who take turns buying dinner, gas, and groceries: instead of handing twenty-dollar bills back and forth after every stop, they write everything on one napkin and settle up with two Venmo payments on Sunday night.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "net_ledger",
+      "label": "Netting ledger",
+      "kind": "store",
+      "lane": "clearing",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_sub_b",
+      "from": "acquirer",
+      "to": "net_ledger",
+      "kind": "payload",
+      "label": "submits drafts"
+     },
+     {
+      "id": "e_sub_c",
+      "from": "bank_c",
+      "to": "net_ledger",
+      "kind": "payload",
+      "label": "submits drafts"
+     },
+     {
+      "id": "e_net_a",
+      "from": "issuer",
+      "to": "net_ledger",
+      "kind": "money",
+      "label": "net debit"
+     }
+    ],
+    "highlight": [
+     "issuer",
+     "bank_c",
+     "acquirer",
+     "e_runner_ba",
+     "e_runner_ac",
+     "e_runner_cb"
+    ],
+    "remove": [
+     "e_runner_ba",
+     "e_runner_ac",
+     "e_runner_cb"
+    ]
+   }
+  },
+  {
+   "index": 2,
+   "name": "Central Bank Reserves: Book-Entry Settlement",
+   "problem": {
+    "statement": "Even after netting reduces volume by ninety percent, clerks still carry bags of gold and Bank of England notes through the streets of London to pay the net differences. Robberies happen, counting notes introduces human error, and a bank with a large net debit still has to physically haul coins from its vault to Lombard Street before the doors close.",
+    "beginner": "Netting shrank the pile of cash by ninety percent, but that remaining ten percent is still millions of dollars in heavy paper bills and gold coins being carried down the street.",
+    "model": {
+     "id": "locality-and-caching",
+     "application": "Keep the gold immobile in one shared vault and move ownership by updating rows in a shared ledger right where the clearing sheet sits."
+    }
+   },
+   "gate": {
+    "question": "Every bank in the clearinghouse already keeps a reserve vault of gold at the central bank down the street. How do you settle the clearinghouse's daily net sheet without a single coin or banknote ever leaving a vault?",
+    "hint": "If the clearinghouse itself opens an account at the central bank, what does 'paying your net debit' become?"
+   },
+   "solution": "In 1854, the London clearing banks agree to settle exclusively through book entries at the Bank of England, where each member bank and the Clearing House itself hold reserve accounts. At the end of the clearing run, every net-debtor bank signs a single transfer slip instructing the Bank of England to debit its reserve account and credit the Clearing House account; the Inspector then signs slips crediting each net-creditor bank from that same account. The Clearing House account starts and ends the afternoon at exactly zero, and the gold never moves an inch.",
+   "user_lens": {
+    "gives": "Large commercial payments settle with the speed of a pen stroke and zero risk of a courier being robbed in transit.",
+    "costs": "Every clearing bank must now park permanent, non-interest-bearing reserve balances at the central bank to participate."
+   },
+   "tech_lens": {
+    "mechanism": "Physical payload movement is replaced by atomic pointer/balance updates against a shared root ledger (central bank reserve accounts) via an omnibus settlement account that zeroes out each cycle.",
+    "principle": "Immobilize the heavy asset and circulate signed claims on its root registry."
+   },
+   "tradeoff": "The central bank becomes a single operational chokepoint: if the central reserve ledger is unavailable or a bank's reserve balance is short by one pound at the cutoff bell, that bank's settlement blocks.",
+   "at_scale": "Settlement cost becomes completely independent of transaction size: settling a ten-billion-dollar net position takes the exact same single ledger entry as settling ten dollars.",
+   "defends": [
+    "inv1",
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "immobilized gold + book-entry transfer",
+      "software_concept": "zero-copy buffer passing: pass an offset handle to shared memory instead of copying megabytes across sockets"
+     },
+     {
+      "mechanism": "zero-balance omnibus clearing account",
+      "software_concept": "staging table / escrow account that must assert zero balance at the end of every batch transaction"
+     }
+    ],
+    "interview_probes": [
+     "Where in your architecture are you copying large payloads across services when you could store the payload once and pass an immutable reference?"
+    ],
+    "approach": "Maintain a shared settlement ledger where participants pre-fund reserve accounts; execute the net settlement vector as a single atomic database transaction that debits all negative net positions into a zero-sum clearing account and credits all positive positions.",
+    "vocab": [
+     "data-modeling",
+     "consensus"
+    ]
+   },
+   "beginner_analogy": "Like the island of Yap's giant stone money: nobody carries a four-ton limestone wheel across the village to buy a pig; the stone stays where it sits and everyone agrees it now belongs to the seller.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "central_bank",
+      "label": "Central bank ledger",
+      "kind": "store",
+      "lane": "settlement",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_settle_sheet",
+      "from": "net_ledger",
+      "to": "central_bank",
+      "kind": "control",
+      "label": "net sheet"
+     },
+     {
+      "id": "e_res_debit",
+      "from": "issuer",
+      "to": "central_bank",
+      "kind": "money",
+      "label": "reserve debit"
+     },
+     {
+      "id": "e_res_credit",
+      "from": "central_bank",
+      "to": "acquirer",
+      "kind": "money",
+      "label": "reserve credit"
+     }
+    ],
+    "highlight": [
+     "net_ledger",
+     "issuer",
+     "acquirer"
+    ],
+    "remove": [
+     "e_net_a"
+    ]
+   }
+  },
+  {
+   "index": 3,
+   "name": "Novation & The Default Waterfall: Surviving a Dead Bank",
+   "problem": {
+    "statement": "Multilateral netting has a hidden trap. Suppose Bank A fails at 3:55 PM, five minutes before settlement. Because everyone's gross checks were tangled into a single net sum, nobody knows whose checks just bounced. If the clearinghouse unwinds the day's netting and deletes every check involving Bank A, Bank C suddenly owes money it didn't expect to owe and goes bankrupt too, triggering a chain-reaction collapse across the entire financial system (Herstatt-style systemic contagion).",
+    "beginner": "If one bank goes broke five minutes before the end-of-day math settles, you cannot just cross out its payments without wrecking every other bank's math and starting a domino effect of bankruptcies.",
+    "model": {
+     "id": "trust-boundary",
+     "application": "Insert a central counterparty (CCP) that legally steps between every pair of banks and backs its guarantee with pre-funded collateral posted before any trade is accepted."
+    }
+   },
+   "gate": {
+    "question": "If a member bank defaults at the end of the day, unwinding the net sheet will bankrupt innocent banks that were counting on incoming funds. How do you guarantee that the afternoon settlement finishes on time even when a member bank dies mid-day?",
+    "hint": "Stop treating the clearinghouse as a mere calculator. Make it the legal buyer to every seller and the legal seller to every buyer, and ask what price each bank must pay upfront to join that club."
+   },
+   "solution": "Two interlocking mechanisms: legal novation and the default waterfall. First, the moment a transaction enters the clearinghouse, the clearinghouse novates the contract: Bank A no longer owes Bank B; Bank A owes the Central Counterparty (CCP), and the CCP owes Bank B. Second, to make that promise credible, the CCP holds a pre-funded default waterfall: every member posts initial margin sized to its daily peak exposure plus a contribution to a mutualized default fund. If Bank A defaults at 3:55 PM, the CCP immediately seizes Bank A's margin to pay the central bank on time, and only dips into the mutualized fund if the loss exceeds Bank A's own collateral. The settlement run finishes on schedule.",
+   "user_lens": {
+    "gives": "A merchant's bank gets paid on time even if the cardholder's bank fails between the morning purchase and the evening settlement.",
+    "costs": "Every member bank must lock up billions in high-grade collateral at the clearinghouse, a cost passed down in transaction fees."
+   },
+   "tech_lens": {
+    "mechanism": "Legal novation replaces bilateral counterparty edges with CCP edges; a tiered collateral pool (defaulter's margin -> defaulter's guaranty fund -> CCP skin-in-the-game -> surviving members' guaranty fund) absorbs tail defaults without unwinding the netting graph.",
+    "principle": "Never unwind a shared batch under failure; isolate failure blast radius with pre-funded buffers and an indirection boundary."
+   },
+   "tradeoff": "Concentrating all bilateral risk into one CCP saves the member banks from each other, but creates a single institution that can never be allowed to fail.",
+   "at_scale": "Each bank now evaluates the credit risk of one counterparty (the CCP) instead of N-1 banks, and collateral requirements scale with a bank's net volatility rather than its gross transaction count.",
+   "defends": [
+    "inv3",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "legal novation to a CCP",
+      "software_concept": "reverse proxy / bulkhead mediator that terminates client connections so upstream crashes never propagate raw errors to peers"
+     },
+     {
+      "mechanism": "default waterfall collateral",
+      "software_concept": "pre-allocated resource quotas and fallback memory pools that absorb a runaway tenant before it OOMs shared nodes"
+     }
+    ],
+    "interview_probes": [
+     "In a multi-tenant batch pipeline, how do you prevent one poisoned tenant's failure at commit time from forcing a rollback of every other tenant's work?"
+    ],
+    "approach": "Require each participant to lock collateral >= max_intraday_net_debit before admitting claims; on settlement default, debit the defaulter's collateral account automatically to complete the batch rather than recomputing the net graph.",
+    "vocab": [
+     "bulkhead",
+     "circuit-breaker"
+    ]
+   },
+   "beginner_analogy": "Like an apartment security deposit plus an insurance pool: if one roommate skips town before rent is due, the landlord takes their deposit so the rest of the house isn't evicted on the spot.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "ccp_waterfall",
+      "label": "CCP default fund",
+      "kind": "store",
+      "lane": "clearing",
+      "order": 1
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_margin_a",
+      "from": "issuer",
+      "to": "ccp_waterfall",
+      "kind": "money",
+      "label": "posts margin"
+     },
+     {
+      "id": "e_margin_c",
+      "from": "bank_c",
+      "to": "ccp_waterfall",
+      "kind": "money",
+      "label": "posts margin"
+     },
+     {
+      "id": "e_cover_default",
+      "from": "ccp_waterfall",
+      "to": "central_bank",
+      "kind": "money",
+      "label": "covers default"
+     }
+    ],
+    "highlight": [
+     "issuer",
+     "net_ledger",
+     "central_bank"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 4,
+   "name": "Dual-Message Card Rails: Fast Auth, Slow Money",
+   "problem": {
+    "statement": "By the 1960s, banks mail millions of plastic charge cards to consumers. At the checkout counter, a merchant cannot wait until tonight's clearinghouse run to learn whether a stranger's card is stolen or over its limit. Early networks let merchants approve sales below a 'floor limit' (say, 50 dollars) blindly and require a phone call to the issuer for anything larger. Thieves quickly learn to buy 49-dollar items all afternoon, and phone switchboards at BankAmericard collapse under peak holiday calling.",
+    "beginner": "The clearinghouse only settles money once a night, but the shopkeeper needs to know right now, while you are standing at the counter with a bag of groceries, whether your card is good.",
+    "model": {
+     "id": "separation-of-concerns",
+     "application": "Split a payment into two separate messages at two different speeds: a lightweight real-time control signal that locks funds in milliseconds, and a heavy batch clearing file that moves money hours later."
+    }
+   },
+   "gate": {
+    "question": "A customer wants to walk out of a shop with goods in two seconds, but multilateral interbank clearing only runs in overnight batches. How do you give the merchant a rock-solid payment guarantee right now without settling real money on every swipe?",
+    "hint": "What is the minimum state change the issuing bank needs to make in real time so the customer cannot spend the same dollar twice before tonight's batch arrives?"
+   },
+   "solution": "Build a dual-message network (launched by BankAmericard / Visa with BASE I in 1973 for authorization and BASE II in 1974 for clearing). When the card is tapped, the merchant's terminal sends an ISO 8583 authorization request through the acquirer and the card network switch to the issuer. The issuer checks fraud rules and available balance, places an authorization hold that decrements the cardholder's 'available to spend' counter without moving a cent of ledger cash, and returns a 6-character approval code in under a second. That night, the merchant sends its batch of captured sales through the clearinghouse, matched against the morning's approval codes.",
+   "user_lens": {
+    "gives": "You can walk into a shop in Tokyo with a card issued in Ohio and get approved in 800 milliseconds.",
+    "costs": "Your available balance drops immediately on a hold (like a hotel check-in or gas pump pre-auth) even when the final charge is days away or cancelled."
+   },
+   "tech_lens": {
+    "mechanism": "Two-phase reservation protocol (ISO 8583 0100/0110 auth followed hours later by 0220 clearing batch): real-time reads and reservation locks hit the issuer's hot balance store, while ledger postings and interbank settlement remain batched.",
+    "principle": "Separate the real-time permission check from the expensive settlement work; reserve fast, settle in bulk."
+   },
+   "tradeoff": "Holds and final captures can drift apart: a restaurant bill authorized for 100 dollars settles at 120 dollars with tip, or a cancelled hotel hold ties up the customer's credit line until the reservation TTL expires.",
+   "at_scale": "The real-time authorization switch handles 65,000+ stateless messages per second because it never touches central-bank reserves, while the heavy accounting ledger absorbs one compressed batch file per acquirer per night.",
+   "defends": [
+    "inv4",
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "authorization hold + overnight capture",
+      "software_concept": "two-phase reservation (try-confirm/cancel saga) with an expiring lease on available quota"
+     },
+     {
+      "mechanism": "BASE I real-time switch vs BASE II batch clearing",
+      "software_concept": "CQRS / fast control plane vs asynchronous bulk data plane"
+     }
+    ],
+    "interview_probes": [
+     "Why do card networks and inventory systems use a time-bounded reservation hold instead of executing the full ledger settlement synchronously on the checkout request?"
+    ],
+    "approach": "On checkout, atomically decrement available_balance and insert a reservation row with an auth_code and expires_at TTL; during the nightly clearing job, match capture records by auth_code, convert reservations into immutable ledger postings, and release expired holds.",
+    "vocab": [
+     "multi-step-processes",
+     "cqrs",
+     "saga"
+    ]
+   },
+   "beginner_analogy": "Like calling a restaurant to reserve a table for six: the host puts a 'Reserved' card on the table in ten seconds over the phone, and the actual dinner and bill happen hours later when your party shows up.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "pos_term",
+      "label": "POS terminal",
+      "kind": "channel",
+      "lane": "commerce",
+      "order": 3
+     },
+     {
+      "id": "auth_switch",
+      "label": "Auth switch",
+      "kind": "channel",
+      "lane": "clearing",
+      "order": 5
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_tap",
+      "from": "buyer",
+      "to": "pos_term",
+      "kind": "payload",
+      "label": "card tap"
+     },
+     {
+      "id": "e_pos_merch",
+      "from": "pos_term",
+      "to": "merchant",
+      "kind": "payload",
+      "label": "sale"
+     },
+     {
+      "id": "e_auth_req",
+      "from": "acquirer",
+      "to": "auth_switch",
+      "kind": "control",
+      "label": "ISO 8583 auth"
+     },
+     {
+      "id": "e_auth_iss",
+      "from": "auth_switch",
+      "to": "issuer",
+      "kind": "control",
+      "label": "hold funds"
+     }
+    ],
+    "highlight": [
+     "buyer",
+     "merchant",
+     "acquirer",
+     "issuer",
+     "e_iou"
+    ],
+    "remove": [
+     "e_iou"
+    ]
+   }
+  },
+  {
+   "index": 5,
+   "name": "Interchange & Chargebacks: Aligning Four Selfish Actors",
+   "problem": {
+    "statement": "The technical rails work, but the incentives are lopsided. Issuing banks take all the credit risk, fund the 30-day interest-free grace period, and mail out the cards, while acquiring banks and merchants capture the sale. Why would an issuer promote the card over cash? Worse, if a shady merchant charges a card for goods that never arrive, or a thief uses a stolen card at a careless merchant, the consumer refuses to pay their bill and walks away from the network.",
+    "beginner": "Why would your bank take the risk of giving you a card if the store's bank gets all the fees? And why would you ever hand your card to a stranger's website if you couldn't get your money back when they cheat you?",
+    "model": {
+     "id": "incentive-alignment",
+     "application": "Route a balanced fee (interchange) from acquirer to issuer on every sale, and give the issuer a reversible clawback right (the chargeback) that pushes fraud loss onto whichever party failed to verify the transaction."
+    }
+   },
+   "gate": {
+    "question": "Four parties must cooperate on every swipe: cardholder, merchant, acquirer, and issuer. Issuers bear the credit and fraud cost, while consumers fear dishonest merchants. How do you wire the network's rules so every party profits from playing fair and the careless party pays when fraud happens?",
+    "hint": "Follow two flows that run opposite to the payment: a small slice of every sale that pays the issuer for taking the risk, and a dispute rule that assigns fraud liability to whoever skipped the security check."
+   },
+   "solution": "Wire two economic loops directly into the clearinghouse rules. First, interchange: on every cleared sale, the acquirer pays the issuer a network-set percentage (say, 1.8 percent), deducting it automatically from the net settlement so issuers are paid to issue cards and fund consumer protections. Second, the chargeback and liability shift: if a cardholder disputes a fraudulent or undelivered charge, the issuer reverses the credit through the clearinghouse. Who eats the loss depends on a strict rule table: if the merchant verified an EMV chip or 3D-Secure token, the issuer absorbs the fraud; if the merchant ran a downgraded magnetic stripe or skipped authentication, the merchant and acquirer eat the chargeback plus a penalty fee.",
+   "user_lens": {
+    "gives": "Zero fraud liability and a built-in escrow court: if an airline collapses or a shop ships a brick, your bank claws your money back.",
+    "costs": "Merchants bake the 1.5 to 3 percent acceptance cost into retail prices, so cash buyers quietly subsidize cardholders' rewards."
+   },
+   "tech_lens": {
+    "mechanism": "Automated fee netting inside the clearing batch (interchange deducted from gross capture before net position calculation) paired with a state-machine dispute protocol that reverses settlement entries based on cryptographic verification flags (EMV cryptogram / 3DS ECI) carried in the original auth message.",
+    "principle": "Assign liability to the party with the control knob to prevent the failure; protocols endure when honest compliance is cheaper than defection."
+   },
+   "tradeoff": "Friendly fraud and dispute overhead: consumers sometimes dispute legitimate purchases, forcing merchants to store signed receipts, delivery proofs, and cryptographic logs for months after every sale.",
+   "at_scale": "Because liability shifts automatically based on a bit in the authorization record, the network upgraded billions of terminals from magnetic stripes to EMV chips without passing a single law: merchants upgraded because NOT upgrading meant paying for every counterfeit card swipe.",
+   "defends": [
+    "inv4",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "EMV liability shift",
+      "software_concept": "SLA / contract-driven error attribution: cryptographic attestation in the request header determines which microservice team owns the slo budget burn"
+     },
+     {
+      "mechanism": "chargeback reversal flow",
+      "software_concept": "compensating transaction in an append-only ledger that posts an offsetting debit/credit pair weeks after original commit"
+     }
+    ],
+    "interview_probes": [
+     "Why must a chargeback be implemented as a brand-new offsetting entry in a subsequent clearing batch rather than mutating or deleting the original settled transaction?"
+    ],
+    "approach": "Store the authentication assurance level (chip cryptogram verified, 3DS passed) immutably on the authorization record; when a dispute event arrives, evaluate the liability rule table against that assurance level and emit a compensating clearing entry into the next settlement batch.",
+    "vocab": [
+     "event-sourcing",
+     "idempotency-keys"
+    ]
+   },
+   "beginner_analogy": "Like a pawnshop rule where the shopkeeper only gets insurance coverage if they checked the seller's ID under a UV light; skip the light to save ten seconds, and any stolen watch comes out of the shopkeeper's own pocket.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "dispute_arb",
+      "label": "Dispute & fee rules",
+      "kind": "process",
+      "lane": "clearing",
+      "order": 6
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_dispute",
+      "from": "buyer",
+      "to": "issuer",
+      "kind": "control",
+      "label": "files dispute"
+     },
+     {
+      "id": "e_cb_rule",
+      "from": "issuer",
+      "to": "dispute_arb",
+      "kind": "control",
+      "label": "chargeback claim"
+     },
+     {
+      "id": "e_cb_net",
+      "from": "dispute_arb",
+      "to": "net_ledger",
+      "kind": "money",
+      "label": "reverses & fees"
+     }
+    ],
+    "highlight": [
+     "buyer",
+     "merchant",
+     "issuer",
+     "acquirer",
+     "net_ledger"
+    ],
+    "remove": []
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "A major issuing bank collapses at 2:00 PM",
+   "scenario": "Mid-afternoon on a peak shopping Friday, regulators shut down an issuing bank that has already approved 400 million dollars of card purchases since midnight, none of which have settled at the central bank yet.",
+   "reveal": "Checkout finality (inv4) and default containment (inv3) hold together. The auth switch immediately begins declining new swipes for that issuer's BIN ranges, while the morning's 400 million dollars of approved sales still flow into tonight's clearing batch. When the dead issuer fails to wire its net debit to the central bank, the CCP seizes the issuer's posted initial margin and default-fund contribution from the waterfall (Layer 3) and pays every merchant acquirer in full on schedule."
+  },
+  {
+   "id": "st2",
+   "title": "Transatlantic cable cut isolates an issuer for 90 seconds",
+   "scenario": "A fiber cut severs connectivity between the card network's authorization switch and a healthy bank's data center during Saturday afternoon retail peak.",
+   "reveal": "Rather than failing every checkout globally, the network's auth switch (Layer 4) drops into Stand-In Processing (STIP): using cached cardholder velocity parameters and modest spending limits pre-configured by the issuer, the switch itself approves low-risk transactions on the issuer's behalf and queues the holds to replay when the link returns. High-value luxury purchases decline safely, while everyday grocery and transit taps keep moving."
+  },
+  {
+   "id": "st3",
+   "title": "An airline goes bankrupt with two million unflown tickets",
+   "scenario": "A major airline ceases operations overnight. Two million passengers who bought tickets over the past four months file chargebacks for flights that will never take off.",
+   "reveal": "The chargeback mechanism (Layer 5) protects the cardholders: their issuing banks credit them back and claw the funds from the airline's acquiring bank through the clearinghouse. Because the bankrupt airline has already spent the cash, the airline's acquiring bank eats the multi-hundred-million-dollar loss, which is why acquirers hold back 'rolling reserves' (escrowed percentages of ticket revenue held until the flight date) from high-risk merchants with long delivery lead times."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "Aggregate opposing flows before moving heavy state: multilateral netting turns N*(N-1)/2 physical transfers into N small book entries.",
+   "Immobilize the underlying asset in a root registry and circulate signed claims rather than hauling the asset across the network.",
+   "Never unwind a shared batch when one participant fails; step in with a pre-funded collateral waterfall so survivors settle on time.",
+   "Split real-time permission from bulk settlement: reserve quota in milliseconds at the edge and reconcile the heavy accounting asynchronously.",
+   "Bake liability into the protocol: assign the cost of failure to whichever participant held the control knob to prevent it."
+  ],
+  "mappings": [
+   {
+    "mechanism": "multilateral netting",
+    "elsewhere": "Write-combining CPU caches, MapReduce combiners, and database group-commit buffers that collapse thousands of intermediate mutations into one final state flush."
+   },
+   {
+    "mechanism": "central bank book-entry reserves",
+    "elsewhere": "Shared-memory arena allocators and zero-copy I/O (io_uring, sendfile) where processes pass descriptors instead of copying payload bytes."
+   },
+   {
+    "mechanism": "CCP novation & default waterfall",
+    "elsewhere": "API gateways with per-tenant rate budgets and bulkhead thread pools that absorb a misbehaving client before it starves shared backend workers."
+   },
+   {
+    "mechanism": "dual-message auth + batch capture",
+    "elsewhere": "E-commerce inventory holds and airline seat locks that place a 15-minute TTL reservation at checkout before the payment and fulfillment saga commits."
+   }
+  ]
+ }
+}

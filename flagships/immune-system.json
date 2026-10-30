@@ -1,0 +1,719 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "system": "The adaptive immune response",
+  "narrowing": "The vertebrate cell-mediated and humoral adaptive loop: how the body generates receptors for pathogens that do not exist yet, deletes the clones that would attack its own organs, routes rare antigen encounters through lymph nodes, and remembers the winner for decades. Left out are the complement cascade, mucosal mucus barriers, and allergy IgE pathways.",
+  "ordering_note": "The layers follow the causal failures a vertebrate immune system must solve in order: first generating billions of distinct receptors from a tiny genome (V(D)J recombination) and pruning self-reactive clones (thymic negative selection), then solving the needle-in-a-haystack search problem (lymph node routing), then preventing false-positive autoimmune wars against harmless food or tissue (two-signal co-stimulation), then out-multiplying a fast-dividing pathogen (clonal expansion), and finally turning the army off while keeping a permanent index (Treg braking and immunological memory).",
+  "history_confidence": "high",
+  "domain": "biology"
+ },
+ "essence": {
+  "text": "A virus can mutate its surface proteins in hours, while human generations take twenty-five years. If the body hard-coded one gene per pathogen, a single new flu strain would wipe us out before natural selection could write a counter-gene. Instead, the vertebrate adaptive immune system runs a controlled lottery inside each developing white blood cell: it physically cuts and shuffles DNA segments to mint billions of unique receptor locks before any pathogen ever arrives, executes the 95 percent of cells whose random locks happen to fit the body's own healthy proteins, and circulates the survivors through lymph-node meeting halls. When an invader finally matches one cell in ten million, a two-key safety check unleashes exponential cloning of that exact cell and saves a warm cache of veterans so the second infection dies before you even feel a fever.",
+  "beginner": "Germs evolve much faster than humans do, so your body cannot be born with a pre-made list of every germ you will ever meet. Instead, your bone marrow acts like a locksmith who blindly cuts billions of random keys before knowing what the locks look like, throws away every key that accidentally opens your own house, and waits. When a new germ shows up, the one cell out of ten million holding the right key makes thousands of copies of itself in a few days, wins the fight, and leaves behind veteran guards so that same germ can never make you sick twice.",
+  "deep_facts": [
+   "The entire human genome has only about 20,000 protein-coding genes, yet your immune system can make over 100 billion different antibody and T-cell receptor shapes by physically cutting and pasting gene fragments (V, D, and J segments) inside each young lymphocyte.",
+   "Roughly 95 to 98 percent of all immature T cells that enter your thymus never leave it alive: they are deliberately executed because their randomly shuffled receptor happens to bind either nothing at all or your own healthy body proteins.",
+   "If a naive T cell circulated at random through the bloodstream trying to bump into a splinter in your finger, finding its matching germ could take weeks; lymph nodes act as regional rendezvous hubs where dendritic courier cells bring the germ's fragments and T cells scan thousands of them per hour.",
+   "A single activated T cell can divide every 6 to 8 hours for a week, expanding one lonely cell into a clone army of 10,000 to 100,000 identical fighters tailored to that exact pathogen.",
+   "Measles is dangerous even after you recover because the virus infects CD150+ memory lymphocytes directly, wiping out 20 to 70 percent of your previously stored antibody repertoire in an effect called immunological amnesia."
+  ]
+ },
+ "strip_down": {
+  "purpose": "Recognize and destroy any novel pathogen that breaches the body's innate barriers without attacking healthy host tissue, and retain lifelong rapid recall against repeat infections.",
+  "actors": [
+   {
+    "id": "a1",
+    "name": "Host organism",
+    "want": "Clear fast-replicating viruses and bacteria before they overwhelm vital organs, without suffering friendly-fire destruction of my own tissues"
+   },
+   {
+    "id": "a2",
+    "name": "Dendritic scout cell",
+    "want": "Capture protein fragments at a wound site, distinguish real tissue danger from harmless debris, and present the evidence to the matching T cell"
+   },
+   {
+    "id": "a3",
+    "name": "Naive lymphocyte",
+    "want": "Scan presented peptides rapidly until I find the one antigen shape my unique receptor fits, then receive permission to divide"
+   },
+   {
+    "id": "a4",
+    "name": "Pathogen",
+    "want": "Replicate exponentially and evade host receptors before the slow adaptive response can assemble an army"
+   }
+  ],
+  "invariants": [
+   {
+    "id": "inv1",
+    "text": "Self-tolerance: no lymphocyte clone capable of binding healthy self-peptides with high affinity is permitted to unleash an effector attack."
+   },
+   {
+    "id": "inv2",
+    "text": "Danger-gated activation: antigen recognition alone never triggers clonal war; a second innate danger signal must confirm real infection."
+   },
+   {
+    "id": "inv3",
+    "text": "Bounded encounter latency: despite any given receptor existing at a frequency of 1 in 10^6, a matching lymphocyte must meet its antigen within hours of infection, before exponential pathogen growth wins."
+   },
+   {
+    "id": "inv4",
+    "text": "Homeostatic contraction: once the pathogen is cleared, the expanded effector army must stand down and self-destruct so inflammation does not consume the host."
+   }
+  ],
+  "entities": [
+   {
+    "id": "en1",
+    "name": "Antigen / peptide",
+    "note": "A short 8-to-15 amino-acid protein fragment sliced from a pathogen or host cell and displayed on an MHC surface cradle"
+   },
+   {
+    "id": "en2",
+    "name": "T-cell receptor (TCR)",
+    "note": "A unique surface protein lock generated by random V(D)J gene splicing; each T cell wears ~30,000 identical copies of its one lock"
+   },
+   {
+    "id": "en3",
+    "name": "MHC cradle",
+    "note": "Major Histocompatibility Complex molecule: the standardized display tray on cell surfaces that holds peptides out for T cells to inspect"
+   },
+   {
+    "id": "en4",
+    "name": "B7 co-stimulator",
+    "note": "The second hardware key raised by a dendritic cell only when its innate sensors detect real microbial damage"
+   },
+   {
+    "id": "en5",
+    "name": "Memory lymphocyte",
+    "note": "A long-lived veteran cell left behind after battle, 100x more numerous and faster to fire than a naive cell"
+   }
+  ],
+  "flows": [
+   {
+    "id": "f1",
+    "text": "Antigen trafficking: dendritic cells swallow microbes at the wound, digest them into peptides, and ride lymphatic vessels to the nearest lymph node."
+   },
+   {
+    "id": "f2",
+    "text": "Clonal deployment: activated lymphocytes divide in the lymph node, exit into the bloodstream, and home to the inflamed tissue to kill infected cells."
+   }
+  ],
+  "constraints": [
+   "The entire human genome (~20,000 genes) is orders of magnitude smaller than the space of possible pathogen protein shapes (~10^11).",
+   "A bacterium can divide every 20 minutes and a virus can produce thousands of copies per burst; a slow immune search loses to exponential math.",
+   "Generating receptor shapes at random guarantees that many fresh receptors will fit the host's own heart, pancreas, or nerve proteins."
+  ]
+ },
+ "visual": {
+  "lanes": [
+   {
+    "id": "tissue",
+    "label": "Wound tissue"
+   },
+   {
+    "id": "thymus",
+    "label": "Thymus & pool"
+   },
+   {
+    "id": "lymph",
+    "label": "Lymph node"
+   },
+   {
+    "id": "effector",
+    "label": "Effector & mem"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "pathogen",
+    "label": "Pathogen breach",
+    "kind": "actor",
+    "lane": "tissue",
+    "order": 0
+   },
+   {
+    "id": "innate_mac",
+    "label": "Innate phagocyte",
+    "kind": "process",
+    "lane": "tissue",
+    "order": 2
+   },
+   {
+    "id": "stem_pool",
+    "label": "Marrow progenitors",
+    "kind": "store",
+    "lane": "thymus",
+    "order": 0
+   },
+   {
+    "id": "blood_stream",
+    "label": "Blood circulation",
+    "kind": "channel",
+    "lane": "effector",
+    "order": 4
+   }
+  ],
+  "edges": [
+   {
+    "id": "e_infect",
+    "from": "pathogen",
+    "to": "innate_mac",
+    "kind": "payload",
+    "label": "invades tissue"
+   },
+   {
+    "id": "e_spawn",
+    "from": "stem_pool",
+    "to": "blood_stream",
+    "kind": "payload",
+    "label": "fixed cells"
+   },
+   {
+    "id": "e_patrol",
+    "from": "blood_stream",
+    "to": "innate_mac",
+    "kind": "control",
+    "label": "generic engulf"
+   }
+  ]
+ },
+ "layers": [
+  {
+   "index": 1,
+   "name": "V(D)J Recombination & Thymic Selection: Mint All Keys, Burn the Self-Keys",
+   "problem": {
+    "statement": "Innate phagocytes only recognize a few dozen ancient microbial patterns (like bacterial cell-wall sugars). When a virus mutates its coat or hides inside host cells, fixed germline receptors are blind to it. Yet if bone marrow cells generate billions of random receptor shapes to catch any future virus, half of those random receptors will bind the body's own insulin, myelin, or heart muscle and tear the host apart from the inside.",
+    "beginner": "Your DNA is too small to store a picture of every future virus, so your cells have to invent billions of random detector shapes. The danger is that many of those random shapes will match your own healthy organs and attack you.",
+    "model": {
+     "id": "inversion",
+     "application": "Generate the full combinatorial universe of receptors randomly upfront, then pass every immature cell through an audition organ (the thymus) that forces self-reactive cells to commit suicide before they ever enter the blood."
+    }
+   },
+   "gate": {
+    "question": "You need white blood cells that can recognize any alien protein shape in the universe, including ones that haven't evolved yet, without ever attacking the host's own 20,000 proteins. How do you build that detector pool?",
+    "hint": "It is much easier to test a random key against a closed room containing all of your own locks than to predict every burglar's face in advance."
+   },
+   "solution": "Run a two-step pipeline in the bone marrow and thymus. First, V(D)J somatic recombination: inside each developing T cell, RAG enzymes physically cut out random V, D, and J gene segments from the chromosome, chew back a few random nucleotides, and stitch them together to create a one-of-a-kind T-cell receptor (TCR). Second, thymic negative selection: before any T cell is allowed into the blood, it migrates into the thymus, where specialized medullary cells (using the AIRE transcription factor) express a sample platter of almost every self-protein from the pancreas, eye, thyroid, and heart. If a young T cell's receptor grabs strongly onto any self-peptide, the thymus triggers apoptosis (programmed cell death) on the spot. Only clones that ignore self-proteins graduate as naive T cells.",
+   "user_lens": {
+    "gives": "Your body already holds a receptor for a virus that will jump from a bat five years from now, while leaving your own pancreas and nerves untouched.",
+    "costs": "You burn 95 to 98 percent of all the T cells you manufacture before they ever see a single germ, and rare gaps in the thymic self-library leave the door cracked for autoimmune disease."
+   },
+   "tech_lens": {
+    "mechanism": "Combinatorial DNA splicing + junctional nucleotide insertion generates ~10^11 receptor variants; negative selection filters the pool against an AIRE-driven self-peptidome in an isolated sandbox before granting egress.",
+    "principle": "When the threat space is unbounded and the safe set is finite, generate candidates randomly and filter by negative selection against the known-good set."
+   },
+   "tradeoff": "Massive upfront metabolic waste: 97 percent of thymocytes die in the nursery, and the thymus slowly shrinks with age (involution), narrowing the fresh repertoire in older adults.",
+   "at_scale": "A human carries roughly 10^11 T cells representing 10^7 to 10^8 distinct surviving clonotypes at any moment, enough to tile the shape space of foreign peptides while fitting inside a few hundred grams of lymphoid tissue.",
+   "defends": [
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "V(D)J random receptor splicing",
+      "software_concept": "fuzzing / property-based random test generation that explores an astronomical input space from a compact seed grammar"
+     },
+     {
+      "mechanism": "thymic negative selection against AIRE self-peptides",
+      "software_concept": "negative-selection anomaly detector trained in a clean-room sandbox by deleting every random rule that fires on normal baseline traffic"
+     }
+    ],
+    "interview_probes": [
+     "Why is negative selection (generating random detectors and deleting the ones that match normal self traffic) able to catch zero-day payloads that signature allowlists miss?"
+    ],
+    "approach": "Sample random feature detectors over the input vector space, evaluate each candidate against a comprehensive corpus of known-benign 'self' samples in an offline staging phase, discard any detector whose affinity exceeds threshold tau, and deploy only the survivors.",
+    "vocab": [
+     "indexing"
+    ]
+   },
+   "beginner_analogy": "Like training a guard dog by introducing it to every member of the family and every piece of furniture in the house while it is a puppy, and disqualifying any dog that growls at the family, so the dog that graduates only barks at strangers.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "vdj_splicer",
+      "label": "V(D)J gene splicer",
+      "kind": "process",
+      "lane": "thymus",
+      "order": 2
+     },
+     {
+      "id": "thymus_gate",
+      "label": "Thymic self-filter",
+      "kind": "process",
+      "lane": "thymus",
+      "order": 4
+     },
+     {
+      "id": "naive_pool",
+      "label": "Naive T-cell repertoire",
+      "kind": "store",
+      "lane": "thymus",
+      "order": 6
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_stem_vdj",
+      "from": "stem_pool",
+      "to": "vdj_splicer",
+      "kind": "payload",
+      "label": "progenitors"
+     },
+     {
+      "id": "e_vdj_thy",
+      "from": "vdj_splicer",
+      "to": "thymus_gate",
+      "kind": "payload",
+      "label": "random TCRs"
+     },
+     {
+      "id": "e_thy_pass",
+      "from": "thymus_gate",
+      "to": "naive_pool",
+      "kind": "payload",
+      "label": "2% survive"
+     }
+    ],
+    "highlight": [
+     "stem_pool",
+     "blood_stream",
+     "e_spawn"
+    ],
+    "remove": [
+     "e_spawn"
+    ]
+   }
+  },
+  {
+   "index": 2,
+   "name": "Lymph Nodes & Dendritic Couriers: Solving the 1-in-a-Million Search",
+   "problem": {
+    "statement": "Because every T cell wears a different random receptor, only about 1 in 1,000,000 naive T cells matches a rose-thorn bacteria in your left thumb. If those million T cells wander randomly through 100,000 kilometers of blood capillaries waiting to bump into the thumb, the bacteria will multiply into fatal sepsis days before the right T cell ever passes through that capillary.",
+    "beginner": "Only a handful of cells in your whole body hold the right key for the germ in your splinter. If they just float around the bloodstream hoping to bump into your finger by luck, the germ will win days before they arrive.",
+    "model": {
+     "id": "locality-and-caching",
+     "application": "Instead of sending rare searchers to scan every cubic millimeter of peripheral tissue, pipe drained antigens from the tissue into regional index hubs (lymph nodes) and route all naive T cells through those hubs."
+    }
+   },
+   "gate": {
+    "question": "You have 100 million different T-cell keys and a tiny infection hiding in one square millimeter of skin. How do you guarantee the matching T cell meets that germ within twelve hours without requiring every T cell to visit every millimeter of skin?",
+    "hint": "Do not make the buyers walk to every farm in the country; build regional farmers' markets along the highway and have couriers bring samples from the wound to the nearest market."
+   },
+   "solution": "Build the lymphatic network and deploy Dendritic Cells as antigen couriers. When bacteria breach the skin, local dendritic cells swallow the microbes, chop their proteins into 10-amino-acid peptides, mount those peptides onto MHC display trays on their outer membrane, and ride one-way lymphatic vessels to the nearest draining lymph node (in your armpit, neck, or groin). Meanwhile, naive T cells don't patrol the skin at all: they loop continuously from blood into lymph nodes via high endothelial venules, crawling over packed dendritic cells along fibroblastic reticular fiber highways and scanning 500 to 5,000 cells per hour until a lock clicks.",
+   "user_lens": {
+    "gives": "Within 12 to 24 hours of a cut getting infected, the one-in-a-million matching T cell has already found its target in the regional lymph node.",
+    "costs": "Your lymph nodes swell and ache under your jaw or armpit as traffic packs into the meeting hall."
+   },
+   "tech_lens": {
+    "mechanism": "Spatial partitioning and rendezvous routing: dendritic cells drain interstitial fluid from tissue catchment zones into ~600 regional lymph nodes, while naive T cells traverse the paracortex along chemokine-guided stromal networks (CCL19/CCL21), converting an O(V_body) random walk into a high-density local join.",
+    "principle": "Co-locate queries and indexed summaries in dedicated rendezvous hubs rather than scanning raw storage."
+   },
+   "tradeoff": "The lymphatic drainage vessels that carry dendritic couriers to the hub can also be hijacked as highways by metastasizing tumor cells or lymph-borne pathogens like Yersinia pestis.",
+   "at_scale": "Each lymph node processes millions of T-cell-to-dendritic-cell handshakes per hour across ~600 distributed nodes, guaranteeing >95 percent probability that a rare clone meets its cognate peptide within one daily circulation cycle.",
+   "defends": [
+    "inv3"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "lymph node rendezvous hub",
+      "software_concept": "consistent-hashed rendezvous broker / shuffle stage in MapReduce where keys from producers and consumers meet in one partition"
+     },
+     {
+      "mechanism": "MHC peptide presentation",
+      "software_concept": "standardized fixed-width feature digest / bloom signature extracted from raw payloads for fast header matching"
+     }
+    ],
+    "interview_probes": [
+     "When matching a stream of rare subscriber predicates against high-volume regional events, how do you partition the rendezvous topology so neither events nor predicates have to broadcast globally?"
+    ],
+    "approach": "Extract compact feature digests (peptides) at edge collectors, route them to regional broker partitions by spatial locality, and stream subscriber workers through the broker partitions to perform high-throughput local joins.",
+    "vocab": [
+     "proximity-services",
+     "consistent-hashing",
+     "indexing"
+    ]
+   },
+   "beginner_analogy": "Like losing your keys at a giant stadium: instead of fifty thousand people searching every row of seats, an usher brings found keys to one Lost & Found booth by the main gate and everyone who lost a key walks past that booth.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "dendritic",
+      "label": "Dendritic courier",
+      "kind": "process",
+      "lane": "tissue",
+      "order": 4
+     },
+     {
+      "id": "lymph_hub",
+      "label": "Lymph node hub",
+      "kind": "store",
+      "lane": "lymph",
+      "order": 3
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_capture",
+      "from": "pathogen",
+      "to": "dendritic",
+      "kind": "payload",
+      "label": "antigens"
+     },
+     {
+      "id": "e_drain",
+      "from": "dendritic",
+      "to": "lymph_hub",
+      "kind": "payload",
+      "label": "MHC peptides"
+     },
+     {
+      "id": "e_t_scan",
+      "from": "naive_pool",
+      "to": "lymph_hub",
+      "kind": "payload",
+      "label": "scans 500/hr"
+     }
+    ],
+    "highlight": [
+     "pathogen",
+     "innate_mac",
+     "naive_pool"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 3,
+   "name": "Two-Signal Co-Stimulation: The Two-Key Nuclear Launch",
+   "problem": {
+    "statement": "Thymic negative selection (Layer 1) is good, but it cannot show every protein: food proteins from your lunch, harmless gut bacteria, fetal proteins during pregnancy, and tissue proteins only made after puberty were never in the thymus. If a naive T cell in a lymph node launches a full killer attack the moment its receptor clicks onto a peptide, you will mount a lethal immune war against strawberries, commensal gut flora, and your own adult organs.",
+    "beginner": "Just because a T cell's key fits a protein that wasn't in the thymus doesn't mean it is a dangerous germ; it could be a peanut you just ate or a harmless skin bacterium.",
+    "model": {
+     "id": "trust-boundary",
+     "application": "Require two independent signals across the cell synapse before firing: Signal 1 (adaptive specificity: TCR matches MHC-peptide) AND Signal 2 (innate danger: dendritic cell raises B7 only when microbial damage sensors tripped)."
+    }
+   },
+   "gate": {
+    "question": "A T cell in the lymph node has just clicked onto a foreign peptide it has never seen before. How does the T cell know whether that peptide came from a deadly bacterium tearing up the lungs or from a harmless bite of cheddar cheese?",
+    "hint": "The T cell wasn't at the crime scene, but the dendritic courier cell was. What should the dendritic cell have to show alongside the peptide to prove there was a real fight?"
+   },
+   "solution": "Enforce Polly Matzinger and Kevin Lafferty's Two-Signal Rule. A naive T cell requires two simultaneous physical handshakes on the same dendritic cell to activate. Signal 1 is the antigen lock: the T-cell receptor binds the peptide-MHC tray. Signal 2 is co-stimulation: the T cell's CD28 receptor must bind a B7 protein on the dendritic cell. By design, a resting dendritic cell that casually swallowed food protein or peaceful dead skin cells does NOT express B7 on its surface; it only raises B7 flags when its innate Toll-like receptors (TLRs) detect actual microbial molecular patterns (lipopolysaccharide, viral double-stranded RNA) or necrotic cell alarm signals at the wound. Receive Signal 1 + Signal 2, and the T cell ignites; receive Signal 1 alone (no B7), and the T cell is permanently disarmed into 'anergy' (unresponsiveness).",
+   "user_lens": {
+    "gives": "Your immune system ignores trillions of friendly gut bacteria and pounds of daily food proteins while still pouncing on an invading pathogen.",
+    "costs": "A purified protein vaccine injected all by itself is ignored as harmless unless an 'adjuvant' (an innate danger mimic like alum or lipid nanoparticles) is mixed in to trip Signal 2."
+   },
+   "tech_lens": {
+    "mechanism": "Logical AND gate across the immunological synapse: TCR/MHC-peptide engagement (Signal 1) + CD28/B7 engagement (Signal 2, induced by innate PRR/TLR signaling); Signal 1 && !Signal 2 routes the cell into peripheral tolerance (clonal anergy).",
+    "principle": "Couple high-specificity pattern matching with an independent out-of-band ground-truth danger attestation; disarm detectors that fire without corroboration."
+   },
+   "tradeoff": "Stealth threats that cause neither microbial TLR patterns nor messy cell necrosis (such as early-stage solid tumors that grow quietly from self-tissue) can present Signal 1 without Signal 2 and trick the responding T cells into anergy.",
+   "at_scale": "Peripheral anergy acts as a continuous runtime garbage collector across billions of circulating lymphocytes, silencing any self-reactive clone that slipped past the thymus the first time it touches healthy, uninflamed tissue.",
+   "defends": [
+    "inv2",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "Signal 1 (MHC-peptide) + Signal 2 (TLR-induced B7)",
+      "software_concept": "two-man rule / multi-factor authorization where a content signature match must be accompanied by an independent telemetry anomaly token before triggering automated remediation"
+     },
+     {
+      "mechanism": "Signal 1 without Signal 2 -> clonal anergy",
+      "software_concept": "auto-muting a noisy alerting rule that fires when system SLO metrics show zero actual user impact"
+     }
+    ],
+    "interview_probes": [
+     "In an automated abuse-mitigation pipeline, how do you prevent a new heuristic classifier from banning millions of legitimate users when it encounters a benign new traffic shape?"
+    ],
+    "approach": "Gate destructive remediation on a conjunction of two orthogonal signals: (1) high-dimensional feature match AND (2) an independent health/damage metric exceeding baseline; if (1) fires while (2) is quiet, demote the rule to shadow/anergic state.",
+    "vocab": [
+     "consensus",
+     "quorum"
+    ]
+   },
+   "beginner_analogy": "Like a submarine missile launch that requires two officers to turn two separate keys at once: the sonar officer who hears a shape in the water, and the captain who confirms the ship is actually under attack.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "costim_gate",
+      "label": "2-signal B7/CD28 gate",
+      "kind": "process",
+      "lane": "lymph",
+      "order": 5
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_danger_sig",
+      "from": "innate_mac",
+      "to": "dendritic",
+      "kind": "control",
+      "label": "TLR danger alarm"
+     },
+     {
+      "id": "e_sig12",
+      "from": "lymph_hub",
+      "to": "costim_gate",
+      "kind": "control",
+      "label": "Sig 1 + B7 Sig 2"
+     }
+    ],
+    "highlight": [
+     "innate_mac",
+     "dendritic",
+     "lymph_hub"
+    ],
+    "remove": []
+   }
+  },
+  {
+   "index": 4,
+   "name": "Clonal Expansion & Affinity Maturation: Autoscale the Winner",
+   "problem": {
+    "statement": "The one matching T cell in the lymph node has just passed the two-signal check, but it is still ONE cell. Meanwhile, at the wound site, the bacteria have been dividing every 20 minutes and now number in the hundreds of millions. One T cell cannot kill a hundred million bacteria, and the body could never afford to keep 100,000 pre-built copies of all 100 million receptor types (that would weigh more than the human body).",
+    "beginner": "You found the one guard in the whole country who has the right weapon, but the enemy already has a million soldiers at the gate. One guard cannot fight a million germs alone.",
+    "model": {
+     "id": "queue-and-buffer",
+     "application": "Keep the standby repertoire at 1-cell-thick cold capacity, then pour autocrine growth signals (IL-2) onto the single verified winner so it doubles every six hours into a 50,000-cell army while B cells mutate and hill-climb for tighter antibody fit."
+    }
+   },
+   "gate": {
+    "question": "You can only afford to store a handful of copies of each of your 100 million receptor types during peacetime, yet you need 100,000 copies of a single receptor type to clear an active infection. How do you bridge that 10,000-fold gap on demand?",
+    "hint": "Once Signal 1 and Signal 2 confirm the winner, turn that cell into its own copying machine and let B cells run a fast evolution tournament inside the lymph node."
+   },
+   "solution": "Burnet's Clonal Selection and Expansion, paired with Germinal Center Affinity Maturation. The moment a T cell passes the two-signal gate, it begins secreting Interleukin-2 (IL-2) and expressing the high-affinity IL-2 receptor, driving itself into a positive-feedback division loop: doubling every 6 hours for 14 to 16 generations until one cell becomes 50,000 identical effector T cells that pour into the blood and follow chemokine trails back to the infected tissue. Simultaneously, helper T cells activate matching B cells inside lymph-node Germinal Centers, where AID enzymes deliberately pepper the B cell's antibody gene with point mutations (somatic hypermutation) at a rate a million times higher than normal DNA replication. B-cell daughters compete to grab limited antigen on follicular dendritic cells; the tighter binders survive and differentiate into plasma factories pumping out 2,000 antibodies per second.",
+   "user_lens": {
+    "gives": "By day 5 to 7 of an infection, a tailored army of millions of killer T cells and trillions of high-precision antibodies floods the exact tissue where the germ is hiding.",
+    "costs": "The four-to-seven-day lag while the winning clone divides is why you feel miserable for a week the first time you catch a new virus."
+   },
+   "tech_lens": {
+    "mechanism": "Lazy evaluation + exponential autoscaling (2^15 replication driven by autocrine IL-2 loop) combined with evolutionary hill-climbing in germinal centers (somatic hypermutation + competitive selection increasing antibody binding affinity K_a by 100-to-1,000x).",
+    "principle": "Store an astronomical catalog at unit-1 cold density and autoscale only the activated key exponentially; refine the winning template by evolutionary hill-climbing under live load."
+   },
+   "tradeoff": "The 5-day doubling ramp leaves a cold-start vulnerability window where ultra-fast pathogens (like Ebola or pneumonic plague) can kill the host before clonal expansion finishes.",
+   "at_scale": "A single plasma B cell secretes ~2,000 antibody molecules per second, and the expanded T-cell clone temporarily claims up to 5 to 10 percent of all circulating CD8+ T cells in the body during peak infection.",
+   "defends": [
+    "inv3",
+    "inv2"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "1-cell standby repertoire + 2^15 clonal expansion",
+      "software_concept": "scale-to-zero serverless functions that keep millions of cold images on disk and horizontally autoscale only the invoked route"
+     },
+     {
+      "mechanism": "germinal center somatic hypermutation",
+      "software_concept": "online genetic / evolutionary hyperparameter tuning that mutates the winning worker and selects the highest-scoring variant"
+     }
+    ],
+    "interview_probes": [
+     "When a scale-to-zero system faces a sudden 10,000x spike on a single cold tenant, how do you survive the cold-start doubling window before new workers finish booting?"
+    ],
+    "approach": "Keep the long-tail catalog at minimal cold footprint; upon verified activation, trigger exponential worker replication (doubling capacity each tick) while running an online mutation-and-selection loop to optimize the hot filter's precision.",
+    "vocab": [
+     "fanout",
+     "hot-key",
+     "load-balancing"
+    ]
+   },
+   "beginner_analogy": "Like a library that keeps only one master blueprint of every tool in a vault, and when a flood hits, feeds the 'sandbag machine' blueprint into a 3D-printer farm that prints printers until ten thousand machines are making sandbags.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "clonal_amp",
+      "label": "Clonal expansion & GC",
+      "kind": "process",
+      "lane": "effector",
+      "order": 2
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_ignite",
+      "from": "costim_gate",
+      "to": "clonal_amp",
+      "kind": "control",
+      "label": "IL-2 autoscale"
+     },
+     {
+      "id": "e_army_out",
+      "from": "clonal_amp",
+      "to": "blood_stream",
+      "kind": "payload",
+      "label": "50k clones + IgG"
+     },
+     {
+      "id": "e_kill_site",
+      "from": "blood_stream",
+      "to": "pathogen",
+      "kind": "control",
+      "label": "clears infected"
+     }
+    ],
+    "highlight": [
+     "costim_gate",
+     "blood_stream",
+     "pathogen",
+     "e_patrol"
+    ],
+    "remove": [
+     "e_patrol"
+    ]
+   }
+  },
+  {
+   "index": 5,
+   "name": "Treg Braking & Memory Cache: Stand Down the Army, Keep the Veterans",
+   "problem": {
+    "statement": "By day 8, the expanded clone army has killed the virus, but your bloodstream is now packed with millions of hair-trigger killer T cells spewing inflammatory cytokines (TNF-alpha, IFN-gamma) that cook your lungs and drop your blood pressure (cytokine storm). And if you simply execute every single clone back to zero, the next time the same virus floats past you will suffer the same seven-day cold-start fever all over again.",
+    "beginner": "Once the war is won, having millions of armed soldiers still firing missiles inside your lungs will kill you faster than the virus did; but if you fire every soldier, you'll get just as sick next winter.",
+    "model": {
+     "id": "feedback-loop",
+     "application": "Wire a delayed negative-feedback brake (CTLA-4, PD-1, and regulatory T cells) that culls 90 percent of the effector army once antigen drops, while promoting 5 to 10 percent into a warm L1 cache of memory cells."
+    }
+   },
+   "gate": {
+    "question": "Your exponential clone army has just wiped out the invading virus. How do you stop the army from burning down your own lungs today, while making sure the same virus can never exploit the 5-day cold-start window again?",
+    "hint": "Pair an automatic off-switch that climbs as the battle winds down with a small reserve of hardened veterans that skip the rookie boot camp next time."
+   },
+   "solution": "Run two closing moves: Negative-Feedback Contraction and Immunological Memory. First, within days of activation, T cells begin expressing inhibitory checkpoint receptors on their surface (CTLA-4, which outcompetes CD28 for B7, and PD-1), while specialized Foxp3+ Regulatory T cells (Tregs) soak up stray IL-2 and secrete calming cytokines (IL-10, TGF-beta). As the pathogen is cleared and Signal 1 disappears, 90 to 95 percent of the effector army undergoes contraction apoptosis and is quietly recycled by macrophages. Second, the surviving 5 to 10 percent differentiate into long-lived Memory B and T cells (central memory in lymph nodes, effector memory in blood, and tissue-resident memory parked right inside the lung or skin). They sit at 100 to 1,000 times the baseline naive frequency, keep their high-affinity hypermutated receptors, and need minimal co-stimulation to fire within hours on a second encounter.",
+   "user_lens": {
+    "gives": "Your fever breaks as the infection clears, and the next time you meet that pathogen (or after a vaccine), memory cells crush it in hours before you ever feel a symptom.",
+    "costs": "Storing lifelong memory clones slowly fills your immunological attic over eighty years, and tumors sometimes learn to forge the PD-1 'stand down' signal to turn off T cells that came to kill them."
+   },
+   "tech_lens": {
+    "mechanism": "Delayed negative feedback (CTLA-4/PD-1 checkpoints + Foxp3+ Treg IL-2 sink) triggers 90% clonal contraction upon antigen clearance, while a 5-10% fraction persists as epigenetic warm cache (T_RM at tissue edge, T_CM in lymph hubs, long-lived plasma cells in bone marrow).",
+    "principle": "Every positive-feedback autoscale loop requires a delayed negative-feedback brake; persist a warm edge cache of the winning configuration to eliminate cold-start latency on repeat hits."
+   },
+   "tradeoff": "Checkpoint brakes can be exploited by cancers that express PD-L1 to put attacking T cells to sleep; conversely, blocking those brakes with immunotherapy drugs (checkpoint inhibitors) cures tumors at the price of unleashing autoimmune inflammation.",
+   "at_scale": "Bone-marrow plasma cells and memory T cells maintain protective antibody titers for 50+ years (the half-life of measles and smallpox immunity exceeds a human lifespan) using a tiny fraction of total lymphocyte capacity.",
+   "defends": [
+    "inv4",
+    "inv3",
+    "inv1"
+   ],
+   "developer": {
+    "mappings": [
+     {
+      "mechanism": "tissue-resident & central memory cells",
+      "software_concept": "multi-tier warm cache (L1 edge cache in tissue + L2 regional cache in lymph nodes) pre-warmed with compiled high-affinity rules"
+     },
+     {
+      "mechanism": "CTLA-4 / PD-1 / Treg contraction",
+      "software_concept": "autoscaler scale-in cooldown and token-bucket damping that decommissions burst workers once queue depth drains"
+     }
+    ],
+    "interview_probes": [
+     "When designing an aggressive autoscaler or anomaly mitigator, what negative-feedback damping stops positive-feedback oscillation from consuming the cluster after the spike subsides?"
+    ],
+    "approach": "Attach a decaying lease to burst workers that renews only while threat signals remain above threshold; upon lease expiry, terminate 90% of workers and promote the refined filter weights into a warm edge cache.",
+    "vocab": [
+     "caching",
+     "tiered-storage",
+     "rate-limiting"
+    ]
+   },
+   "beginner_analogy": "Like demobilizing an army after a war by sending ninety percent of the soldiers home so they don't bankrupt the country, while keeping a trained firehouse crew right in the border town with their boots already by the truck.",
+   "diff": {
+    "add_nodes": [
+     {
+      "id": "treg_brake",
+      "label": "Treg & PD-1 brake",
+      "kind": "process",
+      "lane": "effector",
+      "order": 5
+     },
+     {
+      "id": "memory_cache",
+      "label": "Memory T & B cache",
+      "kind": "store",
+      "lane": "effector",
+      "order": 6
+     }
+    ],
+    "add_edges": [
+     {
+      "id": "e_damp",
+      "from": "treg_brake",
+      "to": "clonal_amp",
+      "kind": "control",
+      "label": "90% contraction"
+     },
+     {
+      "id": "e_save_mem",
+      "from": "clonal_amp",
+      "to": "memory_cache",
+      "kind": "payload",
+      "label": "5% veterans"
+     },
+     {
+      "id": "e_fast_recall",
+      "from": "memory_cache",
+      "to": "pathogen",
+      "kind": "control",
+      "label": "instant recall"
+     }
+    ],
+    "highlight": [
+     "clonal_amp",
+     "blood_stream",
+     "pathogen"
+    ],
+    "remove": []
+   }
+  }
+ ],
+ "stress_tests": [
+  {
+   "id": "st1",
+   "title": "HIV directly infects and destroys the CD4+ helper T-cell coordinator",
+   "scenario": "A retrovirus targets the exact CD4+ helper T cells that sit at the center of Layer 3 and Layer 4, using the immune hub's own activation signals to replicate.",
+   "reveal": "Because CD4+ helper T cells are the control-plane coordinators that license dendritic cells, secrete IL-2 for CD8+ killer T-cell expansion, and drive B-cell germinal center hypermutation (Layer 4), losing them collapses the entire adaptive fanout. Even though naive receptors and lymph nodes still exist, the control edge from recognition to clonal expansion is severed, leaving the host vulnerable to opportunistic microbes that a healthy system clears effortlessly."
+  },
+  {
+   "id": "st2",
+   "title": "Molecular mimicry: a throat bacterium looks like heart-valve protein",
+   "scenario": "Streptococcus pyogenes infects the throat, tripping innate TLR danger signals (Signal 2) while carrying an M-protein antigen whose shape closely resembles human cardiac myosin.",
+   "reveal": "Because the strep infection is real and destructive, dendritic cells legitimately raise B7 (Signal 2, Layer 3), licensing T and B cells whose receptors cross-react with the borderline self-similar epitope that barely squeaked past thymic selection (Layer 1). Once expanded into high-affinity antibodies (Layer 4), those antibodies bind the heart valves and cause rheumatic fever, showing why any overlap between pathogen epitopes and self-proteins at a site of real danger is the hardest edge case for two-signal tolerance."
+  },
+  {
+   "id": "st3",
+   "title": "A bacterial superantigen short-circuits the MHC-TCR lock",
+   "scenario": "Staphylococcus aureus secretes Toxic Shock Syndrome Toxin (TSST-1), a protein that clamps the outside of the MHC tray to the outside of the T-cell receptor regardless of which peptide sits inside.",
+   "reveal": "Normal antigen recognition activates 0.001 percent of T cells (only the exact matching clone). By clamping the outer frame of the receptor, the superantigen bypasses specificity and activates up to 20 percent of all T cells in the body at once. The resulting simultaneous IL-2 and TNF-alpha flood overwhelms Treg braking (Layer 5) and triggers systemic shock, proving why strict 1-in-10^6 specificity is what makes exponential clonal amplification survivable."
+  }
+ ],
+ "transfer": {
+  "principles": [
+   "When the space of future threats is unbounded and the set of safe states is bounded, generate detectors randomly and filter by negative selection against the safe set.",
+   "Never search a massive volume by random walk: drain summaries from the edge into regional rendezvous hubs where queries and events meet.",
+   "Gate destructive action on two orthogonal signals: high-specificity pattern match plus an independent ground-truth damage indicator.",
+   "Store a massive long-tail catalog at unit-1 cold density and autoscale only the verified winner exponentially.",
+   "Pair every positive-feedback autoscale loop with a delayed negative-feedback brake, and promote the winning configuration into a multi-tier warm cache."
+  ],
+  "mappings": [
+   {
+    "mechanism": "V(D)J recombination + thymic negative selection",
+    "elsewhere": "Negative-selection intrusion detection systems and property-based fuzzers that synthesize random predicates and prune any rule that fires on known-clean traffic."
+   },
+   {
+    "mechanism": "lymph node rendezvous routing",
+    "elsewhere": "MapReduce shuffle partitions, publish-subscribe rendezvous brokers, and spatial hash grids that co-locate queries and events."
+   },
+   {
+    "mechanism": "two-signal co-stimulation (TCR + B7)",
+    "elsewhere": "Two-factor authentication and canary auto-rollback systems that require both a signature match and an independent SLO error-budget burn before acting."
+   },
+   {
+    "mechanism": "clonal expansion + germinal center hypermutation",
+    "elsewhere": "Scale-to-zero serverless worker pools paired with online evolutionary A/B optimization of the active model."
+   },
+   {
+    "mechanism": "Treg checkpoints + T_RM / T_CM memory cells",
+    "elsewhere": "Autoscaler scale-in cooldowns paired with L1 edge / L2 regional CDN caching that serves repeat hits in milliseconds."
+   }
+  ]
+ }
+}
