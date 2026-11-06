@@ -1,4 +1,4 @@
-const CACHE_VERSION = "vitruvian-v2.13.3";  // bump on EVERY deploy, including content edits
+const CACHE_VERSION = "vitruvian-v2.13.4";  // bump on EVERY deploy, including content edits
 const SHELL = [
   "./",
   "./index.html",
@@ -78,7 +78,7 @@ self.addEventListener("install", e => {
 self.addEventListener("activate", e => {
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_VERSION).map(k => caches.delete(k)))
+      Promise.all(keys.filter(k => k.startsWith('vitruvian-') && k !== CACHE_VERSION).map(k => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });
