@@ -196,6 +196,7 @@
    "index": 1,
    "name": "The Index: Search a Cell, Not a City",
    "problem": {
+    "title": "Finding the nearest car takes too long",
     "statement": "The naive matcher keeps every driver's position in one table and, on each request, measures the distance to all of them to find the nearest. That is a full scan per request. With tens of thousands of drivers and thousands of requests a second it is billions of distance calculations a second, and the table is simultaneously being rewritten by every car reporting its position every few seconds. The match server melts, and latency blows past the couple hundred milliseconds a rider will wait.",
     "beginner": "The first version keeps all the cars in one list and, every time someone asks for a ride, checks the distance to every single car to find the closest. With a few cars that is fine. With tens of thousands, checking them all for every request is far too slow.",
     "model": {
@@ -293,6 +294,7 @@
    "index": 2,
    "name": "Freshness: No Ghost Cars",
    "problem": {
+    "title": "You get matched to a driver who left",
     "statement": "The index is fast, but every entry in it is a few seconds old, and a few seconds is a long time in traffic. A driver may have moved a block, ended their shift, or crashed their app since their last ping. Match a rider to a stale entry and you dispatch a car that is not where the index thinks, or not driving at all. The rider watches a phantom crawl toward them and then vanish. Offline drivers that stopped pinging linger in the buckets and keep getting matched.",
     "beginner": "The list of cars is always a little out of date, because cars move and phones drop off. If the app matches you to a car that already left or turned off, you wait for a driver who never comes.",
     "model": {
@@ -375,6 +377,7 @@
    "index": 3,
    "name": "The Dispatch Race: One Driver, One Rider",
    "problem": {
+    "title": "Two people get sent the same car",
     "statement": "Two riders a block apart both request at the same instant, and the index hands both searches the same nearest free driver. Each match server reads 'driver is free' and dispatches. Now one car has two riders, and the second rider is promised a driver who is already gone. The check ('is this driver free?') and the act ('take them') are two steps, and under real traffic something always slips between them. Naive dispatch also has no acceptance step, so a driver who ignores the ping leaves the rider hanging with no fallback.",
     "beginner": "Two people nearby can ask for a ride at the same moment and both get matched to the same closest car. Only one can actually ride, so the other is left waiting for a driver who is already taken.",
     "model": {
@@ -478,6 +481,7 @@
    "index": 4,
    "name": "Batch and ETA: Nearest Is Not Best",
    "problem": {
+    "title": "The closest car is across the river",
     "statement": "Matching each request the instant it arrives, to the straight-line-nearest free driver, is greedy and wrong twice over. It ranks by crow-flies distance, so it picks the car across the river with a fifteen-minute detour over one three minutes away by road. And by committing immediately, it grabs a driver an early rider barely needed, leaving a rider who arrives two hundred milliseconds later and needed that exact car with nothing. Locally each choice looks fine; globally total waiting time is far worse than it had to be.",
     "beginner": "Grabbing the closest-looking car for each rider the second they ask sounds right, but the closest by map distance can be a long drive away, and taking a car for one rider can leave the next rider, who needed it more, stuck. Deciding one at a time makes everyone wait longer on average.",
     "model": {
@@ -577,6 +581,7 @@
    "index": 5,
    "name": "Surge: Pricing the Imbalance",
    "problem": {
+    "title": "A concert ends and nobody gets a car",
     "statement": "In a hot area the batch runs out of nearby free drivers. A concert lets out, it starts to rain, and demand in a few cells jumps far past supply. With no way to move supply or shed demand, requests either wait for ever-farther cars, dragging pickups out for everyone, or queue with no end in sight. There is also nothing that tells price-flexible riders to wait and nothing that pulls idle drivers a mile away toward the shortage.",
     "beginner": "Sometimes far more people want a ride in one spot than there are cars, like right after a concert. With no way to respond, everyone waits longer and longer, and there is no signal telling nearby drivers to head over or telling riders who can wait that now is a bad time.",
     "model": {
@@ -669,6 +674,7 @@
    "index": 6,
    "name": "The Hot Cell: Shard and Degrade",
    "problem": {
+    "title": "One crowded spot overwhelms one machine",
     "statement": "Everything so far assumed one index and one matcher for the whole map. At real scale two ceilings arrive together. One in-memory node cannot hold every driver on the planet or absorb the global heartbeat storm. And load is geographically brutal: the concert cell gets five hundred requests against twenty cars and hammers the single partition that owns it, while the rest of the fleet sits idle. Sharding spreads the map, but the hot cell is one place and cannot be spread away, so it needs its own defense.",
     "beginner": "One computer cannot track every car in the world or handle every location update. And the load is lopsided: one packed neighbourhood can get more requests than everywhere else combined, overwhelming the one machine responsible for it while the others do nothing.",
     "model": {

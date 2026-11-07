@@ -200,6 +200,7 @@
    "index": 1,
    "name": "Replication: Never Lose the Bytes",
    "problem": {
+    "title": "One dead drive takes your files with it",
     "statement": "The naive store is one server writing each blob to one local disk and handing back a URL to itself. It works until the disk dies, and disks die: at fleet scale a drive fails somewhere every few minutes, and each failure takes every object on it to the grave. A storage service that can lose an acknowledged byte has failed at its one job. The single disk is also a hard capacity and bandwidth ceiling, because one machine can neither hold nor serve the world's blobs.",
     "beginner": "At first there is one computer saving your file to one hard drive. Hard drives break. When it breaks, your file is gone for good. A service whose whole promise is 'we keep your file' cannot lose files when a drive dies, and one drive cannot hold everything anyway.",
     "model": {
@@ -323,6 +324,7 @@
    "index": 2,
    "name": "Erasure Coding: Durability Without Paying 3x",
    "problem": {
+    "title": "Every file pays for three drives",
     "statement": "Three-way replication is simple and safe, and at exabyte scale it is a catastrophe of cost: to survive two failures you store three full copies, a 200% overhead, on hardware sold at razor margins. Most objects are large, cold, and read rarely, yet each one pays triple rent for durability. Storing two extra whole copies is paying for far more redundancy than durability actually requires.",
     "beginner": "Keeping three full copies of everything is safe but hugely expensive: you buy three drives' worth of space for every one file. Most files are big and almost never read again, so paying triple to keep them is wasteful. There should be a cheaper way to survive failures.",
     "model": {
@@ -411,6 +413,7 @@
    "index": 3,
    "name": "The Index: A Flat Namespace Over Scattered Bytes",
    "problem": {
+    "title": "Nobody knows where a file's pieces are",
     "statement": "Bytes are now shattered across the fleet: an object is three replicas here or fourteen fragments there, on nodes chosen for space and failure independence, and that placement shifts as nodes fill, fail, and get added. There is no longer any way to find an object from its key alone, and objects carry metadata (size, content-type, checksum, storage class, version) that no hash of the key can hold. And customers need to list keys. The system needs one authoritative record of what exists and precisely where each object's bytes live.",
     "beginner": "Now each file is broken into pieces spread across many machines, and the pieces can move around. Given just the file's name, how do you find all its pieces? Where do you keep facts about the file, like its type and size, and how do you list what is in a bucket? You need a reliable directory of names to locations.",
     "model": {
@@ -497,6 +500,7 @@
    "index": 4,
    "name": "Presigned URLs: Get the Bytes Off the App's Back",
    "problem": {
+    "title": "Every huge file squeezes through the app",
     "statement": "Every byte still flows through the application: the client uploads to the app, which writes to storage; the client downloads from the app, which reads from storage. For a service whose objects run to gigabytes and terabytes, this is fatal. The app becomes a bandwidth bottleneck and a cost, proxying petabytes it has no reason to see, and it would have to hold long-lived storage credentials that a compromised app would leak. The app has no business touching the bytes at all.",
     "beginner": "Right now every big upload and download passes through the website's servers, which is slow and expensive when files are huge. The website also has to hold the master keys to the storage, which is dangerous. The website should get out of the way and let the browser talk to storage directly, but safely.",
     "model": {
@@ -598,6 +602,7 @@
    "index": 5,
    "name": "Strong Read-After-Write: The Index Must Not Lie",
    "problem": {
+    "title": "A file you just uploaded says not found",
     "statement": "The index was replicated for availability and scale, and replicated records disagree. Write an object, then immediately read it, and your GET might hit a replica that has not seen the write yet and return 404 for a key you just created. LIST might omit a fresh key, or still show a deleted one. For years S3 offered only eventual consistency for exactly this reason, and it broke every workflow that writes then immediately reads (data pipelines, analytics). In December 2020 S3 switched to strong read-after-write consistency for all operations. A namespace that denies a write it accepted is lying.",
     "beginner": "The directory of file locations is copied across several machines so it stays fast and available. But right after you upload, one copy might not know about your file yet, so reading it back can say 'not found', or a listing can miss it. That is confusing and breaks programs that upload a file and immediately use it.",
     "model": {
@@ -691,6 +696,7 @@
    "index": 6,
    "name": "Hot and Cold Tiering: Stop Paying Hot Prices for Cold Bytes",
    "problem": {
+    "title": "Files nobody opens still cost top price",
     "statement": "Everything sits on fast, always-online storage, and most of it does not deserve to. The access pattern of stored objects is brutally skewed: a small fraction is read constantly (hot), and the vast majority is written once and almost never read again (cold backups, logs, old media). Keeping decade-old backups on the same fast media as today's thumbnails means paying premium prices for bytes nobody touches. A single storage class wastes the largest cost in the system.",
     "beginner": "All files sit on fast, expensive storage, but most files are old and hardly ever opened. Paying top price to keep years-old backups instantly ready is wasteful. Rarely-used files should move to cheaper, slower storage, and you should only pay the fast price for the files people actually use.",
     "model": {

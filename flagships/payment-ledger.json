@@ -192,6 +192,7 @@
    "index": 1,
    "name": "Double-Entry: The Balance Is the History",
    "problem": {
+    "title": "A crash mid-transfer makes money vanish",
     "statement": "The naive ledger keeps one mutable number per account and moves money by editing two of them: subtract fifty from Alice, add fifty to Bob. Two failures arrive together. If the process dies between the two writes, the fifty is destroyed (debited, never credited) or conjured (credited, never debited), and conservation is silently broken. And a mutable balance has no memory: it cannot answer why it holds the value it does, and a single wrong write is unrecoverable because the previous value is gone.",
     "beginner": "The first idea is to store one number for each person's balance and change two of them per transfer. But if the computer crashes halfway, one side changes and the other does not, so money appears or disappears. And because you only kept the latest number, you can never check how it got there or undo a mistake.",
     "model": {
@@ -280,6 +281,7 @@
    "index": 2,
    "name": "The Retry Doubles the Money",
    "problem": {
+    "title": "A lost reply sends the payment twice",
     "statement": "The atomic journal makes each write correct, but says nothing about a write that happens twice. A client sends 'transfer fifty' and the response times out. The client cannot tell whether the transfer posted, the network dropped the request, or it posted and only the acknowledgement was lost. So it does the only safe thing and retries, and now fifty moves twice. Over a real network every state-changing request will eventually be sent more than once; at-least-once delivery is the only kind you can get.",
     "beginner": "You send a transfer, but the reply gets lost, so you do not know if it worked. Naturally you try again. Without protection, the system now runs the transfer twice and moves double the money. On a real network this will happen sooner or later.",
     "model": {
@@ -357,6 +359,7 @@
    "index": 3,
    "name": "The Money Is Not in Your Database",
    "problem": {
+    "title": "Books say paid, but the bank call failed",
     "statement": "Everything so far pretended the money lives in your own tables, where a transaction can guarantee it. It does not. A real transfer moves through a bank or card network, an external system you call over the network and cannot enrol in your database transaction. Two failures follow. If you post the ledger entry and then the provider call fails, your books claim money moved that never left. If you call the provider first and then crash before posting, money left with no record. And you cannot hold a database transaction open across an HTTP call to a bank; there is nothing to commit together.",
     "beginner": "Your database can promise your own rows change together, but the real money moves at an outside bank you can only phone up. If you update your books and the bank call fails, your records lie. If the bank moves money and then your app crashes, you have no record of it. The two can never be made to happen as one guaranteed step.",
     "model": {
@@ -489,6 +492,7 @@
    "index": 4,
    "name": "Two Providers, No Lock",
    "problem": {
+    "title": "Money leaves but never arrives",
     "statement": "A single transfer can span two providers: debit the source at one bank, credit the destination at another network. Now the pending-then-settle machinery is not enough, because there are two external moves that must both happen or neither. If leg A (the debit) succeeds and leg B (the credit) hard-fails, money has left the source and landed nowhere. And there is no two-phase commit that a bank and a card network will both join, no shared lock you can hold across them; each is an independent system that commits on its own.",
     "beginner": "Sometimes one transfer touches two different outside companies: take money from one, give it to another. If the first succeeds and the second fails, the money has left but never arrived. And you cannot force two separate banks to agree to complete together, they each act on their own.",
     "model": {
@@ -596,6 +600,7 @@
    "index": 5,
    "name": "The Books Disagree with the Bank",
    "problem": {
+    "title": "Missed refunds and fees pile up unseen",
     "statement": "Even with pending settlement and sagas, your ledger's belief and the provider's actual records drift. A settlement you marked posted was reversed by the bank as a chargeback and the webhook was lost. A fee was deducted that you never booked. A provider retried and moved money twice on their side. Each is a place where your single source of truth and the outside world's single source of truth silently disagree, and left alone the gap compounds until the books are quietly wrong.",
     "beginner": "Your records and the bank's records are kept separately, and they slowly drift apart: a refund you missed, a fee you did not record, a payment the bank processed twice. If nobody checks, small differences pile up until your books no longer match reality.",
     "model": {
@@ -688,6 +693,7 @@
    "index": 6,
    "name": "Billions of Entries, One Hot Account",
    "problem": {
+    "title": "A busy store's traffic jams the server",
     "statement": "Everything so far assumed one ledger database. At scale it breaks three ways. The journal outgrows a single node's write throughput and disk. Deriving a balance by summing an account's entire history becomes unaffordable once an account has millions of postings. And traffic is not uniform: a large merchant's receivable is touched by every one of its customers' transfers at once, a hot account that serializes writes and becomes the bottleneck the whole system waits on. One machine can no longer hold the ledger, sum it fast, or absorb the hottest account.",
     "beginner": "One database cannot hold billions of entries or handle all the writes. Adding up an account's whole history to get its balance gets too slow. And some accounts are far busier than others: a big store's account is hit by every customer at once, jamming up the one machine that holds it while the rest sit idle.",
     "model": {

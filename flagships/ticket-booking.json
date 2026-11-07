@@ -166,6 +166,7 @@
    "index": 1,
    "name": "Claim, Don't Check: The Double-Book",
    "problem": {
+    "title": "Two buyers get the same seat",
     "statement": "The naive booker reads the seat, sees 'free', then writes 'sold'. Between the read and the write sits a gap, and under any real load two buyers fall into it together. Both read seat 12F as free, both write sold, and now two strangers hold the same seat for the same show. The check told the truth the instant it ran; by the time the write lands, the truth has already moved.",
     "beginner": "The first design looks at a seat, sees it is open, then books it. But two people can look at the same instant, both see it open, and both book it. Now two strangers own the very same seat, and nobody notices until the door.",
     "model": {
@@ -253,6 +254,7 @@
    "index": 2,
    "name": "The Hold: Reserve Before You Pay",
    "problem": {
+    "title": "Failed cards leave seats sold to nobody",
     "statement": "Payment is slow and can fail; the claim is fast and cannot. If you mark a seat sold the instant it is claimed and the card then declines, the seat is stranded sold with no buyer behind it. If instead you wait for payment before claiming, the buyer spends thirty seconds typing a card and someone faster takes the seat out from under them, so they pay for nothing. The atomic claim was right; it just happens at the wrong moment relative to the money.",
     "beginner": "Paying takes time, and cards get declined. If you mark the seat sold before the payment, a failed card leaves a seat that is 'sold' to nobody. If you wait until after the payment, someone else grabs the seat while the buyer is still typing their card.",
     "model": {
@@ -360,6 +362,7 @@
    "index": 3,
    "name": "The Thundering Herd: A Line, Not a Mob",
    "problem": {
+    "title": "Millions click at once and it all stalls",
     "statement": "Correctness held, but correctness was never the threat; the on-sale is. When tickets drop, a few thousand seats meet millions of buyers in the same ten seconds, and every one of them hammers the claim path at once. The database connection pool saturates, hold writes stack behind each other, latency climbs, and clients that time out simply retry, piling on load exactly when there is least to spare. The system melts not because the work is hard but because it all arrives together. Ticketmaster's November 2022 on-sale is the canonical case: demand and bot traffic overwhelmed the system and the sale buckled.",
     "beginner": "The moment tickets go on sale, millions of people click in the same second for a few thousand seats. The servers cannot answer everyone at once, requests pile up, people hit refresh, and the extra clicks make the jam worse until the whole thing stalls.",
     "model": {
@@ -465,6 +468,7 @@
    "index": 4,
    "name": "One Writer: Serialize, Don't Fight",
    "problem": {
+    "title": "The best tickets sell painfully slowly",
     "statement": "The queue smoothed the arrival rate, but many booking workers still drain it in parallel and pile onto the same few hundred desirable seats. Each hot row becomes a contention point: pessimistic locks make workers wait in line for one seat while holding database connections, and optimistic writes spin through retry after retry as they lose to each other. The best seats in the house are a hot key, and a hot key does not care that the average load is fine. Throughput on exactly the seats everyone wants collapses to one-at-a-time with a mountain of wasted retries.",
     "beginner": "Even with an orderly line, everyone still wants the same handful of good seats. All the workers fight over those few rows, waiting on locks or retrying failed grabs, so the seats people actually want sell painfully slowly while the workers burn effort losing to each other.",
     "model": {
@@ -560,6 +564,7 @@
    "index": 5,
    "name": "Exactly Once: Retries That Don't Double-Book",
    "problem": {
+    "title": "A refresh charges the same card twice",
     "statement": "The sale is fast, the network is not, and anxious buyers make it worse. A buyer double-clicks 'buy', a request times out and the client retries, a browser is refreshed mid-checkout, a mobile connection drops and reconnects. Each of these can deliver the same booking intent twice. Without protection, two identical requests claim two seats for one buyer, or worse, charge the same card twice for the same seat. The claim is retry-hostile: doing it twice does two things.",
     "beginner": "People double-click, refresh, and retry when things feel slow, and phones drop and resend. If the system treats each try as a fresh order, one buyer ends up with two seats, or gets charged twice for one. The same click must not book twice.",
     "model": {
@@ -645,6 +650,7 @@
    "index": 6,
    "name": "One Truth: No Oversell, Ever",
    "problem": {
+    "title": "Memory says free, the database says sold",
     "statement": "The system now spans a fast cache of holds, a durable seat store, a queue, a single-writer allocator, and a key store, and distributed parts drift. A hold expires in Redis but the release never lands in the database; the allocator crashes after handing out a seat but before persisting it; the cache says free while the store says sold. Any such split risks the one thing a ticketing system must never do: sell the same seat to two people, or lose a seat nobody can ever buy. Under a network partition you cannot have both perfect availability and a guaranteed count, and overselling a concert is not a bug you can apologize your way out of.",
     "beginner": "The system is now many moving parts that can disagree: the fast memory says one thing, the real database another. If they drift, you either sell one seat to two people or lock a seat away that nobody can buy. For tickets, selling the same seat twice is the one mistake you cannot make.",
     "model": {

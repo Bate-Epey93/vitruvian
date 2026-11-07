@@ -179,6 +179,7 @@
    "index": 1,
    "name": "The Scan Won't Scale: Build a Prefix Trie",
    "problem": {
+    "title": "Suggestions arrive after you stop typing",
     "statement": "The naive box runs a database query on every keystroke: SELECT ... WHERE query LIKE 'weat%'. Two things break together. A LIKE-prefix scan over billions of rows is a heavy index range read, and the first keystroke 'w' matches millions of them, so the database does its most work on the least specific input. And 'as you type' means this fires again on 'we', 'wea', 'weat', one scan per character, per user, all at once. Latency climbs into seconds and the database is the first thing to fall over.",
     "beginner": "The first idea is to ask the database 'give me every saved search that starts with these letters' each time a key is pressed. That works for a few searches, but with billions of them the database sifts a huge pile on every keystroke, so the suggestions arrive too late to help, if they arrive at all.",
     "model": {
@@ -261,6 +262,7 @@
    "index": 2,
    "name": "Ranking the Subtree: Precompute Top-K",
    "problem": {
+    "title": "One typed letter means sorting millions",
     "statement": "The trie finds the branch fast, but the branch is huge. Type 'a' and you land above millions of completions; the box has room for maybe ten. To choose which ten, you must rank the whole subtree by popularity, which means visiting every leaf under the node on every keystroke. You have moved the cost from 'scan the corpus' to 'walk the subtree', and for short, popular prefixes those are nearly the same size. The heaviest inputs are still the least specific ones.",
     "beginner": "The tree quickly finds the branch for what you typed, but that branch can hold millions of possible completions, and the box shows only a handful. Sorting millions of options by popularity every time you press a key is just as slow as before, all over again.",
     "model": {
@@ -346,6 +348,7 @@
    "index": 3,
    "name": "The Keystroke Storm: Debounce and Cancel Stale",
    "problem": {
+    "title": "Old suggestions flash over newer ones",
     "statement": "Each lookup is now cheap, which unmasks a new problem: there are far too many of them, and they race. 'As you type' fires a request on every keystroke, so searching 'restaurants' launches eleven lookups from one person, most for prefixes they pass through in milliseconds and never read. Worse, the responses come back out of order: the lookup for 'resta' can arrive after the lookup for 'restau', painting an older, wrong list over a newer one. The box flickers and sometimes shows suggestions for a prefix the user has already left behind.",
     "beginner": "Now each guess is fast, but typing a ten-letter word asks the system ten times, once per letter, and most of those answers are for half-typed words nobody waits to read. The answers can also come back in the wrong order, so the dropdown flickers and briefly shows guesses for letters you already typed past.",
     "model": {
@@ -449,6 +452,7 @@
    "index": 4,
    "name": "The Distributed Cache: Answer Before the Index",
    "problem": {
+    "title": "The same lookup runs a million times",
     "statement": "Even a settled prefix now crosses the network to a serving node, walks the in-memory trie, and reads a top-k list, a few milliseconds each, multiplied by every keystroke of every typist. But the request distribution is savagely head-heavy: a small set of prefixes, the short ones and the trending ones, accounts for most of the traffic, and the answer for a given prefix is identical for everyone and barely changes between builds. Recomputing 'wea' from the trie for the millionth time this minute is pure waste, and it keeps the trie nodes hot enough to become the bottleneck.",
     "beginner": "The same popular half-words get typed over and over by millions of people, and every time the system looks them up fresh even though the answer is the same for everyone. That repeated work piles onto the index and slows everything down.",
     "model": {
@@ -532,6 +536,7 @@
    "index": 5,
    "name": "Trending: When the Snapshot Goes Stale",
    "problem": {
+    "title": "Breaking news is missing for hours",
     "statement": "Every ranking in the system is frozen at the last build, and builds are hours apart because rolling top-k over billions of queries is slow. So the moment the world changes, the box lies. An earthquake, a breaking score, a new product: millions type the term within minutes, but it appears in no precomputed list, and the cache faithfully serves the stale one. The reverse is worse: a query that must be removed, a banned or unsafe suggestion, keeps being offered until the next rebuild and TTL expiry finally flush it. Popularity is a moving target and the snapshot cannot follow it.",
     "beginner": "The suggestions are a photo taken at the last rebuild, hours ago. When something suddenly becomes popular, like breaking news, it is missing from the guesses because the photo is old. And if a bad suggestion needs to be pulled, it lingers until the next photo is taken.",
     "model": {
@@ -618,6 +623,7 @@
    "index": 6,
    "name": "Billions of Prefixes: Shard the Trie, Tame the Hot One",
    "problem": {
+    "title": "One machine can't hold or rebuild it all",
     "statement": "One machine has held the whole trie until now, and that assumption breaks two ways at once. The trie for every language and every past query outgrows a single node's memory, and the builder that rolls top-k over the entire corpus outgrows a single node's throughput, so neither storing nor rebuilding fits on one box. And load is not uniform: when one query goes viral, every typist racing toward the same prefix pounds the single trie replica and the single cache key that own it, melting them while the rest of the fleet idles. The first ceiling is capacity; the second is the hot prefix.",
     "beginner": "One computer cannot hold the tree of every possible search in every language, and it cannot rebuild it fast enough either. On top of that, when one search suddenly goes viral, everyone typing the same letters hammers the one machine that happens to hold that branch while the others sit idle.",
     "model": {

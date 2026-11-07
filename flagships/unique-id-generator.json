@@ -195,6 +195,7 @@
    "index": 1,
    "name": "The Central Counter: Uniqueness by Authority",
    "problem": {
+    "title": "Two records end up with the same ID",
     "statement": "The naive generator makes an id by grabbing something local and hoping it is unique: a random number, a timestamp, the two glued together. Random ids collide by the birthday bound long before the space is full; timestamps collide the instant two callers arrive in the same millisecond. Every collision is a silent catastrophe, one row overwriting another, two payments sharing an id. Hope is not a uniqueness strategy.",
     "beginner": "The first idea is to let each computer make up its own ID number, maybe at random. But two computers can pick the same number by accident, and then two different things share one ID, which quietly corrupts data.",
     "model": {
@@ -279,6 +280,7 @@
    "index": 2,
    "name": "Blocks: Amortizing the Counter",
    "problem": {
+    "title": "Everyone waits in one line for a number",
     "statement": "The single counter is correct but it is a wall. Every id is a network round trip to one node, so creation throughput is capped at what that counter can serve, and its latency is taxed onto every insert. Worse, it is a single point of failure: the moment it is unreachable, not one caller in the fleet can mint an id. A system that cannot create anything when one node hiccups is not a system you can grow.",
     "beginner": "The one counter everyone shares becomes a traffic jam: every computer waits its turn to ask it for a number. And if that counter breaks, no one anywhere can get a new ID at all.",
     "model": {
@@ -379,6 +381,7 @@
    "index": 3,
    "name": "Put Identity in the Number",
    "problem": {
+    "title": "A counter outage still stalls everyone",
     "statement": "Blocks made the counter cheaper, but they did not make it optional. Every generator must still reach the counter to refill, so a long counter outage still ends in a fleet-wide stall, and the ordering the counter gave for free is already gone. Step back to first principles: an id does not need to come from a shared authority. It only needs to be unique and roughly ordered, and both can be manufactured locally if every generator owns a slice of the id space no other generator can touch.",
     "beginner": "Even with blocks, every computer still depends on the one counter to get more numbers. To remove that shared thing completely, each computer has to build a unique number entirely on its own.",
     "model": {
@@ -466,6 +469,7 @@
    "index": 4,
    "name": "Handing Out Machine Numbers",
    "problem": {
+    "title": "Cloned servers make identical IDs",
     "statement": "The whole scheme now rests on one assumption: every generator has a different machine id. Break it and the guarantee collapses instantly. Two machines that boot with the same machine id will, in the same millisecond, mint byte-for-byte identical ids, the exact collision the design promised was impossible. Hardcoding the number in config works until someone clones a VM image, autoscaling spins up a duplicate, or two teams pick the same value. You deleted the central counter; now you need a central authority again, but only for this.",
     "beginner": "Every computer must have its own machine number, or the trick breaks. If two computers accidentally use the same machine number, they will produce the exact same IDs. So something has to make sure each computer gets a different number, once.",
     "model": {
@@ -550,6 +554,7 @@
    "index": 5,
    "name": "The Clock That Runs Backward",
    "problem": {
+    "title": "A time correction makes duplicate IDs",
     "statement": "The timestamp bits quietly assume the clock only moves forward. It does not. NTP corrections nudge it, leap seconds repeat a second, a VM migration can jerk it, and any of these can make the wall clock read a millisecond it has already used. When that happens a generator can mint into a timestamp it already spent, colliding with ids it issued moments ago, and the ids stop climbing, breaking the ordering the whole scheme is sold on. Load has nothing to do with it; the clock itself is unreliable.",
     "beginner": "The ID uses the computer's clock as its main ingredient. But clocks sometimes jump backward a little to correct themselves. If that happens, the computer might reuse a moment it already used and make a duplicate ID, or make IDs that go backward in time.",
     "model": {
@@ -642,6 +647,7 @@
    "index": 6,
    "name": "The Millisecond Ceiling",
    "problem": {
+    "title": "A sudden burst runs out of fresh IDs",
     "statement": "One field is still bounded: the per-millisecond sequence. With 12 bits it holds 4096 values, so one machine can mint at most 4096 ids in a single millisecond. Ask for the 4097th before the millisecond ticks over and there is no unused sequence value left; the naive move is to wrap the sequence back to zero and reuse a number, minting a duplicate. A burst of demand inside one millisecond, not sustained load, is what walks the generator off the edge of its own id space.",
     "beginner": "The last part of the ID is a small counter that only goes up to about 4000 and resets every millisecond. If one computer is asked for more than 4000 IDs in the same millisecond, it runs out of counter values and would have to repeat one.",
     "model": {

@@ -191,6 +191,7 @@
    "index": 1,
    "name": "The Friction Clutch & Constant-Mesh Dogs: Stop Sliding the Gears",
    "problem": {
+    "title": "Every shift smashes spinning teeth",
     "statement": "In the 1894 sliding-gear 'crash box,' shifting means pushing a spinning steel spur gear sideways along a shaft until its teeth slam into the teeth of a spinning gear on the countershaft. Worse, if the heavy engine flywheel is still bolted to the input shaft, you are trying to instantly speed up or slow down 20 kilograms of spinning cast iron using the tips of two gear teeth. Every imperfect shift chips hardened steel corners off the torque-carrying teeth until the gearbox strips.",
     "beginner": "In the earliest cars, moving the gearstick pushed two spinning toothed wheels sideways into each other. If their speeds didn't match to the exact rpm, the teeth smashed together like two spinning buzzsaws.",
     "model": {
@@ -325,6 +326,7 @@
    "index": 2,
    "name": "Cone Synchromesh: The Brake That Blocks Until Speeds Agree",
    "problem": {
+    "title": "Hurried shifts grind and won't go in",
     "statement": "Constant-mesh dog clutches still rely on a human driver to guess when the free-spinning gear and the mainshaft collar are turning at the same speed. If the driver shifts from 2nd to 3rd without double-declutching, the mainshaft collar is spinning at 2,000 rpm while the 3rd-gear wheel (tied to the fast-spinning input shaft) is spinning at 3,200 rpm. Pushing the dog sleeve across produces an awful metallic buzz as the dog teeth bounce off each other.",
     "beginner": "Even with tough little dog teeth, the collar and the gear are still spinning at different speeds. If the driver just shoves the stick across, the teeth grind and refuse to mesh.",
     "model": {
@@ -410,6 +412,7 @@
    "index": 3,
    "name": "H-Gate Selector & Interlock Pins: One Gear at a Time",
    "problem": {
+    "title": "Two ratios at once lock the wheels solid",
     "statement": "A five-speed gearbox has three separate sliding sleeves on the shafts: one for 1st/2nd, one for 3rd/4th, and one for 5th/Reverse, each moved by its own steel selector rail. If vibration, a worn linkage, or a hurried diagonal shove on the gearstick moves the 3rd-gear rail into gear before the 1st-gear rail has fully returned to neutral, two different gear pairs lock the countershaft to the mainshaft at the same time. Because 1st gear demands a 3.5:1 ratio and 3rd gear demands 1.4:1 on the same two shafts, the gearbox instantly welds itself into a solid block of metal, locking the drive wheels at speed.",
     "beginner": "Inside the gearbox are three separate sliding rods for the different pairs of gears. If two rods ever slide into gear at the same time, the gearbox tries to spin one shaft at two speeds at once and locks the car's wheels solid.",
     "model": {
@@ -497,6 +500,7 @@
    "index": 4,
    "name": "Reverse Idler & Lockout: The Deliberate Throwback",
    "problem": {
+    "title": "Backwards is one slip from 5th at 70 mph",
     "statement": "To back the car up, the output mainshaft must spin in the opposite direction to the forward gears while the engine keeps turning the same way. Adding a third gear (the reverse idler) between the countershaft and the mainshaft reverses the rotation. Because reverse is only used once a trip from a dead stop, engineers often leave it as a straight-cut sliding gear without a synchromesh cone to save length and cost. But on a 5-speed H-gate, Reverse sits right behind 5th gear: a driver shifting down from 5th at 70 mph who pulls straight back out of habit will ram the reverse idler into a shaft spinning forward at 4,000 rpm.",
     "beginner": "On a 5-speed gearstick, Reverse sits right behind 5th gear. If you pull straight back from 5th gear on the highway thinking you are going into 4th or 6th, you will slam the backwards gear into a car moving 70 miles an hour forward.",
     "model": {

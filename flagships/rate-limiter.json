@@ -184,6 +184,7 @@
    "index": 1,
    "name": "A Rate Needs a Clock: The Fixed Window",
    "problem": {
+    "title": "Normal users get banned for good",
     "statement": "The naive limiter keeps a running count per caller and rejects anyone past N. But a count with no clock is a lifetime quota, not a rate: a steady, well-behaved caller sends its N requests over an hour and is then locked out forever, while nothing ever forgives old traffic. The word 'rate' means events per unit of time, and this design has thrown the time away.",
     "beginner": "The first idea is to count each user's requests and stop them at 100. But if you never reset that count, a normal user who makes 100 requests over a whole day is banned for good. A limit with no clock works as a lifetime total, which is a very different thing from a speed limit.",
     "model": {
@@ -256,6 +257,7 @@
    "index": 2,
    "name": "The Boundary Burst: Sliding the Window",
    "problem": {
+    "title": "Double the limit in two seconds",
     "statement": "Fixed windows have a seam, and the seam leaks. A caller limited to N per minute can send N requests in the last second of 10:00 and another N in the first second of 10:01: two full allowances, 2N requests, inside a two-second span, and each window saw only its lawful N. An attacker who lines their burst up with the boundary doubles their rate, and the doubled burst lands exactly when the service is least ready for it.",
     "beginner": "The clock reset has a weak spot. If your limit is 100 a minute, you can send 100 at 11:59:59 and another 100 at 12:00:01, which is 200 requests in about two seconds, yet each minute only counted 100. Someone who aims for the reset moment gets double.",
     "model": {
@@ -331,6 +333,7 @@
    "index": 3,
    "name": "Bursts Are Not Abuse: The Token Bucket",
    "problem": {
+    "title": "Honest page loads get turned away",
     "statement": "Smoothing the window fixed the exploit but broke a legitimate pattern. Real clients are bursty on purpose: a page load fires twenty parallel requests, a batch job flushes a hundred rows at once, a mobile app syncs on wake. A flat rolling rate rejects those honest bursts unless you raise the limit so high it no longer protects anything. You are forced to choose between blocking good traffic and admitting bad, because one number cannot express both 'a short burst is fine' and 'a high sustained rate is not'.",
     "beginner": "Normal apps often send a quick clump of requests, then go quiet. A smooth limit punishes that clump even though the average is fine. To let the clump through you would have to raise the limit so much that it stops protecting the service. One dial cannot say both 'a quick burst is okay' and 'a steady flood is not'.",
     "model": {
@@ -411,6 +414,7 @@
    "index": 4,
    "name": "One Truth for the Whole Fleet: The Shared Counter",
    "problem": {
+    "title": "Ten servers let in ten times the limit",
     "statement": "Everything so far lived in one server's memory. Put the service behind a load balancer with ten app servers, each with its own local bucket, and a caller limited to 100 per minute now gets up to 1,000: a hundred from whichever server it happens to hit, times ten servers, because no bucket knows about the others. Worse, the limit becomes nondeterministic, depending on how the balancer sprays requests. The per-server copies each think they are the truth, and together they admit ten times the cap.",
     "beginner": "Big services run on many servers at once. If each server keeps its own count, a user allowed 100 requests gets 100 on every server, so ten servers means 1,000. Each server is honest on its own, but together they let through far more than the limit.",
     "model": {
@@ -492,6 +496,7 @@
    "index": 5,
    "name": "Counting the Right Caller: Identity at the Boundary",
    "problem": {
+    "title": "Offices get blocked, cheaters get in",
     "statement": "A globally correct limiter is still only as good as the key it counts. Key by IP and a corporate NAT or mobile carrier puts thousands of real users behind one address, so they throttle each other, while an abuser rents a hundred cheap IPs and multiplies their quota by a hundred. The identity arrives from outside, unverified, and the limiter has been trusting it. If the key can be spoofed or shared, the cap protects nothing.",
     "beginner": "The limiter counts per 'who', but who is that? If it uses the network address, a whole office sharing one connection gets treated as a single user and blocks each other, while a cheater who buys many addresses looks like many users. The limiter has been trusting whatever the request claims to be.",
     "model": {
@@ -576,6 +581,7 @@
    "index": 6,
    "name": "The Limiter Under Fire: Hot Keys and Fail-Open",
    "problem": {
+    "title": "The safety check takes the site down",
     "statement": "The shared store made the limiter correct and then made it fragile. Two failures arrive together at scale. First, the hot key: an abuser hammering one identity drives every one of those requests to the single store key that holds that caller's bucket, so the very counter meant to throttle the attack is the first thing the attack melts, and it can take its shard down with it. Second, the store is now on every request's critical path, so if it slows or dies, the naive limiter blocks the entire service, turning a limiter outage into a total outage. The thing installed to protect availability has become the biggest threat to it.",
     "beginner": "Two problems show up when this runs for real. A single attacker pounding one account sends all that traffic to the one place that stores that account's count, overwhelming it. And because every request now checks the shared counter, if that counter is slow or down, nobody can get in at all, so the safety device becomes the thing that breaks the site.",
     "model": {

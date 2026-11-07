@@ -171,6 +171,7 @@
    "index": 1,
    "name": "The Queue: Decouple Producer From Consumer",
    "problem": {
+    "title": "Bursts and crashes throw work away",
     "statement": "A producer calls a consumer directly and waits for it to finish. Two failures are baked in. When work arrives in a burst, a hundred requests a second against a consumer that handles ten, the extra ninety are dropped or the producer blocks until the consumer catches up. And when the consumer is slow, restarting, or down, the producer's call fails and the work is simply gone. The producer's fate is chained to the consumer's health and speed.",
     "beginner": "One program hands work straight to another and waits. If a lot of work shows up at once, or the second program is busy or down, the work fails or gets thrown away. The two are stuck to each other.",
     "model": {
@@ -274,6 +275,7 @@
    "index": 2,
    "name": "Acknowledge or Redeliver: At-Least-Once",
    "problem": {
+    "title": "A task vanishes when its worker dies",
     "statement": "The queue holds work, but when does it delete a message? If it removes the message the instant a consumer picks it up, a consumer that crashes mid-task, or after doing the work but before recording it, takes that message to the grave: nobody else ever sees it. If it never removes messages, they are delivered forever. The queue cannot tell 'done' from 'died' without the consumer telling it.",
     "beginner": "When a worker takes a task, should the queue forget it? If it forgets and the worker then crashes, the task is lost. If it never forgets, the task is done again and again. The queue needs to know when a task is truly finished.",
     "model": {
@@ -365,6 +367,7 @@
    "index": 3,
    "name": "Idempotency: Make a Repeat Harmless",
    "problem": {
+    "title": "A customer gets charged twice",
     "statement": "At-least-once means duplicates are guaranteed, not occasional: every timed-out-but-actually-finished message, every redelivery after a slow ack, arrives again. If processing a message has a side effect, charging a card, sending an email, incrementing a balance, then a duplicate does that side effect twice. Exactly-once delivery is impossible over a network, so the duplicate cannot be prevented; it can only be made harmless.",
     "beginner": "Because the queue may deliver the same task twice, a task that charges money or sends an email could do it twice. You cannot stop the second delivery, so you have to make doing the task a second time change nothing.",
     "model": {
@@ -440,6 +443,7 @@
    "index": 4,
    "name": "Consumer Groups: Scale the Workers",
    "problem": {
+    "title": "Tasks arrive faster than they get done",
     "statement": "One consumer, however careful, processes messages at a fixed rate. When producers consistently outpace it, the queue depth climbs forever and every message waits longer behind the backlog. Adding a second consumer naively creates a new hazard: if both pull the same message, the work is done twice, or they fight over the line. The consumer is now the throughput ceiling, and you cannot simply clone it without a rule for who gets what.",
     "beginner": "A single worker can only go so fast. If work keeps arriving faster than it can finish, the line just grows forever. You want more workers, but if two of them grab the same task, it gets done twice.",
     "model": {
@@ -544,6 +548,7 @@
    "index": 5,
    "name": "Partitions: Win Back Ordering",
    "problem": {
+    "title": "An account is updated before it exists",
     "statement": "Parallel consumers destroyed order. For a lot of work that is fine, but some sequences must not be reordered: apply 'account created' before 'account updated', process a customer's payments in the order they were made. With competing consumers pulling freely, 'update' can be processed before 'create', and the state is corrupted. But forcing global order means one consumer processing everything in sequence, throwing away all the parallelism you just built. You cannot have both strict global order and many workers.",
     "beginner": "Because workers run in parallel, tasks can finish out of order. Usually fine, but sometimes order matters: you must create an account before you update it. Making everything happen in strict order means going back to a single worker, which is slow.",
     "model": {
@@ -628,6 +633,7 @@
    "index": 6,
    "name": "The Dead-Letter Queue: Poison Messages",
    "problem": {
+    "title": "One bad task jams everything behind it",
     "statement": "Some messages can never succeed: a malformed payload, a bug that throws every time, a referenced record that no longer exists. Under at-least-once with redelivery, such a poison message fails, its visibility times out, and it comes back, forever. It burns a consumer on every loop, and inside an ordered partition it is worse: the poison message sits at the head and blocks every message behind it, since nothing after it can be processed until it is done. One bad message stalls a whole lane.",
     "beginner": "Some tasks always fail, maybe the data is broken or hits a bug. The queue keeps redelivering them, so they retry forever, wasting workers. In an ordered lane it is worse: the broken task sits at the front and nothing behind it can move.",
     "model": {
@@ -705,6 +711,7 @@
    "index": 7,
    "name": "Backpressure: When Consumers Cannot Keep Up",
    "problem": {
+    "title": "The waiting line fills up and crashes",
     "statement": "Everything so far assumes the backlog is temporary. But if producers outrun consumers on average, not just in a burst, the queue depth grows without bound. The buffer that was a shock absorber becomes a liability: memory or disk fills, the oldest messages age past any usefulness, latency stretches to hours, and eventually the broker rejects writes or falls over, taking producers down with it. An unbounded queue does not prevent overload; it delays and hides it until it is catastrophic.",
     "beginner": "The waiting line helps with short bursts. But if work keeps arriving faster than it can be done for a long time, the line grows forever until the queue runs out of space and breaks. A buffer alone does not fix being permanently too slow.",
     "model": {

@@ -181,6 +181,7 @@
    "index": 1,
    "name": "V(D)J Recombination & Thymic Selection: Mint All Keys, Burn the Self-Keys",
    "problem": {
+    "title": "Detectors that fit any germ also fit you",
     "statement": "Innate phagocytes only recognize a few dozen ancient microbial patterns (like bacterial cell-wall sugars). When a virus mutates its coat or hides inside host cells, fixed germline receptors are blind to it. Yet if bone marrow cells generate billions of random receptor shapes to catch any future virus, half of those random receptors will bind the body's own insulin, myelin, or heart muscle and tear the host apart from the inside.",
     "beginner": "Your DNA is too small to store a picture of every future virus, so your cells have to invent billions of random detector shapes. The danger is that many of those random shapes will match your own healthy organs and attack you.",
     "model": {
@@ -287,6 +288,7 @@
    "index": 2,
    "name": "Lymph Nodes & Dendritic Couriers: Solving the 1-in-a-Million Search",
    "problem": {
+    "title": "The right cell arrives days too late",
     "statement": "Because every T cell wears a different random receptor, only about 1 in 1,000,000 naive T cells matches a rose-thorn bacteria in your left thumb. If those million T cells wander randomly through 100,000 kilometers of blood capillaries waiting to bump into the thumb, the bacteria will multiply into fatal sepsis days before the right T cell ever passes through that capillary.",
     "beginner": "Only a handful of cells in your whole body hold the right key for the germ in your splinter. If they just float around the bloodstream hoping to bump into your finger by luck, the germ will win days before they arrive.",
     "model": {
@@ -386,6 +388,7 @@
    "index": 3,
    "name": "Two-Signal Co-Stimulation: The Two-Key Nuclear Launch",
    "problem": {
+    "title": "Harmless food sets off an all-out attack",
     "statement": "Thymic negative selection (Layer 1) is good, but it cannot show every protein: food proteins from your lunch, harmless gut bacteria, fetal proteins during pregnancy, and tissue proteins only made after puberty were never in the thymus. If a naive T cell in a lymph node launches a full killer attack the moment its receptor clicks onto a peptide, you will mount a lethal immune war against strawberries, commensal gut flora, and your own adult organs.",
     "beginner": "Just because a T cell's key fits a protein that wasn't in the thymus doesn't mean it is a dangerous germ; it could be a peanut you just ate or a harmless skin bacterium.",
     "model": {
@@ -471,6 +474,7 @@
    "index": 4,
    "name": "Clonal Expansion & Affinity Maturation: Autoscale the Winner",
    "problem": {
+    "title": "One cell against a hundred million germs",
     "statement": "The one matching T cell in the lymph node has just passed the two-signal check, but it is still ONE cell. Meanwhile, at the wound site, the bacteria have been dividing every 20 minutes and now number in the hundreds of millions. One T cell cannot kill a hundred million bacteria, and the body could never afford to keep 100,000 pre-built copies of all 100 million receptor types (that would weigh more than the human body).",
     "beginner": "You found the one guard in the whole country who has the right weapon, but the enemy already has a million soldiers at the gate. One guard cannot fight a million germs alone.",
     "model": {
@@ -567,6 +571,7 @@
    "index": 5,
    "name": "Treg Braking & Memory Cache: Stand Down the Army, Keep the Veterans",
    "problem": {
+    "title": "Leftover killer cells turn on the lungs",
     "statement": "By day 8, the expanded clone army has killed the virus, but your bloodstream is now packed with millions of hair-trigger killer T cells spewing inflammatory cytokines (TNF-alpha, IFN-gamma) that cook your lungs and drop your blood pressure (cytokine storm). And if you simply execute every single clone back to zero, the next time the same virus floats past you will suffer the same seven-day cold-start fever all over again.",
     "beginner": "Once the war is won, having millions of armed soldiers still firing missiles inside your lungs will kill you faster than the virus did; but if you fire every soldier, you'll get just as sick next winter.",
     "model": {

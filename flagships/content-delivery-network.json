@@ -182,6 +182,7 @@
    "index": 1,
    "name": "The Edge Cache: Put a Copy Near the User",
    "problem": {
+    "title": "Every visitor waits on one far server",
     "statement": "One origin server, users on every continent. Every request, even for the same unchanging logo served a million times, crosses the planet to the same machine. Latency is bad, and the origin's bandwidth and CPU are a hard ceiling: a popular launch can melt an origin while the content itself never changed once.",
     "beginner": "There is one server, maybe in Virginia, and everyone in the world reads from it. It is slow for far-away users, and the server drowns when a lot of people show up at once, even though they all want the same file.",
     "model": {
@@ -301,6 +302,7 @@
    "index": 2,
    "name": "Geographic Routing: Send Each User to Their Nearest Edge",
    "problem": {
+    "title": "A Berlin phone fetches from Tokyo",
     "statement": "One edge cache helps the users near it and nobody else. Put caches in many cities and a new problem appears: a browser in Berlin has no idea an edge sits two miles away and will happily open a connection to the cache in Tokyo. Copies near users are worthless if requests never find the near one, and a dead PoP must not swallow the users routed to it.",
     "beginner": "You put caches in lots of cities, but how does someone's phone know which one is closest? If it picks the wrong one, or one that is broken, they are back to slow, or an error.",
     "model": {
@@ -417,6 +419,7 @@
    "index": 3,
    "name": "TTL and Invalidation: Copies That Know They Can Be Wrong",
    "problem": {
+    "title": "Readers still see yesterday's page",
     "statement": "A cache is a copy, and the origin keeps changing. Publish a fix, a price change, a corrected headline, and every edge still serves yesterday's bytes until something tells it not to. Cache forever and you are fast but wrong; never cache and you are correct but you have thrown the CDN away. The hard case is a copy that must be dropped the instant the publisher says so.",
     "beginner": "The copies can go out of date. If the site changes but the caches keep the old version, people see stale pages. But if you never keep copies, the CDN is pointless. You need a rule for how long a copy may live, and a way to say 'drop it now.'",
     "model": {
@@ -508,6 +511,7 @@
    "index": 4,
    "name": "Request Coalescing: Surviving the Thundering Herd",
    "problem": {
+    "title": "One expired file knocks the origin over",
     "statement": "A popular object goes cold, its TTL expires, or a purge drops it everywhere at the same instant. Now a single edge takes ten thousand simultaneous requests for a key it does not have, and, naively, fires ten thousand identical fetches at the origin. Multiply by every PoP and one expiry becomes a self-inflicted denial of service on the origin. The stampede is caused by the cache, not the users.",
     "beginner": "Imagine a hugely popular video's copy expires at midnight. The instant it does, a flood of viewers all miss at once, and the cache asks the origin for the same file thousands of times in the same second. The origin falls over, not because the file is big, but because everyone asked at the exact same moment.",
     "model": {
@@ -602,6 +606,7 @@
    "index": 5,
    "name": "The Regional Shield: A Mid-Tier Between Edge and Origin",
    "problem": {
+    "title": "Hundreds of cities each ask the origin",
     "statement": "Coalescing caps each edge at one fetch per object, but a big CDN has hundreds of edges. On a cold object every one of them still misses independently and every one sends its single fetch to the origin at once. The origin now sees hundreds of requests for one object, and small edge caches, short on memory, evict long-tail content constantly, so the miss rate stays high. The origin's ingress is the last shared bottleneck.",
     "beginner": "There are hundreds of edge caches. Even if each one asks the origin only once, hundreds of 'once's still land on the origin together. And small edge caches cannot hold everything, so they keep having to ask. The origin is still doing too much.",
     "model": {
@@ -711,6 +716,7 @@
    "index": 6,
    "name": "Serving Through an Origin Outage",
    "problem": {
+    "title": "Expired copies turn into error pages",
     "statement": "Every layer so far still ends at the origin: a miss, an expiry, or a revalidation eventually needs it. So what happens when the origin is down, overloaded, or unreachable? Naively, an expired object cannot be revalidated, a miss cannot be filled, and the edge returns an error, so the origin's bad day becomes an outage for users worldwide, even for content sitting right there in the cache, merely expired.",
     "beginner": "Everything still depends on the origin being reachable at some point. If the origin goes down, the caches cannot check for updates or get new files, and users get errors, even for pages the cache already has but has marked 'expired.' The worst part: the content is right there, just past its date.",
     "model": {

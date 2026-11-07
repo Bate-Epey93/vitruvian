@@ -158,6 +158,7 @@
    "index": 1,
    "name": "The Verge & Foliot: Metering Runaway Into Beats",
    "problem": {
+    "title": "A day of winding gone in four seconds",
     "statement": "A weight hung on a drum turns a train of gears connected to a dial hand. Left to itself, gravity pulls the weight straight to the floor, the gears scream up to speed, and twenty-four hours of stored winding energy vanishes in four seconds. Nothing in a gear train knows what a second is.",
     "beginner": "If you hang a heavy weight on a gear wheel and let go, the wheel spins like a fan and hits the floor in seconds. You need a mechanical catch that forces the wheel to wait and step one tooth at a time.",
     "model": {
@@ -267,6 +268,7 @@
    "index": 2,
    "name": "Huygens's Pendulum: Replace Inertia With a Natural Period",
    "problem": {
+    "title": "Push harder and the clock runs faster",
     "statement": "The foliot bar is a dumb weight with no opinion of its own about how long a swing should take. If cold winter morning oil thickens in the gear pivots, the crown wheel pushes the foliot more gently, and the clock loses twenty minutes before lunch. If you hang a heavier lead weight on the rope, the clock races ahead. The drive train is dictating the time.",
     "beginner": "A weighted bar on a pivot has no natural rhythm of its own; push it twice as hard and it swings much faster. As long as the gears set the speed of the swing, dirty oil or a fading spring makes the clock lie.",
     "model": {
@@ -357,6 +359,7 @@
    "index": 3,
    "name": "The Recoil Anchor & Graham Deadbeat: Shrinking the Arc and Killing Recoil",
    "problem": {
+    "title": "Each tick shoves the gears backward",
     "statement": "A pendulum is only truly isochronous (same time at any width) when it swings through a tiny arc of 3 to 5 degrees, where sin(theta) almost equals theta. The old verge-and-crown-wheel geometry physically cannot work at 4 degrees: its paddles sit across the wheel's face and require a huge 60-degree swing to clear a tooth. And when William Clement replaces the verge with an iron 'anchor' straddling the rim of a flat escape wheel (~1670) to shrink the swing to 5 degrees, a new flaw appears: after a tooth drops onto a flat anchor pallet, the heavy pendulum's remaining swing shoves the pallet deeper into the wheel and drives the entire gear train backward ('recoil'), coupling the drive weight straight back onto the pendulum.",
     "beginner": "To make a pendulum super accurate, it needs to swing through a tiny 4-degree arc. An anchor hook over the top of the gear wheel lets it take tiny swings, but flat hook faces push the whole gear wheel backward at the end of every tick.",
     "model": {
@@ -466,6 +469,7 @@
    "index": 4,
    "name": "The Detached Lever & Balance Wheel: Let Go of the Oscillator",
    "problem": {
+    "title": "Put it in a pocket and the time drifts",
     "statement": "A Graham deadbeat pendulum regulator keeps quarter-second time bolted to a stone cellar wall, but take it into a pocket or onto a ship at sea and it fails immediately: gravity cannot restore a pendulum that is tilted on its side or pitching in waves. Replacing the pendulum with a coiled hairspring and balance wheel (Huygens, 1675) solves gravity, but on a deadbeat or cylinder escapement the escape wheel tooth STILL rubs continuously against the oscillator throughout its entire swing. In a tiny pocket watch where the balance wheel has a fraction of a pendulum's momentum, sticky aged oil on that continuous rubbing contact drags the rate all over the map.",
     "beginner": "A pendulum stops working the moment you tilt it in your pocket. A spring-loaded balance wheel works upside down, but if the gears rub against that tiny wheel the whole time it swings, old sticky oil slows the watch down.",
     "model": {
@@ -584,6 +588,7 @@
    "index": 5,
    "name": "Draw Angle & The Safety Roller: Locking the Detached Lever Against Shock",
    "problem": {
+    "title": "A bump on the wrist stops the watch",
     "statement": "Detaching the lever from the balance wheel created a dangerous vulnerability. For 90 percent of every beat, the lever sits alone against its banking pin while the balance wheel is off swinging by itself. If the wearer claps their hands or bumps their wrist against a desk during that free window, the jolt can bounce the lever off its banking pin: either letting an escape tooth slip past prematurely ('tripping') or flipping the lever fork to the opposite side so that when the balance wheel's ruby impulse pin comes back around, it slams into the solid outside of the fork ('overbanking') and stops the watch dead.",
     "beginner": "Because the lever lets go of the balance wheel for most of every tick, bumping your wrist while the wheel is away can jolt the lever to the wrong side so the doorway is shut when the wheel comes back.",
     "model": {

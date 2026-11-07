@@ -182,6 +182,7 @@
    "index": 1,
    "name": "The Code: Count, Don't Guess",
    "problem": {
+    "title": "Two addresses get the same short link",
     "statement": "The naive shortener hashes the long URL, takes the first few base62 characters, and hopes. Two problems arrive together. Truncated hashes collide: in a seven-character namespace the birthday bound puts your first collision around two million links, not 3.5 trillion, so every insert now needs a read-check-retry loop that races two concurrent writers straight into the same code. And a hash of the URL means one URL can only ever have one code, so you cannot hand two customers their own private link to the same page.",
     "beginner": "The first idea is to scramble the long address into a short code with a math function. But two different addresses can accidentally produce the same short code, and then one link overwrites another. As you get more links, these accidents get common fast.",
     "model": {
@@ -259,6 +260,7 @@
    "index": 2,
    "name": "Hiding the Ruler: Unguessable Codes",
    "problem": {
+    "title": "Anyone can read every link ever made",
     "statement": "The counter gave clean uniqueness but handed the world a ruler. Codes are sequential, so anyone can request /1, /2, /3 and walk the entire database in order, harvesting every link ever created, private ones included. Worse, the newest code reveals your total link count, and the rate it climbs reveals your business volume to any competitor with a loop and a weekend.",
     "beginner": "Because codes are just counting numbers turned into text, they are easy to guess. Someone can try the next code, and the next, and read every link anyone ever made, plus figure out exactly how many links you have.",
     "model": {
@@ -339,6 +341,7 @@
    "index": 3,
    "name": "The Read Storm: Cache the Redirect",
    "problem": {
+    "title": "Millions of clicks swamp the database",
     "statement": "Creation is solved, but creation was never the load. Redirects outnumber creations by roughly 100 to 1, and every redirect is currently a database read: look up the code, return the URL. At a few thousand redirects a second the database is already the bottleneck, and a popular link turns a single row into a hotspot that saturates the disk it lives on. You are spending a full database query to answer a question whose answer almost never changes.",
     "beginner": "Far more people click short links than create them. Right now every click asks the database 'where does this go?'. That is fine for a few clicks, but with millions the database cannot keep up, and clicking gets slow or fails.",
     "model": {
@@ -426,6 +429,7 @@
    "index": 4,
    "name": "Custom Aliases: One Namespace, Many Claimants",
    "problem": {
+    "title": "One short link points at two pages",
     "statement": "Customers want vanity links: not a scrambled code but /launch or /sale. Now humans are choosing codes, and two problems collide. A chosen alias can clash with a generated code, or with the same alias someone else picked a millisecond earlier. Under any real traffic, two creators can submit /launch at the same instant, both check that it is free, and both write, and now one code has two destinations. The counter guaranteed uniqueness precisely because nobody chose; the moment people choose, uniqueness becomes a race.",
     "beginner": "People want to pick their own short link, like /sale. But two people might pick the same word at the same time, and if you are not careful you save both, so one short link now points at two different pages.",
     "model": {
@@ -505,6 +509,7 @@
    "index": 5,
    "name": "Time: Links That Must Die",
    "problem": {
+    "title": "Expired coupons keep working forever",
     "statement": "Links were promised forever, but some must not last. A one-day promo code, a link the creator revokes, a phishing URL you must kill: all must stop redirecting the instant their time is up. Two failures follow if you ignore time. Expired links keep sending clicks to stale or now-dangerous destinations, violating the promise that a code points where it should. And because nothing is ever removed, the store grows without bound, carrying billions of dead rows that will never be clicked again but still cost storage and slow every scan.",
     "beginner": "Some links should expire, like a coupon that ends tomorrow, or one someone wants taken down. If nothing ever expires, dead links keep working forever and the database fills up with junk that never gets cleaned out.",
     "model": {
@@ -579,6 +584,7 @@
    "index": 6,
    "name": "Billions: The Single Node Gives Way",
    "problem": {
+    "title": "One viral link overwhelms one machine",
     "statement": "Everything so far assumed one database holding one table. At billions of links that assumption breaks two ways at once. The dataset outgrows any single node's disk and its write throughput, so one machine can neither store nor ingest the whole namespace. And traffic is not uniform: one link in a Super Bowl ad draws millions of redirects a second, and if its cache entry ever expires, every one of those requests stampedes the single database row that owns it, melting the shard it lives on while the rest of the fleet sits idle. The first ceiling is capacity; the second is the hot key.",
     "beginner": "One database cannot hold billions of links or handle all the clicks. And clicks are uneven: one viral link can get more traffic than everything else combined, overwhelming the one machine that happens to store it while the others do nothing.",
     "model": {

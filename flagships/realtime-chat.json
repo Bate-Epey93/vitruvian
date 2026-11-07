@@ -202,6 +202,7 @@
    "index": 1,
    "name": "The Held-Open Line: Push, Not Poll",
    "problem": {
+    "title": "Messages lag, or the server is flooded",
     "statement": "The naive chat is a web form. The sender POSTs a message, the server stores it, and the recipient's app asks 'anything new?' on a timer. Now pick the timer and lose either way. Poll every second and a million idle clients hammer the server with mostly-empty requests, burning CPU to answer 'no.' Poll every thirty seconds and the chat feels dead. There is no interval that is both instant and cheap, because the client is asking a question only the server can answer, and only the server knows when the answer changes.",
     "beginner": "The simple version has your phone ask the server 'any new messages?' over and over. Ask too often and you flood the server with pointless questions. Ask rarely and messages show up late. Either way it is wrong, because your phone has no way to know when a message has actually arrived.",
     "model": {
@@ -297,6 +298,7 @@
    "index": 2,
    "name": "Finding Each Other: Gateways, Presence, and the Bus",
    "problem": {
+    "title": "No server knows where your friend is",
     "statement": "One server holding every socket was a fiction. At scale you need thousands of connection servers, and the wall appears at once. The sender's message lands on gateway 12, but the recipient's socket is held by gateway 4000, and gateway 12 has no idea. Worse, nothing knows who is even online: presence, the little green dot, has no source. A message to an offline user should not be pushed at all, but the fabric cannot tell online from offline. You have a room full of switchboards and no directory.",
     "beginner": "Real chat runs on thousands of servers, not one. Your message arrives at one server, but your friend's phone is connected to a different server, and the first server does not know which. Nothing even keeps track of who is online. So messages have nowhere to go, and the 'online' dot means nothing.",
     "model": {
@@ -408,6 +410,7 @@
    "index": 3,
    "name": "The Durable Inbox: Delivering to the Absent",
    "problem": {
+    "title": "Messages to offline phones just vanish",
     "statement": "Push works beautifully for people who are online, and most people are not. A message pushed to a socket that just dropped, or to a phone asleep in a pocket, simply evaporates: the bus delivered it to a gateway, the gateway wrote it to a dead socket, and it is gone, with no record that the recipient never got it. Two failures ride together. A message can be lost the instant a connection blinks, and a fully offline device (app closed, no socket at all) cannot be reached by any socket you hold, because the OS killed your background connection.",
     "beginner": "Push only works if the other phone is connected right now, and most of the time it is not. If you push a message to a phone that just went offline, it disappears with no trace. And if the app is fully closed, you have no connection to it at all, so there is nothing to push through.",
     "model": {
@@ -517,6 +520,7 @@
    "index": 4,
    "name": "One True Order",
    "problem": {
+    "title": "Replies show up above what they answer",
     "statement": "Now messages are durable and they arrive, but they arrive in a muddle. TCP orders bytes within one connection and nothing more. A sender's two messages can straddle a reconnect and land swapped. A group message routed through the bus can overtake an earlier one that took a different path. Redelivery after a dropped ack can show a message twice. So two people in the same conversation see different sequences, a reply appears above the thing it answers, and duplicates surface. Order and uniqueness were never guaranteed; they have to be built.",
     "beginner": "Messages now arrive, but not always in the right order, and sometimes twice. Your network might deliver a later message first, or resend one you already have. Two people in the same chat can end up seeing the conversation in different orders, which makes replies look nonsensical.",
     "model": {
@@ -603,6 +607,7 @@
    "index": 5,
    "name": "Fan-out and the Big Group",
    "problem": {
+    "title": "One tap buries servers in 100,000 copies",
     "statement": "A one-to-one message is one delivery. A message to a group is one for every member, and groups are not small. Send to a 100,000-member community and the naive fabric, on the sender's own path, must write 100,000 inboxes, publish to as many gateways, and fire tens of thousands of push wake-ups, all triggered by one tap. That single message becomes a storm that saturates whichever servers happen to own those recipients, and a handful of huge, active groups (or a celebrity broadcast) become permanent hot spots that dwarf every private chat combined. The average message is cheap; the fattest group is what melts a server.",
     "beginner": "Sending to a big group means one delivery per member. A message to a hundred-thousand-person group means a hundred thousand copies, all set off by a single tap. A few giant, busy groups can generate more work than all the small chats put together, and they overwhelm the servers unlucky enough to hold those members.",
     "model": {
@@ -711,6 +716,7 @@
    "index": 6,
    "name": "Receipts Without Drowning",
    "problem": {
+    "title": "Read ticks outnumber the messages",
     "statement": "The sender wants to know the message was delivered and read: the second tick and the blue tick. Each is a tiny signal flowing backward, and backward from a group is where it turns vicious. In a 100,000-member group, one message can generate up to 100,000 'delivered' and 100,000 'read' signals, each a message in its own right, so receipts alone can outweigh the conversation they describe. Tracking who has read what is worse: full read state is a matrix of every member against every message, O(N squared) and growing with every send. Naive receipts do not just cost traffic; they leak presence and reading habits the sender was never promised.",
     "beginner": "People want to see when a message was delivered and read, the little ticks. In a one-to-one chat that is cheap. In a big group it is brutal: one message can trigger a hundred thousand 'read' signals coming back, more traffic than the messages themselves, and tracking exactly who read what grows impossibly fast.",
     "model": {

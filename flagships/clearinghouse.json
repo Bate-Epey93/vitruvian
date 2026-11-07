@@ -202,6 +202,7 @@
    "index": 1,
    "name": "Multilateral Netting: One Room, One Sum",
    "problem": {
+    "title": "Couriers haul the same gold both ways",
     "statement": "In 1770s London, dozens of banks accept checks drawn on one another. Every afternoon, each bank sends walk clerks across the city to every other bank to present bundles of checks and carry back bags of gold coin. Across N banks, clerks walk N*(N-1) routes a day. Worse, Bank A must pay Bank B 10,000 pounds in gold at 2:00 PM even though Bank B's clerk is walking toward Bank A with 9,800 pounds of checks that arrive at 2:30 PM. Every bank hoards huge piles of dead cash just to survive the afternoon timing lottery.",
     "beginner": "If thirty banks each send couriers to the other twenty-nine banks with bags of cash every afternoon, the streets are full of couriers passing each other with the same gold going in opposite directions.",
     "model": {
@@ -301,6 +302,7 @@
    "index": 2,
    "name": "Central Bank Reserves: Book-Entry Settlement",
    "problem": {
+    "title": "Carried cash gets robbed and miscounted",
     "statement": "Even after netting reduces volume by ninety percent, clerks still carry bags of gold and Bank of England notes through the streets of London to pay the net differences. Robberies happen, counting notes introduces human error, and a bank with a large net debit still has to physically haul coins from its vault to Lombard Street before the doors close.",
     "beginner": "Netting shrank the pile of cash by ninety percent, but that remaining ten percent is still millions of dollars in heavy paper bills and gold coins being carried down the street.",
     "model": {
@@ -395,6 +397,7 @@
    "index": 3,
    "name": "Novation & The Default Waterfall: Surviving a Dead Bank",
    "problem": {
+    "title": "One late bankruptcy topples the rest",
     "statement": "Multilateral netting has a hidden trap. Suppose Bank A fails at 3:55 PM, five minutes before settlement. Because everyone's gross checks were tangled into a single net sum, nobody knows whose checks just bounced. If the clearinghouse unwinds the day's netting and deletes every check involving Bank A, Bank C suddenly owes money it didn't expect to owe and goes bankrupt too, triggering a chain-reaction collapse across the entire financial system (Herstatt-style systemic contagion).",
     "beginner": "If one bank goes broke five minutes before the end-of-day math settles, you cannot just cross out its payments without wrecking every other bank's math and starting a domino effect of bankruptcies.",
     "model": {
@@ -487,6 +490,7 @@
    "index": 4,
    "name": "Dual-Message Card Rails: Fast Auth, Slow Money",
    "problem": {
+    "title": "Stolen plastic sails through checkout",
     "statement": "By the 1960s, banks mail millions of plastic charge cards to consumers. At the checkout counter, a merchant cannot wait until tonight's clearinghouse run to learn whether a stranger's card is stolen or over its limit. Early networks let merchants approve sales below a 'floor limit' (say, 50 dollars) blindly and require a phone call to the issuer for anything larger. Thieves quickly learn to buy 49-dollar items all afternoon, and phone switchboards at BankAmericard collapse under peak holiday calling.",
     "beginner": "The clearinghouse only settles money once a night, but the shopkeeper needs to know right now, while you are standing at the counter with a bag of groceries, whether your card is good.",
     "model": {
@@ -598,6 +602,7 @@
    "index": 5,
    "name": "Interchange & Chargebacks: Aligning Four Selfish Actors",
    "problem": {
+    "title": "Cheated shoppers can't get money back",
     "statement": "The technical rails work, but the incentives are lopsided. Issuing banks take all the credit risk, fund the 30-day interest-free grace period, and mail out the cards, while acquiring banks and merchants capture the sale. Why would an issuer promote the card over cash? Worse, if a shady merchant charges a card for goods that never arrive, or a thief uses a stolen card at a careless merchant, the consumer refuses to pay their bill and walks away from the network.",
     "beginner": "Why would your bank take the risk of giving you a card if the store's bank gets all the fees? And why would you ever hand your card to a stranger's website if you couldn't get your money back when they cheat you?",
     "model": {

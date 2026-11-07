@@ -183,6 +183,7 @@
    "index": 1,
    "name": "Cache-Aside: Put the Hot Answer in Memory",
    "problem": {
+    "title": "The same lookup drowns the database",
     "statement": "Every app server answers every read by querying the backing store, even for the same handful of rows requested thousands of times a second. The store's disk seeks and query planner are the ceiling: read traffic climbs, latency climbs with it, and a popular row becomes a hotspot that saturates the one database that owns it. You are paying a full database query to answer a question whose answer almost never changes.",
     "beginner": "Every server asks the database directly for everything, every time. Even when a thousand people want the exact same row, the database looks it up a thousand times. It is slow, and the database drowns under repeated questions that all have the same answer.",
     "model": {
@@ -301,6 +302,7 @@
    "index": 2,
    "name": "Invalidation: Keeping Copies From Lying",
    "problem": {
+    "title": "Readers still see the old value",
     "statement": "The cache is a copy and the store keeps changing under it. A writer updates a row (a price, a permission, a corrected record) and every cached copy of that key keeps serving the old value until its TTL runs out, so a change can take the full lifetime to appear and a revoked permission lingers dangerously. Long TTL and you are fast but wrong; no TTL and you have thrown the cache away. Worse, the naive fix hides a race: a reader that missed can write a stale value into the cache just after a writer cleared it.",
     "beginner": "When the database changes, the cache still holds the old answer and hands it out until its timer runs out. Set the timer long and people see stale data; set it to zero and the cache is pointless. And a simple 'just delete the cached copy when you write' can still leave a stale copy behind if a read and a write cross at the wrong moment.",
     "model": {
@@ -393,6 +395,7 @@
    "index": 3,
    "name": "The Stampede: One Hot Key, Ten Thousand Misses",
    "problem": {
+    "title": "An expiry sends everyone to the database",
     "statement": "A popular key expires, is invalidated, or is evicted, and in the same instant every server that wanted it misses at once. Naively, each miss independently queries the backing store, so one expiry becomes ten thousand identical reads landing on the store in the same millisecond. The store falls over, not because the value is expensive, but because everyone asked for it at the exact same moment. This is a cache stampede, and the cache caused it, not the users.",
     "beginner": "Imagine the cached answer for something wildly popular expires at midnight. The instant it does, every server misses together and they all ask the database the same question in the same second. The database collapses, not because the question is hard, but because thousands asked it simultaneously.",
     "model": {
@@ -478,6 +481,7 @@
    "index": 4,
    "name": "Consistent Hashing: One Node Is Not Enough",
    "problem": {
+    "title": "Adding a machine reshuffles every key",
     "statement": "One cache node has a hard ceiling: its RAM caps the working set it can hold, and its CPU and network cap the reads it can serve. Past that, the hit ratio falls because the set no longer fits, and a single hot key can saturate the one node that holds it. The obvious fix, more nodes, raises a harder question: which node owns which key? Plain modulo hashing (key mod N) spreads keys evenly, but the day you add or lose a node, N changes and almost every key remaps to a different owner, so the entire cache goes cold at once.",
     "beginner": "One cache machine can only hold so much and answer so many requests. So you add more machines, but now you must decide which machine keeps which key. The simple math (number of the key, divided among the machines) breaks the moment you add or remove a machine: nearly every key suddenly belongs to a different machine, and the whole cache is empty at once.",
     "model": {
@@ -607,6 +611,7 @@
    "index": 5,
    "name": "When the Cache Dies",
    "problem": {
+    "title": "A crash dumps every read on the database",
     "statement": "Every layer so far leans on the cache being there. So what happens when a cache node crashes, or the whole tier is unreachable? The keys that node held vanish from memory in an instant, and every request for them misses at once, a correlated miss storm that hits the backing store all together. If the app treats the cache as a hard dependency and errors when it is down, a cache outage becomes a full outage. If it falls through to the store, a warm cache's traffic now lands on a store sized for a trickle, and the store melts. Losing the cache can take down the very thing it was protecting.",
     "beginner": "The whole system now depends on the cache being up. If a cache machine crashes, everything it remembered is gone instantly, and all those requests hit the database at the same moment. If the app just gives up when the cache is missing, the site goes down; if it sends everything to the database, the database, which was only handling the leftovers, gets crushed. The cache dying can break the database it was shielding.",
     "model": {

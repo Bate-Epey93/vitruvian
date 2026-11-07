@@ -219,6 +219,7 @@
    "index": 1,
    "name": "Store-and-Forward: Nobody Has to Be Home",
    "problem": {
+    "title": "Messages to a sleeping phone vanish",
     "statement": "The naive relay is a wire, not a service: it takes the message and immediately pushes it toward the recipient's phone. But that phone is in a pocket with its radio asleep, or in a basement, or out of battery; phones are unreachable most of the day by design. The push hits nothing and the message dies in flight. A chat system that requires both people online at the same moment is a phone call with extra steps.",
     "beginner": "The middle computer just passes the message along right away. If the other person's phone is off or has no signal at that exact second (and phones are offline a lot), the message hits nothing and is gone.",
     "model": {
@@ -312,6 +313,7 @@
    "index": 2,
    "name": "The Ticks: Making Retries Harmless",
    "problem": {
+    "title": "The same message arrives three times",
     "statement": "Mobile networks lose packets as a matter of routine, and they are just as happy to lose the acknowledgment as the message. The sender's phone faces an unwinnable guess: silence after sending means either 'the message never arrived' or 'it arrived and the reply got lost'. Don't retry, and messages vanish. Retry naively, and the recipient gets 'Happy birthday!' three times, or worse, a payment instruction twice. The queue solved absence; it did nothing for uncertainty.",
     "beginner": "Bad phone networks lose things: sometimes the message, sometimes the 'got it!' reply. The sending phone can't tell which happened. If it sends again just in case, the other person might get the same message twice.",
     "model": {
@@ -411,6 +413,7 @@
    "index": 3,
    "name": "End-to-End Encryption: Blind the Middleman",
    "problem": {
+    "title": "The company can read every message",
     "statement": "Layers 1 and 2 made the server the hero of the story, and that is exactly the problem. Every message rests, readable, in its queues; every conversation of two billion people transits one company's machines in plaintext. Calling that a privacy risk undersells it: it is a wiretap with a delivery feature. One breach, one insider, one subpoena, one change of corporate heart, and everything ever queued is on the table. The invariant 'only the endpoints can read it' isn't weakly protected. It doesn't exist yet.",
     "beginner": "The middle computer can read every message it holds and delivers. So anyone who hacks it, works at the company, or shows up with a court order can read them too. The mail carrier can currently open every letter.",
     "model": {
@@ -516,6 +519,7 @@
    "index": 4,
    "name": "Sender Keys: One Ciphertext, 255 Copies",
    "problem": {
+    "title": "Big chats take minutes per message",
     "statement": "Pairwise encryption hides a brutal multiplication. A message to a 256-member group means the sender's phone must encrypt separately for each member: 255 encryptions, 255 uploads. On fast wifi you'd never notice. On the connections where WhatsApp won (a 2G link in a village, a congested festival cell) that's minutes of radio time and a visible bite of battery and data for one 'happy birthday'. The narrowest pipe in the system, the sender's uplink, has just been multiplied by the size of the group.",
     "beginner": "In a group of 256 people, the sending phone would have to lock and send the message 255 separate times, once per member. On a slow village connection, one short message becomes minutes of sending.",
     "model": {
@@ -637,6 +641,7 @@
    "index": 5,
    "name": "Multi-Device: The Phone Anoints Its Peers",
    "problem": {
+    "title": "The company could quietly add a listener",
     "statement": "End-to-end encryption welded your identity to one physical phone: the keys live there and nowhere else. The first WhatsApp Web ducked the problem by tethering: the browser was a mirror, the phone did all the cryptography, and if the phone went dark the laptop went dumb. Real multi-device means every device needs its own keys, which raises a new question: who decides which devices belong to you? If the answer is 'the server's list', a coerced or compromised server can quietly append one more 'device' to your account, and layer 3's promise dissolves into a wiretap with a device id.",
     "beginner": "The secret keys live on your one phone, so only that phone can read your messages. To let your laptop join, it needs keys too, but then someone has to keep the list of your devices. If the company's computer keeps that list unsupervised, it could sneak an extra 'device' onto it that is really a listener.",
     "model": {

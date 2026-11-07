@@ -198,6 +198,7 @@
    "index": 1,
    "name": "The Timetable: One Clock, One Plan",
    "problem": {
+    "title": "Trains see each other too late to stop",
     "statement": "Two trains, one track, and nothing that coordinates them. Each driver knows only what he can see, and he cannot see far enough to matter: at speed, by the time the other train is visible, the collision is already unavoidable. Early railways ran on hope and lineside hand signals.",
     "beginner": "Two trains share one track, but neither driver knows where the other is, and trains can't stop quickly enough to avoid what they see.",
     "model": {
@@ -281,6 +282,7 @@
    "index": 2,
    "name": "The Block System: Space, Not Time",
    "problem": {
+    "title": "A stalled train gets hit from behind",
     "statement": "Time-based separation rests on a false assumption: 'enough time has passed, so the track must be clear.' A broken-down train doesn't move because ten minutes elapsed. Clayton Tunnel, 1861: a signalman's confusion over whether a train had cleared the tunnel sent a second train in behind it. 23 dead, inside a system following its own rules.",
     "beginner": "The old rule was 'wait 10 minutes, then go.' But waiting doesn't move a broken train. Trains kept crashing into trains that were still there.",
     "model": {
@@ -381,6 +383,7 @@
    "index": 3,
    "name": "Interlocking: Make the Wrong Move Impossible",
    "problem": {
+    "title": "Two trains cleared into one crossing",
     "statement": "Blocks protect a line of trains running nose to tail. But at a junction, routes CROSS, and a signalman controls the points and the signals with separate levers. Nothing physical stops him from setting the points one way and clearing a signal the other, or from clearing two signals into the same crossing. Every junction is a collision that hasn't happened yet, held off only by human care.",
     "beginner": "Where tracks cross, one person controls both the track switches and the go/stop signals with separate levers, and nothing stops them from pulling a deadly combination by mistake.",
     "model": {
@@ -468,6 +471,7 @@
    "index": 4,
    "name": "Track Circuits: The Track Reports Itself",
    "problem": {
+    "title": "A signalman forgets a standing train",
     "statement": "The block system's ledger of 'occupied or clear' lives in a signalman's memory and his register book. Quintinshill, 1915: a signalman forgot a train standing on the main line, visible from his own window, and accepted an express into the same block. Over 200 dead, Britain's worst rail disaster. Human memory was the single point of failure for the most important fact on the railway.",
     "beginner": "The person in the signal box has to REMEMBER which sections have trains in them. One signalman forgot a train he could actually see, and caused Britain's worst-ever rail crash.",
     "model": {
@@ -549,6 +553,7 @@
    "index": 5,
    "name": "Fail-Safe: Design for the Day It Breaks",
    "problem": {
+    "title": "When a part snaps, the train runs away",
     "statement": "Every layer so far still ends at a human: the driver must see the signal and obey it. Armagh, 1889: a stalled excursion train was divided on a hill, its simple brakes released, and 600 tons of carriages full of children ran away downhill into the next train: 80 dead. Signals were right; brakes and human judgment failed. Any component (a wire, a lamp, a pipe, a person) WILL eventually fail. The question the railway had not answered: fail into what?",
     "beginner": "Everything still depends on machines not breaking and drivers not missing a signal. But parts break and people blink. The real question is: when something breaks, does the train end up stopped, or running away?",
     "model": {

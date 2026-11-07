@@ -186,6 +186,7 @@
    "index": 1,
    "name": "Bytes Out of the Database",
    "problem": {
+    "title": "Every photo you add makes lookups slower",
     "statement": "The naive store keeps each photo as a row in the database, bytes and all. Backups that used to take minutes now take hours, and simple metadata queries crawl because the database is dragging megabytes of pixels through memory and polluting the buffer cache that used to hold hot rows. A relational database is built for small, mutable, queryable rows. A photo is none of those, and every one you insert makes the whole database slower.",
     "beginner": "The first idea is to save the whole photo inside the database, like pasting a giant picture into a spreadsheet cell. It works for a few photos, but as they pile up the database gets huge and slow, and even looking up simple facts about a photo drags.",
     "model": {
@@ -275,6 +276,7 @@
    "index": 2,
    "name": "Presigned Upload: Payload Off the App Tier",
    "problem": {
+    "title": "Your servers choke relaying every photo",
     "statement": "The bytes are out of the database, but every upload still streams the full photo through your app servers on its way to the object store. A fleet sized for small JSON requests now melts proxying gigabytes of pixels it only passes along, and its bandwidth and memory become the bottleneck. Worse, each app server holds the object store's write credentials, a fat trust target sitting in the byte path.",
     "beginner": "Now the photos live in proper storage, but every upload still travels through your app servers first, and they are choking on all those pixels they just hand along. And those servers hold the master key to your storage, which is risky.",
     "model": {
@@ -378,6 +380,7 @@
    "index": 3,
    "name": "Renditions: Never Serve the Original",
    "problem": {
+    "title": "A tiny screen gets a giant photo",
     "statement": "Two problems arrive with serving. First, you are handing the full-resolution original to every viewer, so a feed of twenty photos is tens of megabytes for a phone that will show each at a few hundred pixels, wasting bandwidth, battery, and egress money. Second, if you resize during the upload request, the user waits seconds while the server generates every size, and a burst of uploads pins your CPUs. You need several sizes, and you cannot make the uploader wait for them.",
     "beginner": "A phone screen is small, but you are sending it the giant original photo, which is slow and expensive. You need smaller copies. But making those copies takes time, and you do not want the person who just posted to wait while the server shrinks their photo five different ways.",
     "model": {
@@ -478,6 +481,7 @@
    "index": 4,
    "name": "The Read Storm: Serve From the Edge",
    "problem": {
+    "title": "A viral photo buries the central storage",
     "statement": "Renditions exist, but every view still fetches them from your central object store. A viewer in Jakarta waits on a round trip to a bucket in Virginia, and when one photo goes viral, millions of identical requests stampede that single origin and saturate its bandwidth. You are paying origin egress and cross-ocean latency to hand out the exact same immutable bytes over and over.",
     "beginner": "Every time someone looks at a photo, it is fetched from one central storage far away. That is slow for people on the other side of the world, and if a photo gets very popular, that one storage location gets buried under identical requests.",
     "model": {
@@ -577,6 +581,7 @@
    "index": 5,
    "name": "The Feed: Build the Read Ahead of Time",
    "problem": {
+    "title": "Every app open redoes a huge search",
     "statement": "A viewer opens the app and expects a stream of the newest photos from everyone they follow. Computed the obvious way, that means querying the metadata database for the recent photos of hundreds or thousands of followees and merging them, on every single app open, by every user. This fan-in read is the most frequent action in the whole product, and it hammers the one store you worked so hard to keep small, turning feed assembly into the new bottleneck.",
     "beginner": "When you open the app, it has to find the latest photos from everyone you follow and put them in order. Doing that search fresh every time you open the app, for every user, is a huge amount of repeated work on the database.",
     "model": {

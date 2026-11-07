@@ -182,6 +182,7 @@
    "index": 1,
    "name": "Get the Bytes Out of the Request Path",
    "problem": {
+    "title": "Big uploads give up and crash the server",
     "statement": "The naive service is one box: the uploader POSTs the master straight to it over HTTP and it runs ffmpeg inline before responding. A 4 GB master pins that box for the entire encode, which outlasts every HTTP timeout, so the upload connection dies long before the renditions exist. A second upload arriving mid-encode fights for the same CPU and memory and one of them runs out of memory. Encoding inside the request is impossible for anything past a toy clip.",
     "beginner": "The first version is a single computer that receives your whole video over the web connection and makes all the copies before it answers. Your file is huge and the copying takes ages, so the connection gives up, and a second upload can crash the machine.",
     "model": {
@@ -282,6 +283,7 @@
    "index": 2,
    "name": "The Queue and the Worker Fleet",
    "problem": {
+    "title": "Bursts pile up and crashes lose videos",
     "statement": "Async helped, but there is still one encoder box pulling one job at a time. When a popular creator's fans upload a burst, jobs arrive far faster than one box can encode, and there is nowhere for the waiting work to sit except that box's memory. Worse, if the box crashes mid-encode, the job it was holding is simply gone: nothing recorded that it was owed, so inv1 breaks silently.",
     "beginner": "Even after the upload is quick, one machine still makes all the copies, one video at a time. When lots of videos arrive at once they stack up, and if that machine crashes, the video it was working on just vanishes.",
     "model": {
@@ -389,6 +391,7 @@
    "index": 3,
    "name": "Chunked Parallel Encoding",
    "problem": {
+    "title": "A long video hogs one machine for hours",
     "statement": "The fleet parallelizes across different jobs, but any single job still encodes on one worker from first frame to last. A three-hour 4K master is hours of wall-clock on one core, no matter how idle the rest of the fleet is. The creator waits, one machine is pinned, and a thousand spare cores sit watching. The bottleneck is the serial encode of one long file.",
     "beginner": "Many machines help when there are many videos, but one long video is still handled start-to-finish by a single machine, which can take hours while all the other machines sit idle.",
     "model": {
@@ -496,6 +499,7 @@
    "index": 4,
    "name": "Retries, Dead-Letter, and Idempotent Ids",
    "problem": {
+    "title": "A piece encoded twice corrupts the video",
     "statement": "At-least-once delivery is a promise with teeth: a worker that leases a segment task and dies before acknowledging will have that task redelivered. Now two encodes of the same segment can race, writing the same output twice or leaving a half-written file, which corrupts the stitched rendition and breaks inv3. And a genuinely poison segment (a corrupt codec, an unsupported pixel format) fails on every worker forever, retrying in an infinite loop that blocks its job and burns compute.",
     "beginner": "The queue guarantees a task is tried at least once, which means sometimes twice. Two machines encoding the same piece can clash and corrupt the result. And a broken piece that can never succeed will retry forever, jamming the line.",
     "model": {
@@ -582,6 +586,7 @@
    "index": 5,
    "name": "The Completion Barrier and Atomic Publish",
    "problem": {
+    "title": "Playback breaks on a half-built video",
     "statement": "Segments and renditions finish at wildly different times: the 240p rung lands in seconds, the 4K rung minutes later, and segments arrive out of order. If the video is flipped to 'ready' the moment the first rung appears, a player will request a 1080p segment that has not been encoded yet and get a 404 mid-playback. A viewer streaming a half-built ladder is inv4 breaking in the worst possible place: in front of the audience.",
     "beginner": "The different-quality copies finish at different times. If the video is marked ready as soon as the first copy is done, a viewer can ask for a piece that does not exist yet and the playback breaks. It must only go live when every piece is finished.",
     "model": {
@@ -682,6 +687,7 @@
    "index": 6,
    "name": "Autoscale the Fleet on Queue Depth",
    "problem": {
+    "title": "Idle at 3am, hours behind at peak",
     "statement": "A fixed fleet is wrong at every hour. Sized for the daily peak it sits mostly idle at 3am, burning money on cores encoding nothing. Sized for the average it drowns when a big creator drops a 4K master and a thousand uploads land at once: the queue's oldest-message age climbs from seconds to hours and time-to-ready collapses. The fleet size is a constant in a workload that is anything but.",
     "beginner": "The number of encoding machines is fixed, but the amount of work swings wildly. Too many machines and you waste money when it is quiet; too few and everything backs up for hours when a rush hits.",
     "model": {

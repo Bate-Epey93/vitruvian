@@ -185,6 +185,7 @@
    "index": 1,
    "name": "Ranking: Score, Don't Just Sort by Time",
    "problem": {
+    "title": "The post you'd love is buried far down",
     "statement": "The naive feed is reverse-chronological: newest first, everything shown. As the catalog grows from hundreds of items to billions, this collapses. A viewer sees a handful of items before leaving, and the newest items are mostly noise to them; the one video they would have loved is buried a thousand rows down. Recency is not relevance, and attention is the scarce resource being wasted.",
     "beginner": "A feed that just shows the newest posts first drowns you: there is far too much, most of it is not for you, and the thing you would love is buried where you will never scroll.",
     "model": {
@@ -263,6 +264,7 @@
    "index": 2,
    "name": "Candidate Generation: Filter Cheap, Rank Dear",
    "problem": {
+    "title": "Judging every item takes far too long",
     "statement": "Ranking works, but the ranker is expensive: it runs a heavy model over every candidate to predict engagement. Scoring is O(candidates) per request, and 'candidates' is the whole catalog, billions of items. No feed can score a billion items inside a couple hundred milliseconds, times millions of requests a second. The scorer that made the feed good is now the thing that makes it impossible.",
     "beginner": "The smart ranking is too slow: you cannot run a heavy prediction on every single item in the world every time someone opens the app.",
     "model": {
@@ -349,6 +351,7 @@
    "index": 3,
    "name": "The Feedback Loop: Learn From What Happened",
    "problem": {
+    "title": "Suggestions go stale as tastes change",
     "statement": "The ranking model is trained once and frozen. But tastes shift by the hour, trends appear overnight, and a flood of new content arrives every second. Within a day the model is scoring a world that no longer exists, and nothing carries what actually happened (did the viewer watch, skip, finish?) back into it. The model is blind to the outcomes of its own recommendations.",
     "beginner": "A recommender that never learns from what you actually did goes stale fast: it keeps guessing from an old picture of you and an old picture of the world.",
     "model": {
@@ -469,6 +472,7 @@
    "index": 4,
    "name": "Exploration: Break the Degenerate Loop",
    "problem": {
+    "title": "Your feed shrinks to more of the same",
     "statement": "The feedback loop works, and that is the danger: it is positive feedback. The model shows what it predicts you will engage with; you engage; it learns to show more of the same. Your feed narrows into a bubble, popular items get recommended more and so grow more popular (rich-get-richer), and because the model optimizes a proxy (clicks, watch time) it drifts toward clickbait that wins the proxy while losing your trust. The loop amplifies its own bias.",
     "beginner": "A feed that only shows what you already click teaches itself to show you less and less variety, pushes whatever is already popular even harder, and learns that cheap clickbait works, even when you end up feeling worse.",
     "model": {
@@ -553,6 +557,7 @@
    "index": 5,
    "name": "Cold Start: When There Is No Signal Yet",
    "problem": {
+    "title": "Newcomers get junk, new posts go unseen",
     "statement": "Exploration and diversity still assume signal exists. A brand-new viewer has no history, and a just-uploaded item has no engagement, so the collaborative model has nothing to place them with: the cold viewer gets garbage, and good new content gets zero impressions and dies before it can prove itself. Freshness and relevance pull in opposite directions, because proven old items always outscore unproven new ones.",
     "beginner": "The system cannot recommend for someone it has never seen, or recommend something nobody has watched yet, so brand-new viewers get a bad feed and brand-new posts never get a chance.",
     "model": {
@@ -630,6 +635,7 @@
    "index": 6,
    "name": "The Power Law: Surviving the Viral Hot Item",
    "problem": {
+    "title": "One runaway hit knocks the servers over",
     "statement": "Everything above assumes even load. Real engagement is a power law: a tiny number of items and creators take a huge share of all attention. When a clip goes viral, one item's row is fetched by tens of millions of viewers at once (a hot key that melts one shard), the engagement events for it swamp a single stream partition, and when a celebrity with a hundred million followers posts, naively fanning that out is O(followers). The average case was fine; the superstar case takes the system down.",
     "beginner": "When one video or one creator suddenly gets a huge share of all the traffic, the parts of the system that quietly handled the average load fall over on the superstar.",
     "model": {

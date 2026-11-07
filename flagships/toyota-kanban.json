@@ -212,6 +212,7 @@
    "index": 1,
    "name": "Jidoka & The Andon Cord: Stop the Line on First Defect",
    "problem": {
+    "title": "One bad machine spoils thousands of cars",
     "statement": "In a traditional mass-production plant, the sacred rule is 'never stop the moving line.' If a stamping press drifts out of tolerance or a weld gun misfires, the machine keeps running to hit its hourly quota and dumps thousands of slightly warped panels into the warehouse pile. Weeks later, final assembly workers try to bolt doors onto twisted frames with rubber mallets, and a graveyard of finished cars sits in a rework lot waiting to be torn back apart.",
     "beginner": "If a machine starts making crooked parts and nobody is allowed to stop the conveyor belt, you end up with five thousand crooked cars that have to be taken apart by hand at the end of the building.",
     "model": {
@@ -303,6 +304,7 @@
    "index": 2,
    "name": "Kanban & Supermarket Pull: Produce Only What Was Just Taken",
    "problem": {
+    "title": "Wrong parts pile up, right ones run out",
     "statement": "Even with Jidoka catching bad parts, a central planning office still pushes monthly schedules to every department independently. Because real customer orders shift every day and machines hiccup at different rates, the stamping press builds thousands of sedan roofs while final assembly is starved for wagon doors. Walk the aisle and you cannot tell whether a pile of 500 fenders is needed in ten minutes or is surplus from a cancelled forecast.",
     "beginner": "When a central office guesses what every station should make a month in advance, one aisle floods with parts nobody needs today while the next aisle runs out of the part that is holding up the car.",
     "model": {
@@ -418,6 +420,7 @@
    "index": 3,
    "name": "SMED Quick Changeover: Crushing Setup Time to Kill Batching",
    "problem": {
+    "title": "Each mold swap idles the press six hours",
     "statement": "The Kanban rack wants the stamping press to make 50 sedan doors, then 50 truck fenders, then 50 coupe hoods. But changing the five-ton steel die inside the stamping press takes six hours of unbolting, crane hoisting, shimming, and trial hits. If you spend six hours changing dies after every 50 parts, the press sits idle 90 percent of the day. The press foreman rebels: 'With a six-hour changeover, I HAVE to stamp 10,000 doors at once or we go broke!'",
     "beginner": "If it takes six hours to swap the heavy metal mold inside a stamping machine, you cannot afford to swap it every twenty minutes to refill a small supermarket shelf.",
     "model": {
@@ -496,6 +499,7 @@
    "index": 4,
    "name": "Heijunka & Takt Time: Leveling the Heartbeat",
    "problem": {
+    "title": "Crushed on Monday, idle on Tuesday",
     "statement": "Even with Kanban pull and 9-minute die changes, raw customer orders arrive in lumps: fleet buyers order 200 V6 vans on Monday morning, and suburban dealers order 200 four-cylinder sedans on Tuesday. If Final Assembly builds 200 V6 vans in a row on Monday, two bad things happen: first, the V6 engine bay takes 75 seconds of wiring while the sedan takes 45, so Monday's line operators fall behind and pull the Andon cord every cycle; second, the V6 supplier gets slammed with a massive Kanban wave on Monday and sits idle on Tuesday (the bullwhip effect).",
     "beginner": "If you build all the complicated V6 vans on Monday and all the simple four-cylinder cars on Tuesday, the workers and part suppliers get crushed on Monday and have nothing to do on Tuesday.",
     "model": {
@@ -592,6 +596,7 @@
    "index": 5,
    "name": "Poka-Yoke: Making the Wrong Move Physically Unsayable",
    "problem": {
+    "title": "Look-alike parts go into the wrong car",
     "statement": "With Heijunka interleaving sedan, wagon, and van bodies every 60 seconds, a human operator at Final Assembly now faces a new trap: Car 1 needs a sedan airbag harness, Car 2 needs a wagon harness, and the two connectors look almost identical at 6:00 AM. Telling the operator 'pay closer attention' fails; even a 99.9 percent careful human makes one mistake every thousand cars, and an Andon cord only helps if the human notices they grabbed the wrong part.",
     "beginner": "When a worker puts together a sedan at 9:01 and a minivan at 9:02, it is easy to grab the sedan bolt or wire for the minivan by mistake if both fit into the same hole.",
     "model": {

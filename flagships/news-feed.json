@@ -207,6 +207,7 @@
    "index": 1,
    "name": "Fan-out on Write: Precompute Every Feed",
    "problem": {
+    "title": "Every refresh waits on a giant search",
     "statement": "The naive feed is a query: 'give me the latest posts from everyone I follow, newest first.' For a reader following two thousand accounts, that is a two-thousand-way merge over a posts table with billions of rows, sorted and truncated, run again on every pull-to-refresh. Reads outnumber writes a hundred to one, so the system does its most expensive work at the exact moment a human is staring at a spinner.",
     "beginner": "The simple way to build a feed is to search for the newest posts from everyone you follow, every single time you open the app. That search gets painfully slow when you follow thousands of people and there are billions of posts.",
     "model": {
@@ -311,6 +312,7 @@
    "index": 2,
    "name": "The Celebrity Problem: Don't Fan Out the Firehose",
    "problem": {
+    "title": "One huge account's post stalls the rest",
     "statement": "Fan-out on write assumes follower counts are sane. They are not. When an account with forty million followers posts, that one write explodes into forty million inbox insertions. The fan-out worker floods, the queue backs up, and every ordinary user's post now waits behind the celebrity's storm. A single post can jam delivery for the whole network. Twitter hit exactly this, which is why a plain push model cannot stand alone.",
     "beginner": "Pushing a copy of each post to every follower works fine until someone with forty million followers posts. Now one post means forty million copies, all at once, and everyone else's posts get stuck in line behind it.",
     "model": {
@@ -397,6 +399,7 @@
    "index": 3,
    "name": "Cache the Feed: Serve Scrolls from Memory",
    "problem": {
+    "title": "Every scroll hammers the same database",
     "statement": "The inbox lives in a database, and the feed is read relentlessly: every open, every pull-to-refresh, every scroll to the next page is another hit. Hundreds of millions of users reading tens of times a session turn the feed store into a hotspot that no amount of push-side work relieves. The read that fan-out made cheap is still a network round trip to disk, on the single busiest path in the system.",
     "beginner": "Even a quick lookup gets slow when hundreds of millions of people do it constantly. The database holding everyone's feeds becomes the busiest, most overloaded part of the whole system.",
     "model": {
@@ -485,6 +488,7 @@
    "index": 4,
    "name": "Cursor Pagination: A Stable Window on a Moving List",
    "problem": {
+    "title": "Posts repeat or vanish as you scroll",
     "statement": "The feed is infinite scroll, fetched a page at a time. The obvious way, 'skip the first 40, give me the next 20,' assumes the list stands still between pages. It never does: new posts arrive at the top constantly. Offset by 40 after three posts were prepended, and you re-show three the reader already saw, or skip three they didn't. Deletions shift it the other way. Every refresh mid-scroll corrupts the page boundaries.",
     "beginner": "Feeds load in pages as you scroll. If you ask for 'the next 20 after the first 40,' but new posts arrived at the top, the counting is off, and you'll see duplicates or miss posts. The list keeps moving under you.",
     "model": {
@@ -562,6 +566,7 @@
    "index": 5,
    "name": "Ranking: Order by Relevance, Not Just Time",
    "problem": {
+    "title": "A friend's big news gets buried",
     "statement": "The feed is perfectly ordered by time and still fails its reader. Someone following two thousand accounts gets thousands of posts an hour; reverse-chronological shows them the last few minutes and buries a close friend's big news under a stranger's lunch. The best post of the day, published this morning, sits a hundred screens down. Instagram and Twitter both watched engagement fall on pure chronological feeds and abandoned it. A complete, fast, correctly-paged feed is still the wrong feed if the good posts never surface.",
     "beginner": "A feed sorted purely by time shows you whatever was posted most recently, not what you'd most want to see. Follow enough accounts and the posts you care about get buried under a flood of newer, less interesting ones.",
     "model": {

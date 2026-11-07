@@ -198,6 +198,7 @@
    "index": 1,
    "name": "The Transcode Pipeline: One Upload, Many Copies",
    "problem": {
+    "title": "Uploaded videos play almost nowhere",
     "statement": "The naive server stores the raw upload and streams it straight back, and it plays almost nowhere. A raw upload is whatever the camera happened to produce: a codec the viewer's phone can't decode, a bitrate their connection can't sustain, a resolution their screen doesn't have. Worse, converting video is expensive (serious compute per minute of footage), so doing it during the upload means the creator stares at a spinner while the server chokes. And uploads arrive in bursts that no fixed fleet can absorb in real time.",
     "beginner": "A video straight off a camera is like a document in a language only that camera speaks; most phones and TVs can't play it. Translating it takes a lot of computer work, and if you do that work while the person waits, uploads grind to a halt every time a busy hour hits.",
     "model": {
@@ -315,6 +316,7 @@
    "index": 2,
    "name": "Split the Write Path from the Read Path",
    "problem": {
+    "title": "One popular video blocks every new one",
     "statement": "One tier still does everything: accepts uploads, feeds the transcoders, and streams playback. That machine dies of its own success, and the failure modes are cross-wired: a burst of uploads steals the CPU and bandwidth that playback needed, and one video getting popular makes every creator's upload time out. Success in any one job is an outage in the other two; growth itself is the bug.",
     "beginner": "Imagine one worker who takes in packages, repacks them, and hands them out at the counter, all at once. The moment a crowd forms at the counter, the intake line stops dead. On this platform, a popular video breaks uploading.",
     "model": {
@@ -431,6 +433,7 @@
    "index": 3,
    "name": "The CDN: Move the Video Near the Viewer",
    "problem": {
+    "title": "Far from the server, videos keep pausing",
     "statement": "Every viewer on earth still pulls from one origin, and that fails twice at once. Economically: a million concurrent viewers of one video means the same bytes shipped from the origin a million times, and early YouTube's bandwidth bills were an existential threat before the Google acquisition. Physically: a viewer an ocean away gets round-trip latency and rebuffering that no faster origin server can fix, because the speed of light does not negotiate.",
     "beginner": "Every viewer in the world is fetching the video from the same faraway building. That costs a fortune in internet traffic, and for someone on another continent the video keeps pausing to load, not because the server is slow but because the data has too far to travel.",
     "model": {
@@ -519,6 +522,7 @@
    "index": 4,
    "name": "Recommendations: The Loop That Decides What Plays Next",
    "problem": {
+    "title": "Most videos are never seen by anyone",
     "statement": "The delivery machine is now superb, and it is delivering into a void. With hundreds of hours arriving every minute, the catalog is unbrowsable by any human means; search only works when the viewer already knows what they want, and almost every video that exists will never be searched for. A perfect pipeline full of videos nobody can find is a warehouse, not a platform. Discovery is the bottleneck now, and no editorial staff on earth scales to the inventory.",
     "beginner": "There are now far more videos than anyone could ever look through: millions of lifetimes' worth. Searching only helps if you already know a video exists. Without something choosing what to show each person, almost every video ever uploaded would never be seen by anyone.",
     "model": {
@@ -617,6 +621,7 @@
    "index": 5,
    "name": "Monetization: Ads Pay the Bandwidth Bill",
    "problem": {
+    "title": "The bills pile up and creators go unpaid",
     "statement": "Everything built so far burns money at planetary scale (transcoder fleets, exabytes of renditions, edge racks on every continent) and nothing yet pays for a byte of it. Viewers won't pay per view; the bandwidth bill already nearly sank the young company once. The supply side has the same hole: the machine needs creators to keep feeding it forever, and goodwill is not a salary. Two deficits, one design question: who pays, and why do creators keep coming?",
     "beginner": "Running this costs a fortune (all those computers converting, storing, and shipping video worldwide) and viewers expect it free. Meanwhile the people making the videos are working for nothing. Without money coming in and money going to creators, the whole thing quietly starves.",
     "model": {
@@ -728,6 +733,7 @@
    "index": 6,
    "name": "Moderation: The Trust Boundary at Publish",
    "problem": {
+    "title": "Stolen films and scams reach the world",
     "statement": "Anyone on earth can hand this machine anything, and everything built so far (transcode, split paths, worldwide edges, a recommendation loop, an ad economy) is an amplifier that treats a pirated film, a scam, or something far worse exactly like a piano recital. Rights holders sue platforms built on their stolen catalogs; advertisers flee the moment their brand appears beside the unacceptable; laws in every country demand removals. The upload path crosses from an untrusted stranger to worldwide, monetized distribution with no checkpoint at all. At hundreds of hours a minute, 'hire people to watch it' is arithmetic that can never work.",
     "beginner": "Right now a total stranger's video goes straight from their phone to the whole world, with ads on it, no questions asked. Stolen movies, scams, and much worse get the same megaphone as everything else. Far too much arrives every minute for humans to watch it all, so the checking itself has to be a machine.",
     "model": {

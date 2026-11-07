@@ -191,6 +191,7 @@
    "index": 1,
    "name": "The Async Pipeline: Get the Send Off the Critical Path",
    "problem": {
+    "title": "A slow alert service stalls the app",
     "statement": "The send sits inside the producer's request. Posting a comment now waits on the push API, so when APNs is slow or down, the user's own action is slow or fails. A burst of events, a viral post, hammers the provider inline and backs up every producer behind it. A side effect, telling someone, is holding the primary action hostage.",
     "beginner": "Right now the code that reacts to an event (a comment, a payment) also does the sending, in the same step, before it can finish. So if the notification service is slow, the app itself is slow, and a flood of events makes everything grind.",
     "model": {
@@ -294,6 +295,7 @@
    "index": 2,
    "name": "Fan-out: One Event, Every Device",
    "problem": {
+    "title": "Alerts reach only an old phone address",
     "statement": "The worker sends to one hardcoded token. But a user has several devices (phone, tablet, laptop), tokens rotate the moment they reinstall or upgrade, and some events target many users at once (a reply in a 500-person thread). The producer cannot carry anyone's current addresses; whatever token it once knew is already going stale. One event has to expand into the concrete set of live endpoints for everyone it concerns.",
     "beginner": "People have more than one device, and their device 'addresses' keep changing. And some events need to reach a whole group, not one person. The sender does not know all those current addresses, so something has to look them up and turn one event into many sends.",
     "model": {
@@ -394,6 +396,7 @@
    "index": 3,
    "name": "Per-Channel Delivery: Adapters for Push, Email, SMS",
    "problem": {
+    "title": "One change breaks every kind of message",
     "statement": "Not everything belongs on push. A password reset must be email, a login code is SMS, a like is push. Each channel is its own world: APNs and FCM speak their own protocols and auth, email needs MIME and SPF/DKIM and a sender reputation, SMS has 160-character segments and per-country carrier rules. Cramming all of that into one worker makes a brittle tangle where an email change risks the push path and one channel's quirks block the rest.",
     "beginner": "Different messages suit different channels: codes by text, receipts by email, nudges by push. But each channel works completely differently under the hood, and if one big block of code tries to do all of them, a change to one keeps breaking the others.",
     "model": {
@@ -523,6 +526,7 @@
    "index": 4,
    "name": "User Preferences: The Consent Gate",
    "problem": {
+    "title": "People get spammed and turn alerts off",
     "statement": "Now every event blasts every channel to everyone it touches. Users do not want a 2 a.m. SMS for a like, or any email from a category they muted, and some sends legally require opt-in. Without a gate, the system delivers whatever it can, and users answer by turning notifications off entirely, which is worse than silence. A send is a one-way door into someone's attention; once through, it cannot be recalled.",
     "beginner": "If the system sends everything on every channel, people get spammed, so they switch notifications off completely. Users need to choose what reaches them and how, and the system has to check that choice before it sends anything.",
     "model": {
@@ -599,6 +603,7 @@
    "index": 5,
    "name": "Rate Limiting and Digests: Storm Control",
    "problem": {
+    "title": "Forty buzzes from one busy thread",
     "statement": "Even wanted notifications can arrive in a flood. A busy thread you follow fires twenty 'new reply' pushes in a minute; a buggy or looping producer emits thousands. Each passes preferences, each is individually legitimate, but together they drain the battery, bury the one that mattered, and push the user to disable the category. The pipeline has no sense of how much it is already sending to one person.",
     "beginner": "Sometimes you get flooded with notifications that are each fine on their own but overwhelming together, like forty buzzes from one busy conversation. The system needs to notice it is sending too much to one person and calm it down.",
     "model": {
@@ -686,6 +691,7 @@
    "index": 6,
    "name": "Deduplication: One Event, One Buzz",
    "problem": {
+    "title": "The same alert arrives twice",
     "statement": "The queue is at-least-once by design: a worker that crashes after sending but before acking will see the message again and send twice; a producer retry or a double-emit does the same; fan-out can double-count an endpoint. The result is the same alert buzzing a user's wrist twice, which reads as broken. Delivery is over unreliable steps, and reliable steps retry, and retries duplicate.",
     "beginner": "To be reliable, the system sometimes tries a send again, and the queue can hand the same job to two workers. Without care, that means you get the exact same notification twice. It needs a way to recognize 'I already sent this' and skip the repeat.",
     "model": {
@@ -763,6 +769,7 @@
    "index": 7,
    "name": "Retries and Failure Isolation: Surviving a Dead Provider",
    "problem": {
+    "title": "Outages drop alerts and stall the rest",
     "statement": "Providers fail in every way: a transient 503 from FCM, a timeout to the SMS gateway, a full email-provider outage. A naive worker drops the notification on the first error (a lost send, breaking inv1) or retries in a tight loop against a dead provider, amplifying the outage and starving the healthy channels. And one sick provider must not take the others, or the whole pipeline, down with it.",
     "beginner": "The outside services you send through go down or get slow. If the worker gives up on the first error, notifications are lost; if it keeps retrying instantly, it makes the outage worse and blocks the channels that still work. It needs to retry sensibly, leave dead services alone, and keep the working ones flowing.",
     "model": {
