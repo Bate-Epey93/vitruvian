@@ -190,7 +190,8 @@ var Diagram = (() => {
         kind: "process",
         label: laneLabel[lane] || lane,
         folded: members.length,
-        members: members.map(m => m.id)
+        members: members.map(m => m.id),
+        parts: members.map(m => m.label)      // what the box stands for, named on hover
       });
       members.forEach(m => memberOf.set(m.id, id));
     });
@@ -369,6 +370,16 @@ var Diagram = (() => {
     if (n.folded) return "folded";
     return (n.icon && GLYPHS[n.icon]) ? n.icon : n.kind;
   }
+  /* Token body by source kind — the same four glyphs the nodes wear, so
+     the shape in flight matches the shape it left. All drawn upright and
+     axis-aligned so square and diamond stay distinguishable. Module-level
+     so the key draws the very shapes Pulse sends. */
+  function tokenBody(kind) {
+    if (kind === "store")   return el("rect", { x: -3.1, y: -3.1, width: 6.2, height: 6.2, rx: 1, class: "dg-token-body" });
+    if (kind === "process") return el("path", { d: "M 0 -4 L 4 0 L 0 4 L -4 0 Z", class: "dg-token-body" });
+    if (kind === "channel") return el("rect", { x: -4.6, y: -2.1, width: 9.2, height: 4.2, rx: 2.1, class: "dg-token-body" });
+    return el("circle", { r: 3.2, class: "dg-token-body" });    // actor
+  }
   /* Marks sit in the shape's upper-left, clear of the centred label. The pill
      curves away up there, so a channel's mark rides its midline instead. */
   function kindMark(g, n, x, y, color) {
@@ -497,7 +508,12 @@ var Diagram = (() => {
     let shownIds = new Set();
     let lastState = null, lastPos = {}, lastHl = new Set();   // the sim reads the shown state
     let traced = null, freshTimer = null, raceOn = false, spineOn = false, onDrillCb = null, onRenderCb = null;
-    let onSelectCb = null, onZoomCb = null;
+    let onSelectCb = null, onZoomCb = null, onOverlayCb = null;
+    let raceCount = 0, spineMarks = null;    // what Races and Spine last drew, for the key
+    /* The key lists an overlay's marks only while they are drawn, so it is
+       told when Pulse, Spine or Races comes or goes between renders. A
+       render tells it through onRender, once the overlays are back on. */
+    function overlayChanged() { if (onOverlayCb) onOverlayCb(); }
     let hovered = null;      // node under a hovering pointer; show() resets it with the nodes it drew
     /* The locked spotlight (a card, the Spine, a key entry, a trace), kept in
        caller ids. A hover preview borrows the drawing and must hand it back,
@@ -663,6 +679,11 @@ var Diagram = (() => {
        clipped by default on every screen. Zooming by hand turns this off
        until Fit is asked for again. */
     let autoFit = true;
+    /* ...but not past reading. Where the whole would shrink the labels below
+       about 7px, the fit opens at a readable size instead (zoomCtl.openZ).
+       Asking for the whole, by Fit or a double-tap back out, ends that for
+       this diagram: the reader has said what they want to see. */
+    let readFirst = true;
     let lastUpto = 0, lastOpts = {};
     function show(upto, opts = {}) {
       sim.stop();                            // a state change invalidates in-flight tokens
@@ -774,7 +795,7 @@ var Diagram = (() => {
           face.setAttribute("tabindex", "0");
           face.setAttribute("role", "button");
           face.setAttribute("aria-label", n.folded
-            ? `${n.label}, ${n.folded} parts folded together`
+            ? `${n.label}, ${n.folded} parts folded together: ${(n.parts || []).join(", ")}`
             : `${n.label}, ${n.kind}, ${laneLabelById[n.lane] || n.lane} lane${origin}`);
         }
         // semantic zoom: a node that is a system in its own right gets a drill
@@ -796,7 +817,11 @@ var Diagram = (() => {
           el("line", { x1: -3.2, y1: 0, x2: 3.2, y2: 0, class: "dg-drill-plus" }, badge);
           el("line", { x1: 0, y1: -3.2, x2: 0, y2: 3.2, class: "dg-drill-plus" }, badge);
         }
-        txt(el("title", {}, g), `${n.label} · ${laneLabelById[n.lane] || n.lane} · ${n.kind}`);
+        /* A folded box is not a process, whatever kind it borrows to be
+           drawn: it names what it stands for. */
+        txt(el("title", {}, g), n.folded
+          ? `${n.label} · ${n.folded} parts folded: ${(n.parts || []).join(", ")}`
+          : `${n.label} · ${laneLabelById[n.lane] || n.lane} · ${n.kind}`);
         if (hl.has(n.id)) g.classList.add("dg-broken");
         if (ghostSet.has(n.id)) g.classList.add("dg-ghost");
         if (stressSet.has(n.id)) g.classList.add("dg-stress");
@@ -963,10 +988,11 @@ var Diagram = (() => {
       lastState = st;
       lastPos = pos;            // the sim draws store fill meters at node positions
       lastHl = hl;
-      if (autoFit) zoomCtl.fit();        // the whole system, by default, on every screen
-      if (onRenderCb) onRenderCb(st);    // the key redraws itself from what is on screen
+      if (autoFit) zoomCtl.fit();        // the whole system, or a readable part of it (openZ)
       if (raceOn) raceSpotlight(true);   // re-ring contention points on the new state
       if (spineOn) spineSpotlight(true); // and re-trace the spine, which moves layer to layer
+      // last, so the key reads the overlays this state actually carries
+      if (onRenderCb) onRenderCb(st);    // the key redraws itself from what is on screen
     }
 
     /* spotlight: dim everything, then light the given ids (nodes/edges + their
@@ -1037,6 +1063,7 @@ var Diagram = (() => {
     }
     function raceSpotlight(on) {
       raceOn = on;
+      raceCount = 0;
       svg.querySelectorAll(".dg-contended").forEach(e => e.classList.remove("dg-contended"));
       if (!on) return 0;
       const ids = contendedIds();
@@ -1044,6 +1071,7 @@ var Diagram = (() => {
         const g = nodesG.querySelector(`[data-id="${CSS.escape(id)}"]`);
         if (g) g.classList.add("dg-contended");
       });
+      raceCount = ids.length;
       return ids.length;
     }
 
@@ -1173,6 +1201,7 @@ var Diagram = (() => {
        something the request has to wait for. */
     function spineSpotlight(on) {
       spineOn = on;
+      spineMarks = null;
       svg.querySelectorAll(".dg-choke").forEach(e => e.classList.remove("dg-choke"));
       if (!on || !lastState) { spotlight(null); return null; }
       /* Unfolded, like the layer-0 baseline it is compared with. On the folded
@@ -1190,6 +1219,7 @@ var Diagram = (() => {
         const g = nodesG.querySelector(`[data-id="${CSS.escape(id)}"]`);
         if (g) g.classList.add("dg-choke");
       });
+      spineMarks = { hops: s.hops, chokes: chokes.length };
       const base = spineOf(stateAt(doc, 0)).cost;
       return {
         hops: s.hops,
@@ -1199,11 +1229,34 @@ var Diagram = (() => {
       };
     }
 
+    /* What the key owes the reader beyond the parts themselves, and only
+       while it is drawn: the red of what breaks next, what Pulse puts on the
+       lines, and what Spine and Races ring. A static key listed all of it
+       all the time, so most of what it named was never on screen. */
+    function overlays() {
+      const st = lastState;
+      const drawn = id => {
+        if (!st) return false;
+        if (st.nodes.has(id)) return true;
+        const e = st.edges.get(id);
+        return !!e && st.nodes.has(e.from) && st.nodes.has(e.to);
+      };
+      return {
+        breaks: [...lastHl].some(drawn),
+        pulse: sim.running,
+        spine: spineOn && !!(spineMarks && spineMarks.hops),
+        choke: spineOn && !!(spineMarks && spineMarks.chokes),
+        race: raceOn && raceCount > 0
+      };
+    }
+
     /* ── Follow-the-story auto-pan: center the given element ids in the
        scroll viewport (used after each state change so the reader's eye
        lands on what changed, instead of hunting for it off-screen).
        null = scroll home. No-op when the diagram fully fits. ── */
+    let lastFocus = null;                    // { ids, at }: what the story last asked to see
     function focus(ids) {
+      lastFocus = { ids, at: performance.now() };
       ids = viaFold(ids);
       const noOverflow = container.scrollWidth <= container.clientWidth + 4
                       && container.scrollHeight <= container.clientHeight + 4;
@@ -1268,13 +1321,39 @@ var Diagram = (() => {
         const byH = hh > 40 ? hh / layout.height : Infinity;   // a frame too short to measure binds nothing
         return Math.max(0.2, Math.min(MAXUP, byW, byH));
       };
-      /* The tallest frame the fitted drawing can fill at this width, padding
+      /* A floor for reading, under the fit rather than in it.
+
+         fitZ is the whole system and stays the whole system: Fit, the zoom-out
+         limit and the readout all measure from it. But on a phone the whole
+         of a wide system is unreadable. The immune system fitted a 375px
+         screen at 0.37, its labels near 4px, and focus() could never move to
+         what a layer changed because nothing overflowed.
+
+         So where fitting the width would put labels under about 7px, the
+         default opens at a readable size instead: as tall as the frame
+         allows, never under READABLE and never past natural size, since
+         growing an already-cropped drawing only adds panning. The frame then
+         pans, focus() centres what each layer adds, and Fit is one tap away.
+         Wider frames never reach the floor, so large displays keep the
+         contain fit and its MAXUP growth. */
+      const READABLE = 0.78;
+      const openZ = () => {
+        const z = fitZ();
+        if (!readFirst || innerW() / layout.width >= READABLE) return z;
+        const hh = innerH();
+        const byH = hh > 40 ? hh / layout.height : 0;
+        return Math.min(1, Math.max(READABLE, byH));
+      };
+      /* The tallest frame the opening drawing can fill at this width, padding
          included. A frame any taller only adds empty paper under the drawing,
          so a host that has other uses for the height (the phone's reading
-         sheet) can stop the frame here. */
+         sheet) can stop the frame here. At the reading floor that is the
+         floor's height, not the whole's, or the sheet would squeeze the frame
+         back down to the unreadable fit. */
       const usefulHeight = () => {
         const cs = getComputedStyle(container);
-        const z = Math.max(0.2, Math.min(MAXUP, innerW() / layout.width));
+        const byW = innerW() / layout.width;
+        const z = readFirst && byW < READABLE ? READABLE : Math.max(0.2, Math.min(MAXUP, byW));
         return layout.height * z + parseFloat(cs.paddingTop || 0) + parseFloat(cs.paddingBottom || 0);
       };
       const current = () => (svg.getBoundingClientRect().width || layout.width) / layout.width;
@@ -1411,6 +1490,7 @@ var Diagram = (() => {
         const zoomIn = Math.min(MAXZ, Math.max(1.5, fz * 1.65));
         const isZoomedIn = current() > fz * 1.15;
         autoFit = isZoomedIn;
+        if (isZoomedIn) readFirst = false;               // backing out to the whole asks for the whole
         animateTo(isZoomedIn ? fz : zoomIn, clientX - cR.left, clientY - cR.top, 200);
       }
       container.addEventListener("pointercancel", lift);
@@ -1453,12 +1533,35 @@ var Diagram = (() => {
           retry = requestAnimationFrame(fit);
           return null;
         }
-        const z = fitZ();
-        svg.style.minWidth = "0";
-        svg.style.width = (layout.width * z) + "px";
-        container.scrollLeft = 0;
-        container.scrollTop = 0;
-        syncPanClass();
+        const z = openZ();
+        if (z > fitZ() * 1.001) {
+          /* At the reading floor the frame pans, and what it is looking at
+             is focus()'s doing. Every render and every frame of a sheet drag
+             comes back through here, and jumping home each time undid it,
+             or cut its smooth scroll short. So the view stays put, and only
+             a real change of size re-centres on the same spot.
+
+             A change of size can still land mid-scroll: on a phone the
+             sheet settles just after a study opens, the frame shortens, and
+             the size steps down to the floor. Re-centring there stopped the
+             scroll short of the change, so a focus that recent runs again. */
+          const zNow = current();
+          if (Math.abs(z - zNow) > zNow * 0.02) {
+            apply(z, container.clientWidth / 2, container.clientHeight / 2);
+            const asked = lastFocus;
+            if (asked && performance.now() - asked.at < 1200) { focus(asked.ids); lastFocus = asked; }   // a replay, not a new ask
+          } else {
+            svg.style.minWidth = "0";
+            svg.style.width = (layout.width * z) + "px";
+            syncPanClass();
+          }
+        } else {
+          svg.style.minWidth = "0";
+          svg.style.width = (layout.width * z) + "px";
+          container.scrollLeft = 0;
+          container.scrollTop = 0;
+          syncPanClass();
+        }
         notify();
         return z;
       }
@@ -1556,15 +1659,6 @@ var Diagram = (() => {
       }
       function pathFor(edgeId) {
         return edgesG.querySelector(`[data-id="${CSS.escape(edgeId)}"] .dg-epath`);
-      }
-      /* Token body by source kind — the same four glyphs the nodes wear, so
-         the shape in flight matches the shape it left. All drawn upright and
-         axis-aligned so square and diamond stay distinguishable. */
-      function tokenBody(kind) {
-        if (kind === "store")   return el("rect", { x: -3.1, y: -3.1, width: 6.2, height: 6.2, rx: 1, class: "dg-token-body" });
-        if (kind === "process") return el("path", { d: "M 0 -4 L 4 0 L 0 4 L -4 0 Z", class: "dg-token-body" });
-        if (kind === "channel") return el("rect", { x: -4.6, y: -2.1, width: 9.2, height: 4.2, rx: 2.1, class: "dg-token-body" });
-        return el("circle", { r: 3.2, class: "dg-token-body" });    // actor
       }
       function makeToken(e) {
         const p = pathFor(e.id);
@@ -1854,6 +1948,7 @@ var Diagram = (() => {
         nodesG.querySelectorAll(".dg-saturated").forEach(g => g.classList.remove("dg-saturated"));
         clearFills();
         if (was && onStopCb) onStopCb();
+        if (was) overlayChanged();             // its marks leave the key with it
       }
       /* scripted incident: two tokens run the payload chain into the highlighted
          failure, seconds apart — the second arrives where the first already is.
@@ -1894,6 +1989,7 @@ var Diagram = (() => {
           last = performance.now();
           spawnAcc = SPAWN_MS();                       // first token on the very first frame
           raf = requestAnimationFrame(frame);
+          overlayChanged();
           return true;
         },
         replay() {
@@ -1907,6 +2003,7 @@ var Diagram = (() => {
           a.chain = chain; a.ci = 0; a.delay = 0;
           b.chain = chain; b.ci = 0; b.delay = 0.75;   // history's second train
           raf = requestAnimationFrame(frame);
+          overlayChanged();
           return true;
         },
         stop: stopInternal,
@@ -1914,14 +2011,20 @@ var Diagram = (() => {
       };
     })();
 
-    return { show, spotlight, endPreview, focus, layout, laneColor, sim, zoom: zoomCtl, raceSpotlight, contendedIds, spineSpotlight, stateAt: u => stateAt(doc, u), doc,
+    return { show, spotlight, endPreview, focus, layout, laneColor, sim, zoom: zoomCtl, contendedIds, stateAt: u => stateAt(doc, u), doc,
+             /* The host's toggles also tell the key. show() re-applies both
+                through the inner functions, so a render does not ask twice. */
+             raceSpotlight(on) { const n = raceSpotlight(on); overlayChanged(); return n; },
+             spineSpotlight(on) { const s = spineSpotlight(on); overlayChanged(); return s; },
+             overlays,
              setFold(keep) { foldKeep = Math.max(0, keep | 0); openLanes = new Set(); return foldKeep; },
              getFold() { return foldKeep; },
              foldInfo() { return lastFold; },
              foldOpenCount() { return openLanes.size; },
              foldCloseAll() { openLanes = new Set(); show(lastUpto, lastOpts); },
-             /* fit is the default; a hand zoom suspends it until Fit is asked for */
-             fitNow() { autoFit = true; zoomCtl.fit(); },
+             /* fit is the default; a hand zoom suspends it until Fit is asked for,
+                and asking for it is asking for the whole, not the reading floor */
+             fitNow() { autoFit = true; readFirst = false; zoomCtl.fit(); },
              zoomBy(f) { autoFit = false; return zoomCtl.by(f); },
              zoomAtFactor(f, cx, cy) { autoFit = false; return zoomCtl.atFactor(f, cx, cy); },
              zoomFull() { autoFit = false; return zoomCtl.full(); },
@@ -1933,6 +2036,9 @@ var Diagram = (() => {
              /* called whenever the zoom settles, however it got there (buttons,
                 wheel, pinch, double-tap, a refit) */
              onZoom(fn) { onZoomCb = fn; },
+             /* called when Pulse, Spine or Races puts its marks on the drawing
+                or takes them off, between renders */
+             onOverlay(fn) { onOverlayCb = fn; },
              redraw() { show(lastUpto, lastOpts); },
              /* Teardown for a host that is done with this diagram: the observer,
                 the frame loops and the timers otherwise outlive the drawing. */
@@ -1950,10 +2056,15 @@ var Diagram = (() => {
   function legend() {
     const wrap = document.createElement("div");
     wrap.className = "dg-legend";
+    /* What colour means used to close the key as a standing line, read once
+       and then in the way. It is said where the key is asked about instead:
+       on the chip, and on the key itself for a pointer that hovers it. */
+    wrap.title = COPY.keyColour;
     // on phones the legend collapses to this chip (CSS hides it on desktop)
     const tog = document.createElement("button");
     tog.className = "dgl-tog";
     tog.textContent = "key ▸";
+    tog.title = COPY.keyColour;
     tog.setAttribute("aria-label", "Toggle diagram key");
     tog.setAttribute("aria-expanded", "false");
     tog.onclick = () => {
@@ -1974,7 +2085,8 @@ var Diagram = (() => {
     const GLYPH_LABEL = {
       actor: "actor", store: "storage", process: "process", channel: "channel",
       database: "database", cache: "cache", blob: "object store", index: "index",
-      log: "log", queue: "queue", cdn: "edge cache", gateway: "gateway"
+      log: "log", queue: "queue", cdn: "edge cache", gateway: "gateway",
+      folded: "folded parts"
     };
     const KIND_ORDER = ["actor", "store", "process", "channel"];
     // Drawn through the same sketch pass as the nodes: a crisp key beside a
@@ -1998,11 +2110,18 @@ var Diagram = (() => {
     const glyphRow = document.createElement("span");
     glyphRow.className = "dgl-row";
     wrap.appendChild(glyphRow);
+    // lines and overlay marks: cheap to draw, so redrawn whenever one comes or goes
+    const lineRow = document.createElement("span");
+    lineRow.className = "dgl-row";
+    wrap.appendChild(lineRow);
     let lit = null;                                   // the entry currently spotlighting
+    let lastSt = null, lastDg = null;
 
     wrap.update = (st, dg) => {
+      lastSt = st; lastDg = dg;
       glyphRow.textContent = "";
       lit = null;
+      paintLines();
       if (!st) return;
 
       /* A node draws two things and the key owes the reader both: the
@@ -2016,8 +2135,13 @@ var Diagram = (() => {
       const shapes = new Map();                       // kind → node ids (the box)
       const marks = new Map();                        // glyph name → node ids (the corner)
       st.nodes.forEach(n => {
-        if (!shapes.has(n.kind)) shapes.set(n.kind, []);
-        shapes.get(n.kind).push(n.id);
+        /* A folded box borrows the process outline to be drawn and is not
+           one. Counted there, it lit as a process and kept "process" in
+           the key with no process on screen. Its own mark names it. */
+        if (!n.folded) {
+          if (!shapes.has(n.kind)) shapes.set(n.kind, []);
+          shapes.get(n.kind).push(n.id);
+        }
         const m = glyphName(n);
         if (!marks.has(m)) marks.set(m, []);
         marks.get(m).push(n.id);
@@ -2096,30 +2220,66 @@ var Diagram = (() => {
       }
     };
 
-    const item = (svgBuild, label) => {
+    /* One line-or-mark entry. The gloss rides as its tooltip, so the key
+       stays one word deep and is never more than a hover from a sentence. */
+    const item = (svgBuild, [label, gloss]) => {
       const it = document.createElement("span");
       it.className = "dgl-item";
+      if (gloss) it.title = gloss;
       const svg = el("svg", { viewBox: "0 0 30 16", class: "dgl-glyph", "aria-hidden": "true" });
       svgBuild(svg);
       it.appendChild(svg);
       const t = document.createElement("span");
       t.textContent = label;
       it.appendChild(t);
-      wrap.appendChild(it);
+      lineRow.appendChild(it);
     };
-    // node kinds and icons are contextual — see wrap.update above
-    // edge kinds (pattern = kind; colour follows the source lane)
-    item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line", "stroke-width": 2 }, s), "flow");
-    item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line", "stroke-dasharray": "4 3" }, s), "control");
-    item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line", "stroke-dasharray": "1.5 3" }, s), "money");
-    // failure pulse
-    item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line dgl-broken", "stroke-width": 2 }, s), "breaks next");
-    // under Pulse: a jam creeping back upstream from a node that can't keep up
-    item(s => el("line", { x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line dgl-broken", "stroke-width": 2, "stroke-dasharray": "5 2.6" }, s), "backpressure");
-    const note = document.createElement("span");
-    note.className = "dgl-note";
-    note.textContent = "colour = lane · payload takes its source's shape";
-    wrap.appendChild(note);
+    const line = (s, cls, attrs) => el("line", Object.assign({ x1: 4, y1: 8, x2: 26, y2: 8, class: "dgl-line" + (cls ? " " + cls : "") }, attrs || {}), s);
+    /* The lines half, built from the state like the glyph half. It listed
+       all five line kinds always: money on twenty of twenty-five systems
+       that move none, "breaks next" with nothing red, backpressure with
+       nothing flowing. And what Spine and Races draw was never named at
+       all. Now each entry is here exactly while its mark is on screen. */
+    function paintLines() {
+      lineRow.textContent = "";
+      const st = lastSt;
+      if (!st) return;
+      const on = lastDg && lastDg.overlays ? lastDg.overlays() : {};
+      const drawn = [...st.edges.values()].filter(e => st.nodes.has(e.from) && st.nodes.has(e.to));
+      const kinds = new Set(drawn.map(e => e.kind));
+      // edge kinds (pattern = kind; colour follows the source lane)
+      if (kinds.has("payload")) item(s => line(s, "", { "stroke-width": 2 }), COPY.keyFlow);
+      if (kinds.has("control")) item(s => line(s, "", { "stroke-dasharray": "4 3" }), COPY.keyControl);
+      if (kinds.has("money")) item(s => line(s, "", { "stroke-dasharray": "1.5 3" }), COPY.keyMoney);
+      // failure pulse
+      if (on.breaks) item(s => line(s, "dgl-broken", { "stroke-width": 2 }), COPY.keyBreaks);
+      if (on.pulse && kinds.has("payload")) {         // Pulse moves payload and nothing else
+        /* the shapes in flight, one per kind that actually sends payload,
+           in the key's kind order and the sim's own geometry */
+        const senders = KIND_ORDER.filter(k => drawn.some(e => e.kind === "payload" && st.nodes.get(e.from).kind === k));
+        if (senders.length) item(s => {
+          const step = senders.length > 3 ? 6.6 : 8;
+          senders.forEach((k, i) => {
+            const b = tokenBody(k);
+            b.setAttribute("class", "dgl-token");
+            b.setAttribute("transform", `translate(${15 + (i - (senders.length - 1) / 2) * step} 8) scale(.8)`);
+            s.appendChild(b);
+          });
+        }, COPY.keySenders);
+        item(s => line(s, "dgl-congested"), COPY.keyCongested);
+        // a jam creeping back upstream from a node that can't keep up
+        item(s => line(s, "dgl-broken", { "stroke-width": 2, "stroke-dasharray": "5 2.6" }), COPY.keyBackpressure);
+      }
+      if (on.spine) item(s => line(s, "dgl-spine"), COPY.keySpine);
+      if (on.choke) item(s => el("path", { d: roundRectD(8, 3.5, 14, 9, 2), class: "dgl-choke" }, s), COPY.keyChoke);
+      if (on.race) item(s => {
+        // two lines landing on one part: the picture of a second writer
+        el("path", { d: "M 2 3.5 L 10.5 7 M 2 12.5 L 10.5 9", class: "dgl-line" }, s);
+        el("path", { d: roundRectD(12, 3.5, 14, 9, 2), class: "dgl-race" }, s);
+      }, COPY.keyRace);
+    }
+    // the drawing's overlays come and go between renders; the host calls this then
+    wrap.refresh = paintLines;
     return wrap;
   }
 

@@ -634,6 +634,22 @@ var COPY = {
   pulse: "Pulse",
   pulseStop: "Stop",
 
+  /* ── The diagram's key ──
+     Lines and overlay marks join the key only while something on screen
+     uses them. Each pair is the entry's name, then the plain gloss its
+     tooltip gives. */
+  keyColour: "Colour means lane: a part wears its lane's colour, and a line wears the colour of the lane it leaves.",
+  keyFlow: ["flow", "The payload, the thing the system exists to move. This is the load path."],
+  keyControl: ["control", "Signals and permissions, often flowing back against the payload."],
+  keyMoney: ["money", "Value changing hands."],
+  keyBreaks: ["breaks next", "Pulsing red: what fails here, before this layer's fix."],
+  keySenders: ["payload, in its sender's shape", "During a Pulse each payload takes the shape of the part that sent it: a dot from an actor, a square from a store, a diamond from a process, a bar from a channel."],
+  keyCongested: ["congested", "Three or more payloads on one line at once: traffic bunching up."],
+  keyBackpressure: ["backpressure", "A jam creeping back toward the source from a part that cannot keep up."],
+  keySpine: ["spine", "The chain a request waits on, from where it enters to where it is delivered."],
+  keyChoke: ["single point of failure", "Lose this part and nothing gets delivered at all."],
+  keyRace: ["two writers", "Two or more flows can arrive here at once, so their writes can race."],
+
   /* ── Zoom and origin ── */
   zoomFit: "Fit",
   zoomFitHint: "Fit the whole system in view",
@@ -930,8 +946,8 @@ var COPY = {
         ["Zoom in ⊕", "Some nodes are whole systems in their own right and carry a ⊕ badge. Tap it to open that sub-system as its own Deconstruct, and follow the breadcrumb back up. Systems nest as deep as there are Deconstructs to open."],
         ["Payload shapes", "During a Pulse, every payload wears the shape of the kind that sent it: a dot from an actor, a square from a store, a diamond from a process, a bar from a channel. Colour still tells you which lane it came from, so shape and colour answer two different questions at once."],
         ["Backpressure", "When a node takes in more than it can clear, the edges feeding it stiffen and their traffic slows down. The jam creeps back toward the source rather than staying put, which is how one slow component ends up browning out everything upstream of it."],
-        ["Fit and zoom", "The whole system is fitted into view by default, on any screen. With a mouse or trackpad, the controls beside Diagram tools get you closer and back out again, and holding the command key while scrolling does the same. Fit stays lit until you zoom by hand, and relights the moment you tap it. On a touch screen, pinch or double-tap instead. While you are zoomed in, a chip beside Diagram tools shows how far, and tapping it fits the whole system again."],
-        ["The key", "Under the diagram, and built from what is actually on screen rather than everything the app can draw. It lists every shape and every mark this state uses, so nothing is drawn that the key does not name. Tap an entry to light the parts carrying it."],
+        ["Fit and zoom", "The whole system is fitted into view by default. Where that would shrink its labels too small to read, as a wide system does on a phone, the diagram opens at a readable size instead: drag to look around, and each step moves to the part that just changed. With a mouse or trackpad, the controls beside Diagram tools get you closer and back out again, and holding the command key while scrolling does the same. Fit is lit while the whole system is in view, goes out when you zoom by hand, and relights the moment you tap it. On a touch screen, pinch or double-tap instead. Whenever you are not seeing the whole, a chip beside Diagram tools shows how far in you are, and tapping it fits the whole system again."],
+        ["The key", "Under the diagram, and built from what is actually on screen rather than everything the app can draw. It lists every shape, mark and kind of line this state uses, so nothing is drawn that the key does not name. The red of what breaks next, and the marks Pulse, Spine and Races add, join it only while they are showing. Tap a shape or mark to light the parts carrying it. Hover a line or an overlay mark for a sentence on what it means, and a folded box in the diagram for the parts it stands for."],
         ["Fold earlier layers", "Past a few layers the diagram carries more settled machinery than argument. Turn on Fold earlier layers in Diagram tools and everything older folds into one box per lane, each named after the lane and marked with how many parts it stands for. Lines that merged say how many paths they are. Choose how many recent layers stay drawn in full, tap a folded box to open just that one, and tap the pill at the top to turn it all off."]
       ]
     },

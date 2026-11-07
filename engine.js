@@ -2708,15 +2708,24 @@ async function openReader(id, layerIndex, opts = {}) {
     const currentZ = diagram.zoom.current();
     const fitZ = diagram.zoom.fitZ();
     const pct = Math.round((currentZ / fitZ) * 100);
-    const atFit = diagram.isAutoFit() || Math.abs(currentZ - fitZ) < 0.03;
-    zFit.classList.toggle("on", diagram.isAutoFit());
-    zFit.disabled = whole && diagram.isAutoFit();
-    zoomBar.hidden = whole && diagram.isAutoFit() && !diagram.doc.layers.length;
+    /* Fit is lit only while the whole system is what is showing. Where the
+       whole is too small to read, the renderer opens at a readable size
+       instead (openZ in renderer-diagram.js): still its own fit, but not
+       the whole, so the readout says how far in and Fit is the way out. */
+    const fitted = diagram.isAutoFit() && whole;
+    const atFit = fitted || Math.abs(currentZ - fitZ) < 0.03;
+    zFit.classList.toggle("on", fitted);
+    zFit.disabled = fitted;
+    zoomBar.hidden = fitted && !diagram.doc.layers.length;
     /* On a touch screen pinch and double-tap already zoom, so styles.css
        drops − and + there and shows this one chip only while zoomed in:
        the way back, which a gesture alone does not make obvious. */
     zoomBar.classList.toggle("zoomed", !atFit);
     zFit.textContent = atFit ? COPY.zoomFit : `${pct}% ↺`;
+    /* Asking for the whole shrinks the height the drawing can fill, which
+       no resize reports, so the sheet measures again. An unchanged floor
+       is a no-op (setFloor), so the zoom settling often costs nothing. */
+    if (sheetMode && sheetMode.matches) { cancelAnimationFrame(fitRaf); fitRaf = requestAnimationFrame(fitSheet); }
   };
   diagram.onZoom(paintZoom);
   zOut.onclick = () => { diagram.zoomBy(1 / 1.25); paintZoom(); };
@@ -2812,6 +2821,8 @@ async function openReader(id, layerIndex, opts = {}) {
   foldPill.onclick = () => applyFold(0, true);
   diagram.setFold(foldKeep);
   diagram.onRender(onDiagramRender);
+  // Pulse, Spine and Races add marks between renders; the key names them while they show
+  diagram.onOverlay(() => { if (legendEl.refresh) legendEl.refresh(); });
 
   raceBtn.onclick = () => {
     raceOn = !raceOn;

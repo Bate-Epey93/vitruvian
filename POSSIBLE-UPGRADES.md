@@ -65,7 +65,7 @@ This file collects ideas surfaced during build sessions that were never built, o
 - Hard caps force abstraction over density: ≤5 lanes, ≤22 nodes, ≤2 per grid cell, 24-char node labels, 16-char edge labels, 3 vocabulary tags per layer.
 - Content quality for an arbitrary system cannot be guaranteed — validation only promises that what passes renders legibly; substance is the skill's job.
 - The written breakdown is the product and the diagram an enhancement; failure paths (one repair call, then raw-text download) exist so the document is never lost.
-- Wide diagrams are scaled, not reflowed: since v2.8–2.9 the drawing contain-fits its frame on every screen (up to 2.2× on large displays), so a dense system on a phone is whole but small, and reading its labels means zooming in.
+- Wide diagrams are scaled, not reflowed: the drawing contain-fits its frame (up to 2.2× on large displays) unless fitting the width would put labels under about 7px. There, as on a phone, it opens at a readable scale (0.78 to 1×) and pans to what each layer changed, so the whole system is one tap on Fit away rather than on screen by default.
 - Edge labels still crowd near the control lane on the densest flagship; the Manhattan-with-crossings routing is the accepted v1 tradeoff, and YouTube has since grown to 18 nodes / 27 edges.
 - The brand tagline is hidden while reading, to reclaim ~450px for the audience switch.
 - Service-worker fixes reach installed copies only after the Update-ready prompt or a relaunch — inherent to a cache-first PWA.
