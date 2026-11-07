@@ -774,16 +774,22 @@ var COPY = {
      three first-run tips cover the basics; this covers everything. ---------- */
   /* ---------- TIPS ----------
      A tip fires the first time you reach the thing it describes, once each,
-     and never again. They are ON by default and stay on: the app has more in
-     it than any first-run tour can carry, and a tour you saw once in week one
-     is no help in week three when you first open Graft. Settings turns them
-     off, and the card itself has an off switch for the moment you stop
-     wanting them.
+     and never again, and never more than one card at a time. They are ON by
+     default and stay on: the app has more in it than any first-run tour can
+     carry, and a tour you saw once in week one is no help in week three when
+     you first open Graft. Settings turns them off, and the card itself has an
+     off switch for the moment you stop wanting them.
 
      `screen` is the screen id the tip belongs to; `target` is looked up
      inside that screen and the tip is skipped when it is not on the page, so
-     a tip for a button that does not apply simply never fires. Order within a
-     screen is the order they are offered. --------------------------------- */
+     a tip for a button that does not apply simply never fires.
+
+     Arriving at a screen offers one tip: the first in this list that is
+     unspent and on the page. A tip with `when: "used"` is never offered on
+     arrival. It waits for its own thing to be used (a layer's second step,
+     the key, Diagram tools, the menu, the System sheet or Graft), because
+     that is when it can be understood. `clear` names what such a tip must
+     not cover, usually the menu that has just opened. ------------------- */
   tips: [
     // ── the shelf ──
     { id: "lib-shelf", screen: "library", target: ".bd-grid, .lib-grid, .bd-card",
@@ -797,25 +803,28 @@ var COPY = {
     { id: "timeline", screen: "reader", target: ".timeline",
       title: "Your place in the system",
       text: "Meet, then each layer, then the trials. Tap any stop to go there. Finished layers turn teal." },
-    { id: "steps", screen: "reader", target: ".step-tabs, .meet-tabs, .doc-pane",
+    { id: "steps", screen: "reader", when: "used", target: ".step-tabs",
       title: "Guess before you look",
       text: "Each layer runs in four steps: the problem, your guess, the solution, the tradeoff. Making a guess first is what makes the solution stick." },
     { id: "diagram", screen: "reader", target: ".diagram-scroll",
       title: "The diagram follows along",
-      text: "What breaks pulses red, and tapping a card lights its parts. The diagram is drawn by hand, and it is drawn by arithmetic: every box sits where its role and its order put it." },
-    { id: "key", screen: "reader", target: ".dg-legend",
+      text: "What breaks pulses red, and tapping a card lights its parts." },
+    // on a phone the key is a chip that opens over the diagram: ring the chip, keep the open key clear
+    { id: "key", screen: "reader", when: "used", target: ".dgl-tog, .dg-legend", clear: ".dg-legend",
       title: "The key knows what is on screen",
       text: "It lists only the glyphs this diagram actually uses, so it changes as you move through the layers. Tap any entry to light every node that carries it. The shape is the role, the small mark inside is the thing." },
-    { id: "tools", screen: "reader", target: ".diagram-cap",
+    // fires as Diagram tools opens; the ring is the bar that holds Pulse and
+    // that button, and the open menu stays clear of the card
+    { id: "tools", screen: "reader", when: "used", target: ".cap-tools", clear: ".lab-menu",
       title: "Put the system under load",
-      text: "Pulse sends real traffic through the current state and you watch where it piles up. Spine traces the path a request actually waits on and rings anything whose loss takes delivery with it. Races marks the places two flows can arrive at once." },
+      text: "Pulse sends traffic through the system so you can watch where it piles up. Spine and Races live under Diagram tools." },
     { id: "drill", screen: "reader", target: ".dg-drill-badge",
       title: "Some boxes are systems",
       text: "A node with this badge is worth its own Deconstruct. Open it and you drop a level, with a trail back up. The capstone systems nest several levels deep." },
-    { id: "ctx", screen: "reader", target: ".tb-right, #sheetBtn",
+    { id: "ctx", screen: "reader", when: "used", target: ".tb-right, #sheetBtn",
       title: "The tools for this system",
       text: "The System sheet is the reference card: what it is for, its rules, its pieces. Sequence shows the same state as an interaction timeline. Graft lets you propose a change and argues back. On a phone these live in the \u22ef menu." },
-    { id: "menu", screen: "reader", target: "#readerMenuBtn",
+    { id: "menu", screen: "reader", when: "used", target: "#readerMenuBtn", clear: "#menuPop",
       title: "Everything else",
       text: "Strict mode makes you write your fix before the real one opens. The field guide explains every part of a Deconstruct. Exports put the diagram or the whole Deconstruct somewhere else." },
 

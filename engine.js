@@ -737,8 +737,14 @@ function wireTopbar() {
   $("themeBtn").onclick = () => toggleTheme();
   $("seqBtn").onclick = () => { if (currentRec) openSequence(currentRec); };
   $("sheetBtn").onclick = () => { if (currentView) currentView.openSheet(); };
-  $("graftBtn").onclick = () => { if (currentRec) { renderWhatif(currentRec); show("whatif", { keepRec: true }); } };
-  $("readerMenuBtn").onclick = e => { e.stopPropagation(); $("menuPop").hidden = !$("menuPop").hidden; };
+  /* Graft leaves the reader, so its tip is held and comes on the way back */
+  $("graftBtn").onclick = () => { if (currentRec) { featureTips.trigger("ctx"); renderWhatif(currentRec); show("whatif", { keepRec: true }); } };
+  $("readerMenuBtn").onclick = e => {
+    e.stopPropagation();
+    const pop = $("menuPop");
+    pop.hidden = !pop.hidden;
+    if (!pop.hidden) featureTips.trigger("menu");
+  };
   document.addEventListener("click", () => { $("menuPop").hidden = true; });
 }
 
@@ -1895,14 +1901,18 @@ async function drillInto(sub) {
   }
 }
 
-/* ═══ First-run tips: three, the first time a Deconstruct opens. Each one
-   rings the part of the screen it's about. Esc or Skip ends them; the
-   field guide keeps everything else. ═══ */
 /* ═══ Feature tips ═══
    Not a first-run tour. A tour runs once, in the first two minutes, when you
    have no questions yet — and it cannot say anything useful about Graft,
    because you will not open Graft for a week. These fire one at a time, the
    first time you reach the thing they describe, and then never again.
+
+   One card per arrival, never a queue. Opening a sample used to stack every
+   reader tip at once ("1 of 7") over the step tabs, before a word had been
+   read. A screen now offers one tip on arrival. A tip marked when: "used"
+   is not offered on arrival at all: it waits for its own thing (the second
+   step of a layer, the ⋯ menu, Diagram tools, the key), because the moment
+   you use a thing is the moment a sentence about it can land.
 
    On by default and they stay on, because "on" here costs one card the first
    time you meet each feature and nothing after. meta.tipsDone records which
@@ -1911,21 +1921,23 @@ async function drillInto(sub) {
    A tip whose target is not on the page is skipped, not queued, so a tip for
    a button this system does not have simply never fires. ══════════════ */
 const featureTips = (() => {
-  let card = null, ringed = null, queue = [], i = 0;
+  let card = null, ringed = null, tip = null, back = null;
+  // used on the way out of their screen (Graft leaves the reader): offered on the way back
+  const held = new Set();
 
   const on = () => meta.tipsOn !== false;            // absent means on
   const done = () => (meta.tipsDone && typeof meta.tipsDone === "object") ? meta.tipsDone : {};
   /* Look inside the screen first, then fall back to the whole page: some of
      what a screen offers lives in the topbar, which is not inside the screen
      element. Scoping to the screen alone silently made those tips unfirable.
-     The fallback is safe because visit() only ever runs for the screen that
-     is currently showing. */
-  const find = tip => {
-    const root = $("screen-" + tip.screen);
+     The fallback is safe because a tip only opens for the screen that is
+     currently showing. */
+  const find = (t, sel = t.target) => {
+    const root = $("screen-" + t.screen);
     if (!root || root.hidden) return null;
-    const sels = tip.target.split(",").map(x => x.trim());
+    const sels = sel.split(",").map(x => x.trim());
     // getClientRects, not offsetParent: SVG targets (the drill badge) have no offsetParent
-    const hit = root => sels.map(sel => root.querySelector(sel)).find(el => el && el.getClientRects().length > 0);
+    const hit = root => sels.map(s => root.querySelector(s)).find(el => el && el.getClientRects().length > 0);
     return hit(root) || hit(document);
   };
 
@@ -1933,7 +1945,7 @@ const featureTips = (() => {
     if (ringed) ringed.classList.remove("tip-ring");
     ringed = null;
     if (card) card.remove();
-    card = null; queue = []; i = 0;
+    card = null; tip = null;
     document.removeEventListener("keydown", onKey, true);
     window.removeEventListener("resize", place);
     document.removeEventListener("scroll", place, true);
@@ -1943,26 +1955,48 @@ const featureTips = (() => {
     meta.tipsDone = d;
     await Store.saveMeta({ tipsDone: d });
   }
+  /* Closed by hand, the card hands focus back to what you were using: a tip
+     that answers a tap took the focus from the thing you tapped. */
+  function closeByHand() {
+    const to = back;
+    close();
+    if (to && to.isConnected && to.getClientRects().length) {
+      try { to.focus({ preventScroll: true }); } catch (e) {}
+    }
+  }
   function onKey(e) { if (e.key === "Escape") { e.stopPropagation(); dismiss(); } }
-  async function dismiss() { const t = queue[i]; close(); if (t) await markDone(t.id); }
+  async function dismiss() { const t = tip; closeByHand(); if (t) await markDone(t.id); }
 
   function place() {
     if (!card || !card.isConnected) return;
     const t = ringed && ringed.getBoundingClientRect();
     const w = Math.min(330, innerWidth - 32);
     card.style.width = w + "px";
+    const ch = card.offsetHeight;
     if (!t || !t.width) {
       card.style.left = (innerWidth - w) / 2 + "px";
-      card.style.top = (innerHeight - card.offsetHeight) / 2 + "px";
+      card.style.top = (innerHeight - ch) / 2 + "px";
       return;
     }
-    const ch = card.offsetHeight;
-    let top = t.bottom + 12;
-    if (top + ch > innerHeight - 12) top = t.top - ch - 12;
-    if (top < 12) top = Math.max(12, Math.min(innerHeight - ch - 12, t.top + 12));
-    // never past the bottom edge: a card whose buttons are off screen cannot be closed on a phone
-    card.style.top = Math.max(12, Math.min(top, innerHeight - ch - 12)) + "px";
-    card.style.left = Math.max(16, Math.min(innerWidth - w - 16, t.left + t.width / 2 - w / 2)) + "px";
+    const fitX = x => Math.max(16, Math.min(innerWidth - w - 16, x));
+    const fitY = y => Math.max(12, Math.min(innerHeight - ch - 12, y));
+    const x = fitX(t.left + t.width / 2 - w / 2);
+    /* Below the target, else above it. A tip that answers a tap also names
+       what it must keep clear (the menu that just opened, the open key):
+       placed by its target alone, the card landed on the very thing it was
+       describing. Then beside that thing, then below or above it. */
+    const keep = tip && tip.clear ? find(tip, tip.clear) : null;
+    const k = keep && keep.getBoundingClientRect();
+    const spots = [[x, t.bottom + 12], [x, t.top - ch - 12]];
+    if (k) spots.push([fitX(k.left - w - 12), fitY(k.top)], [fitX(k.right + 12), fitY(k.top)],
+                      [x, k.bottom + 12], [x, k.top - ch - 12]);
+    const isClear = ([sx, sy]) => sy >= 12 && sy + ch <= innerHeight - 12 &&
+      !(k && sx < k.right && sx + w > k.left && sy < k.bottom && sy + ch > k.top);
+    // no clear spot: over the target's top edge, and never past the bottom
+    // edge, because a card whose buttons are off screen cannot be closed on a phone
+    const [sx, sy] = spots.find(isClear) || [x, fitY(t.top + 12)];
+    card.style.left = sx + "px";
+    card.style.top = sy + "px";
   }
 
   /* A target below the fold put the card below the fold too. Scroll it into
@@ -1977,43 +2011,27 @@ const featureTips = (() => {
     scr.scrollTop += r.top - s.top - Math.max(16, (s.height - r.height) / 3);
   }
 
-  function paint() {
-    const tip = queue[i];
-    if (!tip) return close();
-    if (ringed) ringed.classList.remove("tip-ring");
-    ringed = find(tip);
-    if (!ringed) { i++; return paint(); }              // vanished since we queued it
-    ringed.classList.add("tip-ring");
-    card.querySelector(".tip-count").textContent = queue.length > 1 ? `${i + 1} of ${queue.length}` : "Tip";
-    card.querySelector(".tip-title").textContent = tip.title;
-    card.querySelector(".tip-text").textContent = tip.text;
-    card.querySelector(".tip-next").textContent = i === queue.length - 1 ? "Got it" : "Next";
-    reveal(ringed);
-    place();
-    card.querySelector(".tip-next").focus();
-  }
-
   function build() {
     card = h("div", "tip-card");
     card.setAttribute("role", "dialog");
     card.setAttribute("aria-live", "polite");
-    const count = h("div", "tip-count");
+    /* A click on the card stays on the card. The ⋯ menu closes on any click
+       on the page, so "Got it" on the tip about that menu shut the menu it
+       had just explained. */
+    card.addEventListener("click", e => e.stopPropagation());
+    const count = h("div", "tip-count", "Tip");
     const title = h("h3", "tip-title");
     const text = h("p", "tip-text");
     const row = h("div", "tip-row");
     const off = h("button", "gbtn ghost tip-off", "Turn tips off");
-    const next = h("button", "gbtn primary tip-next", "Next");
+    const next = h("button", "gbtn primary tip-next", "Got it");
     off.onclick = async () => {
-      close();
+      closeByHand();
       meta.tipsOn = false;
       await Store.saveMeta({ tipsOn: false });
       toast("Tips off. Settings turns them back on.");
     };
-    next.onclick = async () => {
-      const t = queue[i];
-      if (t) await markDone(t.id);
-      if (i >= queue.length - 1) close(); else { i++; paint(); }
-    };
+    next.onclick = () => dismiss();
     row.append(off, next);
     card.append(count, title, text, row);
     document.addEventListener("keydown", onKey, true);
@@ -2022,24 +2040,55 @@ const featureTips = (() => {
     document.body.appendChild(card);
   }
 
-  /* Called whenever a screen settles. Queues every unseen tip for that screen
-     whose target is actually on the page, then walks them one at a time. */
+  function open(t) {
+    const el = find(t);
+    if (!el) return;
+    held.delete(t.id);
+    tip = t;
+    back = document.activeElement;
+    build();
+    ringed = el;
+    ringed.classList.add("tip-ring");
+    card.querySelector(".tip-title").textContent = t.title;
+    card.querySelector(".tip-text").textContent = t.text;
+    reveal(ringed);
+    place();
+    card.querySelector(".tip-next").focus();
+  }
+
+  /* Called whenever a screen settles. Offers one tip: one held from a tool
+     used on the way out, else the first unspent tip for this screen that
+     waits only for arrival and whose target is on the page. The rest come
+     on later arrivals, or when their thing is used. */
   function visit(screen) {
     if (!on() || card) return;
     const spent = done();
-    const next = (COPY.tips || []).filter(t => t.screen === screen && !spent[t.id] && find(t));
-    if (!next.length) return;
-    queue = next; i = 0;
-    build();
-    paint();
+    const left = (COPY.tips || []).filter(t => t.screen === screen && !spent[t.id] && find(t));
+    const t = left.find(x => held.has(x.id)) || left.find(x => x.when !== "used");
+    if (t) open(t);
+  }
+
+  /* Called by the thing a "used" tip describes, every time it is used, so
+     the tip is offered until it has been read. A card already showing wins
+     and the next use offers it again. The pause lets the thing finish
+     opening, so the card is placed beside it rather than on it. */
+  function trigger(id) {
+    const t = (COPY.tips || []).find(x => x.id === id);
+    if (!t || !on() || done()[id]) return;
+    setTimeout(() => {
+      if (!on() || done()[id] || card) return;
+      if (document.body.dataset.screen !== t.screen) { held.add(id); return; }
+      open(t);
+    }, 300);
   }
 
   return {
     visit,
+    trigger,
     close,
     get enabled() { return on(); },
     async setEnabled(v) { meta.tipsOn = !!v; await Store.saveMeta({ tipsOn: !!v }); if (!v) close(); },
-    async reset() { meta.tipsDone = {}; await Store.saveMeta({ tipsDone: {} }); },
+    async reset() { held.clear(); meta.tipsDone = {}; await Store.saveMeta({ tipsDone: {} }); },
     remaining() {
       const spent = done();
       return (COPY.tips || []).filter(t => !spent[t.id]).length;
@@ -2305,7 +2354,11 @@ async function openReader(id, layerIndex, opts = {}) {
     labMenu.appendChild(item);
   });
   const setLab = open => { labMenu.hidden = !open; labBtn.setAttribute("aria-expanded", String(open)); labBtn.classList.toggle("on", open); };
-  labBtn.onclick = e => { e.stopPropagation(); setLab(labMenu.hidden); };
+  labBtn.onclick = e => {
+    e.stopPropagation();
+    setLab(labMenu.hidden);
+    if (!labMenu.hidden) featureTips.trigger("tools");
+  };
   labMenu.onclick = e => e.stopPropagation();
   const labEsc = e => { if (e.key === "Escape" && !labMenu.hidden) { e.stopPropagation(); setLab(false); labBtn.focus(); } };
   labBtn.addEventListener("keydown", labEsc);
@@ -2401,6 +2454,13 @@ async function openReader(id, layerIndex, opts = {}) {
   const pillOff = h("span", "fold-off", COPY.foldTapOff);
   foldPill.append(pillMain, pillWhat, pillOff);
   const legendEl = Diagram.legend();
+  /* The key's tip waits for the key to be used: a tap on an entry, or on a
+     phone the tap that opens it. Closing it is not using it. */
+  legendEl.addEventListener("click", e => {
+    const hit = e.target.closest(".dgl-tap, .dgl-tog");
+    if (!hit || (hit.classList.contains("dgl-tog") && !legendEl.classList.contains("open"))) return;
+    featureTips.trigger("key");
+  });
   dpane.append(dscroll, hud, foldPill, originCard, caption, legendEl, scrubEl, dcap, labMenu);   // legend: the tutorial's grammar, always in view
   const docPane = h("div", "doc-pane");
   /* On a phone the step card is a bottom sheet over the diagram. The grip
@@ -2713,9 +2773,12 @@ async function openReader(id, layerIndex, opts = {}) {
     autoReplay: meta.autoReplay !== false,
     onReplay: runReplay,
     onTools,
-    onNavigate() {
+    onNavigate({ position, step }) {
       if (routed && document.body.dataset.screen === "reader") syncRoute("replace");
+      // the four steps are explained on the second, where the guess is asked for
+      if (position >= 1 && position <= rec.doc.layers.length && step >= 2) featureTips.trigger("steps");
     },
+    onSheetClose() { featureTips.trigger("ctx"); },
     async onOpen(id) { await flushSaves(); openReader(id); },
     async onFinish() { await flushSaves(); await renderLibrary(); show("library"); },
     onSave(r) { Store.saveBreakdownLight(r); },

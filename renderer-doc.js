@@ -566,6 +566,8 @@ var DocView = (() => {
       sheetEl = null;
       document.removeEventListener("keydown", sheetKey, true);
       if (sheetReturn && sheetReturn.focus) sheetReturn.focus();
+      // told on close, not open: a tip about the topbar tools over the open sheet would cover it
+      if (typeof opts.onSheetClose === "function") opts.onSheetClose();
     }
     function sheetKey(ev) { if (ev.key === "Escape") { ev.stopPropagation(); closeSheet(); } }
     function openSheet() {
