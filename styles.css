@@ -423,7 +423,7 @@ h1.title{font-family:var(--display);font-weight:650;font-size:clamp(32px,4.4vw,4
 
 /* inputs (shared) */
 input,textarea{font-family:var(--sans);}
-.focus-row input,.set-block input[type=text],.set-block input[type=password],.design-input,.gate-card textarea,.qa-row input{
+.focus-row input,.set-block input[type=text],.set-block input[type=password],.key-entry input,.design-input,.gate-card textarea,.qa-row input{
   transition:box-shadow .25s var(--ease),border-color .25s var(--ease),background .25s var(--ease);
 }
 
@@ -1182,11 +1182,11 @@ details.analogy-fold summary{font-size:13px;font-weight:600;color:var(--muted);c
 .set-block{background:var(--panel);border-radius:var(--r-lg);padding:22px 24px;margin:14px 0;box-shadow:inset 0 0 0 1px var(--hair), var(--sh-1);}
 .set-block h3{font-family:var(--display);font-weight:650;font-size:18px;letter-spacing:-.025em;margin-bottom:6px;}
 .set-block p.note{font-size:13px;color:var(--muted);margin:6px 0 12px;max-width:64ch;}
-.set-block input[type=text],.set-block input[type=password]{
+.set-block input[type=text],.set-block input[type=password],.key-entry input{
   width:100%;font-family:var(--mono);font-size:13px;border:none;border-radius:var(--r-sm);
   padding:11px 13px;background:var(--panel-2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--hair-strong);
 }
-.set-block input:focus{outline:none;box-shadow:inset 0 0 0 1px var(--accent), 0 0 0 4px color-mix(in srgb,var(--accent) 14%,transparent);}
+.set-block input:focus,.key-entry input:focus{outline:none;box-shadow:inset 0 0 0 1px var(--accent), 0 0 0 4px color-mix(in srgb,var(--accent) 14%,transparent);}
 .set-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;}
 .set-row .gbtn{flex-shrink:0;}
 .seg{display:inline-flex;padding:3px;gap:2px;border-radius:var(--r-pill);
@@ -1378,11 +1378,50 @@ g.dg-node.dg-enter{animation:dg-fade .45s var(--ease) both;}
   border-radius:var(--r-lg);padding:16px 44px 16px 18px;z-index:85;box-shadow:var(--sh-3), inset 0 0 0 1px var(--hair);
 }
 .install-hint[hidden]{display:none;}
-.install-hint .ih-label{color:var(--accent-deep);margin-bottom:4px;}
+:is(.install-hint,.key-sheet) .ih-label{color:var(--accent-deep);margin-bottom:4px;}
 .install-hint p{font-size:13.5px;color:var(--ink-soft);margin:0;line-height:1.55;}
 .install-hint p b{color:var(--ink);}
-.install-hint .ih-close{position:absolute;top:10px;right:10px;width:28px;height:28px;background:color-mix(in srgb,var(--ink) 5%,transparent);
+:is(.install-hint,.key-sheet) .ih-close{position:absolute;top:10px;right:10px;width:28px;height:28px;background:color-mix(in srgb,var(--ink) 5%,transparent);
   border:none;border-radius:50%;color:var(--muted);font-size:15px;line-height:1;cursor:pointer;}
+
+/* The key sheet: the install hint's card, holding a form. Pinned to the
+   bottom, so it rides above a phone's keyboard (the viewport resizes for
+   it), and it scrolls inside itself when the keyboard leaves little room. */
+.key-sheet{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(18px + env(safe-area-inset-bottom));
+  width:460px;max-width:calc(100vw - 24px);max-height:calc(100dvh - var(--topbar-h) - 30px);overflow-y:auto;overscroll-behavior:contain;
+  background:var(--glass-heavy);-webkit-backdrop-filter:blur(24px) saturate(180%);backdrop-filter:blur(24px) saturate(180%);
+  border-radius:var(--r-lg);padding:18px 20px 16px;z-index:86;box-shadow:var(--sh-3), inset 0 0 0 1px var(--hair);
+  animation:ks-in .36s var(--ease-spring) both;
+}
+@keyframes ks-in{from{opacity:0;transform:translateX(-50%) translateY(14px);}to{opacity:1;transform:translateX(-50%);}}
+.key-sheet:focus{outline:none;}
+.key-sheet .ih-label{margin-bottom:6px;padding-right:32px;}
+.ks-echo{font-family:var(--display);font-weight:650;font-size:20px;letter-spacing:-.025em;line-height:1.2;color:var(--ink);
+  margin:0 32px 6px 0;overflow-wrap:anywhere;text-wrap:balance;}
+.ks-lede{font-size:13.5px;line-height:1.55;color:var(--ink-soft);margin:0 0 12px;}
+.ks-sample{margin:0 0 14px;}
+.ks-sample-k{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;}
+.ks-sample-go{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:left;
+  padding:10px 14px;border:none;border-radius:var(--r-md);background:var(--panel);color:var(--ink);cursor:pointer;text-decoration:none;font:inherit;
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 28%,var(--hair));transition:box-shadow .25s var(--ease);}
+.ks-sample-go:hover{box-shadow:inset 0 0 0 1px var(--accent), var(--sh-1);}
+.ks-sample-t{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.ks-sample-t b{font-family:var(--display);font-weight:650;font-size:15px;letter-spacing:-.02em;}
+.ks-sample-t span{font-size:12.5px;color:var(--muted);}
+.ks-sample-go .ico{color:var(--accent-deep);}
+.ks-get{font-size:13px;margin:0 0 8px;}
+:is(.ks-get,.key-get) a{color:var(--accent-deep);font-weight:600;}
+.ks-fine{font-size:12px;line-height:1.55;color:var(--muted);margin:12px 0 0;}
+/* the key field's own line: the shape check, and what Anthropic said */
+.key-msg{font-size:13px;line-height:1.5;color:var(--ink-soft);margin:8px 0 0;}
+.key-msg:empty{display:none;}
+.key-msg[data-tone="warn"]{color:var(--failure);}
+.key-msg[data-tone="ok"]{color:var(--accent-deep);}
+.key-saved{display:flex;align-items:center;gap:9px;font-size:14.5px;color:var(--ink);margin:8px 0 0;}
+.key-saved::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent);}
 
 .tbtn.nudge{color:var(--money);position:relative;}
 .tbtn.nudge::after{content:'';position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--money);box-shadow:0 0 0 2px var(--paper);}
@@ -2140,10 +2179,29 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 
 /* ═══ Settings groups ═══ */
 .set-group{margin-top:34px;}
-.set-group:first-of-type{margin-top:18px;}
+section.set-group:first-of-type{margin-top:18px;}   /* not Advanced, a details that is the first of its type too */
 .set-group-title{font-size:20px;font-weight:650;letter-spacing:-.01em;margin:0 0 4px;color:var(--ink);}
 .set-group-note{font-size:14px;color:var(--muted);margin:0 0 12px;}
 .set-toggles .toggle + .toggle{margin-top:12px;}
+/* Advanced: a group that starts folded. The whole heading is the switch. */
+.set-adv-sum{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;cursor:pointer;list-style:none;
+  padding:10px 12px;margin:0 -12px;border-radius:var(--r-md);transition:background .2s var(--ease);}
+.set-adv-sum::-webkit-details-marker{display:none;}
+.set-adv-sum:hover{background:color-mix(in srgb,var(--ink) 4%,transparent);}
+.set-adv-sum:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+.set-adv-head{display:block;min-width:0;}
+.set-adv-head .set-group-note{display:block;margin:0;}
+.set-adv-chev{margin-top:4px;color:var(--muted);transition:transform .3s var(--ease);}
+.set-adv[open] .set-adv-chev{transform:rotate(180deg);}
+.set-adv[open] .set-adv-sum{margin-bottom:4px;}
+/* the model control has four options; on a narrow phone it wraps rather
+   than running off the block */
+.set-block .seg{flex-wrap:wrap;max-width:100%;}
+@media(max-width:420px){
+  .set-block{padding:20px 18px;}
+  .set-block .seg button{padding:6px 10px;}
+}
+@media(prefers-reduced-motion:reduce){.key-sheet{animation:none;}.set-adv-chev{transition:none;}}
 
 @media(prefers-reduced-motion:reduce){.doc-sheet,.diagram-pane{transition:none!important;}}
 .doc-pane [tabindex="-1"]:focus{outline:none;}
@@ -2256,14 +2314,14 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 /* ═══ Fallbacks ═══ */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){
   .topbar{background:var(--paper);}
-  .menu-pop,.stepper,.dg-hud,.install-hint{background:var(--panel);}
+  .menu-pop,.stepper,.dg-hud,.install-hint,.key-sheet{background:var(--panel);}
   .dg-legend,.scrub-wrap,.diagram-cap{background:var(--panel);}
   @media(max-width:760px){.tb-nav{background:var(--panel);}}
 }
 @media (prefers-reduced-transparency: reduce){
   .topbar{background:var(--paper);-webkit-backdrop-filter:none;backdrop-filter:none;}
-  .menu-pop,.stepper,.dg-hud,.install-hint,.dg-legend,.scrub-wrap,.diagram-cap,.seq-overlay{-webkit-backdrop-filter:none;backdrop-filter:none;}
-  .menu-pop,.stepper,.dg-hud,.install-hint,.dg-legend,.scrub-wrap,.diagram-cap{background:var(--panel);}
+  .menu-pop,.stepper,.dg-hud,.install-hint,.key-sheet,.dg-legend,.scrub-wrap,.diagram-cap,.seq-overlay{-webkit-backdrop-filter:none;backdrop-filter:none;}
+  .menu-pop,.stepper,.dg-hud,.install-hint,.key-sheet,.dg-legend,.scrub-wrap,.diagram-cap{background:var(--panel);}
 }
 @media (prefers-reduced-motion: reduce){
   .dg-enter,g.dg-node.dg-enter{animation:none;}

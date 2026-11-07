@@ -425,5 +425,30 @@ Return ONLY a JSON array of {"i": <number>, "text": "<rewritten passage>"}, one 
     return v.doc;
   }
 
-  return { generate, compare, ask, whatif, voicePass };
+  /* ── Key check: the smallest paid call there is (max_tokens 1, a fraction
+     of a cent), so a mistyped key fails as it is pasted rather than minutes
+     into a run. Returns a kind for the caller to put into words. Anthropic
+     authenticates before it reads the request, so a 400 that is not about
+     credit still means the key was accepted. ── */
+  async function checkKey(apiKey, modelId) {
+    if (!navigator.onLine) return "offline";
+    let res;
+    try {
+      res = await fetch(API, {
+        method: "POST", headers: headers(apiKey, modelId),
+        body: JSON.stringify({ model: modelId, max_tokens: 1, messages: [{ role: "user", content: "Hi" }] })
+      });
+    } catch (e) { return "offline"; }
+    if (res.ok) return "ok";
+    let detail = "";
+    try { detail = (await res.json()).error.message || ""; } catch (e) { /* opaque body */ }
+    if (res.status === 401 || res.status === 403) return "key";
+    if (res.status === 429) return "rate";
+    if (/credit balance/i.test(detail)) return "credit";
+    if (res.status === 404) return "model";
+    if (res.status >= 500) return "busy";
+    return res.status === 400 ? "ok" : "other";
+  }
+
+  return { generate, compare, ask, whatif, voicePass, checkKey };
 })();

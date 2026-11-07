@@ -749,7 +749,12 @@ var COPY = {
     `Restoring it REPLACES every Deconstruct on this device` + (mine ? ` (${mine} of them your own)` : "") +
     `, your progress and your settings. Your API key stays.\n\nRestore it?`,
   restoreDone: (ok, n) => `Restored ${ok}/${n} Deconstructs (everything before was replaced)`,
-  restoreConfirm: "Restoring replaces every Deconstruct on this device. Continue?",
+  /* Home adds one study and never replaces anything; a backup is restored
+     only from Settings. Each control says where the other job lives. */
+  restoreNotBackup: "That file is a single Deconstruct, not a backup. Add it from Home with Import a Deconstruct, which adds it without replacing anything.",
+  importBtn: "Import a Deconstruct (.json)",
+  importTitle: "Pick or drop one Deconstruct saved as .json. A full backup is restored from Settings, under Your data.",
+  importIsBackup: "That file is a full backup, so Home left it alone. Restoring it replaces everything on this device. Use Restore .json below: it says how much will go before anything changes.",
   backupNote: "The backup holds every Deconstruct and attempt on this device, never your API key.",
   importAgain: name => `Opened "${name}" (it was already on this device)`,
   linkMissing: "That Deconstruct is not on this device",
@@ -800,6 +805,61 @@ var COPY = {
   costNote: "A Deconstruct usually costs somewhere between a few cents and about a dollar in API usage, depending on the model.",
   modelCostNote: "Rough cost per Deconstruct: opus-5-5 ≈ $0.45 · opus-5 ≈ $0.55 · opus-4-8 ≈ $0.55. Opus 5.5 is both the cheapest and the most capable, so it is the default; it and Opus 5 fall back to Opus 4.8 on their own if a request is declined.",
   pricingUrl: "https://www.anthropic.com/pricing",
+
+  /* ── Your key ──
+     Deconstruct, Dissect and Graft with no key used to drop the request and
+     open Settings. The key sheet keeps the request on screen and carries it
+     on once a key is saved. Settings shows a saved key by its last four
+     characters, never the key itself. */
+  keySheetKicker: "Add your key",
+  keySheetEcho: {
+    deconstruct: name => `Deconstruct "${name}"`,
+    dissect: () => "Dissect your design",
+    graft: change => `Graft "${change}"`
+  },
+  keySheetLede: "This needs your own Anthropic API key, because Anthropic's models do the writing. Paste it once and this request carries on.",
+  keySheetSample: "Free to read now, no key needed",
+  keySheetGo: { deconstruct: "Save and deconstruct", dissect: "Save and dissect", graft: "Save and run the graft" },
+  keySheetClose: "Close without adding a key",
+  keyConsoleUrl: "https://console.anthropic.com/settings/keys",
+  keyGet: "No key yet? Create one in the Anthropic console ↗",
+  keyFieldLabel: "Your Anthropic API key",
+  keySave: "Save key",
+  keyCheckBtn: "Check key",
+  keyChecking: "Asking Anthropic…",
+  keyCheck: {
+    ok: "Anthropic accepted this key.",
+    key: "Anthropic turned this key down. Check it was copied whole, or create a new one in the console.",
+    rate: "The key works, but Anthropic is limiting requests on it right now. Give it a minute.",
+    credit: "The key works, but its account has no credit left. Add some in the Anthropic console first.",
+    model: "The key works, but Anthropic does not know the model set in Settings, under Advanced. Pick one of the presets there.",
+    busy: "Anthropic is busy, so the key could not be checked. You can still save it.",
+    offline: "No connection, so the key could not be checked. You can still save it.",
+    other: "Anthropic gave no clear answer about this key. You can still save it."
+  },
+  keyEmpty: "Paste your key first.",
+  keyFormat: "Anthropic keys start with sk-ant-. Check the whole key was copied.",
+  keySaved: "Key saved on this device",
+  keyRemoved: "Key removed",
+  keySavedAs: tail => `Saved on this device · ends in …${tail}`,
+  keyReplace: "Replace",
+  keyRemove: "Remove",
+  keyCancel: "Cancel",
+  keyRemoveAsk: "Remove the key from this device?\n\nAnthropic shows a key only once, so keep a copy somewhere safe if you will want it again.",
+  keyRejected: "Anthropic turned down the saved key. Paste a new one.",
+
+  /* ── Settings ──
+     Grouped by what people come to change. The tuning knobs (model, how
+     long it thinks, the voice edit) start folded under Advanced. */
+  setKicker: "On this device",
+  setTitle: "Settings",
+  setGroups: { reading: "Reading", key: "Your key", help: "Help", data: "Your data", advanced: "Advanced" },
+  setKeyNote: "Anything new Vitruvian writes for you calls Anthropic with your key: a Deconstruct, a Dissection, a graft or an answer to a probe. Reading never does.",
+  setAdvancedNote: "The model, how long it thinks, and the voice edit. The defaults suit most people.",
+  strictDefault: "Strict mode by default: write your own fix before you see the real one",
+  modelCustom: "Custom…",
+  modelAnyId: "Any Anthropic model id. A new model needs no app update.",
+
   privacyNote: "Everything lives on this device. Deconstructs, attempts, and your key are never sent anywhere except your own calls to Anthropic.",
   offlineGenNote: "Generation needs a connection. Reading never does.",
   bridgeToast: "Reference notes copied. Paste into UX-First Studio's Structure It station.",
@@ -929,7 +989,7 @@ var COPY = {
     // gets the ring as a whole.
     { id: "set-model", screen: "settings", target: ".set-key, input[type=password]",
       title: "Your key, your model",
-      text: "No Vitruvian account. Generation uses your own Anthropic account and key, straight from the browser, and nothing is sent anywhere else. The model field takes any Anthropic id, so a new model needs no app update." },
+      text: "No Vitruvian account. Generation uses your own Anthropic account and key, straight from the browser, and nothing is sent anywhere else. Under Advanced, the model takes any Anthropic id, so a new model needs no app update." },
     { id: "set-tips", screen: "settings", target: ".set-tips",
       title: "These tips",
       text: "They fire once each, as you reach the thing they describe. Turn them off here whenever you have had enough, or bring them all back to walk the app again." }

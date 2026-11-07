@@ -214,22 +214,19 @@ async function saveOrReuseImportedDoc(doc, source = "generated") {
   await Store.saveBreakdown(rec);
   return { rec, existed: false };
 }
+// a backup is the only file with a list of studies; Store.importAll asks the same
+function looksLikeBackup(parsed) { return !!parsed && typeof parsed === "object" && Array.isArray(parsed.breakdowns); }
 async function importBreakdownJsonText(rawText) {
   const parsed = JSON.parse(rawText);
-  if (parsed && Array.isArray(parsed.breakdowns) && (parsed.app === "vitruvian" || parsed.tool === "vitruvian" || parsed.tool === "system-deconstructor")) {
-    /* A backup is a full restore, not an import: it replaces the library,
-       every attempt and every synced setting. Dropping one on Home used to do
-       that silently. It now asks exactly as Settings does, and says how much
-       is about to go. */
-    const mine = (await Store.getBreakdowns()).filter(b => b.source !== "flagship").length;
-    if (!confirm(COPY.restoreAsk(parsed.breakdowns.length, mine))) return null;
-    const results = await Store.importAll(parsed);
-    const okCount = results.filter(r => r.ok).length;
-    meta = await Store.getMeta();
-    applyTheme(meta.theme || document.documentElement.dataset.theme);
-    renderAudSwitch();
-    await renderLibrary();
-    toast(COPY.restoreDone(okCount, results.length));
+  /* Home adds one study and never replaces anything. A backup replaces the
+     library, every attempt and every synced setting, so it is restored only
+     from Settings > Your data, which says how much goes first. One control
+     used to do both jobs, so a reader adding a study could pick a backup and
+     be one tap from losing the library. Home now sends a backup there, with
+     a line saying why. */
+  if (looksLikeBackup(parsed)) {
+    renderSettings(undefined, undefined, COPY.importIsBackup);
+    show("settings");
     return null;
   }
   const doc = (parsed && parsed.doc && parsed.doc.meta) ? parsed.doc : parsed;
@@ -561,6 +558,7 @@ function retireDiagram() {
 }
 function show(screen, opts = {}) {
   SCREENS.forEach(s => { $("screen-" + s).hidden = s !== screen; });
+  closeKeySheet();   // it speaks for the screen it opened on
   document.body.classList.toggle("reading", screen === "reader");   // frees topbar room for the audience switch
   $("audSwitch").hidden = screen !== "reader";
   $("readerMenuBtn").hidden = screen !== "reader";
@@ -1613,20 +1611,19 @@ async function renderLibrary() {
   const go = ctaButton(COPY.deconstructBtn);
   const launchGenerate = name => {
     if (!name) return;
+    const start = () => { renderGenerate(name); show("generate"); };
     if (!meta.apiKey) {
-      renderSettings("Add your Anthropic API key to generate Deconstructs.");
-      show("settings");
+      openKeySheet({ action: "deconstruct", echo: COPY.keySheetEcho.deconstruct(safeLine(name, 60)), hit: findBestInstantMatch(all, name), resume: start });
       return;
     }
-    renderGenerate(name);
-    show("generate");
+    start();
   };
   const launch = () => {
     const name = input.value.trim();
     if (!name) return;
     const hit = findBestInstantMatch(all, name);
     // When no API key is configured, pressing Enter or Deconstruct on a matching
-    // offline study opens it immediately instead of hitting the Settings wall.
+    // offline study opens it immediately instead of asking for a key.
     if (hit && !meta.apiKey) {
       if (hit.kind === "rec") { openReader(hit.rec.id); return; }
       if (hit.kind === "lab") { location.href = hit.st.href; return; }
@@ -1654,9 +1651,9 @@ async function renderLibrary() {
   const subBar = h("div", "lib-subbar");
   const ownLink = setFace(h("button", "gbtn own-design-btn"), "pencil", COPY.ownDesignLink.replace(/\s*→$/, ""));
   ownLink.onclick = () => {
-    if (!meta.apiKey) { renderSettings("Add your Anthropic API key to generate Deconstructs."); show("settings"); return; }
-    renderGenerate("", "design");
-    show("generate");
+    const start = () => { renderGenerate("", "design"); show("generate"); };
+    if (!meta.apiKey) { openKeySheet({ action: "dissect", echo: COPY.keySheetEcho.dissect(), resume: start }); return; }
+    start();
   };
   subBar.appendChild(ownLink);
 
@@ -1873,10 +1870,10 @@ async function renderLibrary() {
     });
   });
 
-  // quiet foundation of sharing: single-breakdown or full-backup .json import + drag-and-drop
+  // quiet foundation of sharing: one Deconstruct as .json, picked or dropped. Backups go to Settings.
   const importRow = h("div", "lib-foot");
-  const imp = setFace(h("button", "gbtn ghost"), "upload", "Import a Deconstruct (.json)");
-  imp.title = "Pick or drag & drop any .json Deconstruct or backup file";
+  const imp = setFace(h("button", "gbtn ghost"), "upload", COPY.importBtn);
+  imp.title = COPY.importTitle;
   imp.onclick = () => pickFile(async file => {
     try {
       const rec = await importBreakdownJsonText(await file.text());
@@ -2004,7 +2001,11 @@ async function drillInto(sub) {
     return;
   }
   // nothing yet — offer to generate it (BYOK), opening as its own study
-  if (!meta.apiKey) { toast(`No Deconstruct of "${sub}" yet. Add an API key to generate one.`); return; }
+  if (!meta.apiKey) {
+    openKeySheet({ action: "deconstruct", echo: COPY.keySheetEcho.deconstruct(safeLine(sub, 60)),
+      hit: findBestInstantMatch(all, sub), resume: () => { renderGenerate(sub); show("generate"); } });
+    return;
+  }
   if (confirm(`No Deconstruct of "${sub}" yet. Deconstruct it now?`)) {
     renderGenerate(sub);
     show("generate");
@@ -3554,7 +3555,8 @@ function renderWhatif(rec, opts = {}) {
   runBtn.onclick = async () => {
     const change = ta.value.trim();
     if (change.length < 4) { ta.focus(); return; }
-    if (!meta.apiKey) { renderSettings("Add your Anthropic API key to run grafts."); show("settings"); return; }
+    // the typed change stays in the box, and the sheet runs it once a key is saved
+    if (!meta.apiKey) { openKeySheet({ action: "graft", echo: COPY.keySheetEcho.graft(safeLine(change, 60)), resume: () => runBtn.click() }); return; }
     if (!navigator.onLine) { toast("A graft needs a connection"); return; }
     runBtn.disabled = true;
     ta.disabled = true;
@@ -3901,7 +3903,7 @@ function renderGenerate(systemName, mode) {
       const row = h("div", "gate-actions");
       if (e.kind === "key") {
         const b = h("button", "gbtn", "Open Settings");
-        b.onclick = () => { renderSettings(); show("settings"); };
+        b.onclick = () => { renderSettings(COPY.keyRejected); show("settings"); };   // lands on the key, field open
         row.appendChild(b);
       }
       if (e.kind === "overloaded" || e.kind === "rate" || e.kind === "offline" || e.kind === "http") {
@@ -4425,59 +4427,215 @@ function practiceDone(root, st) {
   root.appendChild(row);
 }
 
-/* drafts: { key, model }, the two text fields as typed, when this screen
-   re-renders itself (see refresh below) */
-function renderSettings(banner, drafts) {
+/* ═══ Your key ═══
+   One key field for the key sheet and Settings. It checks the shape before
+   it saves (every Anthropic key starts sk-ant-), saves on Enter, and can ask
+   Anthropic whether the key works. A mistyped key used to save without a
+   word and fail minutes later, once a run had started. */
+let keyFieldSeq = 0;
+function keyEntry({ saveLabel, onSaved, draft, labelledBy }) {
+  const wrap = h("div", "key-entry");
+  const input = h("input");
+  input.type = "password";
+  input.placeholder = "sk-ant-…";
+  input.autocomplete = "off";
+  input.spellcheck = false;
+  input.setAttribute("autocapitalize", "off");
+  if (labelledBy) input.setAttribute("aria-labelledby", labelledBy);
+  else input.setAttribute("aria-label", COPY.keyFieldLabel);
+  input.value = draft || "";
+  const msg = h("p", "key-msg");
+  msg.id = "key-msg-" + (++keyFieldSeq);
+  msg.setAttribute("role", "status");
+  input.setAttribute("aria-describedby", msg.id);
+  const say = (text, tone) => { msg.textContent = text || ""; msg.dataset.tone = tone || ""; };
+  const SHAPE = /^sk-ant-/;
+  const shaped = () => {
+    const k = input.value.trim();
+    if (!k) { say(COPY.keyEmpty, "warn"); return null; }
+    if (!SHAPE.test(k)) { say(COPY.keyFormat, "warn"); return null; }
+    return k;
+  };
+  const row = h("div", "set-row");
+  const save = h("button", "gbtn primary", saveLabel);
+  const check = h("button", "gbtn", COPY.keyCheckBtn);
+  save.type = "button";
+  check.type = "button";
+  let asked = 0;   // a check still out when the field changes, or the key is saved, answers for nothing
+  save.onclick = async () => {
+    const k = shaped();
+    if (!k) { input.focus(); return; }
+    asked++;
+    save.disabled = true;
+    meta.apiKey = k;
+    await Store.saveMeta({ apiKey: k });
+    toast(COPY.keySaved);
+    onSaved(k);
+  };
+  check.onclick = async () => {
+    const k = shaped();
+    if (!k) { input.focus(); return; }
+    const mine = ++asked;
+    check.disabled = true;
+    say(COPY.keyChecking);
+    const kind = await Generator.checkKey(k, meta.modelId || CONFIG.defaultModel);
+    check.disabled = false;
+    if (mine !== asked || input.value.trim() !== k) return;
+    say(COPY.keyCheck[kind] || COPY.keyCheck.other, kind === "ok" ? "ok" : (kind === "key" || kind === "credit" || kind === "model") ? "warn" : "");
+  };
+  input.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); save.click(); } };
+  input.oninput = () => { asked++; if (msg.textContent) say(""); };
+  // checked on leaving the field too, so a paste that missed the start shows at once
+  input.onblur = () => { const k = input.value.trim(); if (k && !SHAPE.test(k)) say(COPY.keyFormat, "warn"); };
+  row.append(save, check);
+  wrap.append(input, msg, row);
+  return { el: wrap, input, row };
+}
+function keyGetLine(cls) {
+  const p = h("p", cls);
+  const a = h("a", null, COPY.keyGet);
+  a.href = COPY.keyConsoleUrl;
+  a.target = "_blank";
+  a.rel = "noopener";
+  p.appendChild(a);
+  return p;
+}
+
+/* The key sheet. Deconstruct, Dissect and Graft with no key used to drop
+   the request and open Settings, then titled "How you learn", with the key
+   field a long scroll down on a phone. The sheet says back what was asked,
+   offers the nearest sample that needs no key, and carries the request on
+   once a key is saved. It is the install hint's card, holding a form, and
+   it belongs to the screen it opened on: show() closes it. */
+let keySheetEl = null, keySheetBack = null;
+function keySheetKey(e) { if (e.key === "Escape") { e.stopPropagation(); closeKeySheet(true); } }
+function closeKeySheet(byHand) {
+  if (!keySheetEl) return;
+  keySheetEl.remove();
+  keySheetEl = null;
+  document.removeEventListener("keydown", keySheetKey, true);
+  const to = keySheetBack;
+  keySheetBack = null;
+  // closed by hand, focus goes back to the button that opened it
+  if (byHand && to && to.isConnected && to.getClientRects().length) {
+    try { to.focus({ preventScroll: true }); } catch (e) {}
+  }
+}
+/* action: "deconstruct" | "dissect" | "graft", for the button's words.
+   hit: findBestInstantMatch's answer for the request, if any. */
+function openKeySheet({ action, echo, hit, resume }) {
+  const back = keySheetEl ? keySheetBack : document.activeElement;
+  closeKeySheet();
+  keySheetBack = back;
+  featureTips.close();
+  const sheet = h("div", "key-sheet");
+  sheet.setAttribute("role", "dialog");
+  sheet.setAttribute("aria-labelledby", "keySheetEcho");
+  sheet.tabIndex = -1;
+  sheet.appendChild(h("div", "ih-label", COPY.keySheetKicker));
+  const title = h("h2", "ks-echo", echo);
+  title.id = "keySheetEcho";
+  sheet.appendChild(title);
+  sheet.appendChild(h("p", "ks-lede", COPY.keySheetLede));
+  if (hit) {
+    // the nearest thing already here, so a visitor with no key still gets an answer
+    const rec = hit.kind === "rec" ? hit.rec : null;
+    const s = h("div", "ks-sample");
+    s.appendChild(h("span", "ks-sample-k", COPY.keySheetSample));
+    const go = rec ? h("button", "ks-sample-go") : guardLabLink(h("a", "ks-sample-go"));
+    const txt = h("span", "ks-sample-t");
+    txt.append(h("b", null, rec ? rec.system : hit.st.name),
+      h("span", null, rec ? `${rec.doc.layers.length} layers · works offline` : hit.st.sub));
+    go.append(txt, icon("arrowRight"));
+    if (rec) {
+      go.type = "button";
+      go.onclick = () => { closeKeySheet(); openReader(rec.id); };
+    } else go.href = hit.st.href;
+    s.appendChild(go);
+    sheet.appendChild(s);
+  }
+  sheet.appendChild(keyGetLine("ks-get"));
+  const entry = keyEntry({
+    saveLabel: COPY.keySheetGo[action] || COPY.keySave,
+    onSaved: () => { closeKeySheet(); resume(); }
+  });
+  sheet.appendChild(entry.el);
+  sheet.appendChild(h("p", "ks-fine", COPY.keyNotice + " " + COPY.costNote));
+  const x = h("button", "ih-close", "×");
+  x.type = "button";
+  x.setAttribute("aria-label", COPY.keySheetClose);
+  x.onclick = () => closeKeySheet(true);
+  sheet.appendChild(x);
+  document.body.appendChild(sheet);
+  keySheetEl = sheet;
+  document.addEventListener("keydown", keySheetKey, true);
+  // a phone's keyboard would cover the request and the sample, so there the sheet takes focus, not the field
+  if (matchMedia("(pointer: fine)").matches) entry.input.focus({ preventScroll: true });
+  else sheet.focus({ preventScroll: true });
+}
+
+/* drafts carries what lives only in the DOM across this screen's own
+   re-renders (see refresh below): the key and model fields as typed, and
+   whether the key field, the custom model field and Advanced are open.
+   dataNote: Home was handed a backup, and Your data says why you are here. */
+function renderSettings(banner, drafts, dataNote) {
   const root = $("screen-settings").firstElementChild;
+  const d = drafts || {};
+  const G = COPY.setGroups;
   root.textContent = "";
-  root.appendChild(h("div", "kicker", "Settings"));
-  root.appendChild(h("h1", "title", "How you learn"));
+  root.appendChild(h("div", "kicker", COPY.setKicker));
+  root.appendChild(h("h1", "title", COPY.setTitle));
 
-  /* About / how it works → landing + tutorial */
-  const ab = h("div", "set-block");
-  ab.appendChild(h("h3", null, "About & field guide"));
-  ab.appendChild(h("p", "note", "What Vitruvian is and how to read a Deconstruct: the cards, the diagram, the developer lens."));
-  const abRow = h("div", "set-row");
-  const abBtn = h("button", "gbtn primary", "Open the intro →");
-  abBtn.onclick = () => { renderLanding(); show("landing"); };
-  const tutBtn = h("button", "gbtn", "Field guide →");
-  tutBtn.onclick = () => { renderTutorial("settings"); show("tutorial"); };
-  abRow.append(abBtn, tutBtn);
-  ab.appendChild(abRow);
+  /* Every control below re-renders the screen. A key pasted but not yet
+     saved, a model id mid-edit, the banner and an open Advanced lived only
+     in the DOM, so a toggle flipped before "Save key" wiped them. They
+     carry across; the banner only while the key field is open. */
+  let entry = null, mi = null, adv = null, keyOpen = false, customOpen = false;
+  const refresh = more => renderSettings(keyOpen ? banner : undefined, Object.assign({
+    key: entry ? entry.input.value : "", keyOpen, model: mi ? mi.value : undefined,
+    custom: customOpen, adv: !!(adv && adv.open)
+  }, more), dataNote);
 
-  /* API key */
-  const kb = h("div", "set-block");
+  /* Your key. A saved key shows as saved, by its last four characters, so
+     two keys can be told apart without a filled password box nobody can
+     read. Replace opens the field; a banner (Anthropic turned the saved key
+     down) opens it as well. */
+  const kb = h("div", "set-block set-key");
   const kh = h("h3", null, "Anthropic API key");
   kh.id = "set-key-h";   // names the field below for screen readers
   kb.appendChild(kh);
-  /* Every banner asks for the key, so it sits with the key. Under the title
-     it was several blocks above the field, and the screen kept its old
-     scroll, so a reader sent here to add a key often saw neither. */
-  if (banner) kb.appendChild(h("div", "narrowing-note", banner));
-  kb.appendChild(h("p", "note", COPY.keyNotice));
-  const key = h("input");
-  key.type = "password";
-  key.placeholder = "sk-ant-…";
-  key.setAttribute("aria-labelledby", "set-key-h");
-  key.value = drafts ? drafts.key : (meta.apiKey || "");
-  // callers show() the screen right after; a hidden screen cannot scroll.
-  // Not on a re-render from a control lower down: it would yank the page here.
-  if (banner && !drafts) requestAnimationFrame(() => {
-    if ($("screen-settings").hidden || !kb.isConnected) return;
-    kb.scrollIntoView({ block: "start" });
-    key.focus({ preventScroll: true });
-  });
-  const krow = h("div", "set-row");
-  const ksave = h("button", "gbtn primary", "Save key");
-  ksave.onclick = async () => {
-    meta.apiKey = key.value.trim();
-    await Store.saveMeta({ apiKey: meta.apiKey });
-    toast(meta.apiKey ? "Key saved on this device" : "Key removed");
-  };
-  const kclear = h("button", "gbtn", "Remove");
-  kclear.onclick = async () => { key.value = ""; meta.apiKey = ""; await Store.saveMeta({ apiKey: "" }); toast("Key removed"); };
-  krow.append(ksave, kclear);
-  kb.append(key, krow);
+  keyOpen = !meta.apiKey || (drafts ? !!d.keyOpen : !!banner);
+  if (keyOpen) {
+    if (banner) kb.appendChild(h("div", "narrowing-note", banner));
+    kb.appendChild(h("p", "note", COPY.keyNotice));
+    entry = keyEntry({ saveLabel: COPY.keySave, labelledBy: "set-key-h", draft: d.key,
+      onSaved: () => refresh({ keyOpen: false, key: "" }) });
+    if (meta.apiKey) {
+      const cancel = h("button", "gbtn ghost", COPY.keyCancel);
+      cancel.type = "button";
+      cancel.onclick = () => refresh({ keyOpen: false, key: "" });
+      entry.row.appendChild(cancel);
+    }
+    kb.appendChild(entry.el);
+    kb.appendChild(keyGetLine("note key-get"));
+  } else {
+    kb.appendChild(h("p", "key-saved", COPY.keySavedAs(meta.apiKey.slice(-4))));
+    const row = h("div", "set-row");
+    const rep = h("button", "gbtn", COPY.keyReplace);
+    rep.type = "button";
+    rep.onclick = () => refresh({ keyOpen: true, key: "", focus: "key" });
+    const rem = h("button", "gbtn", COPY.keyRemove);
+    rem.type = "button";
+    rem.onclick = async () => {
+      if (!confirm(COPY.keyRemoveAsk)) return;
+      meta.apiKey = "";
+      await Store.saveMeta({ apiKey: "" });
+      toast(COPY.keyRemoved);
+      refresh();
+    };
+    row.append(rep, rem);
+    kb.appendChild(row);
+  }
   const cost = h("p", "note");
   cost.appendChild(document.createTextNode(COPY.costNote + " "));
   const link = h("a", null, "Anthropic pricing ↗");
@@ -4486,38 +4644,13 @@ function renderSettings(banner, drafts) {
   link.rel = "noopener";
   cost.appendChild(link);
   kb.appendChild(cost);
-
-  /* model */
-  const mb = h("div", "set-block");
-  const mh = h("h3", null, "Model");
-  mh.id = "set-model-h";
-  mb.appendChild(mh);
-  mb.appendChild(h("p", "note", "Any Anthropic model id; new models need no app update."));
-  mb.appendChild(h("p", "note", COPY.modelCostNote));
-  const mi = h("input");
-  mi.type = "text";
-  mi.setAttribute("aria-labelledby", "set-model-h");
-  mi.value = drafts ? drafts.model : (meta.modelId || CONFIG.defaultModel);
-  const mrow = h("div", "set-row");
-  ["claude-opus-5-5", "claude-opus-5", "claude-opus-4-8"].forEach(preset => {
-    const b = h("button", "gbtn", preset.replace("claude-", ""));
-    b.onclick = () => { mi.value = preset; msave.click(); };
-    mrow.appendChild(b);
+  // callers show() the screen right after; a hidden screen cannot scroll.
+  // Not on a re-render from a control lower down: it would yank the page here.
+  if (banner && !drafts) requestAnimationFrame(() => {
+    if ($("screen-settings").hidden || !kb.isConnected) return;
+    kb.scrollIntoView({ block: "start" });
+    if (entry) entry.input.focus({ preventScroll: true });
   });
-  const msave = h("button", "gbtn primary", "Save");
-  msave.onclick = async () => {
-    meta.modelId = mi.value.trim() || CONFIG.defaultModel;
-    await Store.saveMeta({ modelId: meta.modelId });
-    toast("Model: " + meta.modelId);
-  };
-  mrow.appendChild(msave);
-  mb.append(mi, mrow);
-
-  /* Every control below re-renders the screen. A key pasted but not yet
-     saved, a model id mid-edit and the add-your-key banner lived only in the
-     DOM, so a toggle flipped before "Save key" wiped them. They carry across;
-     the banner only while no key is saved. */
-  const refresh = () => renderSettings(meta.apiKey ? undefined : banner, { key: key.value, model: mi.value });
 
   /* how you learn: everything that changes what reading feels like */
   const toggle = (on, label, flip) => {
@@ -4555,7 +4688,7 @@ function renderSettings(banner, drafts) {
   const lb = h("div", "set-block set-toggles");
   lb.appendChild(h("h3", null, "While you read"));
   lb.append(
-    toggle(meta.challengeModeDefault === true, "Strict mode: write your own fix before you can see the real one",
+    toggle(meta.challengeModeDefault === true, COPY.strictDefault,
       () => { meta.challengeModeDefault = !(meta.challengeModeDefault === true); return Store.saveMeta({ challengeModeDefault: meta.challengeModeDefault }); }),
     toggle(meta.autoReplay !== false, "Replay each failure on the diagram when you reach it",
       () => { meta.autoReplay = meta.autoReplay === false; return Store.saveMeta({ autoReplay: meta.autoReplay }); }),
@@ -4581,6 +4714,113 @@ function renderSettings(banner, drafts) {
     : "Tips are off.";
   tb.append(tagain, tleft);
 
+  /* About / how it works → landing + tutorial */
+  const ab = h("div", "set-block");
+  ab.appendChild(h("h3", null, "About & field guide"));
+  ab.appendChild(h("p", "note", "What Vitruvian is and how to read a Deconstruct: the cards, the diagram, the developer lens."));
+  const abRow = h("div", "set-row");
+  const abBtn = h("button", "gbtn primary", "Open the intro →");
+  abBtn.onclick = () => { renderLanding(); show("landing"); };
+  const tutBtn = h("button", "gbtn", "Field guide →");
+  tutBtn.onclick = () => { renderTutorial("settings"); show("tutorial"); };
+  abRow.append(abBtn, tutBtn);
+  ab.appendChild(abRow);
+
+  /* backup / restore. The only place a backup is restored: Home adds single
+     studies and sends a backup here. */
+  const bb = h("div", "set-block");
+  bb.appendChild(h("h3", null, "Backup & restore"));
+  if (dataNote) bb.appendChild(h("div", "narrowing-note", dataNote));
+  bb.appendChild(h("p", "note", COPY.backupNote));
+  const brow = h("div", "set-row");
+  const bexp = h("button", "gbtn primary", "Backup .json");
+  bexp.onclick = async () => {
+    const state = await Store.exportAll();
+    download("vitruvian-backup.json", JSON.stringify(state, null, 2));
+    meta.lastBackup = Date.now();
+    await Store.saveMeta({ lastBackup: meta.lastBackup });
+    toast("Backup downloaded");
+  };
+  const bres = h("button", "gbtn", "Restore .json");
+  bres.onclick = () => pickFile(async file => {
+    try {
+      const state = JSON.parse(await file.text());
+      if (!looksLikeBackup(state)) {
+        if (state && (state.meta || state.doc)) { alert(COPY.restoreNotBackup); return; }
+        throw new Error("not a Vitruvian backup");
+      }
+      /* Says how many studies the file holds and how many of the reader's
+         own are about to go, before anything is replaced. */
+      const mine = (await Store.getBreakdowns()).filter(b => b.source !== "flagship").length;
+      if (!confirm(COPY.restoreAsk(state.breakdowns.length, mine))) return;
+      const results = await Store.importAll(state);
+      const bad = results.filter(r => !r.ok);
+      meta = await Store.getMeta();
+      applyTheme(meta.theme || document.documentElement.dataset.theme);   // a restored backup may carry a different theme
+      renderAudSwitch();
+      toast(COPY.restoreDone(results.length - bad.length, results.length));
+      if (bad.length) alert("Skipped invalid entries:\n" + bad.slice(0, 8).map(r => `${safeLine(r.system || r.id, 40)}: ${safeLine(r.errors[0], 60)}`).join("\n"));
+      renderSettings();
+    } catch (e) { alert("Restore failed: " + safeLine(e.message, 120)); }
+  });
+  brow.append(bexp, bres);
+  bb.appendChild(brow);
+  if (dataNote && !drafts) requestAnimationFrame(() => {
+    if ($("screen-settings").hidden || !bb.isConnected) return;
+    bb.scrollIntoView({ block: "start" });
+    bres.focus({ preventScroll: true });
+  });
+
+  /* model: the presets as a segmented control, so the one in use shows, and
+     Custom… for any other id */
+  const PRESETS = ["claude-opus-5-5", "claude-opus-5", "claude-opus-4-8"];
+  const cur = meta.modelId || CONFIG.defaultModel;
+  customOpen = d.custom != null ? !!d.custom : !PRESETS.includes(cur);
+  const mb = h("div", "set-block");
+  const mh = h("h3", null, "Model");
+  mh.id = "set-model-h";
+  mb.appendChild(mh);
+  mb.appendChild(h("p", "note", COPY.modelCostNote));
+  const saveModel = async id => {
+    meta.modelId = id || CONFIG.defaultModel;
+    await Store.saveMeta({ modelId: meta.modelId });
+    toast("Model: " + meta.modelId);
+    refresh({ custom: !PRESETS.includes(meta.modelId), model: undefined });
+  };
+  const mseg = h("div", "seg");
+  mseg.setAttribute("role", "group");
+  mseg.setAttribute("aria-labelledby", "set-model-h");
+  PRESETS.forEach(p => {
+    const on = !customOpen && cur === p;
+    const b = h("button", on ? "on" : "", p.replace("claude-", ""));
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(on));
+    b.onclick = () => saveModel(p);
+    mseg.appendChild(b);
+  });
+  const cb = h("button", customOpen ? "on" : "", COPY.modelCustom);
+  cb.type = "button";
+  cb.setAttribute("aria-pressed", String(customOpen));
+  cb.onclick = () => { if (!customOpen) refresh({ custom: true, focus: "model" }); };
+  mseg.appendChild(cb);
+  mb.appendChild(mseg);
+  if (customOpen) {
+    mb.appendChild(h("p", "note", COPY.modelAnyId));
+    mi = h("input");
+    mi.type = "text";
+    mi.spellcheck = false;
+    mi.setAttribute("autocapitalize", "off");
+    mi.setAttribute("aria-labelledby", "set-model-h");
+    mi.value = d.model != null ? d.model : cur;
+    const msave = h("button", "gbtn primary", "Save");
+    msave.type = "button";
+    msave.onclick = () => saveModel(mi.value.trim());
+    mi.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); msave.click(); } };
+    const mrow = h("div", "set-row");
+    mrow.appendChild(msave);
+    mb.append(mi, mrow);
+  }
+
   /* generation speed */
   const gs = h("div", "set-block");
   gs.appendChild(h("h3", null, "Generation"));
@@ -4603,37 +4843,6 @@ function renderSettings(banner, drafts) {
   vtog.style.marginTop = "14px";
   gs.appendChild(vtog);
 
-  /* backup / restore */
-  const bb = h("div", "set-block");
-  bb.appendChild(h("h3", null, "Backup & restore"));
-  bb.appendChild(h("p", "note", COPY.backupNote));
-  const brow = h("div", "set-row");
-  const bexp = h("button", "gbtn primary", "Backup .json");
-  bexp.onclick = async () => {
-    const state = await Store.exportAll();
-    download("vitruvian-backup.json", JSON.stringify(state, null, 2));
-    meta.lastBackup = Date.now();
-    await Store.saveMeta({ lastBackup: meta.lastBackup });
-    toast("Backup downloaded");
-  };
-  const bres = h("button", "gbtn", "Restore .json");
-  bres.onclick = () => pickFile(async file => {
-    try {
-      const state = JSON.parse(await file.text());
-      if (!confirm(COPY.restoreConfirm)) return;
-      const results = await Store.importAll(state);
-      const bad = results.filter(r => !r.ok);
-      meta = await Store.getMeta();
-      applyTheme(meta.theme || document.documentElement.dataset.theme);   // a restored backup may carry a different theme
-      renderAudSwitch();
-      toast(`Restored ${results.length - bad.length}/${results.length} Deconstructs`);
-      if (bad.length) alert("Skipped invalid entries:\n" + bad.slice(0, 8).map(r => `${safeLine(r.system || r.id, 40)}: ${safeLine(r.errors[0], 60)}`).join("\n"));
-      renderSettings();
-    } catch (e) { alert("Restore failed: " + safeLine(e.message, 120)); }
-  });
-  brow.append(bexp, bres);
-  bb.appendChild(brow);
-
   const group = (title, note, ...blocks) => {
     const g = h("section", "set-group");
     if (title) g.appendChild(h("h2", "set-group-title", title));
@@ -4641,13 +4850,29 @@ function renderSettings(banner, drafts) {
     blocks.forEach(b => g.appendChild(b));
     root.appendChild(g);
   };
-  group(null, null, db, lb, tb);
-  group("Deconstructing your own systems", "Generating a Deconstruct calls Anthropic with your key. Everything else works offline.", kb, mb, gs);
-  group("Your data", null, bb);
-  group("About", null, ab);
+  /* The key leads: it is the one setting that unlocks something, and the
+     reason most people open this screen at all. A saved key folds to one
+     line. Tuning knobs most readers never need start folded under Advanced;
+     whether it is open rides along in drafts, or a control inside it shut
+     the group under the reader's finger. */
+  group(G.key, COPY.setKeyNote, kb);
+  group(G.reading, null, db, lb);
+  group(G.help, null, tb, ab);
+  group(G.data, null, bb);
+  adv = h("details", "set-group set-adv");
+  adv.open = !!d.adv;
+  const sum = h("summary", "set-adv-sum");
+  const sumText = h("span", "set-adv-head");
+  sumText.append(h("h2", "set-group-title", G.advanced), h("span", "set-group-note", COPY.setAdvancedNote));
+  sum.append(sumText, icon("chevronDown", "set-adv-chev"));
+  adv.append(sum, mb, gs);
+  root.appendChild(adv);
 
   root.appendChild(h("p", "fine", COPY.privacyNote));
   root.appendChild(h("p", "fine", `${CONFIG.toolName.replace("·", "·")} v${CONFIG.appVersion} · ${COPY.offlineGenNote}`));
+
+  if (d.focus === "key" && entry) requestAnimationFrame(() => entry.input.focus());
+  if (d.focus === "model" && mi) requestAnimationFrame(() => mi.focus());
 }
 
 /* ═══ Launcher shortcut routing (pwa.js calls these) ═══ */
