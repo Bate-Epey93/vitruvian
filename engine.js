@@ -905,8 +905,13 @@ function renderAudSwitch() {
 /* Landing: an editorial split. Copy on the left; on the right, a real
    Deconstruct building itself, layer by layer, in a framed stage, because the
    product explains itself faster than any paragraph about it. */
-let heroTimer = null;
-function stopHero() { if (heroTimer) { clearInterval(heroTimer); heroTimer = null; } }
+let heroTimer = null, heroGen = 0;
+/* The generation retires a hero whose record was still loading when the
+   landing was rebuilt; otherwise two loops shared one stage. */
+function stopHero() { heroGen++; clearTimeout(heroTimer); heroTimer = null; }
+/* How long each beat holds. The failure gets the longest: it is the beat
+   with a sentence to read. */
+const HERO_MS = { base: 2600, breaks: 3000, fix: 2400 };
 
 /* ═══ The headline's second line, drawn ═══
    "Put it back together, and it makes sense" is an argument with a shape:
@@ -1123,18 +1128,33 @@ function renderLanding() {
   headArrow(head);
   copy.appendChild(h("p", "landing-lede", L.lede));
   const actions = h("div", "hero-actions");
+  // either way out counts as having seen the landing
+  const leave = async () => {
+    stopHero();
+    if (meta.landingSeen) return;
+    meta.landingSeen = true;
+    await Store.saveMeta({ landingSeen: true });
+  };
+  /* Straight to the first failure: layer 1 at its problem step, where the
+     reader replays what broke by itself. The system is the one on the
+     stage. Without it (a seed that failed), the library is the way in. */
   const cta = ctaButton(L.cta, "landing-cta");
   cta.onclick = async () => {
-    stopHero();
-    await Store.saveMeta({ landingSeen: true });
-    meta.landingSeen = true;
+    await leave();
+    const rec = await heroRecord();
+    if (rec) { await openReader(rec.id, null, { posStep: [1, 1], watch: true }); return; }
     await renderLibrary();
     show("library");
   };
-  const learn = h("button", "gbtn ghost", L.learn);
-  learn.onclick = () => { stopHero(); renderTutorial("landing"); show("tutorial"); };
-  actions.append(cta, learn);
+  const n = CONFIG.flagshipNames.length;
+  const browse = h("button", "gbtn ghost", L.browse(n));
+  browse.setAttribute("aria-label", L.browseAria(n));
+  browse.onclick = async () => { await leave(); await renderLibrary(); show("library"); };
+  actions.append(cta, browse);
   copy.appendChild(actions);
+  const learn = h("button", "landing-guide", L.learn);
+  learn.onclick = () => { stopHero(); renderTutorial("landing"); show("tutorial"); };
+  copy.appendChild(learn);
   copy.appendChild(h("p", "landing-foot", L.footnote));
   hero.appendChild(copy);
 
@@ -1181,29 +1201,62 @@ function renderLanding() {
   mountHero({ dg, hsTitle, hsLayer, steps, note });
 }
 
+/* The system the stage rebuilds, and the one "Watch it break" opens. */
+async function heroRecord() {
+  return (await Store.getBreakdown("flagship-" + COPY.landing.heroSystem).catch(() => null))
+    || (await Store.getBreakdowns()).find(b => b.source === "flagship") || null;
+}
+
 async function mountHero(el) {
-  const rec = (await Store.getBreakdown("flagship-" + COPY.landing.heroSystem).catch(() => null))
-    || (await Store.getBreakdowns()).find(b => b.source === "flagship");
-  if (!rec) return;
+  const gen = heroGen;
+  const rec = await heroRecord();
+  if (!rec || gen !== heroGen) return;
+  const L = COPY.landing;
   const doc = rec.doc, N = doc.layers.length;
   const diagram = Diagram.mount(el.dg, doc);
   el.hsTitle.textContent = doc.meta.system;
   const segs = [];
   for (let i = 0; i <= N; i++) { const sg = h("span", "hs-seg"); el.steps.appendChild(sg); segs.push(sg); }
-  let i = 0;
-  const paint = () => {
-    diagram.show(i, { animate: i > 0 });
-    el.hsLayer.textContent = i === 0 ? "Layer 0 · the naive baseline" : "Layer " + i + " of " + N;
-    el.note.textContent = i === 0 ? doc.meta.system + ", as simple as it can be." : doc.layers[i - 1].name;
-    segs.forEach((sg, k) => { sg.classList.toggle("done", k < i); sg.classList.toggle("on", k === i); });
+  /* Failure is the whole proposition, and a stage that only ever added boxes
+     showed the growth without the reason for it. So each layer plays twice:
+     the version before it with what breaks lit red, as the reader's replay
+     rewinds to it, then the fix drawn in. */
+  const beats = [{ i: 0, ms: HERO_MS.base }];
+  for (let i = 1; i <= N; i++) beats.push({ i, breaks: true, ms: HERO_MS.breaks }, { i, ms: HERO_MS.fix });
+  const failureOf = layer => {
+    const t = layer.problem && layer.problem.title;
+    return typeof t === "string" && t.trim() ? t.trim() : L.heroFailureFallback;
   };
+  let b = 0;
+  const paint = () => {
+    const { i, breaks } = beats[b];
+    const layer = doc.layers[i - 1];
+    if (breaks) diagram.show(i - 1, { highlight: (layer.diff && layer.diff.highlight) || [] });
+    else diagram.show(i, { animate: i > 0 });
+    el.hsLayer.textContent = i === 0 ? COPY.capBaseline : breaks ? L.heroBreaks : L.heroLayer(i, N);
+    el.note.textContent = i === 0 ? L.heroBaseline(doc.meta.system)
+      : breaks ? L.heroFailure(i, failureOf(layer)) : layer.name;
+    el.hsLayer.classList.toggle("broke", !!breaks);
+    el.note.classList.toggle("broke", !!breaks);
+    segs.forEach((sg, k) => {
+      sg.classList.toggle("done", k < i);
+      sg.classList.toggle("on", k === i);
+      sg.classList.toggle("broke", k === i && !!breaks);
+    });
+  };
+  // reduced motion: show the finished system, hold still
+  if (RM_PREF()) { b = beats.length - 1; paint(); return; }
   paint();
-  if (RM_PREF()) { i = N; paint(); return; }    // reduced motion: show the finished system, hold still
-  heroTimer = setInterval(() => {
-    if ($("screen-landing").hidden) { stopHero(); return; }
-    i = (i + 1) % (N + 1);
-    paint();
-  }, 2600);
+  const next = () => {
+    heroTimer = setTimeout(() => {
+      if (gen !== heroGen) return;
+      if ($("screen-landing").hidden) { stopHero(); return; }
+      b = (b + 1) % beats.length;
+      paint();
+      next();
+    }, beats[b].ms);
+  };
+  next();
 }
 
 /* Fade-up on first sight. IntersectionObserver only: no scroll listeners. */
@@ -3072,9 +3125,16 @@ async function openReader(id, layerIndex, opts = {}) {
                     (s.onSpine < s.chokes ? ` (${s.onSpine} on the spine)` : ""));
     toast(parts.join(" · "));
   };
+  /* Arriving by "Watch it break", the first thing on screen is the failure
+     replaying itself, so the arrival tip waits for the collision instead of
+     opening over it. With no replay coming it is offered as usual; the cap
+     below keeps a replay that never lands from holding it back for good. */
+  let tipWait = !!opts.watch && diagram.sim.available && meta.autoReplay !== false && meta.onePage !== true;
+  const offerTip = () => { if (currentRec === rec) featureTips.visit("reader"); };
   // scripted incident: two tokens run into the gate's failure, seconds apart.
   // The caption tells the reader what history they just watched.
   diagram.sim.onReplayCrash(() => {
+    if (tipWait) { tipWait = false; setTimeout(offerTip, 1200); }
     const p = currentView ? currentView.position : 0;
     const L = rec.doc.layers[p - 1];
     let text = "The failure, replayed. The second arrival meets the first.";
@@ -3161,7 +3221,8 @@ async function openReader(id, layerIndex, opts = {}) {
   // so the replace a jump makes lands on the reader's entry
   if (layerIndex != null) currentView.goToLayer(layerIndex);
   else if (Array.isArray(opts.posStep)) currentView.goToPosStep(opts.posStep[0], opts.posStep[1]);
-  setTimeout(() => { if (currentRec === rec) featureTips.visit("reader"); }, 750);
+  if (tipWait) setTimeout(() => { if (tipWait) { tipWait = false; offerTip(); } }, 9000);
+  else setTimeout(offerTip, 750);
 }
 
 /* ═══ Branded diagram export: current diagram state → PNG with the Vitruvian

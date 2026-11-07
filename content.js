@@ -944,7 +944,20 @@ var COPY = {
     headlineArrowLabel: "and then",
     lede: "Vitruvian rebuilds everyday systems one failure at a time. Each layer exists because the version before it broke, and the diagram grows as you go.",
     learn: "How to read a Deconstruct",
+    /* heroSystem is both the system the stage rebuilds and the one "Watch it
+       break" opens, at layer 1's problem, so the button keeps the stage's
+       promise. */
     heroSystem: "url-shortener",
+    /* The stage plays each layer twice: the version before it, with what
+       breaks lit red, then the fix drawn in. heroFailure captions the first
+       beat with the layer's problem.title; heroFailureFallback stands in for
+       a study without one, because the layer's name is the fix, and set in
+       red it would read as the thing that broke. */
+    heroBaseline: system => `${system}, as simple as it can be.`,
+    heroBreaks: "What breaks",
+    heroFailure: (n, failure) => `Layer ${n}: ${failure}`,
+    heroFailureFallback: "the design so far breaks",
+    heroLayer: (n, total) => `Layer ${n} of ${total}`,
     stats: ["sample systems to take apart", "thinking models that keep coming back", "reading levels, plain English to engineer"],
     sections: [
       { icon: "whatItIs", title: "What it is",
@@ -956,7 +969,13 @@ var COPY = {
       { icon: "howTo", title: "How to use it",
         body: "Start with a sample Deconstruct. Add your Anthropic API key in Settings to deconstruct anything you name, or submit your own design and see where it breaks first. It works offline and installs to your home screen." }
     ],
-    cta: "Start deconstructing",
+    /* The first failure is the moment the product makes sense, and it sat
+       about eleven taps from here (Home, a card, the tips, two Meet steps).
+       The primary button goes straight to it; the library is the second
+       choice, and the field guide a quiet third. */
+    cta: "Watch it break",
+    browse: n => `Browse all ${n}`,
+    browseAria: n => `Browse all ${n} systems`,
     footnote: "Your Deconstructs stay on this device. There is no cloud to sign up for."
   },
 
