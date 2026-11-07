@@ -2,7 +2,8 @@
 /* Share-page generator: for the root plus every library slug, emit
      share/<slug>.html  — og/twitter card tags + instant redirect into
                           the app at #/study/<slug> (crawlers read tags,
-                          humans bounce straight into the reader)
+                          humans bounce straight into the reader). The
+                          in-app Share sends a sample as this page.
      share/og/<slug>.png — 1200x630 brand card: washi ground, seeded ink
                           enso, teal square, vermillion seal. No text in
                           the image: og:title carries the words, per the
@@ -17,6 +18,7 @@ const root = path.join(__dirname, "..");
 
 const SITE = CONFIG.siteUrl;
 const OUT = path.join(root, "share");
+const OG_W = 1200, OG_H = 630;
 fs.mkdirSync(path.join(OUT, "og"), { recursive: true });
 
 /* ── raster kit (same idiom as make-marketing-assets.js) ── */
@@ -92,7 +94,7 @@ function encodePNG(c) {
 const seedOf = s => { let n = 0; for (const ch of s) n = (n * 31 + ch.charCodeAt(0)) % 997; return 1 + (n / 997) * 8; };
 
 function ogCard(slug) {
-  const c = canvas(1200, 630, WASHI);
+  const c = canvas(OG_W, OG_H, WASHI);
   const side = 250, x0 = 170, y0 = (630 - side) / 2;
   frame(c, x0, y0, side, 10, TEAL);
   enso(c, 295, 315, 180, 30, INK, { seed: seedOf(slug) });
@@ -102,8 +104,27 @@ function ogCard(slug) {
   return c;
 }
 
+/* Search results and link previews cut a description wherever they like
+   (Google near 155 characters, chat apps often sooner), so it is cut here
+   first: at a clause break when one falls late enough to keep most of the
+   sentence, otherwise at a word, never mid-word, and never on a dangling
+   "the" or "without" that promises a noun the reader never gets. */
+const DESC_MAX = 155;
+const DANGLING = /\s+(?:a|an|the|of|in|on|at|to|for|by|with|without|from|into|and|or|but|that|as)$/i;
+function clip(s, max = DESC_MAX) {
+  if (s.length <= max) return s;
+  const head = s.slice(0, max - 1);
+  const clause = Math.max(head.lastIndexOf(", "), head.lastIndexOf(": "), head.lastIndexOf("; "));
+  let out = head.slice(0, clause >= max * 0.6 ? clause : head.lastIndexOf(" "));
+  while (DANGLING.test(out)) out = out.replace(DANGLING, "");
+  return out.replace(/[\s,:;.—-]+$/, "") + "…";
+}
+
 const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-function page(slug, title, desc) {
+/* The image carries no words, so its alt says whose card it is and what is
+   drawn, for anyone hearing the preview rather than seeing it. Width and
+   height let an unfurler lay the card out before the image arrives. */
+function page(slug, title, desc, alt) {
   const url = `../#/study/${slug}`;
   const img = `${SITE}share/og/${slug}.png`;
   return `<!DOCTYPE html>
@@ -112,12 +133,17 @@ function page(slug, title, desc) {
 <meta charset="UTF-8">
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(desc)}">
+<meta property="og:site_name" content="${esc(CONFIG.toolName)}">
 <meta property="og:type" content="article">
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(desc)}">
 <meta property="og:url" content="${SITE}share/${slug}.html">
 <meta property="og:image" content="${img}">
+<meta property="og:image:width" content="${OG_W}">
+<meta property="og:image:height" content="${OG_H}">
+<meta property="og:image:alt" content="${esc(alt)}">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image:alt" content="${esc(alt)}">
 <meta http-equiv="refresh" content="0;url=${url}">
 </head>
 <body>
@@ -133,9 +159,11 @@ console.log("wrote share/og/vitruvian.png");
 
 for (const slug of CONFIG.flagshipNames) {
   const doc = JSON.parse(fs.readFileSync(path.join(root, "flagships", slug + ".json"), "utf8"));
-  const title = `${doc.meta.system}, deconstructed · Vitruvian`;
-  const desc = `${doc.layers.length} layers, each born from a real failure. ` + doc.essence.text.split(". ")[0] + ".";
-  fs.writeFileSync(path.join(OUT, slug + ".html"), page(slug, title, desc));
+  // the same title the in-app Share hands the share sheet (COPY.shareTitle)
+  const title = `${COPY.shareTitle(doc.meta.system)} · ${CONFIG.toolName}`;
+  const desc = clip(`${doc.layers.length} layers, each born from a real failure. ` + doc.essence.text.split(". ")[0] + ".");
+  const alt = `${COPY.shareTitle(doc.meta.system)}: a ${CONFIG.toolName} card of two ink brush circles, a teal square and a red seal on warm paper.`;
+  fs.writeFileSync(path.join(OUT, slug + ".html"), page(slug, title, desc, alt));
   fs.writeFileSync(path.join(OUT, "og", slug + ".png"), encodePNG(ogCard(slug)));
   console.log(`wrote share/${slug}.html + og/${slug}.png`);
 }

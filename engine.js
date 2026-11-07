@@ -3476,6 +3476,67 @@ async function openVocab(v, layer) {
   } catch (e) { recur.appendChild(h("p", "vo-none", COPY.readFail)); }
 }
 
+/* ═══ Share — the native sheet on a phone, the clipboard elsewhere ═══ */
+/* On a phone the share sheet is where links go. On a desktop it is a short
+   list of apps that may have no plain copy, and copying is what a desktop
+   reader expects, so the desktop keeps Copy link. */
+function shareSheetHere() {
+  return typeof navigator.share === "function" &&
+    !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+}
+/* Chrome's sheet refuses .json files (its list of shareable types is short)
+   while Safari's takes them, so canShare decides, with a stand-in file:
+   the answer depends on the file's type, never its contents. */
+function canShareJsonFile() {
+  if (!shareSheetHere() || typeof navigator.canShare !== "function") return false;
+  try { return navigator.canShare({ files: [new File(["{}"], "study.json", { type: "application/json" })] }); }
+  catch (e) { return false; }
+}
+function studyJsonName(rec) {
+  return rec.system.replace(/\W+/g, "-").toLowerCase() + ".json";
+}
+/* True once the sheet has done its job or the reader closed it; false when
+   the browser refused, so the caller copies instead. It must be reached
+   before any await in the tap's handler, or the browser no longer counts
+   the share as the reader's own act and refuses it. */
+async function shareViaSheet(data) {
+  try { await navigator.share(data); return true; }
+  catch (e) { return !!e && e.name === "AbortError"; }
+}
+async function copyLink(url, msg) {
+  try { await navigator.clipboard.writeText(url); toast(msg); }
+  catch (e) { prompt(COPY.shareCopyPrompt, url); }
+}
+/* A portable link carries the whole Deconstruct, so a sample-sized one runs
+   14,000 to 21,000 characters. Discord cuts a message at 2,000 and LinkedIn
+   at 3,000, and a cut link imports nothing. Past this the reader is told and offered the
+   .json, which arrives whole anywhere a file can go. */
+const SHARE_LINK_SOFT_MAX = 2000;
+async function shareStudy(rec) {
+  const title = COPY.shareTitle(rec.system);
+  if (rec.source === "flagship") {
+    /* the sample's own share page, not the bare #/study link: unfurlers
+       never see a #fragment, so that one previewed as the generic site
+       card. The page carries the study's title and image and redirects to
+       the same #/study route. tools/validate.js keeps one per sample. */
+    const url = CONFIG.siteUrl + "share/" + encodeURIComponent(studySlug(rec)) + ".html";
+    if (shareSheetHere() && await shareViaSheet({ title, text: COPY.shareText(rec.system), url })) return;
+    return copyLink(url, COPY.shareCopied);
+  }
+  const name = studyJsonName(rec);
+  if (canShareJsonFile()) {
+    const file = new File([JSON.stringify(rec.doc, null, 2)], name, { type: "application/json" });
+    if (await shareViaSheet({ files: [file], title, text: COPY.shareFileText(CONFIG.siteUrl) })) return;
+  }
+  let url = "";
+  try { url = CONFIG.siteUrl + "#/import/" + await encodeSharePayload(rec.doc); }
+  catch (err) { toast(COPY.shareLocalNote); return; }
+  if (url.length <= SHARE_LINK_SOFT_MAX) return copyLink(url, COPY.sharePortableCopied);
+  if (!confirm(COPY.shareLongAsk(url.length))) return copyLink(url, COPY.shareLongCopied);
+  download(name, JSON.stringify(rec.doc, null, 2));
+  toast(COPY.shareJsonSaved(name));
+}
+
 /* Pulse as GIF records for a couple of seconds after its menu entry is gone,
    so the guard against starting a second recording lives out here. */
 let gifRecording = false;
@@ -3541,28 +3602,10 @@ function buildReaderMenu(rec, challengeOn) {
 
   pop.appendChild(h("div", "menu-sep"));
   const out = group(COPY.menuShare);
-  add(out, COPY.shareMenu, async () => {
-    let url = "";
-    let msg = COPY.shareCopied;
-    if (rec.source === "flagship") {
-      /* the sample's own share page, not the bare #/study link: unfurlers
-         never see a #fragment, so that one previewed as the generic site
-         card. The page carries the study's title and image and redirects to
-         the same #/study route. tools/validate.js keeps one per sample. */
-      url = CONFIG.siteUrl + "share/" + encodeURIComponent(studySlug(rec)) + ".html";
-    } else {
-      try {
-        const token = await encodeSharePayload(rec.doc);
-        url = CONFIG.siteUrl + "#/import/" + token;
-        msg = "Portable share link copied (works offline, no server)";
-      } catch (err) {
-        toast(COPY.shareLocalNote);
-        return;
-      }
-    }
-    try { await navigator.clipboard.writeText(url); toast(msg); }
-    catch (e) { prompt("Copy this link:", url); }
-  });
+  const shareLabel = rec.source === "flagship"
+    ? (shareSheetHere() ? COPY.shareMenuSheet : COPY.shareMenu)
+    : (canShareJsonFile() ? COPY.shareMenuFile : COPY.shareMenu);
+  add(out, shareLabel, () => shareStudy(rec));
   add(out, COPY.exportPngMenu, () => exportDiagramPNG(rec));
   /* Pulse is off under reduced motion, so there is nothing to record and
      the entry is left out rather than offered and refused. */
@@ -3576,7 +3619,7 @@ function buildReaderMenu(rec, challengeOn) {
     });
   }
   add(out, COPY.menuJson, () => {
-    download(rec.system.replace(/\W+/g, "-").toLowerCase() + ".json", JSON.stringify(rec.doc, null, 2));
+    download(studyJsonName(rec), JSON.stringify(rec.doc, null, 2));
   });
   add(out, COPY.menuNotes, async () => {
     try {

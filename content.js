@@ -913,8 +913,26 @@ var COPY = {
   menuStrict: "Strict mode: write your fix first",
   menuOnePage: "Read each layer as one page",
   menuShare: "Share & export",
+  /* The link entry says what it will do on this device. On a phone it opens
+     the share sheet; elsewhere it copies. A sample goes as its own share
+     page, so the preview card shows that study. The reader's own Deconstruct
+     has no page to point at, so on a phone it goes as its .json file. */
   shareMenu: "Copy link",
+  shareMenuSheet: "Share link",
+  shareMenuFile: "Share as a file",
   shareCopied: "Link copied. Anyone can open this Deconstruct",
+  shareTitle: system => `${system}, deconstructed`,
+  shareText: system => `${system}, rebuilt from nothing one failure at a time.`,
+  shareFileText: url => `A Deconstruct made in Vitruvian. To read it, open ${url} and choose Import a Deconstruct on Home.`,
+  sharePortableCopied: "Portable link copied. It carries the whole Deconstruct, so it opens without a server",
+  /* A portable link carries the whole Deconstruct, so it runs to tens of
+     thousands of characters. Chat apps cut it off and the cut link imports
+     nothing, so the reader hears that before anything is copied. */
+  shareLongAsk: n => `This link is ${n.toLocaleString("en")} characters long, because it carries the whole Deconstruct. Most chat apps cut links off at about 2,000 characters, and a cut link opens nothing.\n\n` +
+    `Save a .json file to send instead?\n\n(Cancel copies the long link anyway. It still works in an email or a document.)`,
+  shareJsonSaved: name => `Saved ${name}. Whoever gets it opens it from Home, with Import a Deconstruct`,
+  shareLongCopied: "Long link copied. It works in an email or a document; most chat apps cut it off",
+  shareCopyPrompt: "Copy this link:",
   shareLocalNote: "This Deconstruct lives on this device. Export the .json to share it.",
   exportPngMenu: "Diagram as PNG",
   menuGif: "Pulse as GIF",
@@ -1035,7 +1053,7 @@ var COPY = {
       text: "The System sheet is the reference card: what it is for, its rules, its pieces. Graft lets you propose a change and argues back. On a phone these live in the \u22ef menu." },
     { id: "menu", screen: "reader", when: "used", target: "#readerMenuBtn", clear: "#menuPop",
       title: "Everything else",
-      text: "Strict mode makes you write your fix before the real one opens. Share & export copies a link, or saves the diagram, a Pulse or the whole Deconstruct as a file. The field guide explains every part of a Deconstruct." },
+      text: "Strict mode makes you write your fix before the real one opens. Share & export sends a link, or saves the diagram, a Pulse or the whole Deconstruct as a file. The field guide explains every part of a Deconstruct." },
 
     // ── the rest of the app ──
     { id: "models", screen: "models", target: ".ml-card, .model-card, .ml-grid",
