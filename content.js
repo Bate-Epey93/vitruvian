@@ -30,6 +30,9 @@ var CONFIG = {
   flagshipNames: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue", "notification-system", "rate-limiter", "search-typeahead", "url-shortener", "ride-matching", "ticket-booking", "content-delivery-network", "recommendation-feed", "payment-ledger", "video-transcoding", "news-feed", "photo-store", "realtime-chat", "whatsapp", "youtube", "railway", "clearinghouse", "toyota-kanban", "immune-system", "manual-gearbox", "clock-escapement"],
   siteUrl: "https://bate-epey93.github.io/vitruvian/",
   repoUrl: "https://github.com/Bate-Epey93/vitruvian",
+  // Home's "Start here" on a first visit: one piece of software, one system
+  // that is not software, and one machine that also has a 3D field study
+  startPicks: ["url-shortener", "immune-system", "manual-gearbox"],
   defaultModel: "claude-opus-5-5"         // one source of truth: Settings, storage seed, and the reset fallback
 };
 
@@ -578,8 +581,26 @@ var COPY = {
   libraryTitle: "Home",
   sampleHeading: "Samples",
   sampleNote: "Worked examples of what a Deconstruct looks like. Open one to see how it works, then take apart a system of your own.",
+  /* Samples split by kind under two headings. Each kind used to be a filter
+     chip, and "Mechanical & 3D" overlapped "Beyond software". */
+  sampleGroupSoftware: "Software",
+  sampleGroupBeyond: "Beyond software",
   yoursHeading: "Your Deconstructs",
-  yoursEmpty: "Nothing here yet. Name a system above, or dissect a design you're building. The samples below show what you'll get.",
+  /* The one slot above the shelves. Someone who stopped part way through a
+     study gets Continue, named with the timeline's words for that place
+     (tlLayer, tlMeet, tlTrials, tlTransfer). Otherwise, while they have no
+     Deconstructs of their own, it holds the CONFIG.startPicks samples. */
+  startHeading: "Start here",
+  startNote: "Samples to try first, each a different kind of system. They need no setup and work offline.",
+  startSize: (done, n) => {
+    const lay = n === 1 ? "layer" : "layers";
+    return done ? `${done} of ${n} ${lay}` : `${n} ${lay}`;
+  },
+  continueKicker: "Continue",
+  continueAria: (system, where) => `Continue ${system}: ${where}`,
+  /* Home's filter chips, on one row. Each appears only once it would show
+     something, so a first visit has none. */
+  filterLabels: { all: "All", yours: "Yours", progress: "In progress", done: "Done" },
   /* the badge on the search match above the cards. A card wears it only
      when it says more than the section heading: a design, or a shared one */
   sourceChip: { flagship: "Sample", design: "Your design", shared: "Shared with you", own: "Your Deconstruct" },
@@ -611,6 +632,9 @@ var COPY = {
   labKicker: "Also a machine",
   labOpen: "Open the field study \u2192",
   labOpenAlso: "Open in 3D \u2197",
+  /* the same link on a Start here sample, where nothing beside it says
+     which study it opens */
+  labOpenAria: name => `Open ${name}, the 3D field study`,
   // The honest half: eligible, but nobody has built it. No link, because
   // there is nothing to link to — a described thing and a button that only
   // registers that you would use it.
@@ -718,9 +742,6 @@ var COPY = {
   labMaybeFoot: "No field study of this one is built yet. Saying so here is how it gets prioritised.",
   labCandHeading: "Candidates",
   labCandNote: "Systems you have deconstructed that could be built as field studies. Flagged while the Deconstruct was written, ranked by the ones you said you would use.",
-  /* The examples have to be things with no study built, or the line
-     promises a card that the built-study check will always filter out. */
-  labCandEmpty: "None yet. Deconstruct something mechanical, like a pin-tumbler lock, a disc brake or a ratchet and pawl, and it will show up here.",
 
   /* ── Backup, restore and links ──
      Everything lives on this device, so that is where these say it is. */
@@ -739,6 +760,8 @@ var COPY = {
     (read ? `; you've read ${read} of those layers.` : "."),
   libraryLede: "Name a system you use, or describe one you're building, and Vitruvian rebuilds it from nothing, one failure at a time, so you can study why each part exists.",
   deconstructPlaceholder: "A system to deconstruct, like a stock exchange or a bike share…",
+  // a phone's field fits about 23 characters once the button is an arrow
+  deconstructPlaceholderShort: "Search or name a system",
   deconstructBtn: "Deconstruct",
   ownDesignLink: "Building something? Dissect your design →",
   ownDesignKicker: "Dissection",

@@ -534,6 +534,7 @@ input,textarea{font-family:var(--sans);}
 
 /* ═══ Library ═══ */
 .lib-hero{max-width:720px;}
+#screen-library .lib-hero{margin-top:40px;}
 .lib-hero .subtitle{margin-bottom:0;}
 .deconstruct-bar{margin:32px 0 14px;max-width:760px;padding:6px;border-radius:var(--r-pill);
   background:color-mix(in srgb,var(--ink) 3.5%,transparent);box-shadow:inset 0 0 0 1px var(--hair);}
@@ -548,23 +549,35 @@ input,textarea{font-family:var(--sans);}
    in both themes, and this placeholder is the only instruction for the
    primary action */
 .deconstruct-bar input::placeholder{color:var(--muted);}
-/* On a phone the labelled button left the field about 90px ("A system tc").
-   The arrow circle carries the action alone there; the label stays in the
-   accessibility tree as the button's name, since ctaButton sets no
-   aria-label. */
-@media(max-width:480px){
-  .db-field{padding-left:16px;}
-  .deconstruct-bar .big-btn{padding:6px;}
-  .deconstruct-bar .btn-label{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;}
-}
 .own-design-btn{margin:0;}
 .lib-subbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:2px 0 8px;}
-.lib-filters{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+/* at most four chips (All, Yours, In progress, Done), so one row always fits */
+.lib-filters{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;}
 .lib-fchip{font-size:12.5px;font-weight:600;border:none;border-radius:var(--r-pill);padding:6px 13px;cursor:pointer;
-  background:var(--panel);color:var(--muted);box-shadow:inset 0 0 0 1px var(--hair);
+  background:var(--panel);color:var(--muted);box-shadow:inset 0 0 0 1px var(--hair);white-space:nowrap;
   transition:background .2s var(--ease),color .2s var(--ease),box-shadow .2s var(--ease);}
 .lib-fchip:hover{color:var(--ink);box-shadow:inset 0 0 0 1px var(--hair-strong);}
 .lib-fchip.on{background:var(--ink);color:var(--paper);box-shadow:var(--sh-1);}
+/* On a phone the labelled button left the field about 90px ("A system tc").
+   The arrow circle carries the action alone there; the label stays in the
+   accessibility tree as the button's name, since ctaButton sets no
+   aria-label. The placeholder shortens too (homePlaceholder in engine.js).
+   The hero's top gap and the bar's are tightened and the design path is a
+   text link under the field, so a study starts on the first screen. */
+@media(max-width:480px){
+  #screen-library .lib-hero{margin-top:4px;}
+  .deconstruct-bar{margin-top:22px;}
+  .db-field{padding-left:16px;}
+  .deconstruct-bar .big-btn{padding:6px;}
+  .deconstruct-bar .btn-label{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;}
+  .lib-subbar{flex-direction:column;align-items:flex-start;gap:10px;}
+  .own-design-btn,.own-design-btn:hover{background:none;box-shadow:none;}
+  .own-design-btn{padding:4px 2px;white-space:normal;text-align:left;color:var(--accent-deep);
+    text-decoration:underline;text-underline-offset:3px;text-decoration-color:color-mix(in srgb,var(--accent) 45%,transparent);}
+  .own-design-btn:hover{text-decoration-color:currentColor;}
+  .own-design-btn .ico{display:none;}
+}
+@media(max-width:380px){.lib-fchip{padding:6px 10px;}}
 .omni-match-slot:empty{display:none;}
 .omni-match{max-width:760px;margin:0 0 14px;padding:12px 16px;border-radius:var(--r-lg);
   background:var(--panel);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 28%,var(--hair)),var(--sh-2);
@@ -579,6 +592,10 @@ input,textarea{font-family:var(--sans);}
 .lib-section-head:first-of-type{margin-top:40px;}
 .lib-section-title{font-family:var(--display);font-weight:650;font-size:24px;letter-spacing:-.03em;}
 .lib-section-sub{font-size:13px;font-weight:550;color:var(--muted);font-variant-numeric:tabular-nums;}
+/* Software and Beyond software inside Samples: a step under the section title */
+.lib-subhead{display:flex;align-items:baseline;gap:10px;margin:36px 0 4px;
+  font-size:15px;font-weight:650;letter-spacing:-.01em;color:var(--ink-soft);}
+.lib-section-head + .lib-subhead,.lib-note + .lib-subhead{margin-top:8px;}
 .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));gap:14px;margin-top:6px;}
 
 .bd-card{
@@ -589,12 +606,13 @@ input,textarea{font-family:var(--sans);}
   transition:transform .5s var(--ease-spring),box-shadow .5s var(--ease);
 }
 .bd-card > * { pointer-events: none; }
-/* Domain data-attribute mapping for library cards (Wave F · Proposal #1) */
-.bd-card[data-domain="software"]   { --card-accent: var(--dom-software); --card-wash: var(--dom-software-wash); }
-.bd-card[data-domain="economics"]  { --card-accent: var(--dom-economics); --card-wash: var(--dom-economics-wash); }
-.bd-card[data-domain="operations"] { --card-accent: var(--dom-operations); --card-wash: var(--dom-operations-wash); }
-.bd-card[data-domain="biology"]    { --card-accent: var(--dom-biology); --card-wash: var(--dom-biology-wash); }
-.bd-card[data-domain="mechanical"] { --card-accent: var(--dom-mechanical); --card-wash: var(--dom-mechanical-wash); }
+/* Domain data-attribute mapping for library cards (Wave F · Proposal #1),
+   and for Home's slot above them, which draws the same miniature */
+:is(.bd-card,.home-continue,.start-pick)[data-domain="software"]   { --card-accent: var(--dom-software); --card-wash: var(--dom-software-wash); }
+:is(.bd-card,.home-continue,.start-pick)[data-domain="economics"]  { --card-accent: var(--dom-economics); --card-wash: var(--dom-economics-wash); }
+:is(.bd-card,.home-continue,.start-pick)[data-domain="operations"] { --card-accent: var(--dom-operations); --card-wash: var(--dom-operations-wash); }
+:is(.bd-card,.home-continue,.start-pick)[data-domain="biology"]    { --card-accent: var(--dom-biology); --card-wash: var(--dom-biology-wash); }
+:is(.bd-card,.home-continue,.start-pick)[data-domain="mechanical"] { --card-accent: var(--dom-mechanical); --card-wash: var(--dom-mechanical-wash); }
 
 .bd-card:hover{transform:translateY(-3px);box-shadow:inset 0 0 0 1.5px var(--card-accent, var(--accent)), var(--sh-2);}
 .bd-card:active{transform:translateY(-1px) scale(.99);}
@@ -1912,37 +1930,67 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 @media(prefers-reduced-motion:reduce){.sheet,.sheet-scrim{transition:none;}}
 
 
-/* ═══ Home: next steps first ═══ */
-.home-top{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(0,1fr);gap:14px;margin-bottom:22px;}
-.home-card{background:var(--panel);border-radius:var(--r-lg);padding:18px;box-shadow:inset 0 0 0 1px var(--hair),var(--sh-1);min-width:0;}
-.home-continue{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:20px;align-items:center;}
+/* ═══ Home: the one slot above the shelves ═══
+   Continue where you stopped or, on a first visit, samples to start on (see
+   homeSlot in engine.js). Both draw a study with the cards' miniature, so
+   they take the cards' domain colours, with the accent for any domain that
+   has none. */
+.home-continue,.start-pick{--card-accent:var(--accent);--card-wash:var(--accent-wash);}
+.home-slot{margin-top:36px;}
+.home-continue{display:grid;grid-template-columns:150px minmax(0,1fr) auto;align-items:center;gap:18px;
+  width:100%;max-width:760px;padding:10px 16px 10px 10px;border:none;border-radius:var(--r-lg);
+  text-align:left;cursor:pointer;color:inherit;font:inherit;
+  background:var(--panel);box-shadow:inset 0 0 0 1px var(--hair),var(--sh-1);
+  transition:transform .5s var(--ease-spring),box-shadow .5s var(--ease);}
+.home-continue:hover{transform:translateY(-2px);box-shadow:inset 0 0 0 1.5px var(--card-accent),var(--sh-2);}
+.home-continue:active{transform:translateY(-1px) scale(.99);}
+.home-continue:hover .bd-go{background:var(--ink);color:var(--paper);transform:translateX(1px) scale(1.06);}
+.home-continue .bd-topo-header{height:64px;margin:0;}
+.home-cont-text{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0;}
+.home-kicker{font-size:12px;font-weight:650;color:var(--accent-deep);}
+.home-sys{max-width:100%;font-family:var(--display);font-weight:650;font-size:19px;letter-spacing:-.025em;line-height:1.2;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.home-where{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;}
+.home-start-head{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 14px;margin-bottom:12px;}
+.start-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-width:960px;}
+.start-pick{display:flex;flex-direction:column;min-width:0;border-radius:var(--r-lg);background:var(--panel);
+  box-shadow:inset 0 0 0 1px var(--hair),var(--sh-1);
+  transition:transform .5s var(--ease-spring),box-shadow .5s var(--ease);}
+.start-pick:has(.start-open:hover){transform:translateY(-2px);box-shadow:inset 0 0 0 1.5px var(--card-accent),var(--sh-2);}
+.start-open{flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;
+  padding:10px 10px 14px;border:none;border-radius:inherit;background:none;
+  text-align:left;cursor:pointer;color:inherit;font:inherit;}
+.start-open .bd-topo-header{align-self:stretch;height:64px;margin:0 0 8px;}
+.start-kind,.start-name,.start-size{padding:0 6px;}
+.start-kind{font-size:12px;font-weight:650;color:var(--card-accent);}
+.start-name{font-family:var(--display);font-weight:650;font-size:18px;letter-spacing:-.025em;line-height:1.2;}
+.start-size{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;}
+/* a sibling of the button, not inside it, so it sits under the text */
+.start-lab{align-self:flex-start;margin:-8px 16px 14px;font-size:12.5px;font-weight:650;color:var(--proposal);
+  text-decoration:none;}
+.start-lab:hover{text-decoration:underline;text-underline-offset:3px;}
+/* a phone stacks the picks as rows, the miniature beside the words, so the
+   first sample sits on the first screen and the other two are a short scroll */
+@media(max-width:640px){
+  .home-slot{margin-top:26px;}
+  .home-continue{grid-template-columns:96px minmax(0,1fr) auto;gap:12px;padding:8px 12px 8px 8px;}
+  .home-continue .bd-topo-header{height:54px;}
+  .home-sys{font-size:17px;}
+  .start-row{grid-template-columns:1fr;gap:8px;}
+  .start-open{display:grid;grid-template-columns:96px minmax(0,1fr);align-items:center;column-gap:12px;row-gap:1px;padding:8px;}
+  .start-open .bd-topo-header{grid-row:1 / span 3;height:54px;margin:0;}
+  .start-kind,.start-name,.start-size{padding:0;}
+  .start-name{font-size:16.5px;}
+  .start-lab{margin:-4px 12px 10px 116px;}
+}
+@media(prefers-reduced-motion:reduce){.home-continue:hover,.start-pick:has(.start-open:hover){transform:none;}}
+
+/* the miniature diagram on a Models page's "Where you've met it" cards */
 .home-thumb{aspect-ratio:16/10;border-radius:var(--r-md);overflow:hidden;pointer-events:none;display:grid;place-items:center;padding:6px;
   background:var(--panel-2);
   box-shadow:inset 0 0 0 1px var(--hair);}
 .home-thumb svg{width:100%!important;min-width:0!important;height:100%!important;}
-.home-cont-text{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0;}
-.eyebrow-sm{font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--accent-deep);}
-.home-review .eyebrow-sm{color:var(--proposal);}
-.home-sys{font-family:var(--display);font-weight:650;font-size:24px;letter-spacing:-.03em;line-height:1.1;}
-.home-where{font-size:14px;color:var(--muted);}
-.home-review{display:flex;flex-direction:column;align-items:flex-start;gap:6px;}
-.home-review .gbtn{margin-top:auto;}
-.home-path{margin:6px 0 10px;}
-.home-path-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px;}
-.home-path-head .gbtn{margin-left:auto;}
-.path-track{position:relative;display:flex;justify-content:space-between;align-items:center;padding:14px 4px 34px;}
-.path-track::before{content:'';position:absolute;left:10px;right:10px;top:50%;margin-top:-10px;height:2px;background:var(--line);}
-.path-dot{position:relative;z-index:1;width:16px;height:16px;border-radius:50%;border:none;cursor:pointer;padding:0;
-  background:var(--panel);box-shadow:inset 0 0 0 2px var(--line);transition:transform .25s var(--ease-spring);}
-.path-dot:hover{transform:scale(1.25);}
-.path-dot.done{background:var(--accent);box-shadow:none;}
-.path-dot.cur{width:22px;height:22px;box-shadow:inset 0 0 0 3px var(--accent),0 0 0 4px color-mix(in srgb,var(--accent) 16%,transparent);}
-.path-label{position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);white-space:nowrap;font-size:12px;font-weight:600;color:var(--ink-soft);}
-.path-dot:first-child .path-label{left:0;transform:none;}
-.path-dot:last-child .path-label{left:auto;right:0;transform:none;}
-#screen-library .lib-hero{margin-top:40px;}
-@media(max-width:860px){.home-top{grid-template-columns:1fr;}.home-continue{grid-template-columns:1fr;}.home-thumb{max-height:180px;}}
-@media(max-width:560px){.path-dot{width:12px;height:12px;}.path-dot.cur{width:18px;height:18px;}.path-label{display:none;font-size:11.5px;}.path-dot.cur .path-label{display:block;}.path-track{gap:2px;}}
+@media(max-width:860px){.home-thumb{max-height:180px;}}
 
 /* ═══ Path: units ═══ */
 .unit{margin-top:34px;}

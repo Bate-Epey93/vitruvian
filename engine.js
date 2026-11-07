@@ -1360,10 +1360,10 @@ function sourceChipLabel(rec) {
    Progress shows in the miniature (read layers inked) and the foot line,
    never also as bars, a percent or a badge. The section heading already says
    Sample or Yours, so only a design or a shared Deconstruct carries a source
-   chip, and the domain chip steps aside while a domain filter names it. */
+   chip. The domain chip stays under "Beyond software", which does not say
+   which domain. */
 function cardGrid(recs) {
   const grid = h("div", "card-grid");
-  const domainFiltered = libFilter === "software" || libFilter === "beyond" || libFilter === "mech";
   recs.forEach(rec => {
     const card = h("button", "bd-card");
     const dom = (rec.doc && rec.doc.meta && rec.doc.meta.domain) || "software";
@@ -1379,7 +1379,7 @@ function cardGrid(recs) {
     if (rec.source === "design" || rec.source === "shared") {
       top.appendChild(h("span", "chip" + (rec.source === "design" ? " design" : ""), sourceChipLabel(rec)));
     }
-    if (!domainFiltered && dom && dom !== "software" && typeof domainLabel === "function") {
+    if (dom && dom !== "software" && typeof domainLabel === "function") {
       const dl = domainLabel(dom);
       if (dl) top.appendChild(h("span", "chip dom-chip", dl));
     }
@@ -1405,6 +1405,87 @@ function cardGrid(recs) {
     grid.appendChild(card);
   });
   return grid;
+}
+
+function revealedCount(rec) {
+  return rec.doc.layers.filter(L => rec.attempts && rec.attempts[L.index] && rec.attempts[L.index].revealed).length;
+}
+/* Where a study was left, in the words its own timeline uses for that place. */
+function placeLeft(rec) {
+  const N = rec.doc.layers.length;
+  const pos = Math.min((rec.progress && rec.progress.position) || 0, N + 2);
+  if (pos <= 0) return COPY.tlMeet;
+  if (pos <= N) return COPY.tlLayer(pos, N);
+  return pos === N + 1 ? COPY.tlTrials : COPY.tlTransfer;
+}
+
+/* ═══ Home's one slot, above the shelves ═══
+   Someone who stopped part way through a study gets it back in one tap, at
+   the place they stopped. A first visit, with nothing of its own yet, gets
+   samples of different kinds instead of an empty "Your Deconstructs" panel. Never
+   both, and never a section of its own: it is one row either way. Both draw
+   a study with the cards' own miniature, so it reads as the same thing the
+   shelf below holds. → an element, or null when there is nothing to offer. */
+function homeSlot(all, flagships, yours) {
+  const last = meta.lastOpenBreakdown ? all.find(r => r.id === meta.lastOpenBreakdown) : null;
+  if (last && recProgressPct(last) < 100) {
+    const dom = recDomain(last);
+    const where = placeLeft(last);
+    const row = h("button", "home-slot home-continue");
+    row.type = "button";
+    row.dataset.domain = dom;
+    row.setAttribute("aria-label", COPY.continueAria(last.system, where));
+    row.appendChild(buildCardTopo(last.doc, revealedCount(last), dom));
+    const txt = h("span", "home-cont-text");
+    txt.append(h("span", "home-kicker", COPY.continueKicker), h("span", "home-sys", last.system), h("span", "home-where", where));
+    row.appendChild(txt);
+    const go = h("span", "bd-go");
+    go.appendChild(icon("arrowRight"));
+    row.appendChild(go);
+    row.onclick = () => openReader(last.id);
+    return row;
+  }
+  if (yours.length) return null;
+  // a finished sample is no place to start; the shelf below still has it
+  const picks = (CONFIG.startPicks || [])
+    .map(slug => flagships.find(r => r.id === "flagship-" + slug))
+    .filter(r => r && recProgressPct(r) < 100);
+  if (!picks.length) return null;
+  const slot = h("section", "home-slot home-start");
+  slot.setAttribute("aria-labelledby", "homeStartHead");
+  const head = h("div", "home-start-head");
+  const title = h("h2", "lib-section-title", COPY.startHeading);
+  title.id = "homeStartHead";
+  head.append(title, h("span", "lib-section-sub", COPY.startNote));
+  slot.appendChild(head);
+  const row = h("div", "start-row");
+  picks.forEach(rec => {
+    const dom = recDomain(rec);
+    const done = revealedCount(rec);
+    const pick = h("div", "start-pick");
+    pick.dataset.domain = dom;
+    const open = h("button", "start-open");
+    open.type = "button";
+    open.appendChild(buildCardTopo(rec.doc, done, dom));
+    open.append(
+      h("span", "start-kind", (typeof domainLabel === "function" && domainLabel(dom)) || ""),
+      h("span", "start-name", rec.system),
+      h("span", "start-size", COPY.startSize(done, rec.doc.layers.length)));
+    open.onclick = () => openReader(rec.id);
+    pick.appendChild(open);
+    /* the machine pick also links to its drawing, as a sibling: a link
+       inside the button would be a control inside a control */
+    const st = fieldStudyFor(rec.system);
+    if (st) {
+      const lab = guardLabLink(h("a", "start-lab", COPY.labOpenAlso));
+      lab.href = st.href;
+      lab.setAttribute("aria-label", COPY.labOpenAria(st.name));
+      pick.appendChild(lab);
+    }
+    row.appendChild(pick);
+  });
+  slot.appendChild(row);
+  return slot;
 }
 
 /* ═══ Field-study candidates ═══
@@ -1445,6 +1526,18 @@ async function labCandidates() {
 
 let libFilter = "all";
 let libQuery = "";
+
+/* On a phone the field is about 220px wide once its button is an arrow, and
+   the full placeholder was cut to "A system tc". It gets the short one
+   there, swapped again if the window is turned or resized. */
+const phoneHome = window.matchMedia ? window.matchMedia("(max-width:480px)") : null;
+function homePlaceholder() {
+  return phoneHome && phoneHome.matches ? COPY.deconstructPlaceholderShort : COPY.deconstructPlaceholder;
+}
+if (phoneHome && phoneHome.addEventListener) phoneHome.addEventListener("change", () => {
+  const i = $("deconInput");
+  if (i) i.placeholder = homePlaceholder();
+});
 
 function recProgressPct(rec) {
   const n = (rec.doc && rec.doc.layers && rec.doc.layers.length) || 1;
@@ -1511,7 +1604,7 @@ async function renderLibrary() {
   field.appendChild(icon("sparkle", "db-ico"));
   const input = h("input");
   input.id = "deconInput";
-  input.placeholder = COPY.deconstructPlaceholder;
+  input.placeholder = homePlaceholder();
   input.maxLength = 120;
   input.value = libQuery;
   input.setAttribute("aria-label", COPY.homeSearchAria);
@@ -1567,17 +1660,20 @@ async function renderLibrary() {
   };
   subBar.appendChild(ownLink);
 
+  /* One row: All, then each of the others only once it would show something.
+     A new reader tapping In progress used to get "Nothing matches"; now a
+     first visit, with only All to offer, gets no row at all. The kinds of
+     system are headings inside Samples rather than chips here. */
   const filterBar = h("div", "lib-filters");
   filterBar.setAttribute("role", "group");
   filterBar.setAttribute("aria-label", COPY.homeFilterAria);
+  const pcts = all.map(recProgressPct);
+  const FL = COPY.filterLabels;
   const filters = [
-    ["all", "All"],
-    ...(yours.length ? [["yours", "Yours"]] : []),
-    ["progress", "In progress"],
-    ["done", "Completed"],
-    ["software", "Software"],
-    ["beyond", "Beyond software"],
-    ["mech", "Mechanical & 3D"]
+    ["all", FL.all],
+    ...(yours.length ? [["yours", FL.yours]] : []),
+    ...(pcts.some(p => p > 0 && p < 100) ? [["progress", FL.progress]] : []),
+    ...(pcts.some(p => p === 100) ? [["done", FL.done]] : [])
   ];
   if (!filters.some(([id]) => id === libFilter)) libFilter = "all";
   const filterBtns = {};
@@ -1596,19 +1692,27 @@ async function renderLibrary() {
     filterBtns[id] = b;
     filterBar.appendChild(b);
   });
-  subBar.appendChild(filterBar);
+  if (filters.length > 1) subBar.appendChild(filterBar);
   root.appendChild(subBar);
 
   const bodyWrap = h("div", "lib-body");
   root.appendChild(bodyWrap);
 
+  /* Candidates: flagged by the model, none of them built. Rendered as plain
+     rows rather than cards on purpose — a card here would read as something
+     you can open, and these are the ones you cannot. Shown only when there
+     are some and Home is unfiltered: they are not Deconstructs, so a search
+     or a filter has nothing to say about them. */
+  const candWrap = h("div", "lab-cands");
+  candWrap.hidden = true;
+  root.appendChild(candWrap);
+  let candCount = 0;
+  const paintCands = () => { candWrap.hidden = !(candCount && libFilter === "all" && !libQuery.trim()); };
+
   const passesFilter = rec => {
     if (libFilter === "yours") return rec.source !== "flagship";
     if (libFilter === "progress") { const p = recProgressPct(rec); return p > 0 && p < 100; }
     if (libFilter === "done") return recProgressPct(rec) === 100;
-    if (libFilter === "software") return recDomain(rec) === "software";
-    if (libFilter === "beyond") return recDomain(rec) !== "software";
-    if (libFilter === "mech") return recDomain(rec) === "mechanical" || !!fieldStudyFor(rec.system);
     return true;
   };
 
@@ -1659,38 +1763,44 @@ async function renderLibrary() {
   function paintBody() {
     const q = libQuery.trim();
     paintMatchBanner(q);
+    paintCands();
     bodyWrap.textContent = "";
 
     const fYours = yours.filter(r => passesFilter(r) && matchesRecQuery(r, q));
     const fFlags = flagships.filter(r => passesFilter(r) && matchesRecQuery(r, q));
-    const showLabs = (libFilter === "all" || libFilter === "mech") && FIELD_STUDIES.some(st => matchesFieldStudyQuery(st, q));
-    const fLabs = (libFilter === "all" || libFilter === "mech") ? FIELD_STUDIES.filter(st => matchesFieldStudyQuery(st, q)) : [];
+    const fLabs = libFilter === "all" ? FIELD_STUDIES.filter(st => matchesFieldStudyQuery(st, q)) : [];
 
     const isFiltered = q.length > 0 || libFilter !== "all";
 
-    // Your own Deconstructs are the point of the app; the samples only show
-    // what one looks like.
-    if (!isFiltered || fYours.length || libFilter === "yours") {
-      bodyWrap.appendChild(sectionHead(COPY.yoursHeading, fYours.length ? fYours.length + (isFiltered ? " matching" : " so far") : null));
-      if (fYours.length) bodyWrap.appendChild(cardGrid(fYours));
-      /* filtered to nothing, the no-match panel below speaks (with its reset);
-         a second panel here contradicted it */
-      else if (!isFiltered) {
-        const empty = h("div", "empty-panel");
-        empty.appendChild(h("p", null, COPY.yoursEmpty));
-        bodyWrap.appendChild(empty);
-      }
+    if (!isFiltered) {
+      const slot = homeSlot(all, flagships, yours);
+      if (slot) bodyWrap.appendChild(slot);
     }
 
-    if (libFilter !== "yours" && (fFlags.length || !isFiltered)) {
+    // Your own Deconstructs are the point of the app; the samples only show
+    // what one looks like. With none yet, the slot above speaks for this
+    // shelf; filtered to nothing, the no-match panel below does.
+    if (fYours.length) {
+      bodyWrap.appendChild(sectionHead(COPY.yoursHeading, fYours.length + (isFiltered ? " matching" : " so far")));
+      bodyWrap.appendChild(cardGrid(fYours));
+    }
+
+    if (fFlags.length) {
       bodyWrap.appendChild(sectionHead(COPY.sampleHeading, fFlags.length + (fFlags.length === 1 ? " system" : " systems")));
       if (!isFiltered) bodyWrap.appendChild(h("p", "lib-note", COPY.sampleNote));
-      bodyWrap.appendChild(cardGrid(fFlags));
+      [[COPY.sampleGroupSoftware, fFlags.filter(r => recDomain(r) === "software")],
+       [COPY.sampleGroupBeyond, fFlags.filter(r => recDomain(r) !== "software")]].forEach(([label, recs]) => {
+        if (!recs.length) return;
+        const sub = h("h3", "lib-subhead", label);
+        sub.appendChild(h("span", "lib-section-sub", String(recs.length)));
+        bodyWrap.appendChild(sub);
+        bodyWrap.appendChild(cardGrid(recs));
+      });
     }
 
     // Field studies: self-contained lab pages rather than schema documents,
     // so they live outside the breakdown store and link out as plain pages.
-    if (showLabs && fLabs.length) {
+    if (fLabs.length) {
       const n = fLabs.length;
       bodyWrap.appendChild(sectionHead(COPY.labHeading, n + (n === 1 ? " study" : " studies")));
       if (!isFiltered) bodyWrap.appendChild(h("p", "lib-note", COPY.labNote));
@@ -1744,16 +1854,13 @@ async function renderLibrary() {
   };
   paintBody();
 
-  /* Candidates: flagged by the model, none of them built. Rendered as plain
-     rows rather than cards on purpose — a card here would read as something
-     you can open, and these are the ones you cannot. */
-  const candWrap = h("div", "lab-cands");
-  root.appendChild(candWrap);
   labCandidates().then(list => {
     candWrap.textContent = "";
-    candWrap.appendChild(sectionHead(COPY.labCandHeading, list.length ? String(list.length) : ""));
-    candWrap.appendChild(h("p", "lib-note", list.length ? COPY.labCandNote : COPY.labCandEmpty));
+    candCount = list.length;
+    paintCands();
     if (!list.length) return;
+    candWrap.appendChild(sectionHead(COPY.labCandHeading, String(list.length)));
+    candWrap.appendChild(h("p", "lib-note", COPY.labCandNote));
     list.forEach(c => {
       const row = h("div", "cand-row" + (c.wanted ? " wanted" : ""));
       const head = h("div", "cand-head");
