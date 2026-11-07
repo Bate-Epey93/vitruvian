@@ -42,6 +42,7 @@ const ICONS = {
   chevronLeft: ["M12 15l-5-5 5-5"],
   chevronDown: ["M5 7.5l5 5 5-5"],
   chevronUp: ["M5 12.5l5-5 5 5"],
+  check: ["M4.5 10.5l3.6 3.6 7.4-8.2"],
   play: ["M7 5.2v9.6l7.6-4.8z"],
   pause: ["M7.5 5v10", "M12.5 5v10"],
   stop: ["M6.2 6.2h7.6v7.6H6.2z"],
@@ -359,9 +360,11 @@ function syncRoute(mode = "push") {
   const screen = document.body.dataset.screen || "library";
   if (screen === "generate") return;
   const hash = buildRouteHash(screen);
+  const depth = routeDepth();
   const state = {
     screen,
-    drillStack: drillStack.map(x => ({ id: x.id, system: x.system }))
+    drillStack: drillStack.map(x => ({ id: x.id, system: x.system })),
+    depth
   };
   if (location.hash === hash && mode === "push") {
     try { history.replaceState(state, "", hash); } catch (e) {}
@@ -369,8 +372,28 @@ function syncRoute(mode = "push") {
   }
   try {
     if (mode === "replace") history.replaceState(state, "", hash);
-    else history.pushState(state, "", hash);
+    else history.pushState(Object.assign(state, { depth: depth + 1 }), "", hash);
   } catch (e) {}
+}
+/* How many of the app's own entries sit behind this one. Every entry the
+   app writes carries it, so Back can tell an in-app screen behind it from a
+   shared link, a launch shortcut or another site. A replace keeps it. */
+function routeDepth() {
+  const st = typeof history !== "undefined" && history.state;
+  return (st && st.depth > 0) ? st.depth : 0;
+}
+/* ═══ Back ═══
+   One back, one meaning: where you were. With an app screen behind this
+   one it is the browser's own back, which the router replays (popstate),
+   so the study, model or Practice round you came from comes back. With
+   none, it goes to `fallback`, or Home. It used to go Home every time,
+   beside a brand and a Home tab that did the same. */
+async function goBack(fallback) {
+  await flushSaves();
+  if (routeDepth() > 0) { history.back(); return; }
+  if (fallback) { await fallback(); return; }
+  await renderLibrary();
+  show("library");
 }
 /* A chat app can mangle a link into a broken %-escape, and decodeURIComponent
    throws on one. The raw text simply matches nothing, which the routes
@@ -393,7 +416,7 @@ async function linkMissed(msg) {
   await renderLibrary();
   show("library", { noRoute: true });
   toast(msg);
-  try { history.replaceState({ screen: "library", drillStack: [] }, "", "#/"); } catch (_) {}
+  try { history.replaceState({ screen: "library", drillStack: [], depth: routeDepth() }, "", "#/"); } catch (_) {}
   return true;
 }
 async function applyUrlRoute(hashStr, histState) {
@@ -442,7 +465,8 @@ async function applyUrlRoute(hashStr, histState) {
       return true;
     }
     if (hStr === "/practice" || hStr === "/drill") {
-      await renderDrill();
+      // Back from "Open this layer" lands on the same question, not a new round
+      await renderDrill({ keep: true });
       show("drill", { noRoute: true });
       return true;
     }
@@ -469,7 +493,7 @@ async function applyUrlRoute(hashStr, histState) {
         await renderLibrary();
         toast(existed ? `Opened "${rec.system}"` : `Imported shared Deconstruct: ${rec.system}`);
         await openReader(rec.id, null, { noRoute: true });
-        try { history.replaceState({ screen: "reader", drillStack: [{ id: rec.id, system: rec.system }] }, "", `#/study/${encodeURIComponent(studySlug(rec))}`); } catch (e) {}
+        try { history.replaceState({ screen: "reader", drillStack: [{ id: rec.id, system: rec.system }], depth: routeDepth() }, "", `#/study/${encodeURIComponent(studySlug(rec))}`); } catch (e) {}
         return true;
       } catch (e) {
         /* in-app, one line, never a native dialog: the message can carry the
@@ -505,7 +529,7 @@ async function applyUrlRoute(hashStr, histState) {
     await renderLibrary();
     show("library", { noRoute: true });
     toast("That link could not be opened");
-    try { history.replaceState({ screen: "library", drillStack: [] }, "", "#/"); } catch (_) {}
+    try { history.replaceState({ screen: "library", drillStack: [], depth: routeDepth() }, "", "#/"); } catch (_) {}
     return true;
   } finally {
     suppressRoute = false;
@@ -559,14 +583,19 @@ function retireDiagram() {
 function show(screen, opts = {}) {
   SCREENS.forEach(s => { $("screen-" + s).hidden = s !== screen; });
   closeKeySheet();   // it speaks for the screen it opened on
-  document.body.classList.toggle("reading", screen === "reader");   // frees topbar room for the audience switch
+  document.body.classList.toggle("reading", screen === "reader");   // the nav island and theme toggle step out (styles.css)
   $("audSwitch").hidden = screen !== "reader";
   $("readerMenuBtn").hidden = screen !== "reader";
   // reading-only context tools live in the topbar's right zone; hidden elsewhere
   // so global chrome never shows dead buttons (see placement note in commit)
   ["ctxDiv", "sheetBtn", "graftBtn"].forEach(id => { $(id).hidden = screen !== "reader"; });
-  $("backBtn").hidden = screen === "library" || screen === "landing";
+  /* Back belongs to the reader, the one screen without the nav island.
+     Everywhere else it sat beside the island, a third way Home next to the
+     brand and the Home tab; the field guide and Graft carry their own. */
+  $("backBtn").hidden = screen !== "reader";
   $("menuPop").hidden = true;
+  closeAudPop();
+  if (typeof closeInstallOffer === "function") closeInstallOffer();   // pwa.js: the offer speaks for the layer it followed
   const navScreen = screen === "vocab" ? "models" : screen;   // vocabulary is a tab of Models
   document.querySelectorAll("[data-screen]").forEach(b => {
     const on = b.dataset.screen === navScreen;
@@ -734,7 +763,7 @@ function wireTopbar() {
   $("brand").onclick = async () => { await flushSaves(); await renderLibrary(); show("library"); };
   $("brand").onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("brand").click(); } };
   $("libraryBtn").onclick = async () => { await flushSaves(); await renderLibrary(); show("library"); };
-  $("backBtn").onclick = async () => { await flushSaves(); await renderLibrary(); show("library"); };
+  $("backBtn").onclick = () => goBack();
   $("modelsBtn").onclick = () => { renderModels(); show("models"); };
   $("drillBtn").onclick = () => { renderDrill(); show("drill"); };
   $("settingsBtn").onclick = () => { renderSettings(); show("settings"); };
@@ -744,13 +773,44 @@ function wireTopbar() {
   $("graftBtn").onclick = () => { if (currentRec) { featureTips.trigger("ctx"); renderWhatif(currentRec); show("whatif", { keepRec: true }); } };
   $("readerMenuBtn").onclick = e => {
     e.stopPropagation();
+    closeAudPop();
     const pop = $("menuPop");
     pop.hidden = !pop.hidden;
     if (!pop.hidden) featureTips.trigger("menu");
   };
-  document.addEventListener("click", () => { $("menuPop").hidden = true; });
+  document.addEventListener("click", () => { $("menuPop").hidden = true; closeAudPop(); });
 }
 
+/* ═══ Reading level ═══
+   Wide screens get the three levels side by side. On a phone they used to
+   shrink to B E D, letters that named nothing; there the switch is one pill
+   naming the level you are on ("Enthusiast"), and a tap opens all three as
+   a menu of radio items, so a screen reader hears which one is set. Which
+   of the two shows is CSS alone (styles.css, 760px), so both stay current. */
+async function setAudience(id) {
+  meta.audienceMode = id;
+  await Store.saveMeta({ audienceMode: id });
+  renderAudSwitch();
+  if (currentView) currentView.setAudience(id);
+}
+function closeAudPop(refocus) {
+  const box = $("audSwitch");
+  const pop = box && box.querySelector(".aud-pop");
+  if (!pop || pop.hidden) return;
+  pop.hidden = true;
+  const pick = box.querySelector(".aud-pick");
+  pick.setAttribute("aria-expanded", "false");
+  if (refocus) pick.focus();
+}
+function openAudPop() {
+  const box = $("audSwitch");
+  const pop = box.querySelector(".aud-pop");
+  $("menuPop").hidden = true;
+  pop.hidden = false;
+  box.querySelector(".aud-pick").setAttribute("aria-expanded", "true");
+  const on = pop.querySelector('[aria-checked="true"]') || pop.querySelector(".aud-opt");
+  if (on) on.focus();
+}
 function renderAudSwitch() {
   const box = $("audSwitch");
   let pill = box.querySelector(".sliding-seg-pill");
@@ -759,32 +819,78 @@ function renderAudSwitch() {
     pill = h("div", "sliding-seg-pill");
     box.appendChild(pill);
     COPY.audienceModes.forEach(m => {
-      const b = h("button", meta.audienceMode === m.id ? "on" : "");
+      const b = h("button", "aud-seg", m.label);
+      b.type = "button";
       b.dataset.aud = m.id;
-      b.append(h("span", "aud-full", m.label), h("span", "aud-abbr", m.label[0]));  // full text ↔ single letter on mobile
-      b.setAttribute("aria-label", m.label);
-      b.onclick = async () => {
-        meta.audienceMode = m.id;
-        await Store.saveMeta({ audienceMode: m.id });
-        renderAudSwitch();
-        if (currentView) currentView.setAudience(m.id);
-      };
+      b.onclick = () => setAudience(m.id);
       box.appendChild(b);
     });
+    // the phone's one pill, and the menu it opens
+    const pick = h("button", "aud-pick");
+    pick.type = "button";
+    pick.setAttribute("aria-haspopup", "menu");
+    pick.setAttribute("aria-expanded", "false");
+    pick.append(h("span", "aud-pick-label"), icon("chevronDown", "aud-pick-chev"));
+    const pop = h("div", "aud-pop");
+    pop.hidden = true;
+    pop.setAttribute("role", "menu");
+    pop.setAttribute("aria-label", COPY.audienceLabel);
+    const head = h("div", "aud-pop-head", COPY.audienceLabel);
+    head.setAttribute("aria-hidden", "true");   // the menu's own label says it
+    pop.appendChild(head);
+    COPY.audienceModes.forEach(m => {
+      const o = h("button", "aud-opt");
+      o.type = "button";
+      o.dataset.aud = m.id;
+      o.setAttribute("role", "menuitemradio");
+      o.tabIndex = -1;
+      o.append(icon("check", "aud-opt-check"), h("span", null, m.label));
+      o.onclick = async () => { closeAudPop(true); await setAudience(m.id); };
+      pop.appendChild(o);
+    });
+    pick.onclick = e => {
+      e.stopPropagation();
+      if (pop.hidden) openAudPop(); else closeAudPop();
+    };
+    pick.onkeydown = e => {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); openAudPop(); }
+    };
+    pop.onclick = e => e.stopPropagation();   // a tap inside is not a tap outside
+    pop.onkeydown = e => {
+      const opts = Array.from(pop.querySelectorAll(".aud-opt"));
+      const at = opts.indexOf(document.activeElement);
+      let to = null;
+      if (e.key === "ArrowDown") to = (at + 1) % opts.length;
+      else if (e.key === "ArrowUp") to = (at - 1 + opts.length) % opts.length;
+      else if (e.key === "Home") to = 0;
+      else if (e.key === "End") to = opts.length - 1;
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeAudPop(true); return; }
+      else if (e.key === "Tab") { closeAudPop(); return; }
+      if (to == null) return;
+      e.preventDefault();
+      opts[to].focus();
+    };
+    box.append(pick, pop);
     /* First measured at boot, while the switch is hidden, the pill came out
        0px wide and stayed so: every reader opened with no level marked. The
-       switch resizes when it is shown and when its labels swap to letters,
-       so re-measure then. The pill is absolute, so this cannot feed itself. */
+       switch resizes when it is shown and when it changes form at the phone
+       width, so re-measure then. The pill is absolute, so this cannot feed
+       itself. */
     if (typeof ResizeObserver === "function") new ResizeObserver(() => renderAudSwitch()).observe(box);
-  } else {
-    box.querySelectorAll("button").forEach(b => {
-      b.classList.toggle("on", b.dataset.aud === meta.audienceMode);
-    });
   }
+  const cur = COPY.audienceModes.find(m => m.id === meta.audienceMode) || COPY.audienceModes[1];
   // say which level is on, not only paint it: a screen reader heard three equal buttons
-  box.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.aud === meta.audienceMode)));
+  box.querySelectorAll(".aud-seg").forEach(b => {
+    const on = b.dataset.aud === cur.id;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", String(on));
+  });
+  box.querySelectorAll(".aud-opt").forEach(o => o.setAttribute("aria-checked", String(o.dataset.aud === cur.id)));
+  const pick = box.querySelector(".aud-pick");
+  pick.querySelector(".aud-pick-label").textContent = cur.label;
+  pick.setAttribute("aria-label", `${COPY.audienceLabel}: ${cur.label}`);
   requestAnimationFrame(() => {
-    const onBtn = box.querySelector("button.on");
+    const onBtn = box.querySelector(".aud-seg.on");
     if (onBtn && pill) {
       const bRect = onBtn.getBoundingClientRect();
       const cRect = box.getBoundingClientRect();
@@ -1146,15 +1252,19 @@ function renderTutorial(from) {
   root.textContent = "";
   const T = COPY.tutorial;
   const back = h("button", "gbtn", returnId ? "‹ Back to the Deconstruct" : "‹ Back");
-  /* Only Settings goes back to Settings. A guide reached by URL, reload or
-     history comes from the router with no origin worth keeping, and landed
-     on Settings, a screen the reader never came from. */
-  back.onclick = async () => {
+  /* The guide's one back, now the top bar's hides off the reader. It is the
+     same back as the reader's (goBack): the screen the guide was opened
+     from, at the place it was left. Opening that screen afresh pushed a
+     second copy of it, and its own Back then returned here. The origin is
+     only the fallback, for a guide with nothing of the app's behind it.
+     Only Settings goes back to Settings: a guide reached by URL, reload or
+     history landed there, a screen the reader never came from. */
+  back.onclick = () => goBack(async () => {
     if (returnId) { openReader(returnId); }
     else if (from === "landing") { renderLanding(); show("landing"); }
     else if (from === "settings") { renderSettings(); show("settings"); }
     else { await renderLibrary(); show("library"); }
-  };
+  });
   root.appendChild(back);
   root.appendChild(h("div", "kicker", T.kicker));
   root.appendChild(h("h1", "title", T.headline));
@@ -3005,6 +3115,10 @@ async function openReader(id, layerIndex, opts = {}) {
      previous screen's entry (the parent study on a drill, or Practice,
      Models, Vocabulary), and Back skipped it. */
   let routed = false;
+  /* Moving on from a layer read to its fix is the first point a reader has
+     seen what Vitruvian does, so the one install offer (pwa.js) waits for
+     it. It used to be a top bar button from the first second. */
+  let lastPos = null;
   currentView = DocView.mount({
     docPane, diagram, rec, scrubEl,
     audience: meta.audienceMode || "enthusiast",
@@ -3017,6 +3131,11 @@ async function openReader(id, layerIndex, opts = {}) {
       if (routed && document.body.dataset.screen === "reader") syncRoute("replace");
       // the four steps are explained on the second, where the guess is asked for
       if (position >= 1 && position <= rec.doc.layers.length && step >= 2) featureTips.trigger("steps");
+      const left = lastPos;
+      lastPos = position;
+      if (left == null || left === position || left < 1 || left > rec.doc.layers.length) return;
+      const a = rec.attempts[rec.doc.layers[left - 1].index];
+      if (a && a.revealed && typeof offerInstall === "function") offerInstall();
     },
     onSheetClose() { featureTips.trigger("ctx"); },
     async onOpen(id) { await flushSaves(); openReader(id); },
@@ -3432,7 +3551,8 @@ function renderWhatif(rec, opts = {}) {
 
   const backRow = h("div", "gate-actions");
   const backBtn2 = h("button", "gbtn", "‹ Back to the Deconstruct");
-  backBtn2.onclick = () => openReader(rec.id);
+  // the reader's own back (goBack), so the study's Back does not return here
+  backBtn2.onclick = () => goBack(() => openReader(rec.id));
   backRow.appendChild(backBtn2);
   root.appendChild(backRow);
 
@@ -4023,7 +4143,7 @@ function modelUses(recs, id) {
 }
 /* The screen is its own scroll box and kept its offset across the swap, so a
    model opened from low in the list landed mid-page with its title far above.
-   A model opens at its top; "All models" returns to where the list was.
+   A model opens at its top; its breadcrumb returns to where the list was.
    Instant, because .screen scrolls smoothly. */
 let modelsIndexScroll = 0;
 async function renderModels(detailId) {
@@ -4068,9 +4188,18 @@ function renderModel(root, recs, id) {
   const m = MODEL_LIBRARY.find(x => x.id === id);
   const uses = modelUses(recs, id);
   const read = uses.filter(u => u.read), unread = uses.filter(u => !u.read);
-  const back = h("button", "gbtn ghost", "‹ All models");
-  back.onclick = () => renderModels();
-  root.appendChild(back);
+  /* A breadcrumb, not a back button: it names where the page sits and goes
+     up to the index, wherever the reader arrived from. Back is the
+     browser's, or the nav island's Models. */
+  const crumb = h("nav", "page-crumb");
+  crumb.setAttribute("aria-label", "Breadcrumb");
+  const up = h("button", "crumb-link", COPY.modelsCrumb);
+  up.type = "button";
+  up.onclick = () => renderModels();
+  const here = h("span", "crumb-here", m.name);
+  here.setAttribute("aria-current", "page");
+  crumb.append(up, h("span", "crumb-sep", "›"), here);
+  root.appendChild(crumb);
   root.appendChild(h("div", "kicker", "Thinking model"));
   root.appendChild(h("h1", "title", m.name));
   root.appendChild(h("p", "subtitle", m.one_liner));
@@ -4326,16 +4455,24 @@ async function renderDrill(opts = {}) {
   const root = $("screen-drill").firstElementChild;
   root.textContent = "";
   const audience = meta.audienceMode || "enthusiast";
-  if (!opts.keep || !reviewState) {
+  // an empty round is never kept: Back from the first layer read should find questions
+  if (!opts.keep || !reviewState || !reviewState.deck.length) {
     reviewState = { deck: Review.deck(recs, { systems: opts.systems || null, audience }), i: 0, right: 0, checked: 0, systems: opts.systems || null, label: opts.label || null };
   }
   const st = reviewState;
   root.appendChild(h("div", "kicker", st.label || "Practice"));
   root.appendChild(h("h1", "title", "Practice"));
   if (!st.deck.length) {
-    root.appendChild(h("p", "subtitle", "Nothing to practise yet. Read a layer of any Deconstruct through to its solution and you can quiz yourself on it here."));
-    const go = ctaButton("Back home");
-    go.onclick = async () => { await renderLibrary(); show("library"); };
+    root.appendChild(h("p", "subtitle", COPY.practiceEmpty));
+    /* the next step, opened: layer 1 of a short sample, rather than Home
+       and a choice to make. Home only if that sample is missing. */
+    const go = ctaButton(COPY.practiceEmptyCta);
+    go.onclick = async () => {
+      const first = await Store.getBreakdown("flagship-" + COPY.practiceFirstStudy).catch(() => null);
+      if (first) { openReader(first.id, 1); return; }
+      await renderLibrary();
+      show("library");
+    };
     root.appendChild(go);
     return;
   }
@@ -4574,6 +4711,31 @@ function openKeySheet({ action, echo, hit, resume }) {
   else sheet.focus({ preventScroll: true });
 }
 
+/* Install: a permanent row. The one offer comes after the first finished
+   layer and never again, so this is where installing stays findable. It
+   says what this browser can do (installState in pwa.js) and repaints
+   when that changes: the browser's prompt arriving, or the install done. */
+function installBlock() {
+  const ib = h("div", "set-block set-install");
+  paintInstallBlock(ib);
+  return ib;
+}
+function paintInstallBlock(ib) {
+  const I = COPY.install;
+  const state = typeof installState === "function" ? installState() : "other";
+  ib.textContent = "";
+  ib.appendChild(h("h3", null, I.setTitle));
+  ib.appendChild(h("p", "note", I.setNote[state] || I.setNote.other));
+  if (state !== "prompt") return;
+  const b = h("button", "gbtn primary", I.setBtn);
+  b.type = "button";
+  b.onclick = () => promptInstall();
+  ib.appendChild(b);
+}
+window.addEventListener("sdc:installchange", () => {
+  document.querySelectorAll(".set-install").forEach(paintInstallBlock);
+});
+
 /* drafts carries what lives only in the DOM across this screen's own
    re-renders (see refresh below): the key and model fields as typed, and
    whether the key field, the custom model field and Advanced are open.
@@ -4694,6 +4856,24 @@ function renderSettings(banner, drafts, dataNote) {
       () => { meta.autoReplay = meta.autoReplay === false; return Store.saveMeta({ autoReplay: meta.autoReplay }); }),
     toggle(meta.onePage === true, "Read each layer as one page instead of four steps",
       () => { meta.onePage = !(meta.onePage === true); return Store.saveMeta({ onePage: meta.onePage }); }));
+
+  /* the theme, since the toggle left the reader's top bar */
+  const thb = h("div", "set-block");
+  const thh = h("h3", null, COPY.themeTitle);
+  thh.id = "set-theme-h";
+  thb.appendChild(thh);
+  const thseg = h("div", "seg");
+  thseg.setAttribute("role", "group");
+  thseg.setAttribute("aria-labelledby", "set-theme-h");
+  const curTheme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  COPY.themeModes.forEach(([id, label]) => {
+    const b = h("button", curTheme === id ? "on" : "", label);
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(curTheme === id));
+    b.onclick = async () => { if (id !== curTheme) await toggleTheme(); refresh(); };
+    thseg.appendChild(b);
+  });
+  thb.appendChild(thseg);
 
   /* feature tips — on by default, and a way back to the ones already spent */
   const tb = h("div", "set-block set-tips");
@@ -4856,9 +5036,9 @@ function renderSettings(banner, drafts, dataNote) {
      whether it is open rides along in drafts, or a control inside it shut
      the group under the reader's finger. */
   group(G.key, COPY.setKeyNote, kb);
-  group(G.reading, null, db, lb);
+  group(G.reading, null, db, lb, thb);
   group(G.help, null, tb, ab);
-  group(G.data, null, bb);
+  group(G.data, null, bb, installBlock());
   adv = h("details", "set-group set-adv");
   adv.open = !!d.adv;
   const sum = h("summary", "set-adv-sum");

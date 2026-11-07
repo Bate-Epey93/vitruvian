@@ -785,6 +785,10 @@ var COPY = {
     { id: "enthusiast", label: "Enthusiast" },
     { id: "developer",  label: "Developer" }
   ],
+  /* On a phone the three levels used to shrink to B E D, which named
+     nothing. There the switch is one pill naming the level you are on, and
+     a tap opens all three under this heading. */
+  audienceLabel: "Reading level",
   gateKicker: "Your turn before the reveal",
   gateHint1: "Show the thinking model",
   gateHint2: "One more hint",
@@ -859,6 +863,41 @@ var COPY = {
   strictDefault: "Strict mode by default: write your own fix before you see the real one",
   modelCustom: "Custom…",
   modelAnyId: "Any Anthropic model id. A new model needs no app update.",
+  /* The reader's top bar had grown to thirteen controls, so the theme
+     toggle left it. It sits here, and stays on the other screens' bars. */
+  themeTitle: "Theme",
+  themeModes: [["light", "Light"], ["dark", "Dark"]],
+
+  /* ── Installing ──
+     One offer, made once, after the first finished layer: by then the
+     reader has seen what the app is for. It used to be an Install button in
+     the top bar from the first second. Settings keeps a row for it for good,
+     worded for what this browser can do (installState in pwa.js). */
+  install: {
+    label: "Install Vitruvian",
+    lede: "Put it on your home screen and it opens like any other app, in its own window.",
+    iosLede: "Add it to your home screen for offline reading and safer data: installed apps are exempt from Safari's storage cleanup. Tap",
+    iosHow: "Share ▹ Add to Home Screen",
+    btn: "Install",
+    close: "Not now",
+    setTitle: "Install app",
+    setBtn: "Install app",
+    setNote: {
+      installed: "Installed. Vitruvian opens from your home screen in its own window.",
+      prompt: "Put Vitruvian on your home screen or dock, so it opens in its own window like any other app.",
+      ios: "In Safari, tap Share ▹ Add to Home Screen. Installed, your Deconstructs are exempt from Safari's storage cleanup.",
+      other: "Look for Install, Add to Dock or Add to Home Screen in your browser's menu. Not every browser can install apps, and everything works in the browser too."
+    }
+  },
+
+  /* ── Practice ──
+     An empty round used to offer only Back home. It names the next step
+     instead, and opens it: the first layer of a short sample. */
+  practiceEmpty: "Nothing to practise yet. Read a layer of any Deconstruct through to its solution and you can quiz yourself on it here.",
+  practiceEmptyCta: "Read your first layer",
+  practiceFirstStudy: "url-shortener",
+  // a model's page names its way up, where a second Back button used to be
+  modelsCrumb: "Models",
 
   privacyNote: "Everything lives on this device. Deconstructs, attempts, and your key are never sent anywhere except your own calls to Anthropic.",
   offlineGenNote: "Generation needs a connection. Reading never does.",
@@ -1055,7 +1094,7 @@ var COPY = {
     controls: {
       title: "Controls",
       items: [
-        ["Audience: B / E / D", "Three reading levels of the same Deconstruct: Beginner (plain language and everyday analogies), Enthusiast (the default), and Developer (adds the engineer mappings and interview probes). Switch anytime and you keep your place."],
+        ["Reading level", "Three reading levels of the same Deconstruct: Beginner (plain language and everyday analogies), Enthusiast (the default), and Developer (adds the engineer mappings and interview probes). On a phone it is one pill at the top naming your level; tap it for the other two. Switch anytime and you keep your place."],
         ["Four steps per layer", "Each layer runs The problem, Your guess, The solution, The tradeoff. The button at the bottom of the card moves you on, and Skip to the solution is always there. Arrow keys move a step; Shift with an arrow moves a layer."],
         ["The timeline", "The strip under the diagram is your place in the system: Meet, each layer, then Trials and Transfer. Finished layers turn teal. Tap any of them to jump there."],
         ["On a phone", "The diagram takes the larger half to start with, and the step card sits in a sheet below it. Drag the sheet's handle, or tap it, to give more room to the text or back to the diagram. Whatever you choose is remembered."],

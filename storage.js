@@ -7,8 +7,8 @@
      verdict, ts} }, progress:{ layersRead, gatesAnswered } }
    · meta — keyPath key; audienceMode, challengeModeDefault,
      apiKey, modelId, lastOpenBreakdown, lastBackup, schemaVersion,
-     device-local keys (visits, iosHintDismissed, persistAsked,
-     flagshipsSeeded).
+     device-local keys (visits, iosHintDismissed, installOffered,
+     persistAsked, flagshipsSeeded).
    · modelIndex — kept as an empty store so DB_VERSION never moves;
      nothing reads it any more.
    Backups NEVER contain the API key (§9, acceptance #10).
@@ -25,7 +25,7 @@ var Store = (() => {
      the default, so moving anyone off it would raise their bill uninvited. */
   const RETIRED_MODELS = /^(claude-fable-5|claude-haiku-4-5(-20251001)?)$/;
   const SCHEMA_VERSION = 1;                 // backup file format
-  const LOCAL_ONLY_META = ["apiKey", "visits", "iosHintDismissed", "persistAsked", "flagshipsSeeded"];
+  const LOCAL_ONLY_META = ["apiKey", "visits", "iosHintDismissed", "installOffered", "persistAsked", "flagshipsSeeded"];
   let db = null;
 
   function open() {

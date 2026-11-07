@@ -101,6 +101,33 @@ var LabPage = (function () {
     });
     paintThemeBtn();
 
+    /* ═══ the way back ═══
+       A study is reached from the app, nearly always from its companion
+       Deconstruct, and "../" dropped the reader on Home, a screen they had
+       not come from. With the app as the page behind this one, back is the
+       browser's own, to the place they left it. Otherwise (a shared link, a
+       new tab) the top chevron opens the companion study, and the closing
+       "Back to Vitruvian" keeps its own link, Home. */
+    var appRoot = new URL("../", location.href);
+    function cameFromApp() {
+      if (history.length < 2 || !document.referrer) return false;
+      try {
+        var r = new URL(document.referrer);
+        return r.origin === appRoot.origin &&
+          (r.pathname === appRoot.pathname || r.pathname === appRoot.pathname + "index.html");
+      } catch (e) { return false; }
+    }
+    function backToApp(e) {
+      if (!cameFromApp()) return;   // the link's own href
+      e.preventDefault();
+      history.back();
+    }
+    var topBack = document.querySelector(".lab-back");
+    if (topBack) {
+      if (C.companion && C.companion.href) topBack.href = C.companion.href;
+      topBack.addEventListener("click", backToApp);
+    }
+
     /* ═══ stage controls ═══
        A toggle reads its own next state off aria-pressed, so anything
        that changes the scene behind its back has to say so here —
@@ -273,6 +300,7 @@ var LabPage = (function () {
       }
       var p = primary.href ? h("a", "big-btn step-next", primary.label) : h("button", "big-btn step-next", primary.label);
       if (primary.href) p.href = primary.href; else p.addEventListener("click", primary.fn);
+      if (primary.back) p.addEventListener("click", backToApp);
       f.appendChild(p);
       return f;
     }
@@ -359,7 +387,7 @@ var LabPage = (function () {
           comp.appendChild(h("span", "lab-offer-cta", C.companion.cta));
           card.appendChild(comp);
         }
-        card.appendChild(footer(last ? { label: "Back to Vitruvian", href: "../" } : { label: "Next layer", fn: function () { goto(layerIndex + 1, 1); } },
+        card.appendChild(footer(last ? { label: "Back to Vitruvian", href: "../", back: true } : { label: "Next layer", fn: function () { goto(layerIndex + 1, 1); } },
           { label: "Back to the solution", fn: function () { goto(layerIndex, 3); } }));
       }
 

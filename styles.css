@@ -193,7 +193,7 @@ html.theme-transitioning *::after {
 }
 
 /* ── Tactile active press physics (Wave F · Proposal #4) ── */
-.tbtn:active, .nav-btn:active, .lib-fchip:active, .tl-seg:active, .pill-btn:active, .gbtn:active, .zbtn:active:not(:disabled), .aud-switch button:active {
+.tbtn:active, .nav-btn:active, .lib-fchip:active, .tl-seg:active, .pill-btn:active, .gbtn:active, .zbtn:active:not(:disabled), .aud-seg:active, .aud-pick:active {
   transform: scale(0.96);
   transition: transform 0.08s var(--ease-press);
 }
@@ -272,10 +272,12 @@ body.reading .brand-sub{display:none;}
 .nav-btn:hover{color:var(--ink);}
 .nav-btn.on{background:var(--panel);color:var(--ink);box-shadow:var(--sh-1), inset 0 0 0 1px var(--hair);}
 .nav-btn.on .ico{opacity:1;color:var(--accent);}
-/* while reading, the island keeps its icons and gives the label room to the
-   audience switch */
-body.reading .nav-btn .tbtn-label{display:none;}
-body.reading .nav-btn{padding:6px 9px;}
+/* While reading, the island leaves at every width: the brand goes Home and
+   Back goes where you were, so it was a third and fourth way out, and the
+   reader's bar held thirteen controls. The theme toggle goes too; it is in
+   Settings, under Reading. Off the reader both stay. */
+body.reading .tb-nav{display:none;}
+body.reading #themeBtn{display:none;}
 
 /* header buttons */
 .tbtn{
@@ -290,8 +292,6 @@ body.reading .nav-btn{padding:6px 9px;}
 .tbtn.icon-only{padding:8px;width:36px;height:36px;justify-content:center;}
 .tbtn.icon-only .ico{width:19px;height:19px;}
 .tbtn.on{color:var(--accent);}
-.tbtn.accent{background:var(--ink);color:var(--paper);}
-.tbtn.accent:hover{background:var(--accent);color:#fff;}
 .ico-sun{display:none!important;}
 :root[data-theme="dark"] .ico-sun{display:block!important;}
 :root[data-theme="dark"] .ico-moon{display:none!important;}
@@ -311,16 +311,36 @@ body.reading .nav-btn{padding:6px 9px;}
   transition:transform .28s var(--ease-spring), width .28s var(--ease-spring);
   pointer-events:none;z-index:0;
 }
-.aud-switch button{
+.aud-seg{
   position:relative;z-index:1;
   font-size:12.5px;font-weight:600;letter-spacing:-.005em;
   background:transparent;border:none;color:var(--muted);
   padding:5px 12px;border-radius:var(--r-pill);cursor:pointer;
   transition:color .2s var(--ease);
 }
-.aud-switch button.on{color:var(--ink);}
-.aud-switch button:not(.on):hover{color:var(--ink);}
-.aud-abbr{display:none;}
+.aud-seg.on{color:var(--ink);}
+.aud-seg:not(.on):hover{color:var(--ink);}
+/* the phone's form (760px, below): one pill naming the level, and the menu
+   of all three it opens. Display is set only there, so neither can show on
+   a wide screen, even left open across a resize. */
+.aud-pick{display:none;align-items:center;gap:3px;
+  font-size:12.5px;font-weight:600;letter-spacing:-.005em;color:var(--ink);
+  background:var(--panel);border:none;border-radius:var(--r-pill);cursor:pointer;
+  padding:5px 8px 5px 12px;box-shadow:var(--sh-1), inset 0 0 0 1px var(--hair);}
+.aud-pick .ico{width:15px;height:15px;color:var(--muted);transition:transform .2s var(--ease);}
+.aud-pick[aria-expanded="true"] .ico{transform:rotate(180deg);}
+.aud-pop{display:none;position:absolute;top:calc(100% + 10px);left:50%;transform:translateX(-50%);min-width:200px;
+  background:var(--glass-heavy);
+  -webkit-backdrop-filter:blur(24px) saturate(180%);backdrop-filter:blur(24px) saturate(180%);
+  border:1px solid var(--hair);border-radius:var(--r-md);
+  box-shadow:var(--sh-3);padding:6px;z-index:80;color:var(--ink);}
+.aud-pop-head{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:6px 11px 4px;}
+.aud-opt{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:none;border:none;cursor:pointer;
+  font-size:14px;font-weight:500;color:var(--ink);padding:9px 11px;border-radius:9px;transition:background .15s;}
+.aud-opt:hover,.aud-opt:focus-visible{background:color-mix(in srgb,var(--ink) 6%,transparent);}
+.aud-opt .ico{width:16px;height:16px;color:var(--accent);visibility:hidden;}
+.aud-opt[aria-checked="true"]{font-weight:650;}
+.aud-opt[aria-checked="true"] .ico{visibility:visible;}
 
 /* overflow menu */
 .menu-wrap{position:relative;}
@@ -997,6 +1017,14 @@ input,textarea{font-family:var(--sans);}
 .reader-crumb .rc-link:hover{background:var(--accent-wash);}
 .reader-crumb .rc-sep{color:var(--faint);}
 .reader-crumb .rc-here{color:var(--ink);font-weight:650;}
+/* a page's way up (a model's page: Models › Idempotency), in place of a
+   second back button */
+.page-crumb{display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;font-size:13px;margin:0 0 22px -6px;}
+.page-crumb .crumb-link{background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:6px;
+  font-size:13px;font-weight:550;color:var(--accent-deep);}
+.page-crumb .crumb-link:hover{background:var(--accent-wash);}
+.page-crumb .crumb-sep{color:var(--faint);}
+.page-crumb .crumb-here{color:var(--ink-soft);font-weight:550;}
 
 /* ── overview: essence and skeleton ── */
 .essence{font-size:18px;line-height:1.65;color:var(--ink);margin:18px 0 22px;letter-spacing:-.005em;text-wrap:pretty;}
@@ -1381,6 +1409,7 @@ g.dg-node.dg-enter{animation:dg-fade .45s var(--ease) both;}
 :is(.install-hint,.key-sheet) .ih-label{color:var(--accent-deep);margin-bottom:4px;}
 .install-hint p{font-size:13.5px;color:var(--ink-soft);margin:0;line-height:1.55;}
 .install-hint p b{color:var(--ink);}
+.install-hint .ih-go{margin-top:12px;}
 :is(.install-hint,.key-sheet) .ih-close{position:absolute;top:10px;right:10px;width:28px;height:28px;background:color-mix(in srgb,var(--ink) 5%,transparent);
   border:none;border-radius:50%;color:var(--muted);font-size:15px;line-height:1;cursor:pointer;}
 
@@ -2225,8 +2254,9 @@ section.set-group:first-of-type{margin-top:18px;}   /* not Advanced, a details t
 
 /* ═══ Responsive chrome ═══
    Under 760px the nav island leaves the header and becomes a tab bar along
-   the bottom edge, where thumbs are. It steps aside while reading so the
-   diagram and prose keep the whole screen. */
+   the bottom edge, where thumbs are. Like the header's island, it is gone
+   while reading (body.reading, above), so the diagram and prose keep the
+   whole screen. */
 @media(max-width:1100px){
   .brand-sub{display:none;}
 }
@@ -2234,7 +2264,10 @@ section.set-group:first-of-type{margin-top:18px;}   /* not Advanced, a details t
    switch and the nav island. .tb-right is an equal flex share with
    min-width:0 and flex-end, so below that width its tools overflow LEFT
    across the audience switch and take its clicks (System sheet landed on
-   Developer at 1150px). The labels go a little above that line for slack. */
+   Developer at 1150px). The labels go a little above that line for slack.
+   That was measured with the nav island in the reader's bar as well; it
+   has since left, so this line now has room to spare and could come down
+   once it is measured again. */
 @media(max-width:1400px){
   .ctx-btn .tbtn-label{display:none;}
   .ctx-btn{padding:8px;width:36px;height:36px;justify-content:center;}
@@ -2254,12 +2287,9 @@ section.set-group:first-of-type{margin-top:18px;}   /* not Advanced, a details t
 @media(max-width:640px){
   .tb-right .ctx-btn{display:none;}
   .menu-pop .menu-compact{display:block;}
-}
-@media(max-width:960px){
-  .aud-full{display:none;}
-  .aud-abbr{display:inline;}
-  .aud-switch button{padding:5px 10px;}
-  body.reading .tb-nav{display:none;}
+  /* the divider set those tools apart; alone it divided nothing, and the
+     level pill needs its width on a 320px phone */
+  .tb-right .tb-div{display:none;}
 }
 @media(max-width:760px){
   :root{--topbar-h:54px;}
@@ -2275,21 +2305,23 @@ section.set-group:first-of-type{margin-top:18px;}   /* not Advanced, a details t
   .nav-btn{flex-direction:column;gap:2px;padding:6px 14px;font-size:10.5px;font-weight:600;}
   .nav-btn .ico{width:20px;height:20px;}
   .nav-btn .tbtn-label{display:block;}
-  body.reading .tb-nav{display:none;}
   .tbtn-label{display:none;}
   .tbtn{padding:8px;}
-  /* the reader's bar is full (back, audience switch, menu), so the toggle
-     steps out there only; elsewhere it stays, as it is the one control that
-     sets the theme */
-  body.reading #themeBtn{display:none;}
+  /* The reading level as one pill naming it, where the three side by side
+     do not fit. They used to shrink to B E D here, letters that named
+     nothing. With the nav island gone from the reader's bar, the full three
+     fit everywhere above this width. */
+  .aud-switch .aud-seg,.aud-switch .sliding-seg-pill{display:none;}
+  .aud-pick{display:inline-flex;}
+  .aud-pop{display:block;}
 }
 @media(max-width:420px){
   body.reading .brand-text{display:none;}
-  .aud-switch button{padding:5px 8px;}
+  .aud-pick{padding:5px 6px 5px 10px;}
   h1.title{font-size:30px;}
   .nav-btn{padding:6px 11px;}
 }
-.step-dot,.step-btn,.gbtn,.tbtn,.big-btn,.aud-switch button,.seg button,.nav-btn{-webkit-user-select:none;user-select:none;}
+.step-dot,.step-btn,.gbtn,.tbtn,.big-btn,.aud-seg,.aud-pick,.aud-opt,.seg button,.nav-btn{-webkit-user-select:none;user-select:none;}
 
 /* ═══ Splash ═══
    Painted from static HTML before the deferred app boots; engine.js

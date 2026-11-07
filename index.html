@@ -53,11 +53,12 @@
 <div class="app">
 
   <!-- TOPBAR — translucent header: brand left, nav island centre, tools right.
-       While reading, the island compacts to icons and the audience switch and
-       reader tools take the spare room. -->
+       While reading, the island and the theme toggle step out (the brand
+       goes Home, the theme is in Settings), Back appears, and the reading
+       level and reader tools take the room. -->
   <header class="topbar">
     <div class="tb-left">
-      <button class="tbtn icon-only" id="backBtn" aria-label="Back home" hidden><svg class="ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M12 15l-5-5 5-5"/></svg></button>
+      <button class="tbtn icon-only" id="backBtn" aria-label="Back" title="Back" hidden><svg class="ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M12 15l-5-5 5-5"/></svg></button>
       <div class="brand" id="brand" title="Home" role="link" tabindex="0">
         <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8.2 4.9A8 8 0 1 1 4.6 8.4"/><rect x="10" y="10" width="4" height="4" rx="1"/></svg></div>
         <div class="brand-text">
@@ -111,12 +112,9 @@
   <button id="updateReload">Reload</button>
 </div>
 
-<!-- iOS INSTALL HINT (second non-installed visit) -->
-<div class="install-hint" id="iosHint" hidden>
-  <div class="ih-label">Install Vitruvian</div>
-  <p>Add this to your home screen for offline reading and safer data; installed apps are exempt from Safari's storage cleanup. Tap <b>Share ▹ Add to Home Screen</b>.</p>
-  <button class="ih-close" id="iosHintClose" aria-label="Dismiss">×</button>
-</div>
+<!-- INSTALL OFFER (pwa.js fills it once, after the first finished layer:
+     an Install button where the browser can, Safari's steps on iOS) -->
+<div class="install-hint" id="installSheet" role="dialog" aria-modal="false" aria-labelledby="installSheetLabel" hidden></div>
 
 </body>
 </html>
