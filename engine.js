@@ -1201,14 +1201,31 @@ function renderLanding() {
   mountHero({ dg, hsTitle, hsLayer, steps, note });
 }
 
-/* The system the stage rebuilds, and the one "Watch it break" opens. */
+/* The system on the stage, and the one "Watch an example" opens. A
+   different sample each time the landing is drawn, and never the same one
+   twice running, so a returning visitor sees the range rather than the URL
+   shortener forever. The button reads heroRecId, so it always opens the
+   system the stage is actually showing. */
+let heroRecId = null;
+async function pickHero() {
+  const pool = (await Store.getBreakdowns())
+    .filter(b => b.source === "flagship" && b.doc && b.doc.layers && b.doc.layers.length >= 4);
+  if (!pool.length) { heroRecId = null; return; }
+  let last = null;
+  try { last = localStorage.getItem("vitruvian_last_hero"); } catch (e) {}
+  const choices = pool.length > 1 ? pool.filter(b => b.id !== last) : pool;
+  heroRecId = choices[Math.floor(Math.random() * choices.length)].id;
+  try { localStorage.setItem("vitruvian_last_hero", heroRecId); } catch (e) {}
+}
 async function heroRecord() {
-  return (await Store.getBreakdown("flagship-" + COPY.landing.heroSystem).catch(() => null))
-    || (await Store.getBreakdowns()).find(b => b.source === "flagship") || null;
+  const picked = heroRecId && await Store.getBreakdown(heroRecId).catch(() => null);
+  return picked || (await Store.getBreakdowns()).find(b => b.source === "flagship") || null;
 }
 
 async function mountHero(el) {
   const gen = heroGen;
+  await pickHero();
+  if (gen !== heroGen) return;
   const rec = await heroRecord();
   if (!rec || gen !== heroGen) return;
   const L = COPY.landing;
@@ -3125,7 +3142,7 @@ async function openReader(id, layerIndex, opts = {}) {
                     (s.onSpine < s.chokes ? ` (${s.onSpine} on the spine)` : ""));
     toast(parts.join(" · "));
   };
-  /* Arriving by "Watch it break", the first thing on screen is the failure
+  /* Arriving by "Watch an example", the first thing on screen is the failure
      replaying itself, so the arrival tip waits for the collision instead of
      opening over it. With no replay coming it is offered as usual; the cap
      below keeps a replay that never lands from holding it back for good. */

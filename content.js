@@ -962,10 +962,6 @@ var COPY = {
     headlineArrowLabel: "and then",
     lede: "Vitruvian rebuilds everyday systems one failure at a time. Each layer exists because the version before it broke, and the diagram grows as you go.",
     learn: "How to read a Deconstruct",
-    /* heroSystem is both the system the stage rebuilds and the one "Watch it
-       break" opens, at layer 1's problem, so the button keeps the stage's
-       promise. */
-    heroSystem: "url-shortener",
     /* The stage plays each layer twice: the version before it, with what
        breaks lit red, then the fix drawn in. heroFailure captions the first
        beat with the layer's problem.title; heroFailureFallback stands in for
@@ -991,7 +987,11 @@ var COPY = {
        about eleven taps from here (Home, a card, the tips, two Meet steps).
        The primary button goes straight to it; the library is the second
        choice, and the field guide a quiet third. */
-    cta: "Watch it break",
+    /* "Watch it break" left a first-time visitor asking what breaks, and
+       "Deconstruct" is a word they have not met yet. This says plainly what
+       happens next. The stage picks a different sample each visit, and the
+       button opens whichever one it is showing. */
+    cta: "Watch an example",
     browse: n => `Browse all ${n}`,
     browseAria: n => `Browse all ${n} systems`,
     footnote: "Your Deconstructs stay on this device. There is no cloud to sign up for."
