@@ -41,7 +41,10 @@
   font-family:var(--mono); font-size:9.5px; letter-spacing:2px; text-transform:uppercase;
   color:var(--faint); pointer-events:none; transition:opacity .4s; }
 #hint.gone { opacity:0; }
-@media (max-width:720px) { #hint { display:none; } }
+/* Between a phone and a window the stage's bottom edge belongs to the
+   study's floating controls, and the hint would land on them. A phone
+   gets it once, in the clear drawing (see the 560px block below). */
+@media (min-width:561px) and (max-width:720px) { #hint { display:none; } }
 
 #tip { position:absolute; pointer-events:none; opacity:0; transition:opacity .12s;
   transform:translate(14px,-30px); max-width:230px;
@@ -56,9 +59,12 @@
 
 
 /* ── stage controls ── */
-/* ── stage controls ── */
 .stage-ctrls { position:absolute; top:12px; right:12px; display:flex; flex-wrap:wrap;
   justify-content:flex-end; gap:6px; z-index:10; max-width:60%; }
+/* The view toggles' box only becomes a menu on a phone; anywhere wider
+   it steps aside and the toggles are buttons in the row. */
+.st-view { display:contents; }
+.st-more { display:none; }
 .st-btn { font-family:var(--mono); font-size:9.5px; letter-spacing:1px; text-transform:uppercase;
   background:color-mix(in srgb, var(--panel) 88%, transparent); color:var(--ink-soft);
   border:1px solid var(--line); border-radius:5px; padding:6px 10px; cursor:pointer; transition:all .15s;
@@ -136,6 +142,33 @@
   .lc-name { font-size:21px; }
   .stage-ctrls { top:8px; right:8px; }
   .st-btn { padding:5px 8px; font-size:9px; }
+}
+
+/* ── phone: instruments off the drawing ──
+   Floating every readout and control over a 44vh stage left about 80px
+   of it clear. So the stage becomes a column: the study's readout as a
+   one-line ticker on top (row 1), the drawing (row 2), and its controls
+   as strips underneath (rows 3 and 4). A study places its own pieces in
+   those rows; everything else shares the drawing's cell, so the hint,
+   the tooltip and the stage buttons still float over the drawing and
+   over nothing else. */
+@media (max-width:560px) {
+  .lab-stage { display:grid; grid-template-columns:minmax(0,1fr);
+    grid-template-rows:auto minmax(0,1fr) auto auto; }
+  .lab-stage > * { grid-area:2 / 1; }
+
+  #hint { display:block; bottom:10px; width:max-content; max-width:calc(100% - 24px);
+    white-space:normal; text-align:center; font-size:9px; letter-spacing:.6px; line-height:1.5; }
+
+  /* Reset and one ⋯ button; the view toggles drop down from it */
+  .st-more { display:block; font-size:13px; line-height:1; letter-spacing:0; padding:4px 10px 6px; }
+  .stage-ctrls.open .st-more { border-color:var(--accent); color:var(--accent); }
+  .st-view { display:none; position:absolute; top:calc(100% + 6px); right:0; min-width:148px;
+    flex-direction:column; gap:4px; padding:6px; border-radius:9px;
+    background:var(--panel); border:1px solid var(--line);
+    box-shadow:0 8px 24px rgba(0,0,0,.16); }
+  .stage-ctrls.open .st-view { display:flex; }
+  .st-view .st-btn { text-align:left; padding:8px 10px; -webkit-backdrop-filter:none; backdrop-filter:none; }
 }
 
 /* Nothing moves on its own; the scrubber is the whole interface. */

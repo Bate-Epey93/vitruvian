@@ -734,6 +734,10 @@ var TXScene = (function () {
         sc.camera.dist = Math.max(120, Math.min(4000, sc.camera.dist * f));
         sc.invalidate();
       },
+      /* The stage toggles the shell may offer: all three. 1930 mode stays
+         under reduced motion, because it changes what a shift does (the
+         blocker rings come off the bench), not how fast it plays. */
+      supports: { explode: true, cutaway: true, mode: true },
       setExplode: function (v) { sc.explodeAmount = v; sc.invalidate(); },
       setCutaway: function (on) { sc.clip = on ? [0, 0, 1, 4] : null; sc.invalidate(); },
       setMode: function (m) {

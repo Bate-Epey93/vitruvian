@@ -2,8 +2,9 @@
    FIELD STUDY — page shell
    ───────────────────────────────────────────────────────────────
    Everything a field study needs that is not the machine: the layer
-   walkthrough (the app's timeline and four-step card), the demo transport, the three stage toggles, camera
-   handling, theme, and the accessibility plumbing.
+   walkthrough (the app's timeline and four-step card), the demo
+   transport, whichever stage toggles the scene says it supports,
+   camera handling, theme, and the accessibility plumbing.
 
    Knows nothing about any particular mechanism. A study supplies a
    copy object and a scene module; whatever readouts that mechanism
@@ -26,7 +27,9 @@ var LabPage = (function () {
   function $(id) { return document.getElementById(id); }
 
   /* opts.copy   — the study's prose (see the copy contract in the skill)
-     opts.scene  — module exposing create(canvas) and LAYERS
+     opts.scene  — module exposing create(canvas) and LAYERS; the
+                   controller create() returns says which stage toggles
+                   it can honour in supports: { explode, cutaway, mode }
      opts.instruments — optional { build(root, api), paint(api) } */
   function mount(opts) {
     var C = opts.copy, L = opts.scene.LAYERS;
@@ -35,6 +38,8 @@ var LabPage = (function () {
     var canvas = $("stage");
     var ctl = opts.scene.create(canvas);
     var RM = ctl.scene.reducedMotion;
+    /* A scene that predates `supports` is taken at its methods' word. */
+    var SUP = ctl.supports || { explode: !!ctl.setExplode, cutaway: !!ctl.setCutaway, mode: !!ctl.setMode };
     if (DEBUG) window.__lab = window.__tx = ctl;
     var layerIndex = 0;
     var live = $("live");
@@ -118,22 +123,48 @@ var LabPage = (function () {
         });
         return b;
       }
-      /* Exploded and Cutaway only where the scene can honour them, the same
-         test as the third toggle below: a button that lights over an
-         unchanged drawing reads as broken. */
-      if (ctl.setExplode) {
+      /* Only the toggles the scene says it supports: a button that lights
+         over an unchanged drawing reads as broken. */
+      var view = h("div", "st-view");
+      view.id = "stageView";
+      if (SUP.explode) {
         els.expBtn = toggle(C.controls.explode, function (on) { ctl.setExplode(on ? 1 : 0); });
-        bar.appendChild(els.expBtn);
+        view.appendChild(els.expBtn);
       }
-      if (ctl.setCutaway) {
+      if (SUP.cutaway) {
         els.cutBtn = toggle(C.controls.cutaway, function (on) { ctl.setCutaway(on); });
-        bar.appendChild(els.cutBtn);
+        view.appendChild(els.cutBtn);
       }
-      /* the optional third toggle: a study names it and names the two
+      /* the optional mode toggle: a study names it and names the two
          states it switches the scene between */
-      if (C.altMode && ctl.setMode) {
+      if (SUP.mode && C.altMode) {
         els.altBtn = toggle(C.altMode.label, function (on) { ctl.setMode(on ? C.altMode.on : C.altMode.off); });
-        bar.appendChild(els.altBtn);
+        view.appendChild(els.altBtn);
+      }
+      /* On a phone the view toggles fold behind one ⋯ button beside Reset,
+         so the stage keeps its corner. Above that width the menu box is
+         display:contents and the toggles sit in the row as before. The
+         button comes first so an open menu is next in the tab order. */
+      if (view.firstChild) {
+        var more = h("button", "st-btn st-more", "⋯");
+        more.setAttribute("aria-label", C.controls.view);
+        more.setAttribute("aria-expanded", "false");
+        more.setAttribute("aria-controls", view.id);
+        var setOpen = function (open) {
+          bar.classList.toggle("open", open);
+          more.setAttribute("aria-expanded", open ? "true" : "false");
+        };
+        more.addEventListener("click", function () { setOpen(!bar.classList.contains("open")); });
+        document.addEventListener("pointerdown", function (e) {
+          if (bar.classList.contains("open") && !bar.contains(e.target)) setOpen(false);
+        });
+        document.addEventListener("keydown", function (e) {
+          if (e.key !== "Escape" || !bar.classList.contains("open")) return;
+          setOpen(false);
+          more.focus();
+        });
+        bar.appendChild(more);
+        bar.appendChild(view);
       }
       var reset = h("button", "st-btn", C.controls.reset);
       /* through smoothCameraChange, like double-click: it stops a coasting
@@ -454,6 +485,10 @@ var LabPage = (function () {
 
     /* ═══ pointer: orbit on the canvas, page scroll everywhere else ═══ */
     var drag = null, pointers = {}, pinch = 0, orbitSamples = [];
+    /* The phone hint promises a double-tap. With touch-action off, a touch
+       browser does not reliably turn two taps into a dblclick, so taps are
+       counted here: two short, still touches close together reset. */
+    var tapDown = null, lastTap = null, tapResetAt = -Infinity;
     canvas.addEventListener("pointerdown", function (e) {
       stopCameraMotion();
       pointers[e.pointerId] = [e.clientX, e.clientY];
@@ -465,9 +500,20 @@ var LabPage = (function () {
       if (Object.keys(pointers).length === 1) {
         drag = [e.clientX, e.clientY];
         orbitSamples = [{ t: performance.now(), x: e.clientX, y: e.clientY }];
-      } else orbitSamples = [];
+        tapDown = e.pointerType === "touch" ? { t: performance.now(), x: e.clientX, y: e.clientY } : null;
+      } else { orbitSamples = []; tapDown = null; }
       $("hint").classList.add("gone");
     });
+    function countTap(e) {
+      var now = performance.now(), d = tapDown;
+      tapDown = null;
+      if (!d || now - d.t > 280 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) { lastTap = null; return; }
+      if (lastTap && now - lastTap.t < 360 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 32) {
+        lastTap = null;
+        tapResetAt = now;
+        smoothCameraChange(function () { ctl.resetCamera(); });
+      } else lastTap = { t: now, x: e.clientX, y: e.clientY };
+    }
     canvas.addEventListener("pointermove", function (e) {
       var ids = Object.keys(pointers);
       if (pointers[e.pointerId]) pointers[e.pointerId] = [e.clientX, e.clientY];
@@ -510,6 +556,7 @@ var LabPage = (function () {
         return;
       }
       if (!left.length) {
+        if (e.type === "pointerup") countTap(e); else tapDown = null;
         var hadDrag = !!drag;
         drag = null;
         if (hadDrag && !RM && orbitSamples.length >= 2) {
@@ -555,7 +602,11 @@ var LabPage = (function () {
       if (e.ctrlKey) dy *= 4;
       ctl.dolly(Math.exp(Math.max(-120, Math.min(120, dy)) * 0.0009));
     }, { passive: false });
-    canvas.addEventListener("dblclick", function () { smoothCameraChange(function () { ctl.resetCamera(); }); });
+    canvas.addEventListener("dblclick", function () {
+      /* a browser that does fire dblclick for the same two taps */
+      if (performance.now() - tapResetAt < 600) return;
+      smoothCameraChange(function () { ctl.resetCamera(); });
+    });
 
     /* ═══ layout ═══ */
     function fit() {
@@ -575,11 +626,29 @@ var LabPage = (function () {
         ctl.resetCamera();
       }
     }
-    if (window.ResizeObserver) new ResizeObserver(fit).observe($("stageWrap"));
+    /* The canvas, not the stage: on a phone the instruments are strips
+       above and below the drawing, and one coming or going with the
+       layer resizes the drawing while the stage stays the same size. */
+    if (window.ResizeObserver) new ResizeObserver(fit).observe(canvas);
     else window.addEventListener("resize", fit);
 
     /* ═══ boot ═══ */
-    if (C.hint) $("hint").textContent = C.hint;
+    /* The hint names the gestures this device has. A phone gets it once,
+       ever, and only for a few seconds: on a stage this small it sits on
+       the drawing itself. */
+    var hint = $("hint");
+    var coarse = !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+    if (coarse && C.hintTouch) hint.textContent = C.hintTouch;
+    else if (C.hint) hint.textContent = C.hint;
+    if (window.matchMedia && window.matchMedia("(max-width: 560px)").matches) {
+      var hintSeen = false;
+      try {
+        hintSeen = localStorage.getItem("vitruvian_lab_hint_seen") === "1";
+        localStorage.setItem("vitruvian_lab_hint_seen", "1");
+      } catch (e) {}
+      if (hintSeen) hint.hidden = true;
+      else setTimeout(function () { hint.classList.add("gone"); }, 7000);
+    }
     if (opts.instruments) opts.instruments.build($("stageWrap"), api);
     buildStageControls($("stageWrap"));
     buildDoc($("docInner"));

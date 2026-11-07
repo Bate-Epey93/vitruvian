@@ -84,12 +84,19 @@
     els.pedal.style.height = Math.round(S.clutch * 100) + "%";
   }
 
-  /* ═══ H-gate ═══ */
+  /* ═══ H-gate ═══
+     The knob is the lever, and it moves on every layer: through the
+     interlock and reverse layers it is the clearest picture of what the
+     demo is doing, so it stays as a read-only indicator. The slots are
+     buttons only on the free layer; before that they were seven
+     disabled targets sitting on the drawing.
+     [gear, column, row] in the gate, listed in gear order so the phone
+     strip (a plain row) and the tab order both read R, N, 1 to 5; the
+     wider layout places each one in the H by its column and row. */
   var GATE_X = [18, 48, 78];
   var SLOTS = [
-    [1, 0, 0], [3, 1, 0], [5, 2, 0],
-    [0, 1, 1],
-    [2, 0, 2], [4, 1, 2], [-1, 2, 2]
+    [-1, 2, 2], [0, 1, 1],
+    [1, 0, 0], [2, 0, 2], [3, 1, 0], [4, 1, 2], [5, 2, 0]
   ];
 
   function buildGate(root, api) {
@@ -109,6 +116,8 @@
     var grid = h("div", "gate-grid");
     grid.setAttribute("role", "group");
     grid.setAttribute("aria-label", C.a11y.gate);
+    grid.hidden = true;
+    els.gateGrid = grid;
     els.gateBtns = {};
     SLOTS.forEach(function (sl) {
       var b = h("button", "gate-btn", C.gearNames[sl[0]]);
@@ -120,7 +129,7 @@
       grid.appendChild(b);
     });
     wrap.appendChild(grid);
-    wrap.appendChild(h("div", "mono-label gate-cap", "Gate"));
+    wrap.appendChild(h("div", "mono-label gate-cap", C.hud.gate));
     root.appendChild(wrap);
   }
 
@@ -161,8 +170,7 @@
         });
       },
       layerChanged: function (api) {
-        var free = !!api.layer().free;
-        Object.keys(els.gateBtns).forEach(function (k) { els.gateBtns[k].disabled = !free; });
+        els.gateGrid.hidden = !api.layer().free;
       },
       paint: function (api) {
         paintHud(api.ctl);

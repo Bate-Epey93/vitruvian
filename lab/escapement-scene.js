@@ -674,11 +674,13 @@ var ESCScene = (function () {
         sc.camera.dist = Math.max(90, Math.min(4000, sc.camera.dist * f));
         sc.invalidate();
       },
-      /* No setExplode or setCutaway. Every part here is a profile in the
-         drawing plane, none carries an explode vector, and a section
-         through a flat part shows the face it already shows, so both
-         buttons lit over an unchanged drawing. Without the two methods
-         the shell leaves them off. */
+      /* The stage toggles the shell may offer. No explode or cutaway:
+         every part here is a profile in the drawing plane, none carries
+         an explode vector, and a section through a flat part shows the
+         face it already shows, so both buttons lit over an unchanged
+         drawing. Slow motion only changes how fast a beat plays, and
+         under reduced motion nothing plays, so it goes too. */
+      supports: { explode: false, cutaway: false, mode: !sc.reducedMotion },
       setMode: function (m) { S.mode = m; },
 
       hoverLabel: function (x, y) {

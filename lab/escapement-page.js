@@ -85,6 +85,16 @@
     meters.appendChild(r3);
 
     hud.appendChild(meters);
+
+    /* The two readouts are not the same claim (see hudNote in the copy),
+       so on the free layer, where the reader moves both, each says what
+       it is. */
+    els.note = h("p", "hud-note");
+    els.note.appendChild(h("span", null, C.hudNote.rate));
+    els.note.appendChild(h("span", null, C.hudNote.drift));
+    els.note.hidden = true;
+    hud.appendChild(els.note);
+
     root.appendChild(hud);
   }
 
@@ -100,7 +110,8 @@
     els.mech.textContent = C.mechNames[S.mech] || S.mech;
     els.rate.textContent = rateText(ctl.rate());
     els.rate.classList.toggle("matched", Math.abs(ctl.rate()) < 2);
-    els.drift.textContent = "±" + (d >= 100 ? Math.round(d / 60) + " min" : d >= 10 ? Math.round(d) + " s" : d.toFixed(1) + " s") + " / day";
+    /* written the way the rate is, so the pair fits a phone's one-line ticker */
+    els.drift.textContent = "±" + (d >= 100 ? Math.round(d / 60) + " min" : d >= 10 ? Math.round(d) + " s" : d.toFixed(1) + " s") + "/day";
     els.barFill.style.width = driftBar(d) + "%";
     els.barFill.classList.toggle("wide", d > 30);
     /* the real amplitude, and the drawn one beside it only where the
@@ -134,9 +145,11 @@
   }
 
   /* ═══ the bench ═══
-     Five buttons, one per escapement. Live only where the layer says
-     so — before the synthesis each layer is making one argument, and
-     letting the reader swap mechanisms mid-argument loses it. */
+     Five buttons, one per escapement, shown only where the layer says
+     the reader is free. Before the synthesis each layer is making one
+     argument, and letting the reader swap mechanisms mid-argument loses
+     it; a greyed row of five they cannot press was only clutter on the
+     drawing. The HUD already names what is on the bench. */
   function buildBench(root) {
     var wrap = h("div", "bench-wrap");
     wrap.setAttribute("role", "group");
@@ -190,8 +203,8 @@
       },
       layerChanged: function (a) {
         var free = !!a.layer().free;
-        els.bench.classList.toggle("live", free);
-        Object.keys(els.benchBtns).forEach(function (k) { els.benchBtns[k].disabled = !free; });
+        els.bench.hidden = !free;
+        els.note.hidden = !free;
         els.drive.value = String(a.ctl.state.drive);
         els.era.textContent = (C.layers[a.layerIndex()] || {}).era || "";
       },

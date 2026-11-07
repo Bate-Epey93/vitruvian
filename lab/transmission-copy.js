@@ -14,6 +14,8 @@ var TX_COPY = {
   intro: "A manual gearbox has one job the driver can feel: connect the engine to the road through one of six ratios, on demand, without destroying anything. Everything below is the safety machinery that grew around that one demand.",
 
   hint: "Drag to orbit · scroll to zoom · double-click to reset",
+  /* the same hint on a touch screen, which has no wheel and no mouse */
+  hintTouch: "Drag to turn · pinch to zoom · double-tap to reset",
   cutawayNote: "Dog teeth and cones are drawn coarse and oversized. A real synchro hides all of this in a few millimetres.",
 
   /* the four headings every layer card carries, in order */
@@ -30,7 +32,7 @@ var TX_COPY = {
     label: "Free shift",
     text: "The gate is live. Click a slot, or press 1-5, R, N."
   },
-  /* the optional third stage toggle, and the two scene modes it flips */
+  /* the optional mode toggle, and the two scene modes it flips */
   altMode: { label: "1930 mode", on: "1930", off: "modern" },
 
   layers: [
@@ -120,7 +122,7 @@ var TX_COPY = {
 
   gearNames: { "-1": "R", 0: "N", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5" },
 
-  hud: { engine: "Engine", road: "Mainshaft", delta: "Difference", gear: "Gear", clutch: "Clutch" },
+  hud: { engine: "Engine", delta: "Difference", gear: "Gear", clutch: "Clutch", gate: "Gate" },
   /* what a part says when the pointer rests on it, keyed by the scene's
      part ids. Name first, then the one thing worth knowing about it. */
   parts: {
@@ -159,7 +161,7 @@ var TX_COPY = {
 
   controls: {
     play: "Play", replay: "Replay", pause: "Pause", restart: "Back to start",
-    explode: "Exploded", cutaway: "Cutaway",
+    explode: "Exploded", cutaway: "Cutaway", view: "View options",
     reset: "Reset view", scrubLabel: "Scrub the shift"
   },
   a11y: {

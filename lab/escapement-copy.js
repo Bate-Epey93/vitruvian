@@ -19,6 +19,8 @@ var ESC_COPY = {
   intro: "A clock is two machines married badly. One stores energy and wants to release all of it at once. The other counts. The escapement is the joint between them, and almost every advance in timekeeping for six hundred years was a change to that joint.",
 
   hint: "Drag to orbit · scroll to zoom · double-click to reset",
+  /* the same hint on a touch screen, which has no wheel and no mouse */
+  hintTouch: "Drag to turn · pinch to zoom · double-tap to reset",
   cutawayNote: "Three things here are drawn larger than life. Pallets and teeth, because a wristwatch escapement is the width of a fingernail. The swing, because an anchor pendulum really moves two or three degrees each side of centre, which is nothing to look at. The readout shows the real figure beside the drawn one. And the recoil, because an escapement that does not visibly recoil is a drawing of nothing. Which escapements recoil at all is not exaggerated: two of these five do it exactly zero times.",
 
   /* the four headings every layer card carries, in order */
@@ -35,7 +37,7 @@ var ESC_COPY = {
     label: "Free bench",
     text: "Every escapement is on the bench. Pick one, then drag the mainspring."
   },
-  /* the optional third stage toggle, and the two scene modes it flips */
+  /* the optional mode toggle, and the two scene modes it flips */
   altMode: { label: "Slow motion", on: "slow", off: "real" },
 
   layers: [
@@ -134,19 +136,20 @@ var ESC_COPY = {
   hud: {
     rate: "Rate",
     drift: "Drive sensitivity",
-    beat: "Beat",
     amp: "Amplitude",
     drive: "Mainspring"
   },
   /* The two readouts are not the same claim, and the study falls apart if
      they are read as one. Rate is how wrong the clock is. Sensitivity is
      how much of that wrongness the drive force is responsible for, which
-     is the only number that improves all the way down the ladder. */
+     is the only number that improves all the way down the ladder.
+     Shown under the meters on the free layer, one line each, so each
+     starts with the label it explains. */
   hudNote: {
-    rate: "Seconds gained or lost per day, for a good example of this escapement.",
-    drift: "How much of that rate moves when the mainspring does. This is the number the ladder is about."
+    rate: "Rate: time gained or lost in a day.",
+    drift: "Drive sensitivity: how much winding changes the rate."
   },
-  driveLabels: { low: "Nearly run down", mid: "Half wound", high: "Fully wound" },
+  driveLabels: { low: "Nearly run down", high: "Fully wound" },
 
   /* what a part says when the pointer rests on it, keyed by the scene's
      part ids. Name first, then the one thing worth knowing about it. */
@@ -174,8 +177,7 @@ var ESC_COPY = {
 
   controls: {
     play: "Play", replay: "Replay", pause: "Pause", restart: "Back to start",
-    explode: "Exploded", cutaway: "Cutaway",
-    reset: "Reset view", scrubLabel: "Scrub the beat"
+    view: "View options", reset: "Reset view", scrubLabel: "Scrub the beat"
   },
   a11y: {
     canvas: "Three-dimensional drawing of a clock escapement",
