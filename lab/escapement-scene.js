@@ -288,6 +288,9 @@ var ESCScene = (function () {
   function create(canvas) {
     var sc = Ink3D.scene(canvas);
     var P = {};
+    /* hover labels are reader-facing words, so they live in the copy file
+       with the rest; the scene only says which part gets which */
+    var NAME = ESC_COPY.parts;
 
     function add(spec) { P[spec.id] = sc.add(spec); return P[spec.id]; }
 
@@ -315,20 +318,20 @@ var ESCScene = (function () {
     }
 
     add({ id: "escRatchet", mesh: wheelMesh(ratchetTooth), group: "wheelR",
-          pos: [0, 0, 0], label: "Escape wheel — pointed teeth", pickable: true, clippable: true });
+          pos: [0, 0, 0], label: NAME.escRatchet, pickable: true, clippable: true });
     add({ id: "escClub", mesh: wheelMesh(clubTooth), group: "wheelC",
-          pos: [0, 0, 0], label: "Escape wheel — club teeth", pickable: true, clippable: true });
+          pos: [0, 0, 0], label: NAME.escClub, pickable: true, clippable: true });
 
     /* ── the train behind it ──
        A great wheel and a pinion, so the mainspring has somewhere to
        be. Shown dim on most layers: it is the thing the escapement is
        arguing with, not the argument. */
     add({ id: "pinion", mesh: Ink3D.gearMesh(Z_PIN, M_TRAIN, 9, 5),
-          group: "train", pos: [0, 0, -W_ESC - 6], label: "Escape pinion", pickable: true });
+          group: "train", pos: [0, 0, -W_ESC - 6], label: NAME.pinion, pickable: true });
     add({ id: "greatWheel", mesh: Ink3D.gearMesh(Z_GW, M_TRAIN, 7, 10),
-          group: "train", pos: [GW_X, 0, -W_ESC - 7], label: "Great wheel — the mainspring's", pickable: true });
+          group: "train", pos: [GW_X, 0, -W_ESC - 7], label: NAME.greatWheel, pickable: true });
     add({ id: "barrel", mesh: Ink3D.revolve(ringSection(0, 30, 22), 30, { tier: 1 }),
-          group: "train", pos: [GW_X, 0, -W_ESC - 24], label: "Mainspring barrel", pickable: true });
+          group: "train", pos: [GW_X, 0, -W_ESC - 24], label: NAME.barrel, pickable: true });
 
     /* ── crown wheel and verge (layers 1 and 2) ──
        The one part of this bench that is not flat. A crown wheel's
@@ -348,7 +351,7 @@ var ESCScene = (function () {
       }
       m = Ink3D.merge(m, Ink3D.revolve(ringSection(0, 11, 8), 18));
       add({ id: "crown", mesh: m, group: "crown", pos: [0, 0, 0],
-            label: "Crown wheel", pickable: true });
+            label: NAME.crown, pickable: true });
     })();
 
     (function () {
@@ -368,10 +371,10 @@ var ESCScene = (function () {
       m = Ink3D.merge(m, flag(-FLAG_Z, Math.PI * 0.53));
       add({ id: "vergeF", mesh: m, group: "verge",
             pos: [0, 0, STAFF_OFF], rot: [-HALF_PI, 0, 0],
-            label: "Verge staff and pallet flags", pickable: true });
+            label: NAME.verge, pickable: true });
       add({ id: "vergeP", mesh: m, group: "vergeP",
             pos: [STAFF_OFF, 0, 0], rot: [0, 0, HALF_PI],
-            label: "Verge staff and pallet flags", pickable: true });
+            label: NAME.verge, pickable: true });
     })();
 
     /* the foliot: a bar with two weights, and no period of its own */
@@ -386,7 +389,7 @@ var ESCScene = (function () {
          horizontally, which is why it works and why it is useless */
       add({ id: "foliot", mesh: m, group: "foliot",
             pos: [0, 96, STAFF_OFF], rot: [-HALF_PI, 0, 0],
-            label: "Foliot — a flywheel, not a timekeeper", pickable: true });
+            label: NAME.foliot, pickable: true });
     })();
 
     /* the pendulum, hung on the same axis as the verge. A real clock
@@ -399,34 +402,34 @@ var ESCScene = (function () {
       m = Ink3D.merge(m, Ink3D.xform(Ink3D.revolve(ringSection(0, 30, 9), 28, { tier: 1 }),
                                      Ink3D.mT(0, -196, 0)));
       add({ id: "pendVerge", mesh: m, group: "pendV", pos: [STAFF_OFF, 0, 0],
-            label: "Pendulum — period from length, not from push", pickable: true });
+            label: NAME.pendulum, pickable: true });
       /* behind the wheel, not through it. A real clock hangs the
          pendulum off the back plate and drives it through a crutch;
          putting it a plate's depth back is the cheapest way to say so
          without drawing the crutch. */
       add({ id: "pendAnchor", mesh: m, group: "pendA", pos: [0, ARBOR_Y, -26],
-            label: "Pendulum — period from length, not from push", pickable: true });
+            label: NAME.pendulum, pickable: true });
     })();
 
     /* ── anchor and deadbeat ── */
     add({ id: "anchor", mesh: Ink3D.prism(anchorProfile(false), 8), group: "anchor",
-          pos: [0, ARBOR_Y, 0], label: "Anchor — flat pallets, so it recoils",
+          pos: [0, ARBOR_Y, 0], label: NAME.anchor,
           pickable: true, clippable: true });
     add({ id: "deadbeat", mesh: Ink3D.prism(anchorProfile(true), 8), group: "deadbeat",
-          pos: [0, ARBOR_Y, 0], label: "Deadbeat pallets — locking faces struck from the arbor",
+          pos: [0, ARBOR_Y, 0], label: NAME.deadbeat,
           pickable: true, clippable: true });
     add({ id: "arbor", mesh: Ink3D.revolve(ringSection(0, 7, 26), 16), group: "pivot",
-          pos: [0, ARBOR_Y, 0], label: "Pallet arbor", pickable: true });
+          pos: [0, ARBOR_Y, 0], label: NAME.arbor, pickable: true });
 
     /* ── the lever escapement ── */
     add({ id: "lever", mesh: Ink3D.prism(leverProfile(), 6), group: "lever",
-          pos: [0, ARBOR_Y, 0], label: "Lever — locked except for one moment a beat",
+          pos: [0, ARBOR_Y, 0], label: NAME.lever,
           pickable: true, clippable: true });
     /* banking pins: the lever rests on one or the other, and draw holds
        it there against anything short of a dropped watch */
     [-1, 1].forEach(function (s, i) {
       add({ id: "bank" + i, mesh: Ink3D.revolve(ringSection(0, 3.2, 14), 12), group: "lever",
-            pos: [s * 16, ARBOR_Y + 48, 0], label: "Banking pin", pickable: true });
+            pos: [s * 16, ARBOR_Y + 48, 0], label: NAME.bank, pickable: true });
     });
 
     (function () {
@@ -440,26 +443,26 @@ var ESCScene = (function () {
       }
       m = Ink3D.merge(m, Ink3D.revolve(ringSection(0, 8, 12), 16));
       add({ id: "balance", mesh: m, group: "balance", pos: [0, BAL_Y, 10],
-            label: "Balance wheel", pickable: true });
+            label: NAME.balance, pickable: true });
 
       var hair = Ink3D.sweep([0, -0.9, 1.6, -0.9, 1.6, 0.9, 0, 0.9],
                              spiralPath(10, 34, 4.25, 54), { sideTier: 0 });
       add({ id: "hairspring", mesh: hair, group: "balance", pos: [0, BAL_Y, 22],
-            label: "Hairspring — the balance's period lives here", pickable: true });
+            label: NAME.hairspring, pickable: true });
 
       /* the roller table under the balance, and the one jewel that
          touches the lever */
       var roll = Ink3D.revolve(ringSection(0, 19, 6), 24);
       add({ id: "roller", mesh: roll, group: "balance", pos: [0, BAL_Y, 0],
-            label: "Roller table", pickable: true });
+            label: NAME.roller, pickable: true });
       add({ id: "rollerJewel", mesh: Ink3D.prism([-2.6, -2.6, 2.6, -2.6, 2.6, 2.6, -2.6, 2.6], 9),
-            group: "balance", pos: [0, BAL_Y, 0], label: "Roller jewel — the only contact", pickable: true });
+            group: "balance", pos: [0, BAL_Y, 0], label: NAME.rollerJewel, pickable: true });
     })();
 
     /* the plate, for depth. Ghosted on every layer: it is the bench,
        not the machine. */
     add({ id: "plate", mesh: Ink3D.revolve(ringSection(0, 132, 5), 44, { tier: 2 }),
-          group: "plate", pos: [0, 30, -46], label: "Back plate" });
+          group: "plate", pos: [0, 30, -46], label: NAME.plate });
 
     /* ═══ state ══════════════════════════════════════════════ */
     var S = {

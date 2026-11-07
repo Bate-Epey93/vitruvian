@@ -19,7 +19,7 @@ var ESC_COPY = {
   intro: "A clock is two machines married badly. One stores energy and wants to release all of it at once. The other counts. The escapement is the joint between them, and almost every advance in timekeeping for six hundred years was a change to that joint.",
 
   hint: "Drag to orbit · scroll to zoom · double-click to reset",
-  cutawayNote: "Three things here are drawn larger than life. Pallets and teeth, because a wristwatch escapement is the width of a fingernail. The swing, because an anchor pendulum really moves two or three degrees each side of centre, which is nothing to look at — the readout shows the real figure beside the drawn one. And the recoil, because an escapement that does not visibly recoil is a drawing of nothing. Which escapements recoil at all is not exaggerated: two of these five do it exactly zero times.",
+  cutawayNote: "Three things here are drawn larger than life. Pallets and teeth, because a wristwatch escapement is the width of a fingernail. The swing, because an anchor pendulum really moves two or three degrees each side of centre, which is nothing to look at. The readout shows the real figure beside the drawn one. And the recoil, because an escapement that does not visibly recoil is a drawing of nothing. Which escapements recoil at all is not exaggerated: two of these five do it exactly zero times.",
 
   /* the four headings every layer card carries, in order */
   bands: {
@@ -43,10 +43,10 @@ var ESC_COPY = {
       name: "The foliot",
       era: "c.1300 · the first escapement",
       problem: "A weight on a rope turns a wheel train. Nothing in that sentence mentions time. Left alone the weight falls, the train screams up to speed, and a day of stored energy is gone in about four seconds.",
-      beginner: "Winding a clock stores a fall. Without something to let that fall out in small pieces, it is not a clock, it is a dropped stone with gears attached.",
+      beginner: "Winding a clock stores a fall. Without something to let that fall out in small pieces, what you have is a dropped stone with gears attached.",
       analogy: "pouring a jug out through a tap instead of over the lip.",
       solution: "A crown wheel with saw teeth, and a vertical staff across its face carrying two flags set about ninety degrees apart. A tooth pushes one flag, the staff turns, the other flag swings into the path of a tooth on the far side and stops the wheel. The wheel is let down one tooth per swing. At the top of the staff a weighted bar, the foliot, carries the momentum across.",
-      tradeoff: "The foliot is a flywheel, not a timekeeper. It has no period of its own — it swings as fast as it is pushed. Push harder and the clock runs faster, which is exactly what a heavy weight does, and what a nearly-unwound weight stops doing.",
+      tradeoff: "The foliot is a flywheel with no period of its own: it swings as fast as it is pushed. Push harder and the clock runs faster, which is exactly what a heavy weight does, and what a nearly-unwound weight stops doing.",
       atScale: "Fifteen minutes a day was a good one. Monastery clocks were reset against a sundial whenever the sun was out, and the hour hand was the only hand worth fitting.",
       demoLabel: "Let it down, one tooth per swing"
     },
@@ -57,16 +57,16 @@ var ESC_COPY = {
       beginner: "Replace the thing that swings as hard as you push it with a thing that swings at its own speed no matter how you push it.",
       analogy: "a child on a swing, who takes the same time per swing whether you push gently or hard. Only the height changes.",
       solution: "Hang the oscillator instead of balancing it. A pendulum's period comes from its length and from gravity, and almost not at all from how hard it is pushed. The same verge and crown wheel, now with a pendulum where the foliot was.",
-      tradeoff: "The verge needs a wide swing to work — eighty degrees or more end to end, forty each side of centre. A pendulum is only truly isochronous at small arcs: over about five degrees the period grows with the swing, so the drive force leaks back into the rate through the width of the arc instead of through the speed of the bar.",
+      tradeoff: "The verge needs a wide swing to work: eighty degrees or more end to end, forty each side of centre. A pendulum is only truly isochronous at small arcs: over about five degrees the period grows with the swing, so the drive force leaks back into the rate through the width of the arc instead of through the speed of the bar.",
       atScale: "From fifteen minutes a day to about fifteen seconds. One change, a sixty-fold improvement, and the minute hand becomes worth fitting.",
       demoLabel: "Swing wide, as the verge demands"
     },
     {
       name: "The anchor",
       era: "c.1670 · Clement",
-      problem: "The wide arc is the verge's fault, not the pendulum's. The geometry puts the pallets across the face of the wheel, and that forces the staff through a large angle for every tooth.",
+      problem: "The wide arc is the verge's fault, and the pendulum only inherits it. The geometry puts the pallets across the face of the wheel, and that forces the staff through a large angle for every tooth.",
       beginner: "Move the pallets to the rim of the wheel instead of across its face, and the same tooth can be caught with a much smaller movement.",
-      analogy: "catching a door by its handle rather than by its hinge — far less movement at your end for the same movement at the door.",
+      analogy: "catching a door by its handle rather than by its hinge: far less movement at your end for the same movement at the door.",
       solution: "An anchor straddling the rim of the escape wheel, pivoted above it, with a pallet reaching down on each side. The pendulum now works through four to six degrees (two or three each side of centre), deep in the region where its period does not care about its amplitude. It also makes the long seconds pendulum practical, and with it the longcase clock.",
       tradeoff: "The pallet faces are flat, so after a tooth drops, the pendulum's remaining swing drives the wheel backwards. That is recoil: the whole train, and the weight behind it, are pushed back against the pendulum every beat. The drive force is coupled to the pendulum again, through a different door.",
       atScale: "Ten seconds a day in a good longcase, and visible on the dial: watch the second hand of a recoil clock and it steps forward, then twitches back, every beat.",
@@ -86,12 +86,12 @@ var ESC_COPY = {
     {
       name: "The detached lever",
       era: "1754 · Mudge",
-      problem: "Every escapement so far keeps a hand on the oscillator for the whole of its swing. A pendulum in a cellar can live with that. A balance wheel in a pocket, being carried, turned over and knocked, cannot — and none of this works lying on its side anyway, because the pendulum's restoring force is gravity.",
+      problem: "Every escapement so far keeps a hand on the oscillator for the whole of its swing. A pendulum in a cellar can live with that. A balance wheel in a pocket, being carried, turned over and knocked, cannot. And none of this works lying on its side anyway, because the pendulum's restoring force is gravity.",
       beginner: "Let go of the oscillator. Touch it once per swing, for as little time as possible, and leave it alone the rest of the time.",
       analogy: "keeping a swing going with one push per pass, your hand off the chains in between, rather than walking alongside holding on.",
-      solution: "A balance wheel with a hairspring, which gives a period from spring and inertia and does not care which way up it is. Between it and the escape wheel sits a lever. For most of the vibration the lever is locked against a banking pin and the balance is free. Once per swing a jewel on the balance's roller enters the lever's notch, unlocks it, receives one impulse, and leaves. Draw — a few degrees of angle cut into the locking faces — makes train pressure pull the lever back into lock instead of out of it, and a guard pin riding a safety roller stops the lever unlocking out of turn when the watch is knocked.",
+      solution: "A balance wheel with a hairspring, which gives a period from spring and inertia and does not care which way up it is. Between it and the escape wheel sits a lever. For most of the vibration the lever is locked against a banking pin and the balance is free. Once per swing a jewel on the balance's roller enters the lever's notch, unlocks it, receives one impulse, and leaves. Draw (a few degrees of angle cut into the locking faces) makes train pressure pull the lever back into lock instead of out of it, and a guard pin riding a safety roller stops the lever unlocking out of turn when the watch is knocked.",
       tradeoff: "More parts, smaller parts, and every one of them critical. The lever escapement has about a dozen adjustments that must all be right at once, which is why watchmaking became a trade of its own rather than a branch of blacksmithing.",
-      atScale: "Not more accurate than a Graham regulator — a good wristwatch keeps a few seconds a day where the regulator keeps a fraction of one. It is accurate while being carried, which the regulator is not at any price. Essentially every mechanical watch made since 1900 uses this escapement.",
+      atScale: "It is no more accurate than a Graham regulator: a good wristwatch keeps a few seconds a day where the regulator keeps a fraction of one. It is accurate while being carried, which the regulator is not at any price. Almost every mechanical watch made since 1900 uses this escapement.",
       demoLabel: "Unlock, impulse, and let go"
     },
     {
@@ -109,17 +109,17 @@ var ESC_COPY = {
 
   phases: {
     idle: "Beating",
-    lock: "Locked — the tooth resting on a pallet",
-    release: "Unlocking — the pallet clearing the tooth",
-    impulse: "Impulse — the one push this swing gets",
-    drop: "Drop — the next tooth falling onto the other pallet",
-    dead: "Dead — the tooth sliding on the locking arc, wheel still",
-    recoil: "Recoil — the pendulum driving the wheel backwards",
-    runaway: "Runaway — nothing is metering the train",
-    supplementary: "Free — the balance swinging with nothing touching it",
+    lock: "Locked: the tooth resting on a pallet",
+    release: "Unlocking: the pallet clearing the tooth",
+    impulse: "Impulse: the one push this swing gets",
+    drop: "Drop: the next tooth falling onto the other pallet",
+    dead: "Dead: the tooth sliding on the locking arc, wheel still",
+    recoil: "Recoil: the pendulum driving the wheel backwards",
+    runaway: "Runaway: nothing is metering the train",
+    supplementary: "Free: the balance swinging with nothing touching it",
     unlock: "The roller jewel entering the notch",
-    trip: "Tripped — the lever unlocked out of turn",
-    stall: "Stalled — not enough drive to clear the lock",
+    trip: "Tripped: the lever unlocked out of turn",
+    stall: "Stalled: not enough drive to clear the lock",
     recover: "Back to where it started"
   },
 
@@ -148,6 +148,30 @@ var ESC_COPY = {
   },
   driveLabels: { low: "Nearly run down", mid: "Half wound", high: "Fully wound" },
 
+  /* what a part says when the pointer rests on it, keyed by the scene's
+     part ids. Name first, then the one thing worth knowing about it. */
+  parts: {
+    escRatchet: "Escape wheel · pointed teeth",
+    escClub: "Escape wheel · club teeth",
+    pinion: "Escape pinion",
+    greatWheel: "Great wheel · the mainspring's",
+    barrel: "Mainspring barrel",
+    crown: "Crown wheel",
+    verge: "Verge staff and pallet flags",
+    foliot: "Foliot · a flywheel with no period of its own",
+    pendulum: "Pendulum · its period comes from its length",
+    anchor: "Anchor · flat pallets, so it recoils",
+    deadbeat: "Deadbeat pallets · locking faces struck from the arbor",
+    arbor: "Pallet arbor",
+    lever: "Lever · locked except for one moment a beat",
+    bank: "Banking pin",
+    balance: "Balance wheel",
+    hairspring: "Hairspring · the balance's period lives here",
+    roller: "Roller table",
+    rollerJewel: "Roller jewel · the only contact",
+    plate: "Back plate"
+  },
+
   controls: {
     play: "Play", replay: "Replay", pause: "Pause", restart: "Back to start",
     explode: "Exploded", cutaway: "Cutaway",
@@ -161,9 +185,9 @@ var ESC_COPY = {
   },
   companion: {
     kicker: "2D Deconstruct",
-    text: "Read the companion architecture Deconstruct of the mechanical clock escapement, with software mappings, invariants, and stress tests.",
+    text: "Read the companion Deconstruct of the mechanical clock escapement: the rules it must never break, its trials, and what each part maps to in software.",
     cta: "Open the Deconstruct \u2192",
     href: "../#/study/clock-escapement"
   },
-  footer: "Drawn from primitives, not from a model file. No library, no build step — the same discipline as the rest of Vitruvian."
+  footer: "Drawn in code from primitives, with no model file, no library and no build step: the same discipline as the rest of Vitruvian."
 };

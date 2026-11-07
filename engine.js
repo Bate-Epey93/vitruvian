@@ -44,6 +44,7 @@ const ICONS = {
   chevronUp: ["M5 12.5l5-5 5 5"],
   play: ["M7 5.2v9.6l7.6-4.8z"],
   pause: ["M7.5 5v10", "M12.5 5v10"],
+  stop: ["M6.2 6.2h7.6v7.6H6.2z"],
   gauge: ["M3.8 14a6.2 6.2 0 1 1 12.4 0", "M10 14l3.2-4"],
   replay: ["M4 10a6 6 0 1 0 1.8-4.3", "M4 3.6v3.2h3.2"],
   races: ["M3 7h11.5", "M12 4.5L14.5 7 12 9.5", "M3 13h11.5", "M12 10.5l2.5 2.5-2.5 2.5"],
@@ -216,23 +217,20 @@ async function importBreakdownJsonText(rawText) {
        that silently. It now asks exactly as Settings does, and says how much
        is about to go. */
     const mine = (await Store.getBreakdowns()).filter(b => b.source !== "flagship").length;
-    const ask = `This is a full backup with ${parsed.breakdowns.length} Deconstruct${parsed.breakdowns.length === 1 ? "" : "s"}.\n\n` +
-      `Restoring it REPLACES your current library` + (mine ? ` (${mine} of your own studies)` : "") +
-      `, your progress and your settings. Your API key stays.\n\nRestore it?`;
-    if (!confirm(ask)) return null;
+    if (!confirm(COPY.restoreAsk(parsed.breakdowns.length, mine))) return null;
     const results = await Store.importAll(parsed);
     const okCount = results.filter(r => r.ok).length;
     meta = await Store.getMeta();
     applyTheme(meta.theme || document.documentElement.dataset.theme);
     renderAudSwitch();
     await renderLibrary();
-    toast(`Restored ${okCount}/${results.length} Deconstructs (library replaced)`);
+    toast(COPY.restoreDone(okCount, results.length));
     return null;
   }
   const doc = (parsed && parsed.doc && parsed.doc.meta) ? parsed.doc : parsed;
   const { rec, existed } = await saveOrReuseImportedDoc(doc);
   await renderLibrary();
-  toast(existed ? `Opened "${rec.system}" (already in your library)` : `Imported: ${rec.system}`);
+  toast(existed ? COPY.importAgain(rec.system) : `Imported: ${rec.system}`);
   return rec;
 }
 
@@ -424,7 +422,7 @@ async function applyUrlRoute(hashStr, histState) {
          or a mangled escape — used to return false, which the back button
          ignores: the old screen stayed up under a URL that no longer matched
          it. Land on the library and say so, as the catch below does. */
-      return await linkMissed("That study is not in your library");
+      return await linkMissed(COPY.linkMissing);
     }
     const modelsMatch = hStr.match(/^\/models(?:\/([^/]+))?/);
     if (modelsMatch) {
@@ -489,7 +487,7 @@ async function applyUrlRoute(hashStr, histState) {
         show("whatif", { noRoute: true, keepRec: true });
         return true;
       }
-      return await linkMissed("That study is not in your library");
+      return await linkMissed(COPY.linkMissing);
     }
     if (hStr === "/" || hStr === "") {
       await renderLibrary();
@@ -990,7 +988,7 @@ function renderLanding() {
   const copy = h("div", "hero-copy reveal");
   const eyebrow = h("div", "eyebrow");
   eyebrow.appendChild(h("span", "eyebrow-dot"));
-  eyebrow.appendChild(document.createTextNode(L.kicker));
+  eyebrow.appendChild(document.createTextNode(L.kicker(CONFIG.flagshipNames.length)));
   copy.appendChild(eyebrow);
   const head = h("h1", "landing-head");
   const lines = L.headline.split("\n");
@@ -1341,6 +1339,13 @@ function buildCardTopo(doc, doneLayers, dom) {
   return header;
 }
 
+/* One badge per kind of Deconstruct, shared by the cards and the search
+   match, so the same record is never "Sample" in one place and something
+   else an inch above it. */
+function sourceChipLabel(rec) {
+  return COPY.sourceChip[rec.source] || COPY.sourceChip.own;
+}
+
 function cardGrid(recs) {
   const grid = h("div", "card-grid");
   recs.forEach(rec => {
@@ -1357,9 +1362,7 @@ function cardGrid(recs) {
 
     const top = h("div", "bd-top");
     const chipCls = rec.source === "flagship" ? " flagship" : (rec.source === "design" ? " design" : "");
-    const chipLabel = rec.source === "flagship" ? "Sample" : rec.source === "design" ? "Your design"
-                    : rec.source === "shared" ? "Shared with you" : "Your Deconstruct";
-    top.appendChild(h("span", "chip" + chipCls, chipLabel));
+    top.appendChild(h("span", "chip" + chipCls, sourceChipLabel(rec)));
     if (dom && dom !== "software" && typeof domainLabel === "function") {
       const dl = domainLabel(dom);
       if (dl) top.appendChild(h("span", "chip dom-chip", dl));
@@ -1502,7 +1505,7 @@ async function renderLibrary() {
   input.placeholder = COPY.deconstructPlaceholder;
   input.maxLength = 120;
   input.value = libQuery;
-  input.setAttribute("aria-label", "Search library or enter a system to deconstruct");
+  input.setAttribute("aria-label", COPY.homeSearchAria);
   input.autocomplete = "off";
   field.appendChild(input);
   const go = ctaButton(COPY.deconstructBtn);
@@ -1557,7 +1560,7 @@ async function renderLibrary() {
 
   const filterBar = h("div", "lib-filters");
   filterBar.setAttribute("role", "group");
-  filterBar.setAttribute("aria-label", "Filter library");
+  filterBar.setAttribute("aria-label", COPY.homeFilterAria);
   const filters = [
     ["all", "All"],
     ...(yours.length ? [["yours", "Yours"]] : []),
@@ -1608,16 +1611,16 @@ async function renderLibrary() {
     const info = h("div", "omni-match-info");
     if (hit.kind === "rec") {
       const rec = hit.rec;
-      info.appendChild(h("span", "chip flagship", rec.source === "flagship" ? "Ready in library" : "Your study"));
+      info.appendChild(h("span", "chip flagship", sourceChipLabel(rec)));
       info.appendChild(h("span", "omni-match-title", rec.system));
       info.appendChild(h("span", "omni-match-sub", `${rec.doc.layers.length} layers · works offline`));
       const acts = h("div", "omni-match-actions");
-      const openBtn = h("button", "gbtn primary", "Open study →");
+      const openBtn = h("button", "gbtn primary", COPY.matchOpen);
       openBtn.type = "button";
       openBtn.onclick = () => openReader(rec.id);
       acts.appendChild(openBtn);
       if (hit.fs) {
-        const labLink = guardLabLink(h("a", "gbtn", "Open 3D study ↗"));
+        const labLink = guardLabLink(h("a", "gbtn", COPY.labOpenAlso));
         labLink.href = hit.fs.href;
         acts.appendChild(labLink);
       }
@@ -1628,11 +1631,11 @@ async function renderLibrary() {
       banner.append(info, acts);
     } else if (hit.kind === "lab") {
       const st = hit.st;
-      info.appendChild(h("span", "chip lab-chip", "3D Field Study"));
+      info.appendChild(h("span", "chip lab-chip", COPY.labCardChip));
       info.appendChild(h("span", "omni-match-title", st.name));
       info.appendChild(h("span", "omni-match-sub", st.sub));
       const acts = h("div", "omni-match-actions");
-      const openLink = guardLabLink(h("a", "gbtn primary", "Open 3D study →"));
+      const openLink = guardLabLink(h("a", "gbtn primary", COPY.labOpen));
       openLink.href = st.href;
       acts.appendChild(openLink);
       const genBtn = h("button", "gbtn ghost", "Deconstruct in 2D");
@@ -1687,8 +1690,8 @@ async function renderLibrary() {
         const lab = guardLabLink(h("a", "bd-card lab-card"));
         lab.href = st.href;
         const top = h("div", "bd-top");
-        top.appendChild(h("span", "chip lab-chip", "Field study"));
-        top.appendChild(h("span", "chip", COPY.labChip));
+        top.appendChild(h("span", "chip lab-chip", COPY.labCardChip));
+        top.appendChild(h("span", "chip", COPY.labCardChip3d));
         const go = h("span", "bd-go");
         go.appendChild(icon("arrowUpRight"));
         top.appendChild(go);
@@ -1705,11 +1708,9 @@ async function renderLibrary() {
 
     if (isFiltered && !fYours.length && !fFlags.length && !fLabs.length) {
       const none = h("div", "empty-panel");
-      none.appendChild(h("p", null, q
-        ? `No offline studies match "${q}". Press Deconstruct above to generate a fresh breakdown.`
-        : "No studies match this filter yet."));
+      none.appendChild(h("p", null, q ? COPY.noMatchQuery(q) : COPY.noMatchFilter));
       if (libFilter !== "all" || q) {
-        const rst = h("button", "gbtn", "Show all studies");
+        const rst = h("button", "gbtn", COPY.showAll);
         rst.type = "button";
         rst.style.marginTop = "10px";
         rst.onclick = () => {
@@ -2247,7 +2248,7 @@ async function openReader(id, layerIndex, opts = {}) {
     capToggle.setAttribute("aria-label", collapsed ? "Show key" : "Hide key");
     capToggle.title = collapsed ? "Show key" : "Hide key";
   };
-  const playBtn = setFace(h("button", "gbtn sim-btn sim-primary"), "play", "Pulse");
+  const playBtn = setFace(h("button", "gbtn sim-btn sim-primary"), "play", COPY.pulse);
   playBtn.title = "Send live traffic through this state";
   const loadBtn = setFace(h("button", "gbtn sim-btn"), "gauge", "Load");
   loadBtn.title = "Turn up the traffic until something saturates";
@@ -2276,15 +2277,17 @@ async function openReader(id, layerIndex, opts = {}) {
   const foldOpts = [1, 2, 3].map(k => {
     const b = h("button", "fold-lvl", String(k));
     b.type = "button";
-    b.title = k === 1 ? COPY.foldLvl1 : `Keep the last ${k} layers drawn in full`;
-    b.setAttribute("aria-label", k === 1 ? COPY.foldLvl1 : `Keep the last ${k} layers drawn in full`);
+    b.title = k === 1 ? COPY.foldLvl1 : COPY.foldLvlN(k);
+    b.setAttribute("aria-label", b.title);
     foldLevels.appendChild(b);
     return b;
   });
   foldLevels.insertBefore(h("span", "fold-levels-cap", COPY.foldLevelsCap), foldLevels.firstChild);
 
-  // Lab tools: the deeper instruments, one tap away instead of always on show
-  const labBtn = setFace(h("button", "gbtn sim-btn lab-btn"), "flask", "Lab tools");
+  /* Diagram tools: the deeper instruments, one tap away instead of always on
+     show. Only the name the reader sees moved off "Lab", which belongs to the
+     field studies under lab/; the lab- class names were left alone. */
+  const labBtn = setFace(h("button", "gbtn sim-btn lab-btn"), "flask", COPY.toolsLabel);
   labBtn.setAttribute("aria-haspopup", "true");
   labBtn.setAttribute("aria-expanded", "false");
   const labMenu = h("div", "lab-menu");
@@ -2292,10 +2295,10 @@ async function openReader(id, layerIndex, opts = {}) {
   labMenu.setAttribute("role", "menu");
   const foldBtn = setFace(h("button", "gbtn sim-btn"), "layers", COPY.foldLabel);
   foldBtn.title = COPY.foldHint;
-  [[raceBtn, "Ring the parts where two flows can arrive at once."],
-   [spineBtn, "Trace what a request waits on, and what would stop everything."],
+  [[raceBtn, COPY.toolRaces],
+   [spineBtn, COPY.toolSpine],
    [foldBtn, COPY.foldDesc],
-   [gifBtn, "Record a running Pulse as a looping GIF."]].forEach(([btn, desc]) => {
+   [gifBtn, COPY.toolGif]].forEach(([btn, desc]) => {
     const item = h("div", "lab-item");
     item.append(btn, h("p", "lab-desc", desc));
     if (btn === foldBtn) item.appendChild(foldLevels);
@@ -2460,7 +2463,7 @@ async function openReader(id, layerIndex, opts = {}) {
      stops the sim (via diagram.show) and this resets the buttons */
   let captionTimer = null;
   const resetSimUI = () => {
-    setFace(playBtn, "play", "Pulse");
+    setFace(playBtn, "play", COPY.pulse);
     playBtn.classList.remove("on");
     loadBtn.hidden = true;
     loadBtn.classList.remove("on");
@@ -2477,7 +2480,7 @@ async function openReader(id, layerIndex, opts = {}) {
   playBtn.onclick = () => {
     if (diagram.sim.running) { diagram.sim.stop(); }
     else if (diagram.sim.start()) {
-      setFace(playBtn, "pause", "Rest");
+      setFace(playBtn, "stop", COPY.pulseStop);
       playBtn.classList.add("on");
       loadBtn.hidden = false;
       hud.hidden = false;
@@ -2680,7 +2683,7 @@ async function openReader(id, layerIndex, opts = {}) {
     diagram.show(p - 1, { highlight: L.diff.highlight });
     capState.textContent = `Before layer ${p} · the failure, replayed`;
     if (!diagram.sim.replay()) { if (!quiet) toast("No payload path reaches this failure"); }
-    else { setFace(playBtn, "pause", "Rest"); playBtn.classList.add("on"); hud.hidden = false; }
+    else { setFace(playBtn, "stop", COPY.pulseStop); playBtn.classList.add("on"); hud.hidden = false; }
   };
   replayBtn.onclick = () => runReplay(currentView ? currentView.position : 0, false);
   beforeBtn.onclick = () => { if (currentView) currentView.setBefore(!currentView.before); };
@@ -2987,7 +2990,7 @@ async function openVocab(v, layer) {
       row.onclick = () => { dismiss(); openReader(hit.id, hit.index); };
       recur.appendChild(row);
     });
-  } catch (e) { recur.appendChild(h("p", "vo-none", "Couldn't read your library.")); }
+  } catch (e) { recur.appendChild(h("p", "vo-none", COPY.readFail)); }
 }
 
 function buildReaderMenu(rec, challengeOn) {
@@ -3154,13 +3157,13 @@ function renderWhatif(rec, opts = {}) {
     };
     ctl.appendChild(abBtn);
     if (dg.sim.available) {
-      const wp = setFace(h("button", "gbtn sim-btn sim-primary"), "play", "Pulse");
+      const wp = setFace(h("button", "gbtn sim-btn sim-primary"), "play", COPY.pulse);
       const wl = setFace(h("button", "gbtn sim-btn"), "gauge", "Load");
       wl.hidden = true;
-      dg.sim.onStop(() => { setFace(wp, "play", "Pulse"); wp.classList.remove("on"); wl.hidden = true; wl.classList.remove("on"); });
+      dg.sim.onStop(() => { setFace(wp, "play", COPY.pulse); wp.classList.remove("on"); wl.hidden = true; wl.classList.remove("on"); });
       wp.onclick = () => {
         if (dg.sim.running) dg.sim.stop();
-        else if (dg.sim.start()) { setFace(wp, "pause", "Rest"); wp.classList.add("on"); wl.hidden = false; }
+        else if (dg.sim.start()) { setFace(wp, "stop", COPY.pulseStop); wp.classList.add("on"); wl.hidden = false; }
       };
       wl.onclick = () => wl.classList.toggle("on", dg.sim.toggleLoad());
       ctl.append(wp, wl);
@@ -3488,7 +3491,7 @@ function renderGenerate(systemName, mode) {
               syncGenBgPill();
             }
           }
-          if (p.tokens) tok.textContent = "~" + p.tokens.toLocaleString() + " tokens · you can browse your library while this finishes";
+          if (p.tokens) tok.textContent = "~" + p.tokens.toLocaleString() + " tokens · " + COPY.genBrowse;
           if (p.partial) early.update(p.partial);
         }
       });
@@ -3710,7 +3713,7 @@ async function renderModels(detailId) {
     const card = h("button", "ml-card");
     card.appendChild(h("div", "ml-name", m.name));
     card.appendChild(h("div", "ml-one", m.one_liner));
-    card.appendChild(h("div", "ml-count", systems ? `In ${systems} system${systems > 1 ? "s" : ""}` + (read ? ` · you've read ${read}` : "") : "Not in your library yet"));
+    card.appendChild(h("div", "ml-count", systems ? `In ${systems} system${systems > 1 ? "s" : ""}` + (read ? ` · you've read ${read}` : "") : COPY.modelNotYet));
     card.onclick = () => renderModels(m.id);
     grid.appendChild(card);
   });
@@ -3738,9 +3741,7 @@ function renderModel(root, recs, id) {
   // every place you met it, side by side, with the fix in teal
   main.appendChild(h("h2", "section-head", "Where you've met it"));
   const systems = new Set(uses.map(u => u.rec.id)).size;
-  main.appendChild(h("p", "lib-note", read.length
-    ? `${systems} system${systems > 1 ? "s" : ""} in your library use it; you've read ${read.length} of those layers.`
-    : `${systems} system${systems > 1 ? "s" : ""} in your library use it.`));
+  main.appendChild(h("p", "lib-note", COPY.modelUsedBy(systems, read.length)));
   const grid = h("div", "met-grid");
   (read.length ? read : uses).slice(0, 6).forEach(u => {
     const card = h("button", "met-card");
@@ -4265,7 +4266,7 @@ function renderSettings(banner, drafts) {
   /* backup / restore */
   const bb = h("div", "set-block");
   bb.appendChild(h("h3", null, "Backup & restore"));
-  bb.appendChild(h("p", "note", "The backup contains your library and attempts, never your API key."));
+  bb.appendChild(h("p", "note", COPY.backupNote));
   const brow = h("div", "set-row");
   const bexp = h("button", "gbtn primary", "Backup .json");
   bexp.onclick = async () => {
@@ -4279,7 +4280,7 @@ function renderSettings(banner, drafts) {
   bres.onclick = () => pickFile(async file => {
     try {
       const state = JSON.parse(await file.text());
-      if (!confirm("Restoring replaces your current library. Continue?")) return;
+      if (!confirm(COPY.restoreConfirm)) return;
       const results = await Store.importAll(state);
       const bad = results.filter(r => !r.ok);
       meta = await Store.getMeta();

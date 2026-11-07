@@ -119,7 +119,7 @@ var Generator = (() => {
             }
           }
           if (ev.type === "message_delta" && ev.delta && ev.delta.stop_reason === "max_tokens")
-            throw fail("toobig", "The breakdown hit the output limit. Try narrowing the system.", text);
+            throw fail("toobig", "The Deconstruct hit the output limit. Try narrowing the system.", text);
           // Fable/Mythos: whole fallback chain declined — partial text is not a document
           if (ev.type === "message_delta" && ev.delta && ev.delta.stop_reason === "refusal")
             throw fail("refusal", "The model declined this request (safety classifiers). Try a different model, or rephrase the system.");

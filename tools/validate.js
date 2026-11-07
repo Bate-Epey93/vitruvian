@@ -69,6 +69,15 @@ if (process.argv.slice(2).length === 0) {
     if (!diskSlugs.includes(s)) lockstepErrors.push(`CONFIG.flagshipNames entry "${s}" has no flagships/${s}.json`);
   }
 
+  // 2b. The landing kicker counts the samples itself, but index.html's two
+  //     descriptions and the manifest's say the same promise in static text.
+  //     A sample added without them would make the promise false.
+  const promise = `${CONFIG.flagshipNames.length} systems, free to read offline`;
+  for (const [rel, times] of [["index.html", 2], ["manifest.webmanifest", 1]]) {
+    const found = fs.readFileSync(path.join(root, rel), "utf8").split(promise).length - 1;
+    if (found < times) lockstepErrors.push(`${rel} should say "${promise}" ${times}x (found ${found})`);
+  }
+
   // 3. CSS custom property resolution across styles.css & lab/lab.css
   const cssFiles = ["styles.css", "lab/lab.css"];
   const defined = new Set(["--lane-c", "--pos", "--split-left", "--d", "--dx", "--dy"]);

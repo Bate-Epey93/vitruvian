@@ -152,6 +152,9 @@ var TXScene = (function () {
     var sc = Ink3D.scene(canvas);
     var AXROT = [0, HALF_PI, 0];   // put a part's local z on the world x axis
     var P = {};
+    /* hover labels are reader-facing words, so they live in the copy file
+       with the rest; the scene only says which part gets which */
+    var NAME = TX_COPY.parts;
 
     function drivetrain(id, mesh, x, axis, opt) {
       opt = opt || {};
@@ -172,9 +175,9 @@ var TXScene = (function () {
     }
 
     /* shafts */
-    drivetrain("shaftInput", shaftMesh(16, 108), -16, AX_MAIN, { label: "Input shaft — the engine's end of the box", clip: 1 });
-    drivetrain("shaftMain", shaftMesh(14, 280), 168, AX_MAIN, { label: "Mainshaft — the road's end of the box", clip: 1 });
-    drivetrain("shaftCounter", shaftMesh(16, 330), 145, AX_CNT, { label: "Countershaft — always turning with the engine", clip: 1 });
+    drivetrain("shaftInput", shaftMesh(16, 108), -16, AX_MAIN, { label: NAME.shaftInput, clip: 1 });
+    drivetrain("shaftMain", shaftMesh(14, 280), 168, AX_MAIN, { label: NAME.shaftMain, clip: 1 });
+    drivetrain("shaftCounter", shaftMesh(16, 330), 145, AX_CNT, { label: NAME.shaftCounter, clip: 1 });
 
     /* Exploded opens the stack the way it was assembled: along the shaft
        first, so assembly order is legible, then off the shaft by how deep
@@ -188,38 +191,38 @@ var TXScene = (function () {
     var X_IDLER = [(X_IDLER_PARK - MID) * SPREAD, 46, -74];
 
     /* the constant-mesh drive pair: the engine reaches the countershaft and never lets go */
-    drivetrain("gInMain", Ink3D.gearMesh(Z_IN, M_DRIVE, 16, 16), 0, AX_MAIN, { label: "Input gear · 17 teeth", explode: ex(0, 0) });
-    drivetrain("gInCounter", Ink3D.gearMesh(Z_CD, M_DRIVE, 16, 16), 0, AX_CNT, { label: "Counter drive gear · 29 teeth", explode: ex(0, DROP) });
+    drivetrain("gInMain", Ink3D.gearMesh(Z_IN, M_DRIVE, 16, 16), 0, AX_MAIN, { label: NAME.gInMain, explode: ex(0, 0) });
+    drivetrain("gInCounter", Ink3D.gearMesh(Z_CD, M_DRIVE, 16, 16), 0, AX_CNT, { label: NAME.gInCounter, explode: ex(0, DROP) });
 
     /* speed gears — counter half fixed to the shaft, main half free to spin until a sleeve says otherwise */
     [1, 2, 3, 5].forEach(function (g) {
       var s = SET[g];
       drivetrain("g" + g + "Counter", Ink3D.gearMesh(s.Zc, s.m, s.w, 16), s.x, AX_CNT,
-        { group: "g" + g, explode: ex(s.x, DROP), label: g + (g === 1 ? "st" : g === 2 ? "nd" : g === 3 ? "rd" : "th") + " drive gear · " + s.Zc + " teeth" });
+        { group: "g" + g, explode: ex(s.x, DROP), label: NAME.gearCounter(g, s.Zc) });
       drivetrain("g" + g + "Main", Ink3D.gearMesh(s.Zm, s.m, s.w, 15), s.x, AX_MAIN,
-        { group: "g" + g, explode: ex(s.x, 0), label: g + (g === 1 ? "st" : g === 2 ? "nd" : g === 3 ? "rd" : "th") + " gear · " + s.Zm + " teeth · free on the shaft" });
+        { group: "g" + g, explode: ex(s.x, 0), label: NAME.gearMain(g, s.Zm) });
     });
 
     /* reverse: two meshes in series, which is the whole trick — the output comes back the other way */
-    drivetrain("gRCounter", Ink3D.gearMesh(Z_RC, M_REV, 14, 16), X_REV, AX_CNT, { group: "gR", explode: ex(X_REV, DROP), label: "Reverse drive gear · 15 teeth" });
-    drivetrain("gRMain", Ink3D.gearMesh(Z_RM, M_REV, 14, 15), X_REV, AX_MAIN, { group: "gR", explode: ex(X_REV, 0), label: "Reverse gear · 30 teeth · fixed to the mainshaft" });
-    drivetrain("gRIdler", Ink3D.gearMesh(Z_RI, M_REV, 14, 9), X_IDLER_PARK, AX_IDL, { group: "gR", explode: X_IDLER, label: "Reverse idler · slides into mesh, and nothing slows it down first" });
+    drivetrain("gRCounter", Ink3D.gearMesh(Z_RC, M_REV, 14, 16), X_REV, AX_CNT, { group: "gR", explode: ex(X_REV, DROP), label: NAME.gRCounter });
+    drivetrain("gRMain", Ink3D.gearMesh(Z_RM, M_REV, 14, 15), X_REV, AX_MAIN, { group: "gR", explode: ex(X_REV, 0), label: NAME.gRMain });
+    drivetrain("gRIdler", Ink3D.gearMesh(Z_RI, M_REV, 14, 9), X_IDLER_PARK, AX_IDL, { group: "gR", explode: X_IDLER, label: NAME.gRIdler });
 
     /* synchro assemblies */
-    P.hub34 = drivetrain("hub34", hubMesh(30, 14, 14), X_HUB34, AX_MAIN, { group: "dogs", label: "3-4 hub · splined to the mainshaft", clip: 1, explode: ex(X_HUB34, LIFT_HUB) });
-    P.slv34 = drivetrain("slv34", sleeveMesh(37, 30, 18), X_HUB34, AX_MAIN, { group: "dogs", label: "3-4 sleeve · the only part the driver actually moves", clip: 1, explode: ex(X_HUB34, LIFT_SLV) });
-    P.hub12 = drivetrain("hub12", hubMesh(30, 14, 14), X_HUB12, AX_MAIN, { group: "dogs", label: "1-2 hub · splined to the mainshaft", clip: 1, explode: ex(X_HUB12, LIFT_HUB) });
-    P.slv12 = drivetrain("slv12", sleeveMesh(37, 30, 18), X_HUB12, AX_MAIN, { group: "dogs", label: "1-2 sleeve", clip: 1, explode: ex(X_HUB12, LIFT_SLV) });
-    P.hub5 = drivetrain("hub5", hubMesh(28, 14, 14), X_HUB5, AX_MAIN, { group: "dogs", label: "5th hub", clip: 1, explode: ex(X_HUB5, LIFT_HUB) });
-    P.slv5 = drivetrain("slv5", sleeveMesh(35, 28, 18), X_HUB5, AX_MAIN, { group: "dogs", label: "5th sleeve", clip: 1, explode: ex(X_HUB5, LIFT_SLV) });
+    P.hub34 = drivetrain("hub34", hubMesh(30, 14, 14), X_HUB34, AX_MAIN, { group: "dogs", label: NAME.hub34, clip: 1, explode: ex(X_HUB34, LIFT_HUB) });
+    P.slv34 = drivetrain("slv34", sleeveMesh(37, 30, 18), X_HUB34, AX_MAIN, { group: "dogs", label: NAME.slv34, clip: 1, explode: ex(X_HUB34, LIFT_SLV) });
+    P.hub12 = drivetrain("hub12", hubMesh(30, 14, 14), X_HUB12, AX_MAIN, { group: "dogs", label: NAME.hub12, clip: 1, explode: ex(X_HUB12, LIFT_HUB) });
+    P.slv12 = drivetrain("slv12", sleeveMesh(37, 30, 18), X_HUB12, AX_MAIN, { group: "dogs", label: NAME.slv12, clip: 1, explode: ex(X_HUB12, LIFT_SLV) });
+    P.hub5 = drivetrain("hub5", hubMesh(28, 14, 14), X_HUB5, AX_MAIN, { group: "dogs", label: NAME.hub5, clip: 1, explode: ex(X_HUB5, LIFT_HUB) });
+    P.slv5 = drivetrain("slv5", sleeveMesh(35, 28, 18), X_HUB5, AX_MAIN, { group: "dogs", label: NAME.slv5, clip: 1, explode: ex(X_HUB5, LIFT_SLV) });
 
     /* clutch bodies (cone + dogs) and the blocker rings that guard them */
     var CB = [
-      ["cb4", 20, AX_MAIN, -1, "4th clutch body · on the input shaft, so 4th is straight through"],
-      ["cb3", 60, AX_MAIN, 1, "3rd clutch body · cone and dog teeth"],
-      ["cb2", 130, AX_MAIN, -1, "2nd clutch body"],
-      ["cb1", 170, AX_MAIN, 1, "1st clutch body"],
-      ["cb5", 266, AX_MAIN, 1, "5th clutch body"]
+      ["cb4", 20, AX_MAIN, -1, NAME.cb4],
+      ["cb3", 60, AX_MAIN, 1, NAME.cb3],
+      ["cb2", 130, AX_MAIN, -1, NAME.cb2],
+      ["cb1", 170, AX_MAIN, 1, NAME.cb1],
+      ["cb5", 266, AX_MAIN, 1, NAME.cb5]
     ];
     CB.forEach(function (c) {
       drivetrain(c[0], clutchBodyMesh(25, 27, 13, c[3]), c[1], c[2], { group: "dogs", label: c[4], clip: 1, explode: ex(c[1], LIFT_CB) });
@@ -227,7 +230,7 @@ var TXScene = (function () {
     var BLK = [["blk4", 30, -1], ["blk3", 50, 1], ["blk2", 140, -1], ["blk1", 160, 1], ["blk5", 256, 1]];
     BLK.forEach(function (b) {
       drivetrain(b[0], blockerMesh(26, 23, 6), b[1], AX_MAIN,
-        { group: "synchro", label: "Blocker ring · refuses to index until the speeds agree", clip: 1, explode: ex(b[1], LIFT_BLK) });
+        { group: "synchro", label: NAME.blocker, clip: 1, explode: ex(b[1], LIFT_BLK) });
     });
 
     /* selector rods, forks, and the interlock that makes two gears at once unsayable */
@@ -235,7 +238,7 @@ var TXScene = (function () {
        dragging the whole gate assembly into a shot about the idler */
     Object.keys(ROD).forEach(function (id) {
       drivetrain(id, shaftMesh(5, 300), 150, ROD[id],
-        { group: id === "rod5R" ? "selectR" : "select", label: "Selector rod", clip: 1, explode: [0, 44, 0] });
+        { group: id === "rod5R" ? "selectR" : "select", label: NAME.rod, clip: 1, explode: [0, 44, 0] });
     });
     function fork(id, x, rodId, rIn, rOut, label) {
       var r = ROD[rodId];
@@ -248,21 +251,21 @@ var TXScene = (function () {
       P[id] = p;
       return p;
     }
-    fork("fork34", X_HUB34, "rod34", 37, 43, "3-4 shift fork");
-    fork("fork12", X_HUB12, "rod12", 37, 43, "1-2 shift fork");
-    fork("fork5", X_HUB5, "rod5R", 35, 41, "5th shift fork");
+    fork("fork34", X_HUB34, "rod34", 37, 43, NAME.fork34);
+    fork("fork12", X_HUB12, "rod12", 37, 43, NAME.fork12);
+    fork("fork5", X_HUB5, "rod5R", 35, 41, NAME.fork5);
     /* the reverse fork reaches all the way from the top rod down to the idler */
     P.forkR = sc.add({
       id: "forkR",
       mesh: forkMesh(32, 38, [-(ROD.rod5R[1] - AX_IDL[1]), ROD.rod5R[0] - AX_IDL[0]], 8),
       rot: AXROT, pos: [X_IDLER_PARK, AX_IDL[0], AX_IDL[1]], explode: X_IDLER,
-      group: "gR", label: "Reverse fork · no synchro on this one", pickable: true, clippable: true
+      group: "gR", label: NAME.forkR, pickable: true, clippable: true
     });
 
     P.interlock = sc.add({
       id: "interlock", mesh: Ink3D.prism(Ink3D.rectProfile(70, 26, 0, 82), 16, { sideTier: 1 }),
       rot: AXROT, pos: [34, 0, 0], group: "select", clippable: true,
-      label: "Interlock block · two rods can never move at once", pickable: true
+      label: NAME.interlock, pickable: true
     });
 
     /* lever and gate */
@@ -275,14 +278,14 @@ var TXScene = (function () {
     Ink3D.xform(lever, Ink3D.mRX(-HALF_PI));
     P.lever = sc.add({
       id: "lever", mesh: lever, pos: LEVER_PIVOT, group: "select", clippable: true,
-      label: "Gear lever — the only control the driver has", pickable: true
+      label: NAME.lever, pickable: true
     });
 
     var plate = Ink3D.prism(Ink3D.rectProfile(96, 74), 4, { sideTier: 1 });
     Ink3D.xform(plate, Ink3D.mRX(HALF_PI));
     P.gate = sc.add({
       id: "gate", mesh: plate, pos: [26, 118, 0], group: "select", style: "dim",
-      clippable: true, label: "Gate plate — the H, cut in steel", pickable: true
+      clippable: true, label: NAME.gate, pickable: true
     });
 
     P.gearcase = sc.add({

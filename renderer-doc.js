@@ -259,7 +259,7 @@ var DocView = (() => {
           }
           if (a.predict) {
             const ensoDot = h("span", "tl-dot enso");
-            ensoDot.title = "Gate prediction answered";
+            ensoDot.title = COPY.tlPredicted;
             dotsWrap.appendChild(ensoDot);
           }
           b.appendChild(dotsWrap);
@@ -272,36 +272,42 @@ var DocView = (() => {
           const popTitle = popover.querySelector(".tl-pop-title");
           const popSub = popover.querySelector(".tl-pop-sub");
           const popMeta = popover.querySelector(".tl-pop-meta");
-          /* text only: an accent line and a plain line, both optional */
+          /* text only: an accent line and a plain line, both optional. With
+             neither, the row goes too, or its rule line hangs under nothing. */
           const setMeta = (accent, plain) => {
             popMeta.textContent = "";
             if (accent) popMeta.appendChild(h("span", "tl-pop-model", accent));
             if (plain) popMeta.appendChild(h("span", null, plain));
+            popMeta.hidden = !accent && !plain;
           };
 
+          /* Every word here comes from COPY and every count from the
+             document: the card used to promise "partitioned links" to an
+             immune system and "engineering disciplines" to a railway. The
+             stop labels are sentence case; CSS sets the small caps. */
           if (p === 0) {
-            popLayer.textContent = "MEET THE SYSTEM";
-            popDelta.textContent = "Overview";
+            popLayer.textContent = COPY.tlMeet;
+            popDelta.textContent = COPY.tlMeetTag;
             popTitle.textContent = doc.meta.system;
-            popSub.textContent = (doc.essence && (doc.essence.beginner || doc.essence.text)) || "Baseline system architecture and rules.";
-            setMeta(null, `${doc.strip_down.invariants.length} invariants to defend`);
+            popSub.textContent = (doc.essence && (doc.essence.beginner || doc.essence.text)) || COPY.tlMeetSub;
+            setMeta(null, COPY.tlRules(doc.strip_down.invariants.length));
           } else if (p === N + 1) {
-            popLayer.textContent = "TRIALS";
-            popDelta.textContent = "Stress Tests";
-            popTitle.textContent = "Architectural Stress Tests";
-            popSub.textContent = "Test how this system survives sudden spikes, partitioned links, and cascade failures.";
-            setMeta("✦ Failure Mode Analysis");
+            popLayer.textContent = COPY.tlTrials;
+            popDelta.textContent = COPY.tlTrialsTag((doc.stress_tests || []).length);
+            popTitle.textContent = COPY.tlTrialsTitle;
+            popSub.textContent = COPY.tlTrialsSub;
+            setMeta(null, null);
           } else if (p === N + 2) {
-            popLayer.textContent = "TRANSFER";
-            popDelta.textContent = "Synthesis";
-            popTitle.textContent = "Where Else This Pattern Lives";
-            popSub.textContent = "Cross-domain models that repeat this design move in other engineering disciplines.";
-            setMeta("✦ Cross-Domain Transfer");
+            popLayer.textContent = COPY.tlTransfer;
+            popDelta.textContent = COPY.tlTransferTag(((doc.transfer && doc.transfer.principles) || []).length);
+            popTitle.textContent = COPY.tlTransferTitle;
+            popSub.textContent = COPY.tlTransferSub;
+            setMeta(null, null);
           } else if (layerObj) {
-            popLayer.textContent = `LAYER ${p} OF ${N}`;
+            popLayer.textContent = COPY.tlLayer(p, N);
             const addN = (layerObj.diff.add_nodes || []).length;
             const addE = (layerObj.diff.add_edges || []).length;
-            popDelta.textContent = `+${addN} parts · +${addE} flows`;
+            popDelta.textContent = COPY.tlDelta(addN, addE);
             const a = attemptFor(layerObj.index);
             popTitle.textContent = a.revealed || (p === pos && step >= 3) ? layerObj.name : failurePart(layerObj);
             popSub.textContent = layerObj.problem ? (audience === "beginner" ? layerObj.problem.beginner : layerObj.problem.statement) : "";
@@ -314,7 +320,7 @@ var DocView = (() => {
             const known = pm && typeof modelById === "function" ? modelById(pm.id) : null;
             const modelName = known ? known.name : "";
             const defends = layerObj.defends && layerObj.defends.length
-              ? `${modelName ? " · " : ""}Defends ${layerObj.defends.map(ruleLabel).join(", ")}` : "";
+              ? `${modelName ? " · " : ""}` + COPY.tlDefends(layerObj.defends.map(ruleLabel).join(", ")) : "";
             setMeta(modelName ? "✦ " + modelName : null, defends || null);
           }
 
@@ -343,8 +349,8 @@ var DocView = (() => {
         const name = a.revealed || (p === pos && step >= 3) ? L.name.split(":")[0] : failurePart(L);
         seg(p, p === pos && !onePage ? `${p}  ${name}` : String(p), state, `Layer ${p}: ${name}`, L);
       });
-      seg(N + 1, "Trials", pos === N + 1 ? "on" : pos > N + 1 ? "done" : "todo", "Trials: stress tests");
-      seg(N + 2, "Transfer", pos === N + 2 ? "on" : "todo", "Transfer: what to take with you");
+      seg(N + 1, COPY.tlTrials, pos === N + 1 ? "on" : pos > N + 1 ? "done" : "todo", COPY.tlTrialsAria);
+      seg(N + 2, COPY.tlTransfer, pos === N + 2 ? "on" : "todo", COPY.tlTransferAria);
       scrubEl.appendChild(row);
       /* The row is rebuilt at scrollLeft 0 on every move, so on a phone the
          current stop drifts off the right edge from layer 4 or so. Centre it
@@ -615,7 +621,7 @@ var DocView = (() => {
         const stamp = h("img", "enso-stamp");
         stamp.src = "assets/enso-gate.svg";
         stamp.alt = "";
-        stamp.title = "Gate earned";
+        stamp.title = COPY.layerRebuilt;
         head.appendChild(stamp);
       }
       // the name can spoil the solution — withhold it at the gate
@@ -1019,7 +1025,7 @@ var DocView = (() => {
       const title = h("h1", "step-title", step >= 3 ? L.name : failurePart(L));
       if (step >= 3 && a.revealed) {
         const stamp = h("img", "enso-stamp stamped");
-        stamp.src = "assets/enso-gate.svg"; stamp.alt = ""; stamp.title = "Layer rebuilt";
+        stamp.src = "assets/enso-gate.svg"; stamp.alt = ""; stamp.title = COPY.layerRebuilt;
         title.appendChild(stamp);
       }
       root.appendChild(title);
@@ -1276,8 +1282,8 @@ var DocView = (() => {
         const L = doc.layers[pos - 1];
         say = `Layer ${pos} of ${N}. ` + (onePage ? (challenge && !attemptFor(L.index).revealed ? failurePart(L) : L.name) : STEPS[step - 1].label + ".");
       }
-      else if (pos === N + 1) say = "Trials: stress tests.";
-      else say = "Transfer: what to take with you.";
+      else if (pos === N + 1) say = COPY.tlTrialsAria + ".";
+      else say = COPY.tlTransferAria + ".";
       live.textContent = say;
     }
 

@@ -560,52 +560,133 @@ var NUMBERS_LIBRARY = [
 
 /* ---------- UI COPY ---------- */
 var COPY = {
-  libraryTitle: "Library",
+  /* ── One name per concept ──
+     Every string a reader sees uses these, so a thing keeps its name from
+     the landing page to the last menu:
+       Home              the screen you land on (never library or shelf)
+       Deconstruct       anything rebuilt layer by layer, yours or a sample
+       Field study       only ever one of the 3D pages under lab/
+       Trials            the stop after the last layer (never stress tests)
+       Rules             what the documents call invariants; the exact term
+                         may appear once as a gloss, as in the field guide
+       Strict mode       write your fix before the real one opens; the code
+                         still says challenge and gate, the reader never does
+       Pulse / Stop      the traffic button, idle or running
+       Diagram tools     the instruments behind the diagram's tool button
+                         (not "Lab": lab/ is where the field studies live)
+       Fold earlier layers  what the code calls abstraction */
+  libraryTitle: "Home",
   sampleHeading: "Samples",
   sampleNote: "Worked examples of what a Deconstruct looks like. Open one to see how it works, then take apart a system of your own.",
   yoursHeading: "Your Deconstructs",
   yoursEmpty: "Nothing here yet. Name a system above, or dissect a design you're building. The samples below show what you'll get.",
+  /* the badge on every card, and on the search match above the cards */
+  sourceChip: { flagship: "Sample", design: "Your design", shared: "Shared with you", own: "Your Deconstruct" },
+  homeSearchAria: "Search Home, or name a system to deconstruct",
+  homeFilterAria: "Filter what Home shows",
+  matchOpen: "Open the Deconstruct \u2192",
+  noMatchQuery: q => `Nothing on this device matches "${q}". Press Deconstruct above to generate it.`,
+  noMatchFilter: "Nothing matches this filter yet.",
+  showAll: "Show everything",
   labHeading: "Field studies",
   labNote: "Machines you can turn over in your hands. Same failure ladder, drawn in three dimensions.",
-  labChip: "3D study",
+  /* on a Deconstruct's card when its subject also exists as a field study */
+  labChip: "Also in 3D",
+  /* on the field study's own card, and on a search match that is one */
+  labCardChip: "Field study",
+  labCardChip3d: "3D",
   labKicker: "Also a machine",
   labOpen: "Open the field study \u2192",
+  labOpenAlso: "Open in 3D \u2197",
   // The honest half: eligible, but nobody has built it. No link, because
   // there is nothing to link to — a described thing and a button that only
   // registers that you would use it.
-  /* ── Abstraction ── */
-  foldLabel: "Abstraction",
+  /* ── Fold earlier layers ──
+     The code calls this abstraction. The reader is told what it does, in
+     the words they would use to ask for it. */
+  foldLabel: "Fold earlier layers",
   foldHint: "Fold what you have already been shown into one box per lane",
   foldDesc: "Collapse the layers you have already read into one box per lane, so the layer you are on is the only thing in full.",
   foldLevelsCap: "keep open",
   foldLevelsLabel: "How many recent layers stay drawn in full",
   foldLvl1: "Keep only this layer drawn in full",
-  foldOn: "Abstraction on",
-  foldTapOff: "tap to turn off",
-  foldWhat: n => n + (n === 1 ? " box folded" : " boxes folded"),
-  foldNothing: "Nothing to fold yet — read a few more layers.",
-  foldSet: n => n === 1 ? "Abstraction on · this layer only" : `Abstraction on · last ${n} layers open`,
-  foldOff: "Abstraction off",
-  foldSome: (boxes, opened) => `${boxes} folded · ${opened} opened`,
+  foldLvlN: k => `Keep the last ${k} layers drawn in full`,
+  foldOn: "Earlier layers folded",
+  foldTapOff: "tap to unfold",
+  foldWhat: n => n + (n === 1 ? " box" : " boxes"),
+  foldNothing: "Nothing to fold yet. Read a few more layers first.",
+  foldSet: n => n === 1 ? "Earlier layers folded · only this layer open" : `Earlier layers folded · last ${n} layers open`,
+  foldOff: "Every layer drawn in full again",
+  foldSome: (boxes, opened) => `${boxes} ${boxes === 1 ? "box" : "boxes"} · ${opened} opened`,
+
+  /* ── Diagram tools ──
+     The deeper instruments, one tap away under the diagram instead of
+     always on show. */
+  toolsLabel: "Diagram tools",
+  toolRaces: "Ring the parts where two flows can arrive at once.",
+  toolSpine: "Trace what a request waits on, and what would stop everything.",
+  toolGif: "Record a running Pulse as a looping GIF.",
+  pulse: "Pulse",
+  pulseStop: "Stop",
 
   /* ── Zoom and origin ── */
   zoomFit: "Fit",
   zoomFitHint: "Fit the whole system in view",
   zoomInHint: "Zoom in (or hold \u2318 and scroll)",
   zoomOutHint: "Zoom out (or hold \u2318 and scroll)",
-  originBase: "Here from the start \u2014 part of the naive baseline.",
+  originBase: "Here from the start: part of the naive baseline.",
   originAt: (n, name) => `Added in layer ${n}${name ? " \u00b7 " + name : ""}`,
   originGo: "Read that layer",
 
+  /* ── The timeline's hover card ──
+     The same names the strip under the diagram and the step headings use.
+     The counts come from the document, so the card never promises a kind
+     of trial this system does not have. */
+  tlMeet: "Meet the system",
+  tlMeetTag: "Overview",
+  tlMeetSub: "The system in one breath, and the rules it must never break.",
+  tlRules: n => n === 1 ? "1 rule to defend" : `${n} rules to defend`,
+  tlLayer: (p, n) => `Layer ${p} of ${n}`,
+  tlDelta: (parts, flows) => `+${parts} part${parts === 1 ? "" : "s"} \u00b7 +${flows} flow${flows === 1 ? "" : "s"}`,
+  tlDefends: rules => `Defends ${rules}`,
+  tlPredicted: "You guessed which rule this failure breaks",
+  tlTrials: "Trials",
+  tlTrialsTag: n => n === 1 ? "1 scenario" : `${n} scenarios`,
+  tlTrialsTitle: "Push it somewhere nasty",
+  tlTrialsSub: "The finished system under pressure: how it copes, or where it honestly breaks.",
+  tlTrialsAria: "Trials: the finished system under pressure",
+  tlTransfer: "Transfer",
+  tlTransferTag: n => n === 1 ? "1 principle" : `${n} principles`,
+  tlTransferTitle: "Take it with you",
+  tlTransferSub: "The principles that outlive this system, and where the same shapes turn up elsewhere.",
+  tlTransferAria: "Transfer: what to take with you",
+  layerRebuilt: "Layer rebuilt",
+
   labMaybeKicker: "Also a machine",
   labMaybeCta: "I\u2019d use this",
-  labMaybeDone: "Noted \u2014 it is on the candidates list",
-  labMaybeFoot: "No study of this one is built yet. Saying so here is how it gets prioritised.",
+  labMaybeDone: "Noted: it is on the candidates list",
+  labMaybeFoot: "No field study of this one is built yet. Saying so here is how it gets prioritised.",
   labCandHeading: "Candidates",
-  labCandNote: "Systems in your library that could be built as field studies. Flagged while the Deconstruct was written, ranked by the ones you said you would use.",
+  labCandNote: "Systems you have deconstructed that could be built as field studies. Flagged while the Deconstruct was written, ranked by the ones you said you would use.",
   /* The examples have to be things with no study built, or the line
      promises a card that the built-study check will always filter out. */
-  labCandEmpty: "None yet. Deconstruct something mechanical \u2014 a pin-tumbler lock, a disc brake, a ratchet and pawl \u2014 and it will show up here.",
+  labCandEmpty: "None yet. Deconstruct something mechanical, like a pin-tumbler lock, a disc brake or a ratchet and pawl, and it will show up here.",
+
+  /* ── Backup, restore and links ──
+     Everything lives on this device, so that is where these say it is. */
+  restoreAsk: (n, mine) => `This is a full backup with ${n} Deconstruct${n === 1 ? "" : "s"}.\n\n` +
+    `Restoring it REPLACES every Deconstruct on this device` + (mine ? ` (${mine} of them your own)` : "") +
+    `, your progress and your settings. Your API key stays.\n\nRestore it?`,
+  restoreDone: (ok, n) => `Restored ${ok}/${n} Deconstructs (everything before was replaced)`,
+  restoreConfirm: "Restoring replaces every Deconstruct on this device. Continue?",
+  backupNote: "The backup holds every Deconstruct and attempt on this device, never your API key.",
+  importAgain: name => `Opened "${name}" (it was already on this device)`,
+  linkMissing: "That Deconstruct is not on this device",
+  readFail: "Couldn't read your Deconstructs.",
+  genBrowse: "you can browse Home while this finishes",
+  modelNotYet: "Not in any system here yet",
+  modelUsedBy: (n, read) => `${n === 1 ? "1 system here uses" : n + " systems here use"} it` +
+    (read ? `; you've read ${read} of those layers.` : "."),
   libraryLede: "Name a system you use, or describe one you're building, and Vitruvian rebuilds it from nothing, one failure at a time, so you can study why each part exists.",
   deconstructPlaceholder: "A system to deconstruct, like a stock exchange or a bike share…",
   deconstructBtn: "Deconstruct",
@@ -657,7 +738,12 @@ var COPY = {
   studioUrl: "https://bate-epey93.github.io/uxfirst-studio/",
   /* ---------- LANDING (first-run explainer) ---------- */
   landing: {
-    kicker: "Free, offline, no account needed",
+    /* The promise has to be one the reader can check on the first screen:
+       the samples are free and read offline, and anything else needs their
+       own Anthropic key. The count is the shipped sample count, so the line
+       stays true when a sample is added. index.html and the manifest say
+       the same in static text; tools/validate.js holds them to this count. */
+    kicker: n => `${n} systems, free to read offline`,
     headline: "Take anything apart.\nPut it back together, and it makes sense.",
     /* The second line is drawn, not just set: an arrow runs from the first
        marked word to the second and a payload travels it, the same grammar
@@ -674,7 +760,7 @@ var COPY = {
       { icon: "whatItIs", title: "What it is",
         body: "Pick a system. Vitruvian strips it to its bones, then rebuilds it layer by layer, each layer forced by a real failure. A diagram grows as it comes together." },
       { icon: "whoFor", title: "Who it's for",
-        body: "Curious minds, systems-design enthusiasts, and developers prepping for architecture interviews. Three reading levels, from plain English to engineer." },
+        body: "Anyone who uses a system and wonders why it is built that way: curious readers, people in ops, product and marketing, and engineers. Three reading levels, from plain English to engineer." },
       { icon: "whyWorks", title: "Why it works",
         body: "You remember what you rebuild. Design each fix yourself before the reveal, and collect the thinking models that repeat across systems." },
       { icon: "howTo", title: "How to use it",
@@ -701,7 +787,7 @@ var COPY = {
   tips: [
     // ── the shelf ──
     { id: "lib-shelf", screen: "library", target: ".bd-grid, .lib-grid, .bd-card",
-      title: "Your shelf",
+      title: "Home",
       text: "Your own Deconstructs sit first, then the worked samples. Open any sample to see the shape a Deconstruct takes before you make one." },
     { id: "lib-own", screen: "library", target: ".own-design-btn",
       title: "Your own system",
@@ -731,19 +817,19 @@ var COPY = {
       text: "The System sheet is the reference card: what it is for, its rules, its pieces. Sequence shows the same state as an interaction timeline. Graft lets you propose a change and argues back. On a phone these live in the \u22ef menu." },
     { id: "menu", screen: "reader", target: "#readerMenuBtn",
       title: "Everything else",
-      text: "Strict mode makes you write your fix before the real one opens. The field guide explains every part of a Deconstruct. Exports put the diagram or the whole study somewhere else." },
+      text: "Strict mode makes you write your fix before the real one opens. The field guide explains every part of a Deconstruct. Exports put the diagram or the whole Deconstruct somewhere else." },
 
     // ── the rest of the app ──
     { id: "models", screen: "models", target: ".ml-card, .model-card, .ml-grid",
       title: "The same idea, everywhere",
-      text: "Fourteen thinking models account for nearly every layer in every system here. Open one to see every place it recurs across your library. That recurrence is the thing worth carrying away." },
+      text: "Fourteen thinking models account for nearly every layer in every system here. Open one to see every place it recurs across the systems here. That recurrence is the thing worth carrying away." },
     // not ".set-block": the first of those is Reading level, so this card
     // ringed the wrong control. The key field is the only password input on
     // Settings; ".set-key" goes first so a key block that carries that class
     // gets the ring as a whole.
     { id: "set-model", screen: "settings", target: ".set-key, input[type=password]",
       title: "Your key, your model",
-      text: "Generation runs on your own Anthropic key, straight from the browser. Nothing is sent anywhere else and no account is needed. The model field takes any Anthropic id, so a new model needs no app update." },
+      text: "No Vitruvian account. Generation uses your own Anthropic account and key, straight from the browser, and nothing is sent anywhere else. The model field takes any Anthropic id, so a new model needs no app update." },
     { id: "set-tips", screen: "settings", target: ".set-tips",
       title: "These tips",
       text: "They fire once each, as you reach the thing they describe. Turn them off here whenever you have had enough, or bring them all back to walk the app again." }
@@ -759,7 +845,7 @@ var COPY = {
         ["Meet the system", "Two short steps: the system in one breath with a few surprising, checkable facts, then the rules it must never break (the invariants)."],
         ["The System sheet", "The reference card, one tap away from anywhere in the header: what it is for, the rules, who wants what, the pieces, what flows, and the limits physics and economics impose."],
         ["The rebuild", "Four to seven layers, and the heart of the whole thing. Each one is forced by a concrete failure of the version before it, often a real disaster with a date attached. The design becomes necessary in front of you instead of being described to you."],
-        ["Stress tests", "Push the finished system somewhere nasty and see how it copes, or where it honestly breaks."],
+        ["Trials", "Push the finished system somewhere nasty and see how it copes, or where it honestly breaks."],
         ["Transfer", "The principles that outlive this particular system, and where the same shapes turn up elsewhere."]
       ]
     },
@@ -798,12 +884,12 @@ var COPY = {
         ["Spotlight", "Tap a card to light its parts and dim the rest: the problem card lights what breaks (red), the solution card lights what's added (teal), and Under load traces the path load travels (gold)."],
         ["Trace a part", "Tap any node to light it and every edge touching it; the rest dims, so you can follow one part's whole reach. Tap it again to clear."],
         ["Why a part is here", "The same tap answers the question the whole app is built on. A card names the layer that introduced the part, says what it takes in and gives out, and offers to open that layer. Parts with no layer named were there from the start, in the naive baseline."],
-        ["Zoom in ⊕", "Some nodes are whole systems in their own right and carry a ⊕ badge. Tap it to open that sub-system as its own Deconstruct, and follow the breadcrumb back up. Systems nest as deep as the library goes."],
+        ["Zoom in ⊕", "Some nodes are whole systems in their own right and carry a ⊕ badge. Tap it to open that sub-system as its own Deconstruct, and follow the breadcrumb back up. Systems nest as deep as there are Deconstructs to open."],
         ["Payload shapes", "During a Pulse, every payload wears the shape of the kind that sent it: a dot from an actor, a square from a store, a diamond from a process, a bar from a channel. Colour still tells you which lane it came from, so shape and colour answer two different questions at once."],
         ["Backpressure", "When a node takes in more than it can clear, the edges feeding it stiffen and their traffic slows down. The jam creeps back toward the source rather than staying put, which is how one slow component ends up browning out everything upstream of it."],
-        ["Fit and zoom", "The whole system is fitted into view by default, on any screen. The controls beside Lab tools get you closer and back out again, and holding the command key while scrolling does the same. Fit stays lit until you zoom by hand, and relights the moment you tap it."],
+        ["Fit and zoom", "The whole system is fitted into view by default, on any screen. The controls beside Diagram tools get you closer and back out again, and holding the command key while scrolling does the same. Fit stays lit until you zoom by hand, and relights the moment you tap it."],
         ["The key", "Under the diagram, and built from what is actually on screen rather than everything the app can draw. It lists every shape and every mark this state uses, so nothing is drawn that the key does not name. Tap an entry to light the parts carrying it."],
-        ["Abstraction", "Past a few layers the diagram carries more settled machinery than argument. Turn Abstraction on in Lab tools and everything older folds into one box per lane, each named after the lane and marked with how many parts it stands for. Lines that merged say how many paths they are. Choose how many recent layers stay drawn in full, tap a folded box to open just that one, and tap the pill at the top to turn it all off."]
+        ["Fold earlier layers", "Past a few layers the diagram carries more settled machinery than argument. Turn on Fold earlier layers in Diagram tools and everything older folds into one box per lane, each named after the lane and marked with how many parts it stands for. Lines that merged say how many paths they are. Choose how many recent layers stay drawn in full, tap a folded box to open just that one, and tap the pill at the top to turn it all off."]
       ]
     },
     controls: {
@@ -818,14 +904,14 @@ var COPY = {
     },
     explore: {
       title: "Go deeper: simulate & interrogate",
-      note: "Pulse sits under the diagram, with Replay while you read the problem and Before while you read the solution. Races, Spine, Abstraction and GIF are in Lab tools next to them.",
+      note: "Pulse sits under the diagram, with Replay while you read the problem and Before while you read the solution. Races, Spine, Fold earlier layers and GIF are in Diagram tools next to them.",
       items: [
         ["Pulse ▶ / ⟲ replay", "Send live traffic through the current state. Payloads travel the flow path, crash red into whatever's broken, and (under ◉ load) congest where the system saturates. ⟲ replay re-enacts the exact historical failure, arrival by arrival."],
         ["Fault injection", "While a pulse is running, tap any node to kill it. Traffic piles up behind the dead node and everything downstream starves. It's chaos engineering as a toy. Tap it again to revive it."],
         ["Live HUD", "While traffic flows, a small readout shows throughput (delivered/min), how many payloads are in flight, and crashes. Under load, delivered flattens off while in-flight keeps climbing. That gap is saturation, in numbers you can read."],
         ["Race spotlight ⇉", "Rings every node with two or more concurrent writers, the places where two flows can arrive at once and race. The count tells you how many contention points the design carries."],
         ["Critical path ⌁ spine", "Traces the chain a request actually waits on and dims everything off it. Shortening anything off the spine changes nothing, which is why it helps to know where it runs. Nodes whose loss would stop delivery altogether get a red ring. The readout also compares the spine against layer 0, so you can see what surviving all those failures cost you in extra steps."],
-        ["Abstraction", "Folds the layers you have already read into one box per lane, so the layer you are on is the only thing drawn in full. Keep the last one, two or three layers open. It is a reading aid, not an edit: nothing is removed, the counts on the boxes and the merged lines say exactly what is being stood in for, and a notice at the top of the diagram stays up the whole time it is on."],
+        ["Fold earlier layers", "Folds the layers you have already read into one box per lane, so the layer you are on is the only thing drawn in full. Keep the last one, two or three layers open. It changes only what is drawn: nothing is removed, the counts on the boxes and the merged lines say exactly what is being stood in for, and a notice at the top of the diagram stays up the whole time it is on."],
         ["Sequence view", "In the ⋯ menu: the same state as an interaction timeline: who sends what to whom, top to bottom, in the order it happens. The diagram shows structure and this shows behaviour."],
         ["Probe a layer", "Ask one focused question about any layer. The answer stays grounded in that layer's own mechanism. Needs your Anthropic API key (Settings)."],
         ["Graft a change", "In the ⋯ menu: propose a change and see it ghosted onto the architecture in dashed blueprint ink, with an honest verdict (improves, mixed, or harmful) argued from the system's own rules. Before the verdict you make your own call, and the verdict shows the two side by side. Pulse runs through the graft too."],
@@ -841,7 +927,7 @@ var COPY = {
         ["The System sheet", "system context: actors, invariants (your correctness guarantees), entities, data flows, and hard constraints."],
         ["Each layer's mechanism + principle", "an architecture decision record: what you built and the rule it encodes."],
         ["Under load", "the scaling / capacity section: throughput ceilings, bottlenecks, and the sharding or caching strategy."],
-        ["Tradeoffs + stress tests", "your risk register and failure-mode analysis."],
+        ["Tradeoffs + trials", "your risk register and failure-mode analysis."],
         ["For-engineers mappings", "the concrete tech: the software concept each mechanism maps to."],
         ["Transfer principles", "the reusable patterns to carry into your own design."]
       ]
@@ -854,7 +940,7 @@ var COPY = {
     strip_down: "Finding the skeleton…",
     visual:     "Drawing the baseline…",
     layers:     "Rebuilding, layer by layer…",
-    stress:     "Stress-testing…",
+    stress:     "Running the trials…",
     transfer:   "Extracting principles…",
     voice:      "Editing for voice…"
   }
