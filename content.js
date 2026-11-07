@@ -656,6 +656,11 @@ var COPY = {
   zoomInHint: "Zoom in (or hold \u2318 and scroll)",
   zoomOutHint: "Zoom out (or hold \u2318 and scroll)",
   originBase: "Here from the start: part of the naive baseline.",
+  /* Leads the card and the hover: the failure that summoned the part, in
+     that layer's own words. The layer line under it then drops its own
+     "Added", which would only say so twice. */
+  originWhy: "Added because:",
+  originLayer: (n, name) => `Layer ${n}${name ? " \u00b7 " + name : ""}`,
   originAt: (n, name) => `Added in layer ${n}${name ? " \u00b7 " + name : ""}`,
   originGo: "Read that layer",
 

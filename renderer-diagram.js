@@ -560,6 +560,29 @@ var Diagram = (() => {
       });
       return m;
     })();
+    /* ...and the failure that summoned it, so the card and the hover can say
+       why and not only when. problem.title is that failure already written as
+       a heading (every flagship layer has one), and it is what the reader saw
+       on that layer's first step. The statement's first sentence is only the
+       fallback, for studies without a title: it often sets the scene ("In
+       1770s London, dozens of banks...") before it reaches what broke. */
+    const failureByLayer = (doc.layers || []).map(L => {
+      const p = (L && L.problem) || {};
+      const t = typeof p.title === "string" ? p.title.trim() : "";
+      if (t) return t;
+      const s = typeof p.statement === "string" ? p.statement.trim() : "";
+      if (!s) return null;
+      // a full stop followed by a new sentence, so "3.5" and "e.g. a" stay whole
+      const m = s.match(/^[\s\S]+?[.!?](?=\s+["“(]?[A-Z0-9]|$)/);
+      const first = m ? m[0] : s;
+      if (first.length <= 140) return first;
+      const cut = first.slice(0, 139), sp = cut.lastIndexOf(" ");
+      return (sp > 90 ? cut.slice(0, sp) : cut).replace(/[\s,;:]+$/, "") + "…";
+    });
+    const whyOf = id => {
+      const at = originOf.get(id);
+      return at != null && at >= 0 ? failureByLayer[at] || null : null;
+    };
 
     let suppressClickUntil = 0, flipRaf = 0;
 
@@ -616,6 +639,7 @@ var Diagram = (() => {
         onSelectCb({ id, label: fn ? fn.label : id,
                      layerIndex: at,
                      layerName: (at != null && at >= 0 && doc.layers[at]) ? doc.layers[at].name : null,
+                     why: whyOf(id),
                      does: roleOf(id) });
       }
     }
@@ -818,10 +842,14 @@ var Diagram = (() => {
           el("line", { x1: 0, y1: -3.2, x2: 0, y2: 3.2, class: "dg-drill-plus" }, badge);
         }
         /* A folded box is not a process, whatever kind it borrows to be
-           drawn: it names what it stands for. */
-        txt(el("title", {}, g), n.folded
+           drawn: it names what it stands for. A part says why it is here on
+           a second line, so a desktop hover answers what a tap's card does. */
+        const why = !n.folded && whyOf(n.id);
+        const since = n.folded ? "" : why ? `\n${COPY.originWhy} ${why}`
+          : originOf.get(n.id) === -1 ? `\n${COPY.originBase}` : "";
+        txt(el("title", {}, g), (n.folded
           ? `${n.label} · ${n.folded} parts folded: ${(n.parts || []).join(", ")}`
-          : `${n.label} · ${laneLabelById[n.lane] || n.lane} · ${n.kind}`);
+          : `${n.label} · ${laneLabelById[n.lane] || n.lane} · ${n.kind}`) + since);
         if (hl.has(n.id)) g.classList.add("dg-broken");
         if (ghostSet.has(n.id)) g.classList.add("dg-ghost");
         if (stressSet.has(n.id)) g.classList.add("dg-stress");

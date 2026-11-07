@@ -2510,11 +2510,12 @@ async function openReader(id, layerIndex, opts = {}) {
   oClose.title = "Close (Esc)";
   oClose.setAttribute("aria-label", "Close card");
   oHead.append(oTitle, oClose);
+  const oWhy = h("div", "org-why");
   const oWhen = h("div", "org-when");
   const oDoes = h("div", "org-does");
   const oGo = h("button", "gbtn org-go");
   oGo.type = "button";
-  originCard.append(oHead, oWhen, oDoes, oGo);
+  originCard.append(oHead, oWhy, oWhen, oDoes, oGo);
 
   const foldPill = h("button", "dg-fold-pill");
   foldPill.type = "button";
@@ -2795,11 +2796,17 @@ async function openReader(id, layerIndex, opts = {}) {
     if (sel.layerIndex == null) { closeOrigin(); return; }
     oDoes.textContent = sel.does || "";
     oDoes.hidden = !sel.does;
+    /* The failure first: the app's whole claim is that a part exists because
+       something broke, and the card used to name only the layer. */
+    const why = sel.layerIndex >= 0 && sel.why;
+    oWhy.replaceChildren();
+    if (why) oWhy.append(h("span", "org-why-k", COPY.originWhy), " " + why);
+    oWhy.hidden = !why;
     if (sel.layerIndex < 0) {
       oWhen.textContent = COPY.originBase;
       oGo.hidden = true;
     } else {
-      oWhen.textContent = COPY.originAt(sel.layerIndex + 1, sel.layerName);
+      oWhen.textContent = (why ? COPY.originLayer : COPY.originAt)(sel.layerIndex + 1, sel.layerName);
       oGo.hidden = false;
       oGo.textContent = COPY.originGo;
       oGo.onclick = () => {
