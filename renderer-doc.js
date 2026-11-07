@@ -102,14 +102,17 @@ var DocView = (() => {
       activeSpotCard = null;
     }
     function wireSpot(cardEl, ids, kind, customLabel) {
-      ids = (ids || []).filter(Boolean);
+      // once each: a load path names every node twice (as the end of one
+      // flow and the start of the next), and the count on the pill said so
+      ids = [...new Set((ids || []).filter(Boolean))];
       if (!ids.length) return;                       // nothing to locate (e.g. a layer with no highlights)
       cardEl.classList.add("spot-card");
       cardEl.dataset.spotIds = ids.join(",");
       cardEl.title = "Hover to preview, click to lock on diagram";
 
       const countLabel = ids.length === 1 ? "1 part" : `${ids.length} parts`;
-      const pillText = customLabel || `◎ ${countLabel}`;
+      // a label can be a function of the count, for a pill that says more than it
+      const pillText = typeof customLabel === "function" ? customLabel(ids.length) : (customLabel || `◎ ${countLabel}`);
       let tracePill = cardEl.querySelector(".trace-pill");
       if (!tracePill) {
         tracePill = h("span", "trace-pill", pillText);
@@ -189,7 +192,7 @@ var DocView = (() => {
         if (preFix && before && !onePage) {
           lastShown = pos - 1;
           diagram.show(pos - 1, { fresh: false });
-          capText(`Before layer ${pos} · release B or tap After to see the fix`);
+          capText(`Before layer ${pos} · release B or tap Show after to see the fix`);
           diagram.focus(L.diff.highlight);
         } else if (preFix) {
           lastShown = pos - 1;
@@ -210,7 +213,6 @@ var DocView = (() => {
         }
       }
       renderTimeline();
-      if (opts.onTools) opts.onTools({ pos, N, step: (pos >= 1 && pos <= N && !onePage) ? step : 0, before });
     }
 
     /* ── The timeline: one control for place. Meet, every layer, Trials,
@@ -853,6 +855,8 @@ var DocView = (() => {
     }
     // "Under load": how this mechanism holds as the system grows. Tap the
     // band to trace the load path (the payload flow at this state) in gold.
+    // One pill says both what a tap does and how much it lights; there used
+    // to be two side by side, "trace the load path" and the bare count.
     function scaleBand(L) {
       if (!L.at_scale) return null;
       const scale = h("div", "scale-band");
@@ -860,7 +864,6 @@ var DocView = (() => {
       scale.appendChild(sb);
       scale.appendChild(h("p", null, L.at_scale));
       const loadIds = loadPathIds(L);
-      if (loadIds.length) sb.appendChild(h("span", "sb-hint", "◎ trace the load path"));
       // orders of magnitude, folded away, right where the scaling question is asked
       if (audience === "developer" && typeof NUMBERS_LIBRARY !== "undefined") {
         const nf = h("details", "numbers-fold");
@@ -876,7 +879,7 @@ var DocView = (() => {
         });
         scale.appendChild(nf);
       }
-      wireSpot(scale, loadIds, "load");
+      wireSpot(scale, loadIds, "load", COPY.traceLoad);
       return scale;
     }
     // Defends: each rule chip lights the mechanism this layer added, the

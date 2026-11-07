@@ -58,7 +58,11 @@ const ICONS = {
   cube: ["M10 2.8l6.4 3.6v7.2L10 17.2l-6.4-3.6V6.4z", "M3.6 6.4L10 10l6.4-3.6", "M10 10v7.2"],
   tag: ["M3.5 10.4V4.6c0-.6.5-1.1 1.1-1.1h5.8l6.1 6.1-6.9 6.9z", "M7.2 6.6v.2"],
   compare: ["M10 3v14", "M3.5 5.5h4v9h-4z", "M12.5 5.5h4v9h-4z"],
-  flask: ["M8 3h4", "M8.6 3v5L4.4 15.2c-.5.9.1 1.8 1.1 1.8h9c1 0 1.6-.9 1.1-1.8L11.4 8V3", "M6.2 12.5h7.6"]
+  /* Diagram tools wore a flask, which read as the field studies under lab/
+     on every screen narrow enough to hide the label. A wrench says tools. */
+  tools: ["M12.25 5.25a.83.83 0 0 0 0 1.17l1.33 1.33a.83.83 0 0 0 1.17 0l3.14-3.14a5 5 0 0 1-6.62 6.62l-5.76 5.76a1.77 1.77 0 0 1-2.5-2.5l5.76-5.76a5 5 0 0 1 6.62-6.62l-3.13 3.13z"],
+  // the same two lifelines the topbar's Sequence button drew
+  sequence: ["M5 3v14M15 3v14", "M5 7.5h9M12 5.8l2 1.7-2 1.7", "M15 12.5H6M8 10.8l-2 1.7 2 1.7"]
 };
 function icon(name, cls) {
   const NS = "http://www.w3.org/2000/svg";
@@ -561,7 +565,7 @@ function show(screen, opts = {}) {
   $("readerMenuBtn").hidden = screen !== "reader";
   // reading-only context tools live in the topbar's right zone; hidden elsewhere
   // so global chrome never shows dead buttons (see placement note in commit)
-  ["ctxDiv", "sheetBtn", "seqBtn", "graftBtn"].forEach(id => { $(id).hidden = screen !== "reader"; });
+  ["ctxDiv", "sheetBtn", "graftBtn"].forEach(id => { $(id).hidden = screen !== "reader"; });
   $("backBtn").hidden = screen === "library" || screen === "landing";
   $("menuPop").hidden = true;
   const navScreen = screen === "vocab" ? "models" : screen;   // vocabulary is a tab of Models
@@ -735,7 +739,6 @@ function wireTopbar() {
   $("drillBtn").onclick = () => { renderDrill(); show("drill"); };
   $("settingsBtn").onclick = () => { renderSettings(); show("settings"); };
   $("themeBtn").onclick = () => toggleTheme();
-  $("seqBtn").onclick = () => { if (currentRec) openSequence(currentRec); };
   $("sheetBtn").onclick = () => { if (currentView) currentView.openSheet(); };
   /* Graft leaves the reader, so its tip is held and comes on the way back */
   $("graftBtn").onclick = () => { if (currentRec) { featureTips.trigger("ctx"); renderWhatif(currentRec); show("whatif", { keepRec: true }); } };
@@ -2301,21 +2304,18 @@ async function openReader(id, layerIndex, opts = {}) {
   playBtn.title = "Send live traffic through this state";
   const loadBtn = setFace(h("button", "gbtn sim-btn"), "gauge", "Load");
   loadBtn.title = "Turn up the traffic until something saturates";
-  const replayBtn = setFace(h("button", "gbtn sim-btn"), "replay", "Replay");
-  replayBtn.title = "Re-enact this layer's historical failure";
+  /* Replay and Before used to sit here as well, doubling the labelled
+     buttons in the step card ("Replay the failure", "Compare before and
+     after"). They live only there now, where their labels explain them;
+     holding B still flips to Before from anywhere in the fix step. */
   const raceBtn = setFace(h("button", "gbtn sim-btn"), "races", "Races");
   raceBtn.title = "Highlight nodes with two or more concurrent writers, where races can happen";
   const spineBtn = setFace(h("button", "gbtn sim-btn"), "spine", "Spine");
   spineBtn.title = "Trace the critical path a request waits on, and ring the nodes that would take the whole system down";
-  const gifBtn = setFace(h("button", "gbtn sim-btn"), "record", "GIF");
-  gifBtn.title = "Record the running Pulse as a looping GIF to share";
+  const sequenceBtn = setFace(h("button", "gbtn sim-btn"), "sequence", COPY.toolSequenceLabel);
+  sequenceBtn.title = COPY.toolSequence;
   loadBtn.hidden = true;
   const capSep = () => h("span", "cap-sep");
-  // Before: in the fix step, flip the diagram to the state this layer replaced
-  const beforeBtn = setFace(h("button", "gbtn sim-btn"), "compare", "Before");
-  beforeBtn.title = "Show the system before this fix (or hold B)";
-  replayBtn.hidden = true;
-  beforeBtn.hidden = true;
   /* How much of the past stays drawn. One layer is the aggressive setting:
      only what this layer added keeps its own box. The choice is the reader's
      and it sticks, because the right amount of abstraction depends on how
@@ -2333,37 +2333,49 @@ async function openReader(id, layerIndex, opts = {}) {
   });
   foldLevels.insertBefore(h("span", "fold-levels-cap", COPY.foldLevelsCap), foldLevels.firstChild);
 
-  /* Diagram tools: the deeper instruments, one tap away instead of always on
-     show. Only the name the reader sees moved off "Lab", which belongs to the
-     field studies under lab/; the lab- class names were left alone. */
-  const labBtn = setFace(h("button", "gbtn sim-btn lab-btn"), "flask", COPY.toolsLabel);
-  labBtn.setAttribute("aria-haspopup", "true");
-  labBtn.setAttribute("aria-expanded", "false");
-  const labMenu = h("div", "lab-menu");
-  labMenu.hidden = true;
-  labMenu.setAttribute("role", "menu");
+  /* Diagram tools: the instruments that change how the diagram is drawn, one
+     tap away instead of always on show. Everything in it acts on the drawing
+     (Sequence view redraws the same state as a timeline); exports went to
+     the ⋯ menu with the other exports. The name stays off "Lab", which
+     belongs to the field studies under lab/. */
+  const toolsBtn = setFace(h("button", "gbtn sim-btn tools-btn"), "tools", COPY.toolsLabel);
+  toolsBtn.appendChild(icon("chevronUp", "tools-caret"));   // it opens upward, over the drawing
+  toolsBtn.title = COPY.toolsHint;
+  // the label hides on narrow chrome, and a display:none label names nothing
+  toolsBtn.setAttribute("aria-label", COPY.toolsLabel);
+  toolsBtn.setAttribute("aria-haspopup", "true");
+  toolsBtn.setAttribute("aria-expanded", "false");
+  const toolsMenu = h("div", "tools-menu");
+  toolsMenu.hidden = true;
+  toolsMenu.setAttribute("role", "menu");
+  toolsMenu.setAttribute("aria-label", COPY.toolsLabel);
   const foldBtn = setFace(h("button", "gbtn sim-btn"), "layers", COPY.foldLabel);
   foldBtn.title = COPY.foldHint;
   [[raceBtn, COPY.toolRaces],
    [spineBtn, COPY.toolSpine],
    [foldBtn, COPY.foldDesc],
-   [gifBtn, COPY.toolGif]].forEach(([btn, desc]) => {
-    const item = h("div", "lab-item");
-    item.append(btn, h("p", "lab-desc", desc));
+   [sequenceBtn, COPY.toolSequence]].forEach(([btn, desc]) => {
+    const item = h("div", "tools-item");
+    item.append(btn, h("p", "tools-desc", desc));
     if (btn === foldBtn) item.appendChild(foldLevels);
-    labMenu.appendChild(item);
+    toolsMenu.appendChild(item);
   });
-  const setLab = open => { labMenu.hidden = !open; labBtn.setAttribute("aria-expanded", String(open)); labBtn.classList.toggle("on", open); };
-  labBtn.onclick = e => {
+  const setTools = open => { toolsMenu.hidden = !open; toolsBtn.setAttribute("aria-expanded", String(open)); toolsBtn.classList.toggle("on", open); };
+  toolsBtn.onclick = e => {
     e.stopPropagation();
-    setLab(labMenu.hidden);
-    if (!labMenu.hidden) featureTips.trigger("tools");
+    setTools(toolsMenu.hidden);
+    if (toolsMenu.hidden) return;
+    soloOverlay("tools");
+    $("menuPop").hidden = true;   // the stopped click never reaches the document handler that closes ⋯
+    featureTips.trigger("tools");
   };
-  labMenu.onclick = e => e.stopPropagation();
-  const labEsc = e => { if (e.key === "Escape" && !labMenu.hidden) { e.stopPropagation(); setLab(false); labBtn.focus(); } };
-  labBtn.addEventListener("keydown", labEsc);
-  labMenu.addEventListener("keydown", labEsc);
-  pane.onclick = () => setLab(false);
+  toolsMenu.onclick = e => e.stopPropagation();
+  const toolsEsc = e => { if (e.key === "Escape" && !toolsMenu.hidden) { e.stopPropagation(); setTools(false); toolsBtn.focus(); } };
+  toolsBtn.addEventListener("keydown", toolsEsc);
+  toolsMenu.addEventListener("keydown", toolsEsc);
+  pane.onclick = () => setTools(false);
+  // the overlay covers the reader, so the menu that opened it goes away first
+  sequenceBtn.onclick = () => { setTools(false); openSequence(rec); };
   /* Zoom. Fit is what the renderer does by itself; these exist so the reader
      can get in closer and get back out again, which on desktop was previously
      impossible — the pinch handler ignores anything that is not a touch. */
@@ -2377,7 +2389,7 @@ async function openReader(id, layerIndex, opts = {}) {
   zoomBar.append(zOut, zFit, zIn);
 
   const capTools = h("div", "cap-tools");
-  capTools.append(replayBtn, beforeBtn, playBtn, loadBtn, capSep(), zoomBar, labBtn, capToggle);
+  capTools.append(playBtn, loadBtn, capSep(), zoomBar, toolsBtn, capToggle);
   dcap.append(capState, capTools);
   const scrubEl = h("div", "scrub-wrap");
   /* The caption narrates a failure the reader just watched, so it is marked
@@ -2461,7 +2473,7 @@ async function openReader(id, layerIndex, opts = {}) {
     if (!hit || (hit.classList.contains("dgl-tog") && !legendEl.classList.contains("open"))) return;
     featureTips.trigger("key");
   });
-  dpane.append(dscroll, hud, foldPill, originCard, caption, legendEl, scrubEl, dcap, labMenu);   // legend: the tutorial's grammar, always in view
+  dpane.append(dscroll, hud, foldPill, originCard, caption, legendEl, scrubEl, dcap, toolsMenu);   // legend: the tutorial's grammar, always in view
   const docPane = h("div", "doc-pane");
   /* On a phone the step card is a bottom sheet over the diagram. The grip
      drags it between three heights, or steps through them by tap or arrow
@@ -2536,7 +2548,7 @@ async function openReader(id, layerIndex, opts = {}) {
     hudCrash.textContent = "✕ " + s.crashed + (s.faults ? " · ☠ " + s.faults + " down" : "");
     hudCrash.classList.toggle("lit", s.crashed > 0);
   });
-  if (!diagram.sim.available) { playBtn.hidden = true; replayBtn.hidden = true; }   // prefers-reduced-motion
+  if (!diagram.sim.available) playBtn.hidden = true;   // prefers-reduced-motion
   playBtn.onclick = () => {
     if (diagram.sim.running) { diagram.sim.stop(); }
     else if (diagram.sim.start()) {
@@ -2548,12 +2560,6 @@ async function openReader(id, layerIndex, opts = {}) {
   };
   loadBtn.onclick = () => {
     loadBtn.classList.toggle("on", diagram.sim.toggleLoad());
-  };
-  gifBtn.onclick = async () => {
-    if (gifBtn.disabled) return;
-    gifBtn.disabled = true;
-    try { await exportPulseGIF(diagram, pct => { setFace(gifBtn, "record", pct + "%"); }); }
-    finally { setFace(gifBtn, "record", "GIF"); gifBtn.disabled = false; }
   };
   // race spotlight: ring nodes with ≥2 concurrent payload writers (contention
   // points). Structural — works standing still; under ◉ load you watch tokens
@@ -2633,6 +2639,16 @@ async function openReader(id, layerIndex, opts = {}) {
 
   /* ── why is this part here ── */
   const closeOrigin = () => { originCard.hidden = true; };
+  /* One overlay on the drawing at a time. Diagram tools, the origin card and
+     the replay caption all float over the drawing's lower edge, and on a
+     desktop they piled up in the same corner. Whichever opened last stays.
+     Closing the origin card here leaves its part traced: only the card goes,
+     not what the reader asked the drawing to show. */
+  const soloOverlay = keep => {
+    if (keep !== "tools") setTools(false);
+    if (keep !== "origin") closeOrigin();
+    if (keep !== "caption") { caption.hidden = true; clearTimeout(captionTimer); }
+  };
   oClose.onclick = () => {
     closeOrigin();
     diagram.spotlight(null);
@@ -2677,6 +2693,7 @@ async function openReader(id, layerIndex, opts = {}) {
       const gap = pane.getBoundingClientRect().bottom - frame.getBoundingClientRect().bottom;
       originCard.style.bottom = Math.max(12, Math.round(gap) + 12) + "px";
     }
+    soloOverlay("origin");
     originCard.hidden = false;
   });
 
@@ -2728,6 +2745,7 @@ async function openReader(id, layerIndex, opts = {}) {
        the origin card does, so the key, scrubber and control bar stay clear. */
     const gap = dpane.getBoundingClientRect().bottom - dscroll.getBoundingClientRect().bottom;
     caption.style.bottom = Math.max(12, Math.round(gap) + 12) + "px";
+    soloOverlay("caption");
     caption.hidden = false;
     clearTimeout(captionTimer);
     captionTimer = setTimeout(() => { caption.hidden = true; }, 7000);
@@ -2744,16 +2762,6 @@ async function openReader(id, layerIndex, opts = {}) {
     capState.textContent = `Before layer ${p} · the failure, replayed`;
     if (!diagram.sim.replay()) { if (!quiet) toast("No payload path reaches this failure"); }
     else { setFace(playBtn, "stop", COPY.pulseStop); playBtn.classList.add("on"); hud.hidden = false; }
-  };
-  replayBtn.onclick = () => runReplay(currentView ? currentView.position : 0, false);
-  beforeBtn.onclick = () => { if (currentView) currentView.setBefore(!currentView.before); };
-  // the toolbar shows what the current step can use
-  const onTools = ({ step, before }) => {
-    replayBtn.hidden = !diagram.sim.available || !(step === 1 || step === 2);
-    beforeBtn.hidden = step !== 3;
-    beforeBtn.classList.toggle("on", !!before);
-    beforeBtn.setAttribute("aria-pressed", String(!!before));
-    setFace(beforeBtn, "compare", before ? "After" : "Before");
   };
 
   // gates are opt-in: on only if this breakdown enabled them, or the user set the default on
@@ -2772,7 +2780,6 @@ async function openReader(id, layerIndex, opts = {}) {
     canReplay: diagram.sim.available,
     autoReplay: meta.autoReplay !== false,
     onReplay: runReplay,
-    onTools,
     onNavigate({ position, step }) {
       if (routed && document.body.dataset.screen === "reader") syncRoute("replace");
       // the four steps are explained on the second, where the guess is asked for
@@ -3056,54 +3063,72 @@ async function openVocab(v, layer) {
   } catch (e) { recur.appendChild(h("p", "vo-none", COPY.readFail)); }
 }
 
+/* Pulse as GIF records for a couple of seconds after its menu entry is gone,
+   so the guard against starting a second recording lives out here. */
+let gifRecording = false;
 function buildReaderMenu(rec, challengeOn) {
   const pop = $("menuPop");
   pop.textContent = "";
-  const add = (label, fn, cls) => {
+  /* One home per kind of thing: how to read it, where it can go, help, and
+     the one destructive act set apart at the bottom. Each group is named for
+     a screen reader by the same heading a sighted reader scans. */
+  const group = title => {
+    const g = h("div", "menu-group");
+    g.setAttribute("role", "group");
+    g.setAttribute("aria-label", title);
+    const head = h("div", "menu-head", title);
+    head.setAttribute("aria-hidden", "true");
+    g.appendChild(head);
+    pop.appendChild(g);
+    return g;
+  };
+  const add = (to, label, fn, cls) => {
     const b = h("button", cls || "", label);
     b.onclick = e => { e.stopPropagation(); pop.hidden = true; fn(); };
-    pop.appendChild(b);
+    to.appendChild(b);
+    return b;
   };
-  // Graft + Sequence live in the topbar. The ⋯ menu holds the two reading
-  // preferences and the rarer, one-shot actions.
-  const check = (label, on, fn) => {
+  const check = (to, label, on, fn) => {
     const b = h("button", "menu-check" + (on ? " on" : ""), label);
     b.setAttribute("role", "menuitemcheckbox");
     b.setAttribute("aria-checked", String(!!on));
     b.onclick = e => { e.stopPropagation(); pop.hidden = true; fn(); };
-    pop.appendChild(b);
+    to.appendChild(b);
   };
-  check("Strict mode: write your fix first", challengeOn, () => {
+  /* On a phone the topbar cannot hold the contextual tools as well as the
+     brand, the audience switch and this menu: they overflow their own
+     container and land on top of the audience switch. CSS hides them there
+     and shows these entries instead, which click the very same buttons, so
+     there is one handler per tool rather than two that can drift apart.
+     They lead the menu because on a phone they are the topbar. */
+  // Gate on the button existing, not on it being visible: this menu is built
+  // when the reader opens, which is before the topbar reveals those buttons,
+  // so a `hidden` check here silently produced no entries at all.
+  const compact = [["sheetBtn", COPY.menuSheet], ["graftBtn", COPY.menuGraft]]
+    .filter(([id]) => !!$(id));
+  if (compact.length) {
+    compact.forEach(([id, label]) => add(pop, label, () => $(id).click(), "menu-compact"));
+    pop.appendChild(h("div", "menu-sep menu-compact"));
+  }
+
+  const reading = group(COPY.menuReading);
+  check(reading, COPY.menuStrict, challengeOn, () => {
     rec.challengeMode = !challengeOn;
     Store.saveBreakdownLight(rec);
     if (currentView) currentView.setChallenge(rec.challengeMode);
     buildReaderMenu(rec, rec.challengeMode);
     toast(rec.challengeMode ? "Strict mode on. The fix opens once you've sketched yours." : "Strict mode off");
   });
-  check("Read each layer as one page", meta.onePage === true, async () => {
+  check(reading, COPY.menuOnePage, meta.onePage === true, async () => {
     meta.onePage = !(meta.onePage === true);
     await Store.saveMeta({ onePage: meta.onePage });
     if (currentView) currentView.setOnePage(meta.onePage);
     buildReaderMenu(rec, challengeOn);
   });
-  /* On a phone the topbar cannot hold the three contextual tools as well as
-     the brand, the audience switch and this menu: they overflow their own
-     container and land on top of the audience switch. CSS hides them there
-     and shows these entries instead, which click the very same buttons, so
-     there is one handler per tool rather than two that can drift apart. */
-  // Gate on the button existing, not on it being visible: this menu is built
-  // when the reader opens, which is before the topbar reveals those buttons,
-  // so a `hidden` check here silently produced no entries at all.
-  const compact = [["sheetBtn", "System sheet"], ["seqBtn", "Sequence view"], ["graftBtn", "Graft a change"]]
-    .filter(([id]) => !!$(id));
-  if (compact.length) {
-    pop.appendChild(h("div", "menu-sep menu-compact"));
-    compact.forEach(([id, label]) => add(label, () => $(id).click(), "menu-compact"));
-  }
+
   pop.appendChild(h("div", "menu-sep"));
-  add("Field guide", () => { renderTutorial("reader"); show("tutorial"); });
-  pop.appendChild(h("div", "menu-sep"));
-  add(COPY.shareMenu, async () => {
+  const out = group(COPY.menuShare);
+  add(out, COPY.shareMenu, async () => {
     let url = "";
     let msg = COPY.shareCopied;
     if (rec.source === "flagship") {
@@ -3125,23 +3150,43 @@ function buildReaderMenu(rec, challengeOn) {
     try { await navigator.clipboard.writeText(url); toast(msg); }
     catch (e) { prompt("Copy this link:", url); }
   });
-  add(COPY.exportPngMenu, () => exportDiagramPNG(rec));
-  add("Export Deconstruct .json", () => {
+  add(out, COPY.exportPngMenu, () => exportDiagramPNG(rec));
+  /* Pulse is off under reduced motion, so there is nothing to record and
+     the entry is left out rather than offered and refused. */
+  if (currentDiagram && currentDiagram.sim.available) {
+    add(out, COPY.menuGif, async () => {
+      if (gifRecording || !currentDiagram) return;
+      gifRecording = true;
+      toast(COPY.menuGifBusy);
+      try { await exportPulseGIF(currentDiagram); }
+      finally { gifRecording = false; }
+    });
+  }
+  add(out, COPY.menuJson, () => {
     download(rec.system.replace(/\W+/g, "-").toLowerCase() + ".json", JSON.stringify(rec.doc, null, 2));
   });
-  add("Use as reference in UX-First Studio", async () => {
+  add(out, COPY.menuNotes, async () => {
     try {
       await navigator.clipboard.writeText(bridgeNotes(rec.doc));
       toast(COPY.bridgeToast);
     } catch (e) { alert("Clipboard unavailable. Export the .json instead."); }
-  });
+  }).title = COPY.menuNotesHint;
+
   pop.appendChild(h("div", "menu-sep"));
-  add("Delete this Deconstruct", async () => {
-    if (!confirm(`Delete "${rec.system}" and its attempts? This cannot be undone.`)) return;
-    await Store.deleteBreakdown(rec.id);
-    await renderLibrary();
-    show("library");
-  }, "danger");
+  add(pop, COPY.menuGuide, () => { renderTutorial("reader"); show("tutorial"); });
+
+  /* Only the reader's own Deconstructs can be deleted. A sample deleted here
+     lost its progress and came back with the next content update
+     (seedFlagships), so the entry promised something it could not keep. */
+  if (rec.source !== "flagship") {
+    pop.appendChild(h("div", "menu-sep"));
+    add(pop, COPY.menuDelete, async () => {
+      if (!confirm(`Delete "${rec.system}" and its attempts? This cannot be undone.`)) return;
+      await Store.deleteBreakdown(rec.id);
+      await renderLibrary();
+      show("library");
+    }, "danger");
+  }
 }
 
 /* ═══ What-if — propose a change; verdict + ghosted architecture (§value-add) ═══ */

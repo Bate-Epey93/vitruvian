@@ -342,6 +342,9 @@ body.reading .nav-btn{padding:6px 9px;}
 .menu-pop button.danger{color:var(--failure);}
 .menu-pop button.danger:hover{background:var(--failure-wash);}
 .menu-sep{height:1px;background:var(--hair);margin:5px 6px;}
+/* a group's name, quieter than the entries under it */
+.menu-head{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);padding:7px 11px 3px;}
 
 /* ═══ Screens ═══ */
 .screen{overflow-y:auto;position:relative;background:var(--canvas);scroll-behavior:smooth;}
@@ -1278,9 +1281,11 @@ g.dg-node.dg-enter{animation:dg-fade .45s var(--ease) both;}
 
 /* 'Under load' band */
 .scale-band{background:var(--money-wash);padding:15px 18px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--money) 20%,transparent);}
-.scale-band .sb-label{color:var(--money);}
+.scale-band .sb-label{color:var(--money);flex-wrap:wrap;row-gap:6px;}
 .scale-band p{font-size:14.5px;color:color-mix(in srgb,var(--money) 55%,var(--ink));margin:0;line-height:1.6;}
-.sb-hint{font-size:11px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--money);opacity:.75;margin-left:4px;}
+/* its one pill reads as a sentence ("Trace the load path · 9 parts"), so it
+   drops the label's capitals, and wraps under the label on a narrow column */
+.scale-band .trace-pill{text-transform:none;letter-spacing:0;}
 
 /* semantic-zoom drill badge (⊕ at a node's corner) */
 .dg-drill-badge{cursor:zoom-in;}
@@ -1813,16 +1818,16 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 .tl-pop-meta{display:flex;flex-wrap:wrap;gap:5px;padding-top:5px;border-top:1px solid var(--hair);font-size:10.5px;font-family:var(--mono);color:var(--muted);}
 .tl-pop-model{color:var(--accent);}
 
-/* ═══ Lab tools ═══ */
-.lab-menu{position:absolute;right:10px;bottom:58px;z-index:20;width:290px;padding:6px;border-radius:var(--r-md);
+/* ═══ Diagram tools ═══ */
+.tools-menu{position:absolute;right:10px;bottom:58px;z-index:20;width:290px;padding:6px;border-radius:var(--r-md);
   background:var(--glass-heavy);-webkit-backdrop-filter:blur(24px) saturate(180%);backdrop-filter:blur(24px) saturate(180%);
   box-shadow:var(--sh-3),inset 0 0 0 1px var(--hair);animation:pop-in .26s var(--ease) both;transform-origin:bottom right;}
-.lab-item{display:grid;grid-template-columns:minmax(0,1fr);padding:6px 6px 8px;border-radius:10px;}
-.lab-item + .lab-item{border-top:1px solid var(--hair);}
-.lab-item .sim-btn{justify-self:start;}
-.lab-item .sim-btn .btn-label{display:inline!important;}
-.lab-item .sim-btn{padding:5px 10px 5px 8px!important;}
-.lab-desc{font-size:12.5px;color:var(--muted);margin:2px 0 0 8px;line-height:1.45;}
+.tools-item{display:grid;grid-template-columns:minmax(0,1fr);padding:6px 6px 8px;border-radius:10px;}
+.tools-item + .tools-item{border-top:1px solid var(--hair);}
+.tools-item .sim-btn{justify-self:start;}
+.tools-item .sim-btn .btn-label{display:inline!important;}
+.tools-item .sim-btn{padding:5px 10px 5px 8px!important;}
+.tools-desc{font-size:12.5px;color:var(--muted);margin:2px 0 0 8px;line-height:1.45;}
 /* how many layers stay drawn in full, inside the abstraction item */
 .fold-levels{display:flex;align-items:center;gap:5px;margin:7px 0 0 8px;opacity:.5;
   transition:opacity .2s var(--ease);}
@@ -1835,7 +1840,11 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 .fold-lvl:hover{border-color:var(--proposal);color:var(--proposal);}
 .fold-lvl.on{background:var(--proposal);border-color:var(--proposal);color:#fff;}
 .fold-lvl:focus-visible{outline:2px solid var(--proposal);outline-offset:1px;}
-.lab-btn.on{background:var(--panel);box-shadow:var(--sh-1),inset 0 0 0 1px var(--hair);color:var(--ink);}
+.tools-btn.on{background:var(--panel);box-shadow:var(--sh-1),inset 0 0 0 1px var(--hair);color:var(--ink);}
+/* says "this opens a menu", and which way; it turns over while the menu is up */
+.tools-btn .tools-caret{width:10px;height:10px;stroke-width:1.8;margin-left:-2px;opacity:.6;transition:transform .2s var(--ease);}
+.tools-btn.on .tools-caret{transform:rotate(180deg);}
+@media(prefers-reduced-motion:reduce){.tools-btn .tools-caret{transition:none;}}
 .menu-pop .menu-check{display:flex;align-items:center;gap:10px;}
 .menu-pop .menu-check::before{content:'';width:15px;height:15px;border-radius:4px;flex-shrink:0;box-shadow:inset 0 0 0 1.5px var(--hair-strong);}
 .menu-pop .menu-check.on::before{background:var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.5 8.2l2.3 2.3 4.7-5' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/15px no-repeat;box-shadow:none;}
@@ -1843,7 +1852,7 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 @media(max-width:860px){
   .step-title{font-size:26px;margin-bottom:14px;}
   .step-text{font-size:16px;}
-  .lab-menu{right:8px;bottom:52px;width:min(290px,calc(100vw - 32px));}
+  .tools-menu{right:8px;bottom:52px;width:min(290px,calc(100vw - 32px));}
 }
 @media(max-width:560px){
   .step-head{margin-bottom:16px;}
@@ -1853,7 +1862,7 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
   .step-foot-note{display:none;}
   .tl-seg{height:36px;min-width:30px;padding:0 8px;}
 }
-@media(prefers-reduced-motion:reduce){.move-sketch.nudge,.lab-menu{animation:none;}}
+@media(prefers-reduced-motion:reduce){.move-sketch.nudge,.tools-menu{animation:none;}}
 
 
 /* ═══ Meet the system: rules, and the System sheet ═══ */
@@ -2108,7 +2117,9 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
    below that .tb-right overflows its own box to the LEFT and the tools end up
    drawn across the audience switch. These two rules are a pair: the menu
    entries exist in the DOM at every width and are revealed exactly where the
-   buttons are hidden, so a tool is never in both places or in neither. */
+   buttons are hidden, so a tool is never in both places or in neither.
+   Both widths, here and above, were measured with three tools; Sequence has
+   since moved into Diagram tools, so the two left have slack to spare. */
 /* .menu-pop button already sets display, so this needs the same specificity
    to win — a bare .menu-compact loses the cascade and the tools appear in
    the bar AND the menu at desktop width. */

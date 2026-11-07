@@ -621,11 +621,16 @@ var COPY = {
 
   /* ── Diagram tools ──
      The deeper instruments, one tap away under the diagram instead of
-     always on show. */
+     always on show. Each one changes how the diagram is drawn; exports live
+     in the ⋯ menu. */
   toolsLabel: "Diagram tools",
+  toolsHint: "Diagram tools: Races, Spine, Fold earlier layers and Sequence view",
   toolRaces: "Ring the parts where two flows can arrive at once.",
   toolSpine: "Trace what a request waits on, and what would stop everything.",
-  toolGif: "Record a running Pulse as a looping GIF.",
+  toolSequenceLabel: "Sequence view",
+  toolSequence: "The same state as a timeline: who sends what to whom, in order.",
+  /* the one pill on the Under load band: what a tap does, and how much it lights */
+  traceLoad: n => `◎ Trace the load path · ${n === 1 ? "1 part" : n + " parts"}`,
   pulse: "Pulse",
   pulseStop: "Stop",
 
@@ -730,10 +735,28 @@ var COPY = {
   privacyNote: "Everything lives on this device. Deconstructs, attempts, and your key are never sent anywhere except your own calls to Anthropic.",
   offlineGenNote: "Generation needs a connection. Reading never does.",
   bridgeToast: "Reference notes copied. Paste into UX-First Studio's Structure It station.",
-  shareMenu: "Share link",
+  /* ── The ⋯ menu ──
+     Grouped under the headings a reader scans for: how to read, where it
+     can go, then help. Delete sits alone at the bottom, on the reader's own
+     Deconstructs only. System sheet and Graft show here only on a phone,
+     where the topbar has no room for them. */
+  menuSheet: "System sheet",
+  menuGraft: "Graft a change",
+  menuReading: "Reading",
+  menuStrict: "Strict mode: write your fix first",
+  menuOnePage: "Read each layer as one page",
+  menuShare: "Share & export",
+  shareMenu: "Copy link",
   shareCopied: "Link copied. Anyone can open this Deconstruct",
   shareLocalNote: "This Deconstruct lives on this device. Export the .json to share it.",
-  exportPngMenu: "Export diagram (.png)",
+  exportPngMenu: "Diagram as PNG",
+  menuGif: "Pulse as GIF",
+  menuGifBusy: "Recording a few seconds of Pulse…",
+  menuJson: "Deconstruct as JSON",
+  menuNotes: "Copy as reference notes",
+  menuNotesHint: "Notes to paste into UX-First Studio's Structure It station",
+  menuGuide: "Field guide",
+  menuDelete: "Delete this Deconstruct",
   requestLink: "Request a system →",
   studioUrl: "https://bate-epey93.github.io/uxfirst-studio/",
   /* ---------- LANDING (first-run explainer) ---------- */
@@ -815,18 +838,18 @@ var COPY = {
       text: "It lists only the glyphs this diagram actually uses, so it changes as you move through the layers. Tap any entry to light every node that carries it. The shape is the role, the small mark inside is the thing." },
     // fires as Diagram tools opens; the ring is the bar that holds Pulse and
     // that button, and the open menu stays clear of the card
-    { id: "tools", screen: "reader", when: "used", target: ".cap-tools", clear: ".lab-menu",
+    { id: "tools", screen: "reader", when: "used", target: ".cap-tools", clear: ".tools-menu",
       title: "Put the system under load",
-      text: "Pulse sends traffic through the system so you can watch where it piles up. Spine and Races live under Diagram tools." },
+      text: "Pulse sends traffic through the system so you can watch where it piles up. Races, Spine, Fold earlier layers and Sequence view live under Diagram tools." },
     { id: "drill", screen: "reader", target: ".dg-drill-badge",
       title: "Some boxes are systems",
       text: "A node with this badge is worth its own Deconstruct. Open it and you drop a level, with a trail back up. The capstone systems nest several levels deep." },
     { id: "ctx", screen: "reader", when: "used", target: ".tb-right, #sheetBtn",
       title: "The tools for this system",
-      text: "The System sheet is the reference card: what it is for, its rules, its pieces. Sequence shows the same state as an interaction timeline. Graft lets you propose a change and argues back. On a phone these live in the \u22ef menu." },
+      text: "The System sheet is the reference card: what it is for, its rules, its pieces. Graft lets you propose a change and argues back. On a phone these live in the \u22ef menu." },
     { id: "menu", screen: "reader", when: "used", target: "#readerMenuBtn", clear: "#menuPop",
       title: "Everything else",
-      text: "Strict mode makes you write your fix before the real one opens. The field guide explains every part of a Deconstruct. Exports put the diagram or the whole Deconstruct somewhere else." },
+      text: "Strict mode makes you write your fix before the real one opens. Share & export copies a link, or saves the diagram, a Pulse or the whole Deconstruct as a file. The field guide explains every part of a Deconstruct." },
 
     // ── the rest of the app ──
     { id: "models", screen: "models", target: ".ml-card, .model-card, .ml-grid",
@@ -913,15 +936,15 @@ var COPY = {
     },
     explore: {
       title: "Go deeper: simulate & interrogate",
-      note: "Pulse sits under the diagram, with Replay while you read the problem and Before while you read the solution. Races, Spine, Fold earlier layers and GIF are in Diagram tools next to them.",
+      note: "Pulse sits under the diagram, and Diagram tools next to it holds Races, Spine, Fold earlier layers and Sequence view. Replay the failure is in each layer's problem step, and Compare before and after in its solution step. Pulse as GIF sits with the other exports in the ⋯ menu.",
       items: [
-        ["Pulse ▶ / ⟲ replay", "Send live traffic through the current state. Payloads travel the flow path, crash red into whatever's broken, and (under ◉ load) congest where the system saturates. ⟲ replay re-enacts the exact historical failure, arrival by arrival."],
+        ["Pulse ▶ / ⟲ replay", "Send live traffic through the current state. Payloads travel the flow path, crash red into whatever's broken, and (under ◉ load) congest where the system saturates. ⟲ Replay the failure, in a layer's problem step, re-enacts the exact historical failure, arrival by arrival."],
         ["Fault injection", "While a pulse is running, tap any node to kill it. Traffic piles up behind the dead node and everything downstream starves. It's chaos engineering as a toy. Tap it again to revive it."],
         ["Live HUD", "While traffic flows, a small readout shows throughput (delivered/min), how many payloads are in flight, and crashes. Under load, delivered flattens off while in-flight keeps climbing. That gap is saturation, in numbers you can read."],
         ["Race spotlight ⇉", "Rings every node with two or more concurrent writers, the places where two flows can arrive at once and race. The count tells you how many contention points the design carries."],
         ["Critical path ⌁ spine", "Traces the chain a request actually waits on and dims everything off it. Shortening anything off the spine changes nothing, which is why it helps to know where it runs. Nodes whose loss would stop delivery altogether get a red ring. The readout also compares the spine against layer 0, so you can see what surviving all those failures cost you in extra steps."],
         ["Fold earlier layers", "Folds the layers you have already read into one box per lane, so the layer you are on is the only thing drawn in full. Keep the last one, two or three layers open. It changes only what is drawn: nothing is removed, the counts on the boxes and the merged lines say exactly what is being stood in for, and a notice at the top of the diagram stays up the whole time it is on."],
-        ["Sequence view", "In the ⋯ menu: the same state as an interaction timeline: who sends what to whom, top to bottom, in the order it happens. The diagram shows structure and this shows behaviour."],
+        ["Sequence view", "In Diagram tools. The same state as an interaction timeline: who sends what to whom, top to bottom, in the order it happens. The diagram shows structure and this shows behaviour."],
         ["Probe a layer", "Ask one focused question about any layer. The answer stays grounded in that layer's own mechanism. Needs your Anthropic API key (Settings)."],
         ["Graft a change", "In the ⋯ menu: propose a change and see it ghosted onto the architecture in dashed blueprint ink, with an honest verdict (improves, mixed, or harmful) argued from the system's own rules. Before the verdict you make your own call, and the verdict shows the two side by side. Pulse runs through the graft too."],
         ["Known as… (the engineering vocabulary)", "In Developer mode, each layer names what the profession calls what it does: patterns (problem shapes), concepts (mechanisms), technologies (things you deploy). Tap a chip to climb the ladder, from the timeless thinking model that forces the layer down to the component you would actually deploy. You also see where the same force turns up in your other Deconstructs. Browse them all from Models, under The engineering vocabulary."],
