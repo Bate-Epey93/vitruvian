@@ -106,6 +106,7 @@ let activeGen = null;             // background generation state { controller, s
 let genFormOwner = null;          // controller of the run the generate form on screen started; null for a fresh form
 let genRunView = null;            // { controller, nodes }: a running form set aside when another form replaced it
 let originEscHandler = null;      // the one live origin-card Escape listener (openReader)
+let sheetFitObserver = null;      // the one live observer sizing the phone sheet to the drawing (openReader)
 
 function bytesToBase64Url(bytes) {
   let bin = "";
@@ -589,6 +590,7 @@ function show(screen, opts = {}) {
     currentView = null;
     retireDiagram();
     if (originEscHandler) { document.removeEventListener("keydown", originEscHandler); originEscHandler = null; }
+    if (sheetFitObserver) { sheetFitObserver.disconnect(); sheetFitObserver = null; }
     if (!opts.keepRec) currentRec = null;
   }
 }
@@ -2102,18 +2104,26 @@ const featureTips = (() => {
 const SHEET_SNAPS = [0.3, 0.52, 0.88];          // share of the reader the sheet covers
 const SHEET_NAMES = ["mostly diagram", "half and half", "mostly text"];
 function sheetDrag(wrap, sheet, grip) {
-  /* On a phone the chrome above and below the diagram — topbar, timeline,
-     caption, transport — already takes most of what the sheet leaves, so the
-     old half-and-half default gave the signature artifact 29% of the screen.
-     Narrow screens open on "mostly diagram"; the reader's own choice, once
-     made, still wins. */
+  /* Narrow screens open on "half and half", a comfortable reading height on
+     first open (2.13.2). The diagram does not pay for it: the frame stops at
+     the height the fitted drawing can fill (setFloor, below), so on most
+     systems the lower snaps meet there and the sheet gets the rest instead
+     of a band of empty paper. The reader's own choice, once made, still
+     wins, and only a choice is saved: the opening default is not, so a
+     better default can still reach someone who never moved the sheet. */
   let snap = 1;
   try { const v = parseInt(localStorage.getItem("vitruvian_sheet_snap"), 10); if (v >= 0 && v < SHEET_SNAPS.length) snap = v; } catch (e) {}
   const RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const MIN_SNAP = SHEET_SNAPS[0], MAX_SNAP = SHEET_SNAPS[SHEET_SNAPS.length - 1];
+  /* the least share the sheet may take; below it the diagram's frame would
+     only grow empty paper under the drawing. 0 until the host measures. */
+  let floor = 0, placed = false;
+  const lowest = () => Math.min(MAX_SNAP, Math.max(MIN_SNAP, floor));
+  const at = i => Math.min(MAX_SNAP, Math.max(SHEET_SNAPS[i], floor));   // where snap i actually lands
   const rubberband = (over, dim, c = 0.55) => (over * dim * c) / (dim + c * Math.abs(over));
   const softClamp = raw => {
-    if (raw < MIN_SNAP) return MIN_SNAP - rubberband(MIN_SNAP - raw, 0.22);
+    const lo = lowest();
+    if (raw < lo) return lo - rubberband(lo - raw, 0.22);
     if (raw > MAX_SNAP) return MAX_SNAP + rubberband(raw - MAX_SNAP, 0.14);
     return raw;
   };
@@ -2154,15 +2164,26 @@ function sheetDrag(wrap, sheet, grip) {
     };
     springRaf = requestAnimationFrame(step);
   };
-  const setSnap = (i, initVel = 0, immediate = false) => {
+  const setSnap = (i, initVel = 0, immediate = false, save = true) => {
     snap = Math.max(0, Math.min(SHEET_SNAPS.length - 1, i));
-    const target = SHEET_SNAPS[snap];
+    const target = at(snap);
     if (immediate) apply(target, false);
     else springTo(target, initVel);
     grip.setAttribute("aria-label", `Reading panel: ${SHEET_NAMES[snap]}. Tap or use the arrow keys to resize.`);
-    try { localStorage.setItem("vitruvian_sheet_snap", String(snap)); } catch (e) {}
+    if (save) try { localStorage.setItem("vitruvian_sheet_snap", String(snap)); } catch (e) {}
   };
-  setSnap(snap, 0, true);
+  setSnap(snap, 0, true, false);
+  /* Snaps the floor has merged land in one place, so a tap or an arrow key
+     moves to the next place that is actually different, rather than
+     spending a press on no visible change. */
+  const nextUp = () => {
+    for (let i = snap + 1; i < SHEET_SNAPS.length; i++) if (at(i) > at(snap) + 0.001) return i;
+    return snap;
+  };
+  const nextDown = () => {
+    for (let i = snap - 1; i >= 0; i--) if (at(i) < at(snap) - 0.001) return i;
+    return snap;
+  };
   let start = null, moved = false, samples = [];
   grip.addEventListener("pointerdown", e => {
     if (springRaf) { cancelAnimationFrame(springRaf); springRaf = 0; }
@@ -2197,8 +2218,10 @@ function sheetDrag(wrap, sheet, grip) {
       }
       // Apple exponential deceleration projection (decelerationRate = 0.994)
       const projected = liveFrac + (releaseVel / 1000) * (0.994 / (1 - 0.994));
-      let best = 0;
-      SHEET_SNAPS.forEach((f, i) => { if (Math.abs(f - projected) < Math.abs(SHEET_SNAPS[best] - projected)) best = i; });
+      /* nearest landing place; on a tie (snaps the floor merged) the current
+         snap stands, so a nudge does not quietly save a different choice */
+      let best = snap;
+      SHEET_SNAPS.forEach((f, i) => { if (Math.abs(at(i) - projected) < Math.abs(at(best) - projected) - 0.001) best = i; });
       setSnap(best, releaseVel, false);
     }
     start = null;
@@ -2207,11 +2230,38 @@ function sheetDrag(wrap, sheet, grip) {
   grip.addEventListener("pointerup", end);
   grip.addEventListener("pointercancel", end);
   // a tap steps up and wraps back down; the drag already ended without a click
-  grip.addEventListener("click", () => { if (moved) { moved = false; return; } setSnap(snap === SHEET_SNAPS.length - 1 ? 0 : snap + 1, 0, false); });
-  grip.addEventListener("keydown", e => {
-    if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); setSnap(snap + 1, 0, false); }
-    if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); setSnap(snap - 1, 0, false); }
+  grip.addEventListener("click", () => {
+    if (moved) { moved = false; return; }
+    const up = nextUp();
+    setSnap(up === snap ? 0 : up, 0, false);
   });
+  grip.addEventListener("keydown", e => {
+    if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); setSnap(nextUp(), 0, false); }
+    if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); setSnap(nextDown(), 0, false); }
+  });
+  return {
+    /* The host measures the drawing and says how much of the reader the
+       sheet must at least cover. The first measure lands without motion, or
+       every open would slide the sheet up as the reader appears; later ones
+       (a rotation, a resized window) ease there. A drag in progress keeps
+       its own course and meets the new floor on release. */
+    setFloor(f) {
+      f = Math.max(0, Math.min(MAX_SNAP, Number(f) || 0));
+      if (placed && Math.abs(f - floor) < 0.002) return;
+      floor = f;
+      if (start) return;
+      if (!placed) {
+        placed = true;
+        if (springRaf) { cancelAnimationFrame(springRaf); springRaf = 0; }
+        vel = 0;
+        apply(at(snap), true);
+        void sheet.offsetHeight;                 // settle the new height with transitions off
+        wrap.classList.remove("sheet-moving");
+        return;
+      }
+      springTo(at(snap));
+    }
+  };
 }
 
 function paneSplitDrag(wrap, split) {
@@ -2363,6 +2413,14 @@ async function openReader(id, layerIndex, opts = {}) {
   const setTools = open => { toolsMenu.hidden = !open; toolsBtn.setAttribute("aria-expanded", String(open)); toolsBtn.classList.toggle("on", open); };
   toolsBtn.onclick = e => {
     e.stopPropagation();
+    /* In sheet mode the diagram's pane stops at the drawing (fitSheet),
+       far too short for this menu to open upward inside it. There it opens
+       downward from the bar, over the top of the reading sheet, which also
+       leaves the drawing in view while Races or Spine changes it. */
+    if (toolsMenu.hidden) {
+      const host = sheetMode && sheetMode.matches ? wrap : dpane;
+      if (toolsMenu.parentElement !== host) host.appendChild(toolsMenu);
+    }
     setTools(toolsMenu.hidden);
     if (toolsMenu.hidden) return;
     soloOverlay("tools");
@@ -2493,7 +2551,7 @@ async function openReader(id, layerIndex, opts = {}) {
   paneSplit.title = "Drag to resize panes · Double-click to reset";
   paneSplit.appendChild(h("span", "pane-split-bar"));
   wrap.append(dpane, paneSplit, docSheet);
-  sheetDrag(wrap, docSheet, grip);
+  const sheetCtl = sheetDrag(wrap, docSheet, grip);
   paneSplitDrag(wrap, paneSplit);
   // breadcrumb: only while nested (drilled at least one level deep)
   if (drillStack.length > 1) pane.appendChild(drillCrumb());
@@ -2513,6 +2571,42 @@ async function openReader(id, layerIndex, opts = {}) {
   });
 
   currentDiagram = diagram;
+
+  /* ── In sheet mode the frame stops at the drawing ──
+     The diagram gets whatever the sheet leaves, and a system fitted to a
+     phone's width is usually far shorter than that: 118px of drawing in a
+     246px frame. So measure what the drawing can fill, add the timeline and
+     control bar under it, and have the sheet cover at least the rest.
+     Measured again whenever the reader, the timeline or the bar changes
+     size. Moving the sheet changes none of those, so this never chases its
+     own tail. */
+  const sheetMode = window.matchMedia ? window.matchMedia("(max-width:860px)") : null;
+  let fitRaf = 0;
+  const fitSheet = () => {
+    if (!wrap.isConnected) return;
+    const H = wrap.clientHeight;
+    if (!(H > 0)) return;                                    // not on screen yet: measure when it is
+    if (!sheetMode || !sheetMode.matches) { sheetCtl.setFloor(0); return; }
+    const chrome = dpane.clientHeight - dscroll.offsetHeight;          // timeline and control bar
+    const overlap = dpane.offsetHeight + docSheet.offsetHeight - H;    // the pane runs a little under the sheet
+    const need = diagram.zoom.usefulHeight() + chrome + 2;             // +2 so rounding never tips the fit to height
+    sheetCtl.setFloor((H + overlap - need) / H);
+  };
+  if (sheetFitObserver) sheetFitObserver.disconnect();
+  sheetFitObserver = null;
+  if (typeof ResizeObserver === "function") {
+    /* The reader's own resize, its first showing included, is measured at
+       once, before paint, so the sheet never shows a frame at its old
+       height. The timeline or the bar alone waits a frame: resizing the
+       diagram's frame from their callback would need a second observer pass
+       at the same depth, which browsers refuse with a console error. */
+    sheetFitObserver = new ResizeObserver(entries => {
+      cancelAnimationFrame(fitRaf);
+      if (entries.some(en => en.target === wrap)) fitSheet();
+      else fitRaf = requestAnimationFrame(fitSheet);
+    });
+    [wrap, scrubEl, dcap].forEach(el => sheetFitObserver.observe(el));
+  }
 
   // Corner Registration Marks (Wave E · Proposal #5)
   ["tl", "tr", "bl", "br"].forEach(pos => {
@@ -2614,10 +2708,15 @@ async function openReader(id, layerIndex, opts = {}) {
     const currentZ = diagram.zoom.current();
     const fitZ = diagram.zoom.fitZ();
     const pct = Math.round((currentZ / fitZ) * 100);
+    const atFit = diagram.isAutoFit() || Math.abs(currentZ - fitZ) < 0.03;
     zFit.classList.toggle("on", diagram.isAutoFit());
     zFit.disabled = whole && diagram.isAutoFit();
     zoomBar.hidden = whole && diagram.isAutoFit() && !diagram.doc.layers.length;
-    zFit.textContent = (diagram.isAutoFit() || Math.abs(currentZ - fitZ) < 0.03) ? "FIT" : `${pct}% ↺`;
+    /* On a touch screen pinch and double-tap already zoom, so styles.css
+       drops − and + there and shows this one chip only while zoomed in:
+       the way back, which a gesture alone does not make obvious. */
+    zoomBar.classList.toggle("zoomed", !atFit);
+    zFit.textContent = atFit ? COPY.zoomFit : `${pct}% ↺`;
   };
   diagram.onZoom(paintZoom);
   zOut.onclick = () => { diagram.zoomBy(1 / 1.25); paintZoom(); };
@@ -2648,6 +2747,20 @@ async function openReader(id, layerIndex, opts = {}) {
     if (keep !== "tools") setTools(false);
     if (keep !== "origin") closeOrigin();
     if (keep !== "caption") { caption.hidden = true; clearTimeout(captionTimer); }
+  };
+  /* Where the origin card and the replay caption sit. On a wide screen, on
+     the drawing's own bottom edge, so the key, the timeline and the control
+     bar stay clear. In sheet mode the frame now ends where the drawing does
+     (fitSheet), so that edge is the drawing itself, and a caption there
+     covered the very failure it narrates. There it sits over the timeline
+     and the control bar instead, and only for as long as it is up. */
+  const overlayBottom = () => {
+    if (sheetMode && sheetMode.matches) {
+      const overlap = Math.max(0, dpane.offsetHeight + docSheet.offsetHeight - wrap.clientHeight);
+      return Math.round(overlap) + 8;
+    }
+    const gap = dpane.getBoundingClientRect().bottom - dscroll.getBoundingClientRect().bottom;
+    return Math.max(12, Math.round(gap) + 12);
   };
   oClose.onclick = () => {
     closeOrigin();
@@ -2687,12 +2800,9 @@ async function openReader(id, layerIndex, opts = {}) {
     }
     /* Sit on the drawing's own bottom edge, not the pane's: the key, the
        scrubber and the control bar live below the drawing, and a card pinned
-       to the pane covers them whenever the pane is short. */
-    const pane = originCard.parentElement, frame = dscroll;
-    if (pane && frame) {
-      const gap = pane.getBoundingClientRect().bottom - frame.getBoundingClientRect().bottom;
-      originCard.style.bottom = Math.max(12, Math.round(gap) + 12) + "px";
-    }
+       to the pane covers them whenever the pane is short. In sheet mode
+       overlayBottom says otherwise, and why. */
+    originCard.style.bottom = overlayBottom() + "px";
     soloOverlay("origin");
     originCard.hidden = false;
   });
@@ -2741,10 +2851,9 @@ async function openReader(id, layerIndex, opts = {}) {
     capText.textContent = text;
     /* styles.css lays the caption over the drawing, out of the flow: as a
        flex row it took height from the drawing, which refit smaller
-       mid-replay and back 7s later. It sits on the drawing's bottom edge, as
-       the origin card does, so the key, scrubber and control bar stay clear. */
-    const gap = dpane.getBoundingClientRect().bottom - dscroll.getBoundingClientRect().bottom;
-    caption.style.bottom = Math.max(12, Math.round(gap) + 12) + "px";
+       mid-replay and back 7s later. It sits where the origin card does
+       (overlayBottom): on the drawing's bottom edge on a wide screen. */
+    caption.style.bottom = overlayBottom() + "px";
     soloOverlay("caption");
     caption.hidden = false;
     clearTimeout(captionTimer);
@@ -2759,7 +2868,7 @@ async function openReader(id, layerIndex, opts = {}) {
     const L = rec.doc.layers[p - 1];
     if (!L || !L.diff.highlight.length) { if (!quiet) toast("No failure at this position. Step into a rebuild layer."); return; }
     diagram.show(p - 1, { highlight: L.diff.highlight });
-    capState.textContent = `Before layer ${p} · the failure, replayed`;
+    capState.textContent = COPY.capReplayed(p);
     if (!diagram.sim.replay()) { if (!quiet) toast("No payload path reaches this failure"); }
     else { setFace(playBtn, "stop", COPY.pulseStop); playBtn.classList.add("on"); hud.hidden = false; }
   };

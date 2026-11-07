@@ -1268,6 +1268,15 @@ var Diagram = (() => {
         const byH = hh > 40 ? hh / layout.height : Infinity;   // a frame too short to measure binds nothing
         return Math.max(0.2, Math.min(MAXUP, byW, byH));
       };
+      /* The tallest frame the fitted drawing can fill at this width, padding
+         included. A frame any taller only adds empty paper under the drawing,
+         so a host that has other uses for the height (the phone's reading
+         sheet) can stop the frame here. */
+      const usefulHeight = () => {
+        const cs = getComputedStyle(container);
+        const z = Math.max(0.2, Math.min(MAXUP, innerW() / layout.width));
+        return layout.height * z + parseFloat(cs.paddingTop || 0) + parseFloat(cs.paddingBottom || 0);
+      };
       const current = () => (svg.getBoundingClientRect().width || layout.width) / layout.width;
       function syncPanClass() {
         const canPan = current() > fitZ() * 1.03 ||
@@ -1495,7 +1504,7 @@ var Diagram = (() => {
         if (settleRaf) cancelAnimationFrame(settleRaf);
         stopCoast();
       }
-      return { fitZ, current, fit, full, by, atFactor, destroy,
+      return { fitZ, current, fit, full, by, atFactor, destroy, usefulHeight,
                /* whether the drawing is already sitting at its fitted size, so
                   a Fit control can say whether tapping it would do anything */
                fits: () => Math.abs(current() - fitZ()) < 0.02 };

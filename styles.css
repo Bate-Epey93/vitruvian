@@ -843,6 +843,14 @@ input,textarea{font-family:var(--sans);}
 .zbtn:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
 .diagram-scroll.dg-pannable{cursor:grab;}
 .diagram-scroll.dg-panning,.diagram-scroll.dg-panning *{cursor:grabbing!important;user-select:none;-webkit-user-select:none;}
+/* Touch: pinch and double-tap already zoom, so − and + go, and the readout
+   shows only while zoomed in, as the one-tap way back to Fit. engine.js sets
+   .zoomed. Sized for a finger, since it is the only zoom control left. */
+@media(pointer:coarse){
+  .dg-zoom .zbtn:not(.zfit){display:none;}
+  .dg-zoom:not(.zoomed){display:none;}
+  .dg-zoom .zbtn.zfit{height:26px;padding:0 10px;}
+}
 
 /* ── Why this part is here ──
    Anchored bottom-centre so it never covers the zoom cluster or the Lab menu. */
@@ -947,14 +955,21 @@ input,textarea{font-family:var(--sans);}
   .dg-legend:not(.open){background:transparent;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;}
   .dg-legend:not(.open) .dgl-item,.dg-legend:not(.open) .dgl-note{display:none;}
   .dg-legend.open{padding:8px 10px;gap:5px 10px;box-shadow:inset 0 0 0 1px var(--hair), var(--sh-2);}
-  .diagram-cap{padding:6px 8px 8px 12px;}
+  /* the pane runs 6px under the sheet's rounded top, so the bottom padding
+     carries those 6px as well, or the bar's pill sits against the sheet */
+  .diagram-cap{padding:6px 8px 12px 12px;}
   .cap-tools .sim-btn .btn-label{display:none;}
   .cap-tools .sim-btn{padding:5px 7px;}
 }
 @media(max-width:560px){
-  .diagram-cap{flex-wrap:wrap;row-gap:6px;}
-  .diagram-cap-state{flex:1 1 100%;}
+  /* One row here too. The caption used to take a row of its own above the
+     tools, 72px of bar under a phone-sized drawing. It now speaks only when
+     it has something to add, and then wraps to two lines beside the tools. */
+  .diagram-cap-state{white-space:normal;font-size:12px;line-height:1.3;
+    display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;}
   .dgl-note{display:none;}
+  /* drafting-sheet corners: on a phone they sit on the drawing and the key chip */
+  .diagram-pane .reg-mark{display:none;}
 }
 
 /* semantic-zoom breadcrumb, above the reader while nested */
@@ -1852,7 +1867,15 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 @media(max-width:860px){
   .step-title{font-size:26px;margin-bottom:14px;}
   .step-text{font-size:16px;}
-  .tools-menu{right:8px;bottom:52px;width:min(290px,calc(100vw - 32px));}
+  .tools-menu{right:8px;bottom:58px;width:min(290px,calc(100vw - 32px));}
+  /* The diagram's pane stops at the drawing here, too short for the menu to
+     open upward inside it, so engine.js hands it to the reader and it drops
+     from the bar over the top of the sheet. The drawing stays in view while
+     a tool changes it; the caret points the way it now opens. */
+  .reader > .tools-menu{top:calc(100% - var(--sheet) + 4px);bottom:auto;z-index:40;
+    max-height:calc(var(--sheet) - 12px);overflow-y:auto;overscroll-behavior:contain;transform-origin:top right;}
+  .tools-btn .tools-caret{transform:rotate(180deg);}
+  .tools-btn.on .tools-caret{transform:none;}
 }
 @media(max-width:560px){
   .step-head{margin-bottom:16px;}

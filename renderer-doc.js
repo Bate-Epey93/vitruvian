@@ -170,9 +170,14 @@ var DocView = (() => {
       doc.layers.forEach(L => { if (attemptFor(L.index).revealed) m = Math.max(m, L.index); });
       return m;
     }
+    /* The caption under the diagram speaks only when it adds something: what
+       a colour means, or that the drawing is not the state of the layer you
+       are on. It used to repeat "Layer 2 of 6 · <name>" as well, which the
+       timeline and the step title already say; on a phone that line took a
+       row of its own and the drawing paid for it. Empty is the usual case. */
     function capText(s) {
       const cap = docPane.closest(".reader").querySelector(".diagram-cap-state");
-      if (cap) cap.textContent = s;
+      if (cap) cap.textContent = s || "";
     }
     function loadPathIds(L) {
       const st = Diagram.stateAt(doc, L.index), ids = [];
@@ -183,8 +188,8 @@ var DocView = (() => {
     // layer with what breaks in red; step 3 shows the fix arriving in teal (or,
     // with Before held, the state it replaced); step 4 traces the load path.
     function syncDiagram(animate) {
-      if (pos === 0) { lastShown = 0; diagram.show(0); capText("Layer 0 · the naive baseline"); diagram.focus(null); }
-      else if (pos > N) { lastShown = N; diagram.show(N, { fresh: false }); capText("Final state · all layers"); diagram.focus(null); }
+      if (pos === 0) { lastShown = 0; diagram.show(0); capText(COPY.capBaseline); diagram.focus(null); }
+      else if (pos > N) { lastShown = N; diagram.show(N, { fresh: false }); capText(COPY.capFinal); diagram.focus(null); }
       else {
         const L = doc.layers[pos - 1];
         const a = attemptFor(L.index);
@@ -192,12 +197,12 @@ var DocView = (() => {
         if (preFix && before && !onePage) {
           lastShown = pos - 1;
           diagram.show(pos - 1, { fresh: false });
-          capText(`Before layer ${pos} · release B or tap Show after to see the fix`);
+          capText(COPY.capBeforeHeld(pos));
           diagram.focus(L.diff.highlight);
         } else if (preFix) {
           lastShown = pos - 1;
           diagram.show(pos - 1, { highlight: L.diff.highlight });
-          capText(`Before layer ${pos} · red = what breaks`);
+          capText(COPY.capBreaks(pos));
           diagram.focus(L.diff.highlight);
         } else {
           lastShown = pos;
@@ -207,8 +212,8 @@ var DocView = (() => {
              left the Spine button lit with nothing drawn behind it */
           if (!onePage && step === 4 && L.at_scale && loadPathIds(L).length && !diagram.isSpineOn()) {
             diagram.spotlight(loadPathIds(L), "load");
-            capText(`Layer ${pos} of ${N} · amber = the load path`);
-          } else capText(`Layer ${pos} of ${N} · ${L.name}`);
+            capText(COPY.capLoadPath);
+          } else capText("");
           diagram.focus(added.length ? added : L.diff.highlight);
         }
       }
@@ -368,11 +373,13 @@ var DocView = (() => {
       });
     }
 
-    /* ── The step card's chrome: where you are, the four steps, and one
-       sticky footer that always holds the next move. (Wave F · Proposal #4) ── */
+    /* ── The step card's chrome: the four steps, and one sticky footer that
+       always holds the next move. (Wave F · Proposal #4) Where you are is
+       said once, by the timeline, and which step once, by these tabs. The
+       card used to add "Layer 2 of 6" and a "The solution" kicker over the
+       title, so one phone screen named the layer four times. ── */
     function stepHead(root, L) {
       const head = h("div", "step-head");
-      head.appendChild(h("div", "step-where", `Layer ${L.index} of ${N}`));
       const tabs = h("div", "step-tabs");
       tabs.setAttribute("role", "tablist");
       const pill = h("div", "step-tabs-pill");
@@ -387,8 +394,6 @@ var DocView = (() => {
       });
       head.appendChild(tabs);
       root.appendChild(head);
-      const st = STEPS[step - 1];
-      root.appendChild(h("div", `step-kick tone-${st.tone}`, st.label));
 
       requestAnimationFrame(() => {
         const onTab = tabs.querySelector(".step-tab.on");
@@ -424,7 +429,6 @@ var DocView = (() => {
     const MEET = [{ label: "Essence", tone: "teal" }, { label: "Rules", tone: "vio" }];
     function meetHead(root) {
       const head = h("div", "step-head");
-      head.appendChild(h("div", "step-where", "Meet the system"));
       const tabs = h("div", "step-tabs");
       tabs.setAttribute("role", "tablist");
       const pill = h("div", "step-tabs-pill");
@@ -1272,7 +1276,7 @@ var DocView = (() => {
        ones look: focus goes to the new step's heading (without scrolling),
        and the live region says where you are. */
     function announce() {
-      const target = docPane.querySelector(".step-kick, .step-title, h1, h2");
+      const target = docPane.querySelector(".step-title, h1, h2");
       const ae = document.activeElement;
       if (target && (!ae || ae === document.body || !ae.isConnected || docPane.contains(ae) || (scrubEl && scrubEl.contains(ae)))) {
         target.tabIndex = -1;

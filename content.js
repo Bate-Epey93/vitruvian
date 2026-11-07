@@ -643,6 +643,17 @@ var COPY = {
   originAt: (n, name) => `Added in layer ${n}${name ? " \u00b7 " + name : ""}`,
   originGo: "Read that layer",
 
+  /* ── The caption under the diagram ──
+     Only what the timeline and the step title do not already say: what a
+     colour means, or that the drawing is not the layer you are on. On a
+     layer's solution it says nothing. */
+  capBaseline: "Layer 0 \u00b7 the naive baseline",
+  capFinal: "Final state \u00b7 all layers",
+  capBreaks: n => `Before layer ${n} \u00b7 red = what breaks`,
+  capBeforeHeld: n => `Before layer ${n} \u00b7 release B or tap Show after to see the fix`,
+  capLoadPath: "Amber = the load path",
+  capReplayed: n => `Before layer ${n} \u00b7 the failure, replayed`,
+
   /* ── The timeline's hover card ──
      The same names the strip under the diagram and the step headings use.
      The counts come from the document, so the card never promises a kind
@@ -919,7 +930,7 @@ var COPY = {
         ["Zoom in ⊕", "Some nodes are whole systems in their own right and carry a ⊕ badge. Tap it to open that sub-system as its own Deconstruct, and follow the breadcrumb back up. Systems nest as deep as there are Deconstructs to open."],
         ["Payload shapes", "During a Pulse, every payload wears the shape of the kind that sent it: a dot from an actor, a square from a store, a diamond from a process, a bar from a channel. Colour still tells you which lane it came from, so shape and colour answer two different questions at once."],
         ["Backpressure", "When a node takes in more than it can clear, the edges feeding it stiffen and their traffic slows down. The jam creeps back toward the source rather than staying put, which is how one slow component ends up browning out everything upstream of it."],
-        ["Fit and zoom", "The whole system is fitted into view by default, on any screen. The controls beside Diagram tools get you closer and back out again, and holding the command key while scrolling does the same. Fit stays lit until you zoom by hand, and relights the moment you tap it."],
+        ["Fit and zoom", "The whole system is fitted into view by default, on any screen. With a mouse or trackpad, the controls beside Diagram tools get you closer and back out again, and holding the command key while scrolling does the same. Fit stays lit until you zoom by hand, and relights the moment you tap it. On a touch screen, pinch or double-tap instead. While you are zoomed in, a chip beside Diagram tools shows how far, and tapping it fits the whole system again."],
         ["The key", "Under the diagram, and built from what is actually on screen rather than everything the app can draw. It lists every shape and every mark this state uses, so nothing is drawn that the key does not name. Tap an entry to light the parts carrying it."],
         ["Fold earlier layers", "Past a few layers the diagram carries more settled machinery than argument. Turn on Fold earlier layers in Diagram tools and everything older folds into one box per lane, each named after the lane and marked with how many parts it stands for. Lines that merged say how many paths they are. Choose how many recent layers stay drawn in full, tap a folded box to open just that one, and tap the pill at the top to turn it all off."]
       ]
