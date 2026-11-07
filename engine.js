@@ -231,7 +231,9 @@ async function importBreakdownJsonText(rawText) {
     return null;
   }
   const doc = (parsed && parsed.doc && parsed.doc.meta) ? parsed.doc : parsed;
-  const { rec, existed } = await saveOrReuseImportedDoc(doc);
+  // a file shareStudy sent is someone else's study; a bare one is the reader's own export
+  const source = parsed && parsed.kind === "shared-study" ? "shared" : "generated";
+  const { rec, existed } = await saveOrReuseImportedDoc(doc, source);
   await renderLibrary();
   toast(existed ? COPY.importAgain(rec.system) : `Imported: ${rec.system}`);
   return rec;
@@ -1137,12 +1139,20 @@ function renderLanding() {
   };
   /* Straight to the first failure: layer 1 at its problem step, where the
      reader replays what broke by itself. The system is the one on the
-     stage. Without it (a seed that failed), the library is the way in. */
+     stage. Without it (a seed that failed), the library is the way in.
+     The stage can pick any sample, including one a returning reader is
+     partway through, and arriving at a step saves it as their place. So a
+     study already started opens where they left it instead of moving their
+     bookmark back to layer 1. */
   const cta = ctaButton(L.cta, "landing-cta");
   cta.onclick = async () => {
     await leave();
     const rec = await heroRecord();
-    if (rec) { await openReader(rec.id, null, { posStep: [1, 1], watch: true }); return; }
+    if (rec) {
+      const started = ((rec.progress && rec.progress.position) || 0) > 0;
+      await openReader(rec.id, null, started ? {} : { posStep: [1, 1], watch: true });
+      return;
+    }
     await renderLibrary();
     show("library");
   };
@@ -1244,15 +1254,27 @@ async function mountHero(el) {
     const t = layer.problem && layer.problem.title;
     return typeof t === "string" && t.trim() ? t.trim() : L.heroFailureFallback;
   };
+  /* The fix beat names what the layer adds. Its name used to stand in, which
+     held for the URL shortener, but many samples name a layer after its
+     failure ("The Retry Doubles the Money"), so the fix beat repeated a
+     problem. A layer that adds nothing keeps its name. */
+  const fixOf = layer => {
+    const added = ((layer.diff && layer.diff.add_nodes) || []).map(n => n && n.label).filter(Boolean);
+    return added.length ? L.heroFix(added.join(", ")) : layer.name;
+  };
   let b = 0;
   const paint = () => {
     const { i, breaks } = beats[b];
     const layer = doc.layers[i - 1];
     if (breaks) diagram.show(i - 1, { highlight: (layer.diff && layer.diff.highlight) || [] });
     else diagram.show(i, { animate: i > 0 });
-    el.hsLayer.textContent = i === 0 ? COPY.capBaseline : breaks ? L.heroBreaks : L.heroLayer(i, N);
+    /* The baseline's pill reads "Layer 0 of N", the same width as the other
+       beats, because the reader's longer baseline label squeezed a long
+       system name to one word a line and made the stage jump each loop. The
+       caption under it still says this is the naive version. */
+    el.hsLayer.textContent = breaks ? L.heroBreaks : L.heroLayer(i, N);
     el.note.textContent = i === 0 ? L.heroBaseline(doc.meta.system)
-      : breaks ? L.heroFailure(i, failureOf(layer)) : layer.name;
+      : breaks ? L.heroFailure(i, failureOf(layer)) : fixOf(layer);
     el.hsLayer.classList.toggle("broke", !!breaks);
     el.note.classList.toggle("broke", !!breaks);
     segs.forEach((sg, k) => {
@@ -2217,6 +2239,14 @@ const featureTips = (() => {
   const held = new Set();
 
   const on = () => meta.tipsOn !== false;            // absent means on
+  /* One card at a time, the install offer included. Finishing a layer and
+     reaching the next one's guess step fires both the install offer and the
+     "steps" tip; the offer checks for a tip, so the tip checks for the offer,
+     and a used tip is offered again on the next use. */
+  const busy = () => {
+    const sheet = $("installSheet");
+    return !!card || !!(sheet && !sheet.hidden);
+  };
   const done = () => (meta.tipsDone && typeof meta.tipsDone === "object") ? meta.tipsDone : {};
   /* Look inside the screen first, then fall back to the whole page: some of
      what a screen offers lives in the topbar, which is not inside the screen
@@ -2352,7 +2382,7 @@ const featureTips = (() => {
      waits only for arrival and whose target is on the page. The rest come
      on later arrivals, or when their thing is used. */
   function visit(screen) {
-    if (!on() || card) return;
+    if (!on() || busy()) return;
     const spent = done();
     const left = (COPY.tips || []).filter(t => t.screen === screen && !spent[t.id] && find(t));
     const t = left.find(x => held.has(x.id)) || left.find(x => x.when !== "used");
@@ -2367,7 +2397,7 @@ const featureTips = (() => {
     const t = (COPY.tips || []).find(x => x.id === id);
     if (!t || !on() || done()[id]) return;
     setTimeout(() => {
-      if (!on() || done()[id] || card) return;
+      if (!on() || done()[id] || busy()) return;
       if (document.body.dataset.screen !== t.screen) { held.add(id); return; }
       open(t);
     }, 300);
@@ -2459,6 +2489,17 @@ function sheetDrag(wrap, sheet, grip) {
     if (save) try { localStorage.setItem("vitruvian_sheet_snap", String(snap)); } catch (e) {}
   };
   setSnap(snap, 0, true, false);
+  /* The snap the reader held at the lowest place before stepping up.
+     Where the floor merges snaps, coming back down there returns to it, not
+     to snap 0 or 1: the sheet looks the same either way, but saving the
+     other one quietly changed the reader's choice for every study after.
+     Taps, arrow keys and drags all land through here. */
+  let home = snap;
+  const low = i => at(i) <= at(0) + 0.001;            // lands at the lowest place
+  const land = i => {
+    if (low(snap)) home = snap;
+    return low(i) && low(home) ? home : i;
+  };
   /* Snaps the floor has merged land in one place, so a tap or an arrow key
      moves to the next place that is actually different, rather than
      spending a press on no visible change. */
@@ -2508,7 +2549,7 @@ function sheetDrag(wrap, sheet, grip) {
          snap stands, so a nudge does not quietly save a different choice */
       let best = snap;
       SHEET_SNAPS.forEach((f, i) => { if (Math.abs(at(i) - projected) < Math.abs(at(best) - projected) - 0.001) best = i; });
-      setSnap(best, releaseVel, false);
+      setSnap(land(best), releaseVel, false);
     }
     start = null;
     samples = [];
@@ -2519,11 +2560,11 @@ function sheetDrag(wrap, sheet, grip) {
   grip.addEventListener("click", () => {
     if (moved) { moved = false; return; }
     const up = nextUp();
-    setSnap(up === snap ? 0 : up, 0, false);
+    setSnap(land(up !== snap ? up : 0), 0, false);
   });
   grip.addEventListener("keydown", e => {
-    if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); setSnap(nextUp(), 0, false); }
-    if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); setSnap(nextDown(), 0, false); }
+    if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); setSnap(land(nextUp()), 0, false); }
+    if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); setSnap(land(nextDown()), 0, false); }
   });
   return {
     /* The host measures the drawing and says how much of the reader the
@@ -2702,10 +2743,12 @@ async function openReader(id, layerIndex, opts = {}) {
     /* In sheet mode the diagram's pane stops at the drawing (fitSheet),
        far too short for this menu to open upward inside it. There it opens
        downward from the bar, over the top of the reading sheet, which also
-       leaves the drawing in view while Races or Spine changes it. */
+       leaves the drawing in view while Races or Spine changes it. It goes
+       right after the pane rather than at the end of the reader, so Tab
+       from the tools button reaches the menu before the reading sheet. */
     if (toolsMenu.hidden) {
-      const host = sheetMode && sheetMode.matches ? wrap : dpane;
-      if (toolsMenu.parentElement !== host) host.appendChild(toolsMenu);
+      if (sheetMode && sheetMode.matches) { if (toolsMenu.previousElementSibling !== dpane) dpane.after(toolsMenu); }
+      else if (toolsMenu.parentElement !== dpane) dpane.appendChild(toolsMenu);
     }
     setTools(toolsMenu.hidden);
     if (toolsMenu.hidden) return;
@@ -3040,7 +3083,10 @@ async function openReader(id, layerIndex, opts = {}) {
      Closing the origin card here leaves its part traced: only the card goes,
      not what the reader asked the drawing to show. */
   const soloOverlay = keep => {
-    if (keep !== "tools") setTools(false);
+    /* In sheet mode the tools menu drops over the sheet and the caption sits
+       on the bar, so the two never overlap there, and a replay landing shut
+       a menu the reader had just opened. */
+    if (keep !== "tools" && !(keep === "caption" && sheetMode && sheetMode.matches)) setTools(false);
     if (keep !== "origin") closeOrigin();
     if (keep !== "caption") { caption.hidden = true; clearTimeout(captionTimer); }
   };
@@ -3541,8 +3587,14 @@ async function shareStudy(rec) {
     return copyLink(url, COPY.shareCopied);
   }
   const name = studyJsonName(rec);
+  /* A shared file says it was shared, so the recipient's import marks it
+     "Shared with you", as the #/import link does, instead of filing a
+     stranger's study under Yours. The tag is self-declared, and a forged one
+     can only add that label. Export .json stays a bare study: it is the
+     reader's own copy. */
+  const sharedJson = JSON.stringify({ app: "vitruvian", kind: "shared-study", doc: rec.doc }, null, 2);
   if (canShareJsonFile()) {
-    const file = new File([JSON.stringify(rec.doc, null, 2)], name, { type: "application/json" });
+    const file = new File([sharedJson], name, { type: "application/json" });
     if (await shareViaSheet({ files: [file], title, text: COPY.shareFileText(CONFIG.siteUrl) })) return;
   }
   let url = "";
@@ -3550,7 +3602,7 @@ async function shareStudy(rec) {
   catch (err) { toast(COPY.shareLocalNote); return; }
   if (url.length <= SHARE_LINK_SOFT_MAX) return copyLink(url, COPY.sharePortableCopied);
   if (!confirm(COPY.shareLongAsk(url.length))) return copyLink(url, COPY.shareLongCopied);
-  download(name, JSON.stringify(rec.doc, null, 2));
+  download(name, sharedJson);
   toast(COPY.shareJsonSaved(name));
 }
 
@@ -4707,7 +4759,10 @@ function keyEntry({ saveLabel, onSaved, draft, labelledBy }) {
   msg.setAttribute("role", "status");
   input.setAttribute("aria-describedby", msg.id);
   const say = (text, tone) => { msg.textContent = text || ""; msg.dataset.tone = tone || ""; };
-  const SHAPE = /^sk-ant-/;
+  /* The whole key, not just its start: a zero-width space or a pasted
+     ellipsis cannot go in a request header, so the check failed before
+     sending and reported "No connection" for a key that can never work. */
+  const SHAPE = /^sk-ant-[\x21-\x7e]+$/;
   const shaped = () => {
     const k = input.value.trim();
     if (!k) { say(COPY.keyEmpty, "warn"); return null; }
@@ -4766,7 +4821,21 @@ function keyGetLine(cls) {
    once a key is saved. It is the install hint's card, holding a form, and
    it belongs to the screen it opened on: show() closes it. */
 let keySheetEl = null, keySheetBack = null;
-function keySheetKey(e) { if (e.key === "Escape") { e.stopPropagation(); closeKeySheet(true); } }
+/* The sheet stays non-modal, so a tap on the page still works, but Tab and
+   Shift+Tab wrap inside it while focus is there. Otherwise they moved onto
+   the tab bar and footer the sheet covers, and the focus ring went out of
+   sight with the request still waiting in the sheet. */
+function keySheetKey(e) {
+  if (e.key === "Escape") { e.stopPropagation(); closeKeySheet(true); return; }
+  if (e.key !== "Tab" || !keySheetEl || !keySheetEl.contains(document.activeElement)) return;
+  const f = [...keySheetEl.querySelectorAll("a[href],button:not([disabled]),input:not([disabled])")].filter(el => el.getClientRects().length);
+  if (!f.length) return;
+  const first = f[0], last = f[f.length - 1], a = document.activeElement;
+  if (e.shiftKey ? (a === first || a === keySheetEl) : a === last) {
+    e.preventDefault();
+    (e.shiftKey ? last : first).focus();
+  }
+}
 function closeKeySheet(byHand) {
   if (!keySheetEl) return;
   keySheetEl.remove();

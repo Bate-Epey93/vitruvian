@@ -166,10 +166,9 @@ var LabPage = (function () {
          states it switches the scene between */
       if (SUP.mode && C.altMode) {
         els.altBtn = toggle(C.altMode.label, function (on) { ctl.setMode(on ? C.altMode.on : C.altMode.off); });
-        view.appendChild(els.altBtn);
       }
-      /* On a phone the view toggles fold behind one ⋯ button beside Reset,
-         so the stage keeps its corner. Above that width the menu box is
+      /* On a phone the view toggles fold behind one ⋯ button at the start
+         of the bar, so the stage keeps its corner. Above that width the menu box is
          display:contents and the toggles sit in the row as before. The
          button comes first so an open menu is next in the tab order. */
       if (view.firstChild) {
@@ -193,6 +192,11 @@ var LabPage = (function () {
         bar.appendChild(more);
         bar.appendChild(view);
       }
+      /* The mode toggle stays out of the fold, after the view toggles as it
+         always sat. It is the study's own control, and its copy tells the
+         reader to turn it on by name: a ⋯ says neither that it is there nor
+         whether it is on. Three buttons still fit a 375px stage. */
+      if (els.altBtn) bar.appendChild(els.altBtn);
       var reset = h("button", "st-btn", C.controls.reset);
       /* through smoothCameraChange, like double-click: it stops a coasting
          orbit first, which would otherwise carry on from the home view */
@@ -336,6 +340,18 @@ var LabPage = (function () {
          only one case of; a layer with no cutaway can still ask for it */
       if (els.cutNote) els.cutNote.hidden = !(cfg.cutaway || cfg.note);
 
+      /* The free layer's controls are live on every step, so its readout
+         legend is too: inside the free note on the solution step, on its
+         own just above the buttons on the other three. */
+      function freeKey() {
+        var key = h("p", "free-key");
+        C.freeNote.key.forEach(function (line) { key.appendChild(h("span", null, line)); });
+        return key;
+      }
+      var soloKey = cfg.free && C.freeNote && C.freeNote.key
+        ? function () { var k = freeKey(); k.classList.add("solo"); card.appendChild(k); }
+        : function () {};
+
       if (step === 1) {
         var prob = h("div", "problem-card");
         prob.appendChild(h("p", null, t.problem));
@@ -343,6 +359,7 @@ var LabPage = (function () {
         card.appendChild(prob);
         card.appendChild(h("p", "lc-analogy", "Like " + t.analogy));
         card.appendChild(els.demo);
+        soloKey();
         card.appendChild(footer({ label: "What would you do?", fn: function () { goto(layerIndex, 2); } },
           { label: "Skip to the solution", fn: function () { goto(layerIndex, 3); } }));
       } else if (step === 2) {
@@ -356,6 +373,7 @@ var LabPage = (function () {
         ta.value = loadGuess(layerIndex);
         ta.addEventListener("input", function () { saveGuess(layerIndex, ta.value); });
         card.appendChild(ta);
+        soloKey();
         card.appendChild(footer({ label: "Show me the solution", fn: function () { goto(layerIndex, 3); } },
           { label: "Back to the problem", fn: function () { goto(layerIndex, 1); } }));
       } else if (step === 3) {
@@ -372,6 +390,9 @@ var LabPage = (function () {
           var free = h("div", "free-note");
           free.appendChild(h("div", "mono-label", C.freeNote.label));
           free.appendChild(h("p", null, C.freeNote.text));
+          /* optional: what the study's readouts mean, one line each. The
+             study's own CSS decides whether its HUD says it instead. */
+          if (C.freeNote.key) free.appendChild(freeKey());
           card.appendChild(free);
         }
         card.appendChild(footer({ label: "What's the tradeoff?", fn: function () { goto(layerIndex, 4); } },
@@ -387,6 +408,7 @@ var LabPage = (function () {
           comp.appendChild(h("span", "lab-offer-cta", C.companion.cta));
           card.appendChild(comp);
         }
+        soloKey();
         card.appendChild(footer(last ? { label: "Back to Vitruvian", href: "../", back: true } : { label: "Next layer", fn: function () { goto(layerIndex + 1, 1); } },
           { label: "Back to the solution", fn: function () { goto(layerIndex, 3); } }));
       }

@@ -4,6 +4,32 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [2.15.0] — 2026-11-07 · Less on screen, and the first minute makes sense
+
+The audit's second half: thirteen changes that take things off the screen rather than add to it, each reviewed in a sandbox before shipping, then a second adversarial review of all of them together. Every confirmed finding from that review is fixed here.
+
+### First visit
+- **The landing page shows a system breaking, not just a system.** Before each layer the stage lights the part that fails in red, then draws the fix. The button says what happens next, "Watch an example", and opens the study on layer 1's problem. The stage picks a different sample each visit, never the same one twice running, and the button always opens the one on stage.
+- **Home puts a study on the first phone screen.** A new reader sees one "Start here" row of three samples instead of an empty "Your Deconstructs" shelf; a returning reader sees one "Continue" row with where they stopped. Samples are grouped under Software and Beyond software, and the filter chips fit on one row.
+- **One tip per arrival.** The rest appear the first time you use the thing they describe, not all at once on the first open.
+- **No key, no dead end.** Asking for a new Deconstruct without a key keeps your request, shows the nearest free sample, the cost, and where to get a key, and continues the moment one is saved. Settings shows a saved key as "Saved on this device, ends in …" with Replace and Remove.
+- **An honest promise.** "25 systems, free to read offline", generation on your own Anthropic key, written for anyone who wonders why a system is built the way it is. One name per idea throughout (Deconstruct, Field study, Strict mode, Pulse).
+
+### Reading
+- **Every Problem heading names what breaks**, in the reader's terms, so it no longer gives away the fix before you guess it. All 141 sample layers have one, and new Deconstructs are asked for one and checked.
+- **One home per action.** Replay and Before live in the prose, the caption bar is Pulse, zoom and Diagram tools, and the ⋯ menu is grouped into Reading, Share and export, and Field guide.
+- **Where you are is said once**, the caption bar is one row on phones, and the diagram frame stops at the drawing's height so the sheet gets the rest.
+- **The diagram opens at a readable size** and centres on what this layer added; Fit is one tap away. The key lists only what is on screen.
+- **"Why is this part here" names the failure that added it**, and a desktop hover says the same.
+- **Library cards carry one progress signal**: the miniature diagram, the name, and one line ("2 of 6 layers", "Not started", or the enso when finished). Chips that repeated the section heading are gone.
+- **One back, one home.** The topbar back returns where you came from; the level switch is one pill on phones; install is offered once, after your first finished layer, and stays in Settings.
+
+### Field studies
+- **Only controls that work are shown**, the bench and gearbox controls appear on the free layer, and phones get a one-line readout above the drawing with the view toggles under ⋯.
+
+### Sharing
+- **Shared samples unfurl with their own card**, own studies share as a file, and a link too long to travel says so and offers the file instead.
+
 ## [2.14.0] — 2026-11-07 · A full audit, and everything it found
 
 An adversarial review read the whole app across ten lenses (diagram, reader, library, generation and data, security, deployment, the 3D lab, a first-time walkthrough in a real browser, clutter, and the value proposition) and had every finding checked by two independent verifiers before anything was changed. 104 distinct issues came out of it; 59 were confirmed before fixing began, none were refuted, and the 44 left unverified by a usage limit were each checked as they were fixed. 97 are fixed here; one turned out not to be a bug, and the rest need a decision rather than code (listed at the end).

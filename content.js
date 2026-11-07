@@ -24,8 +24,8 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "2.14.0",
-  flagshipVersion: 14,                   // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
+  appVersion: "2.15.0",
+  flagshipVersion: 15,                   // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   // foundations first, then the systems built on them — YouTube last in software, then non-software & 3D companion flagships
   flagshipNames: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue", "notification-system", "rate-limiter", "search-typeahead", "url-shortener", "ride-matching", "ticket-booking", "content-delivery-network", "recommendation-feed", "payment-ledger", "video-transcoding", "news-feed", "photo-store", "realtime-chat", "whatsapp", "youtube", "railway", "clearinghouse", "toyota-kanban", "immune-system", "manual-gearbox", "clock-escapement"],
   siteUrl: "https://bate-epey93.github.io/vitruvian/",
@@ -965,12 +965,16 @@ var COPY = {
     /* The stage plays each layer twice: the version before it, with what
        breaks lit red, then the fix drawn in. heroFailure captions the first
        beat with the layer's problem.title; heroFailureFallback stands in for
-       a study without one, because the layer's name is the fix, and set in
-       red it would read as the thing that broke. */
+       a study without one, because a layer's name can be the fix, and set in
+       red it would read as the thing that broke. heroFix captions the second
+       beat with the parts the layer adds. A layer's name will not do there,
+       since many samples name a layer after its failure ("The Retry Doubles
+       the Money"), so the fix beat would repeat a problem. */
     heroBaseline: system => `${system}, as simple as it can be.`,
     heroBreaks: "What breaks",
     heroFailure: (n, failure) => `Layer ${n}: ${failure}`,
     heroFailureFallback: "the design so far breaks",
+    heroFix: parts => `The fix adds: ${parts}`,
     heroLayer: (n, total) => `Layer ${n} of ${total}`,
     stats: ["sample systems to take apart", "thinking models that keep coming back", "reading levels, plain English to engineer"],
     sections: [
@@ -1019,9 +1023,12 @@ var COPY = {
      not cover, usually the menu that has just opened. ------------------- */
   tips: [
     // ── the shelf ──
-    { id: "lib-shelf", screen: "library", target: ".bd-grid, .lib-grid, .bd-card",
+    /* The Start here or Continue slot comes first, so a phone opens on a
+       study. Ringing the first card under it made the tip scroll Home past
+       the slot; the cards are only the fallback for a Home with no slot. */
+    { id: "lib-shelf", screen: "library", target: ".home-slot, .card-grid .bd-card",
       title: "Home",
-      text: "Your own Deconstructs sit first, then the worked samples. Open any sample to see the shape a Deconstruct takes before you make one." },
+      text: "Start with a sample, or pick up where you stopped. Anything you Deconstruct yourself sits above the samples." },
     { id: "lib-own", screen: "library", target: ".own-design-btn",
       title: "Your own system",
       text: "Describe something you are building and Vitruvian rebuilds it the same way it rebuilds the samples: one failure at a time, with the concerns your description has not answered yet named at the end." },

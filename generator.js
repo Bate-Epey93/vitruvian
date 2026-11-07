@@ -431,6 +431,12 @@ Return ONLY a JSON array of {"i": <number>, "text": "<rewritten passage>"}, one 
      authenticates before it reads the request, so a 400 that is not about
      credit still means the key was accepted. ── */
   async function checkKey(apiKey, modelId) {
+    /* A header value must be Latin-1, so a key holding a zero-width space or
+       a pasted ellipsis makes fetch throw before anything is sent. Caught
+       below, that would read as "No connection" and invite the reader to
+       save a key that can never work. Building the headers first sorts the
+       bad paste from a real network failure. */
+    try { new Headers(headers(apiKey, modelId)); } catch (e) { return "key"; }
     if (!navigator.onLine) return "offline";
     let res;
     try {

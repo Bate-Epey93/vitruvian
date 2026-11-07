@@ -35,7 +35,18 @@ var ESC_COPY = {
   /* shown on layers the reader can drive themselves */
   freeNote: {
     label: "Free bench",
-    text: "Every escapement is on the bench. Pick one, then drag the mainspring."
+    text: "Every escapement is on the bench. Pick one, then drag the mainspring.",
+    /* The two readouts are not the same claim, and the study falls apart
+       if they are read as one. Rate is how wrong the clock is. Sensitivity
+       is how much of that wrongness the drive force is responsible for,
+       which is the only number that improves all the way down the ladder.
+       One line each, so each starts with the label it explains. On a phone
+       they sit under the meters in the HUD; wider, the HUD floats on the
+       drawing and has no room for them, so they are here in the card. */
+    key: [
+      "Rate: time gained or lost in a day.",
+      "Drive sensitivity: how much winding changes the rate."
+    ]
   },
   /* the optional mode toggle, and the two scene modes it flips */
   altMode: { label: "Slow motion", on: "slow", off: "real" },
@@ -138,16 +149,6 @@ var ESC_COPY = {
     drift: "Drive sensitivity",
     amp: "Amplitude",
     drive: "Mainspring"
-  },
-  /* The two readouts are not the same claim, and the study falls apart if
-     they are read as one. Rate is how wrong the clock is. Sensitivity is
-     how much of that wrongness the drive force is responsible for, which
-     is the only number that improves all the way down the ladder.
-     Shown under the meters on the free layer, one line each, so each
-     starts with the label it explains. */
-  hudNote: {
-    rate: "Rate: time gained or lost in a day.",
-    drift: "Drive sensitivity: how much winding changes the rate."
   },
   driveLabels: { low: "Nearly run down", high: "Fully wound" },
 

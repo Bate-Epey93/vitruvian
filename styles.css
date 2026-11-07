@@ -1568,6 +1568,10 @@ g.dg-node.dg-enter{animation:dg-fade .45s var(--ease) both;}
 .cap-caution{flex:none;width:20px;height:20px;margin-top:1px;overflow:visible;}
 .cap-caution path{fill:none;stroke:var(--failure);stroke-linecap:round;stroke-linejoin:round;}
 .cap-text{min-width:0;}
+/* On a phone the caption sits over the timeline and the control bar for its
+   seven seconds. It holds only the sign and plain text, so taps pass through
+   it to Pulse, Stop and Diagram tools underneath. */
+@media(max-width:860px){.dg-caption{pointer-events:none;}}
 /* live HUD */
 .dg-hud{
   position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:6;
@@ -2057,7 +2061,9 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
   .home-slot{margin-top:26px;}
   .home-continue{grid-template-columns:96px minmax(0,1fr) auto;gap:12px;padding:8px 12px 8px 8px;}
   .home-continue .bd-topo-header{height:54px;}
-  .home-sys{font-size:17px;}
+  /* two lines before the ellipsis: on one line the narrow column cut most
+     names to about 15 characters, while the picks below wrap them in full */
+  .home-sys{font-size:17px;white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;}
   .start-row{grid-template-columns:1fr;gap:8px;}
   .start-open{display:grid;grid-template-columns:96px minmax(0,1fr);align-items:center;column-gap:12px;row-gap:1px;padding:8px;}
   .start-open .bd-topo-header{grid-row:1 / span 3;height:54px;margin:0;}

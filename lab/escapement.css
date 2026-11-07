@@ -39,6 +39,13 @@
 .hud-note { flex:1 0 100%; contain:inline-size; margin:0; padding-top:7px;
   border-top:1px solid var(--line-soft); font-size:10.5px; line-height:1.45; color:var(--muted); }
 .hud-note span { display:block; }
+/* Only on a phone, where the HUD is its own row above the drawing and
+   covers nothing. Anywhere wider the HUD floats on the drawing, and two
+   more lines put it over the balance wheel, or, on a phone on its side,
+   under the mainspring. There the free-bench card carries the same two
+   lines (freeNote.key in the copy). The hidden attribute still decides
+   the layer on a phone, because nothing else here sets a display. */
+@media (min-width:561px) { .hud-note { display:none; } }
 
 /* ── the mainspring ── */
 .drive-wrap { position:absolute; left:12px; bottom:12px; width:228px; z-index:10;
@@ -69,7 +76,6 @@
   .hud-mech-n { font-size:16px; }
   .hud-mech { min-width:62px; padding-right:10px; }
   .hud-meters { min-width:150px; }
-  .hud-note { font-size:10px; }
   .drive-wrap { width:180px; left:8px; bottom:8px; padding:8px 11px 6px; }
   .bench-wrap { right:8px; bottom:8px; padding:6px 7px; }
   .bench-btn { padding:4px 8px; font-size:9px; }
@@ -114,6 +120,8 @@
   .hud-bar { position:absolute; left:0; right:0; bottom:0; height:2px; margin:0; border-radius:0; }
   .hud-bar-fill { border-radius:0; }
   .hud-note { padding-top:4px; font-size:9.5px; line-height:1.4; }
+  /* the HUD carries the readouts' legend here, so the card does not repeat it */
+  .free-key { display:none; }
 
   .bench-wrap { grid-row:3; position:static; flex-direction:row; gap:2px; padding:5px 8px;
     border:none; border-top:1px solid var(--line); border-radius:0;

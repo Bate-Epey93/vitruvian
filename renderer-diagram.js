@@ -1377,11 +1377,19 @@ var Diagram = (() => {
          so a host that has other uses for the height (the phone's reading
          sheet) can stop the frame here. At the reading floor that is the
          floor's height, not the whole's, or the sheet would squeeze the frame
-         back down to the unreadable fit. */
+         back down to the unreadable fit.
+
+         Zoomed by hand, the drawing is as tall as it is drawn now. Measured
+         from the opening size alone, a reader who zoomed in after Fit kept
+         the fitted floor and could not lower the sheet to give the bigger
+         drawing room. Only by hand: while the fit is automatic at the
+         reading floor, the drawn size follows the frame's height, and a
+         floor taken from it would pin the sheet wherever it already sat. */
       const usefulHeight = () => {
         const cs = getComputedStyle(container);
         const byW = innerW() / layout.width;
-        const z = readFirst && byW < READABLE ? READABLE : Math.max(0.2, Math.min(MAXUP, byW));
+        let z = readFirst && byW < READABLE ? READABLE : Math.max(0.2, Math.min(MAXUP, byW));
+        if (!autoFit) z = Math.max(z, current());
         return layout.height * z + parseFloat(cs.paddingTop || 0) + parseFloat(cs.paddingBottom || 0);
       };
       const current = () => (svg.getBoundingClientRect().width || layout.width) / layout.width;
@@ -1515,8 +1523,14 @@ var Diagram = (() => {
         stopCoast();
         const cR = container.getBoundingClientRect();
         const fz = fitZ();
-        const zoomIn = Math.min(MAXZ, Math.max(1.5, fz * 1.65));
-        const isZoomedIn = current() > fz * 1.15;
+        /* "Zoomed in" is measured from where the drawing opened, not always
+           from the whole. On a phone it opens at the reading floor, well
+           above the whole, and measured from the whole the first double-tap
+           there zoomed out to 4px labels: the gesture for a closer look did
+           the opposite. openZ is the whole wherever no floor applies. */
+        const home = autoFit ? openZ() : fz;
+        const zoomIn = Math.min(MAXZ, Math.max(1.5, home * 1.65));
+        const isZoomedIn = current() > home * 1.15;
         autoFit = isZoomedIn;
         if (isZoomedIn) readFirst = false;               // backing out to the whole asks for the whole
         animateTo(isZoomedIn ? fz : zoomIn, clientX - cR.left, clientY - cR.top, 200);
@@ -2144,6 +2158,7 @@ var Diagram = (() => {
     wrap.appendChild(lineRow);
     let lit = null;                                   // the entry currently spotlighting
     let lastSt = null, lastDg = null;
+    const held = { spine: false, race: false };       // turned on here once, so their key entries keep a place (paintLines)
 
     wrap.update = (st, dg) => {
       lastSt = st; lastDg = dg;
@@ -2267,7 +2282,7 @@ var Diagram = (() => {
        all five line kinds always: money on twenty of twenty-five systems
        that move none, "breaks next" with nothing red, backpressure with
        nothing flowing. And what Spine and Races draw was never named at
-       all. Now each entry is here exactly while its mark is on screen. */
+       all. Now each entry shows exactly while its mark is on screen. */
     function paintLines() {
       lineRow.textContent = "";
       const st = lastSt;
@@ -2275,17 +2290,53 @@ var Diagram = (() => {
       const on = lastDg && lastDg.overlays ? lastDg.overlays() : {};
       const drawn = [...st.edges.values()].filter(e => st.nodes.has(e.from) && st.nodes.has(e.to));
       const kinds = new Set(drawn.map(e => e.kind));
+      const payload = kinds.has("payload");
+      /* Pulse, Spine and Races come and go between renders. On a wide screen
+         the key sits in flow above the drawing, so an entry arriving mid-replay
+         wrapped the key onto another row, the frame lost that height, and the
+         drawing refit smaller, then back when the replay ended. So Pulse's
+         entries keep their places while it is off, hidden, and the key's
+         height changes only with the state. Spine's and Races' are held once
+         the reader has turned them on here: held from the start, they cost a
+         row of drawing on a laptop for every reader, for buttons most never
+         press. On a phone the key floats over the drawing and takes no height
+         from it, so a held place there would only be a gap in the open key. */
+      if (on.spine) held.spine = true;
+      if (on.race) held.race = true;
+      const reserve = getComputedStyle(wrap).position !== "absolute";
+      const slot = (can, show, build, copy) => {
+        if (!show && !(can && reserve)) return;
+        item(build, copy);
+        if (show) return;
+        const it = lineRow.lastChild;
+        it.classList.add("dgl-idle");
+        it.style.visibility = "hidden";               // holds its room, but takes no hover and is not read out
+      };
       // edge kinds (pattern = kind; colour follows the source lane)
-      if (kinds.has("payload")) item(s => line(s, "", { "stroke-width": 2 }), COPY.keyFlow);
+      if (payload) item(s => line(s, "", { "stroke-width": 2 }), COPY.keyFlow);
       if (kinds.has("control")) item(s => line(s, "", { "stroke-dasharray": "4 3" }), COPY.keyControl);
       if (kinds.has("money")) item(s => line(s, "", { "stroke-dasharray": "1.5 3" }), COPY.keyMoney);
       // failure pulse
       if (on.breaks) item(s => line(s, "dgl-broken", { "stroke-width": 2 }), COPY.keyBreaks);
-      if (on.pulse && kinds.has("payload")) {         // Pulse moves payload and nothing else
+      // the spine and its chokepoints are read off payload edges, so with none there is nothing to hold
+      slot(payload && held.spine, !!on.spine, s => line(s, "dgl-spine"), COPY.keySpine);
+      slot(payload && held.spine, !!on.choke, s => el("path", { d: roundRectD(8, 3.5, 14, 9, 2), class: "dgl-choke" }, s), COPY.keyChoke);
+      // Races rings only parts with two writers; a state with none never shows it
+      const canRace = reserve && held.race && !!(lastDg && lastDg.contendedIds && lastDg.contendedIds().length);
+      slot(canRace, !!on.race, s => {
+        // two lines landing on one part: the picture of a second writer
+        el("path", { d: "M 2 3.5 L 10.5 7 M 2 12.5 L 10.5 9", class: "dgl-line" }, s);
+        el("path", { d: roundRectD(12, 3.5, 14, 9, 2), class: "dgl-race" }, s);
+      }, COPY.keyRace);
+      /* Pulse last: while it is off its places are held but empty, and at the
+         end of the key that is spare room, not a gap in front of Spine or Races */
+      if (payload) {                                  // Pulse moves payload and nothing else
+        const canPulse = !!(lastDg && lastDg.sim && lastDg.sim.available);
+        const pulsing = !!on.pulse;
         /* the shapes in flight, one per kind that actually sends payload,
            in the key's kind order and the sim's own geometry */
         const senders = KIND_ORDER.filter(k => drawn.some(e => e.kind === "payload" && st.nodes.get(e.from).kind === k));
-        if (senders.length) item(s => {
+        if (senders.length) slot(canPulse, pulsing, s => {
           const step = senders.length > 3 ? 6.6 : 8;
           senders.forEach((k, i) => {
             const b = tokenBody(k);
@@ -2294,17 +2345,10 @@ var Diagram = (() => {
             s.appendChild(b);
           });
         }, COPY.keySenders);
-        item(s => line(s, "dgl-congested"), COPY.keyCongested);
+        slot(canPulse, pulsing, s => line(s, "dgl-congested"), COPY.keyCongested);
         // a jam creeping back upstream from a node that can't keep up
-        item(s => line(s, "dgl-broken", { "stroke-width": 2, "stroke-dasharray": "5 2.6" }), COPY.keyBackpressure);
+        slot(canPulse, pulsing, s => line(s, "dgl-broken", { "stroke-width": 2, "stroke-dasharray": "5 2.6" }), COPY.keyBackpressure);
       }
-      if (on.spine) item(s => line(s, "dgl-spine"), COPY.keySpine);
-      if (on.choke) item(s => el("path", { d: roundRectD(8, 3.5, 14, 9, 2), class: "dgl-choke" }, s), COPY.keyChoke);
-      if (on.race) item(s => {
-        // two lines landing on one part: the picture of a second writer
-        el("path", { d: "M 2 3.5 L 10.5 7 M 2 12.5 L 10.5 9", class: "dgl-line" }, s);
-        el("path", { d: roundRectD(12, 3.5, 14, 9, 2), class: "dgl-race" }, s);
-      }, COPY.keyRace);
     }
     // the drawing's overlays come and go between renders; the host calls this then
     wrap.refresh = paintLines;

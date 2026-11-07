@@ -98,13 +98,16 @@ var MY_COPY = {
 
   bands: { problem, solution, tradeoff, atScale },   // the four card headings
   badPhases: ["crash", …],                          // phases the readout marks as failure
-  freeNote: { label, text },                        // optional; shown on free:true layers
+  freeNote: { label, text, key? },                  // optional; shown on free:true layers.
+                                                    // key: optional readout legend, one line each,
+                                                    // shown on every step of the free layer
   altMode: { label, on, off },                       // optional third toggle + its two scene modes
 
   layers: [ { name, era, problem, beginner, analogy,
               solution, tradeoff, atScale, demoLabel }, … ],
   phases: { idle: "…", … },     // one line per segment name, keyed by name
-  controls: { play, replay, pause, restart, explode, cutaway, reset, scrubLabel },
+  controls: { play, replay, pause, restart, explode, cutaway, view, reset, scrubLabel },
+                                // view: label of the phone ⋯ menu that holds the view toggles
   a11y: { canvas, rmNote, … }
 };
 ```

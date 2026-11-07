@@ -86,12 +86,12 @@
 
     hud.appendChild(meters);
 
-    /* The two readouts are not the same claim (see hudNote in the copy),
-       so on the free layer, where the reader moves both, each says what
-       it is. */
+    /* The two readouts are not the same claim (see freeNote.key in the
+       copy), so on the free layer, where the reader moves both, each says
+       what it is. Only a phone shows it here (escapement.css); wider, the
+       free-bench card carries the same lines. */
     els.note = h("p", "hud-note");
-    els.note.appendChild(h("span", null, C.hudNote.rate));
-    els.note.appendChild(h("span", null, C.hudNote.drift));
+    C.freeNote.key.forEach(function (line) { els.note.appendChild(h("span", null, line)); });
     els.note.hidden = true;
     hud.appendChild(els.note);
 
