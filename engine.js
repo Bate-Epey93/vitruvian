@@ -1265,9 +1265,8 @@ function sectionHead(title, sub) {
 /* ── Topological Miniature Blueprint Header (Wave F · Proposal #1) ── */
 function buildCardTopo(doc, doneLayers, dom) {
   const header = h("div", "bd-topo-header");
-  const totalLayers = (doc && doc.layers && doc.layers.length) || 1;
-  header.appendChild(h("span", "bd-topo-badge", `${doneLayers}/${totalLayers} layers`));
-
+  /* no "2/6 layers" badge up here: the inked parts already show how far you
+     got, and the card's foot line says it in words */
   if (!doc || !doc.visual) return header;
   const lanes = doc.visual.lanes || [{ id: "l0" }];
   const laneIndex = {};
@@ -1357,8 +1356,14 @@ function sourceChipLabel(rec) {
   return COPY.sourceChip[rec.source] || COPY.sourceChip.own;
 }
 
+/* A card says each thing once, because it repeats dozens of times down Home.
+   Progress shows in the miniature (read layers inked) and the foot line,
+   never also as bars, a percent or a badge. The section heading already says
+   Sample or Yours, so only a design or a shared Deconstruct carries a source
+   chip, and the domain chip steps aside while a domain filter names it. */
 function cardGrid(recs) {
   const grid = h("div", "card-grid");
+  const domainFiltered = libFilter === "software" || libFilter === "beyond" || libFilter === "mech";
   recs.forEach(rec => {
     const card = h("button", "bd-card");
     const dom = (rec.doc && rec.doc.meta && rec.doc.meta.domain) || "software";
@@ -1366,15 +1371,15 @@ function cardGrid(recs) {
 
     const n = rec.doc.layers.length;
     const done = rec.doc.layers.filter(L => rec.attempts[L.index] && rec.attempts[L.index].revealed).length;
-    const pct = Math.round(100 * done / n);
 
     // Topological Miniature Header (Proposal #1)
     card.appendChild(buildCardTopo(rec.doc, done, dom));
 
     const top = h("div", "bd-top");
-    const chipCls = rec.source === "flagship" ? " flagship" : (rec.source === "design" ? " design" : "");
-    top.appendChild(h("span", "chip" + chipCls, sourceChipLabel(rec)));
-    if (dom && dom !== "software" && typeof domainLabel === "function") {
+    if (rec.source === "design" || rec.source === "shared") {
+      top.appendChild(h("span", "chip" + (rec.source === "design" ? " design" : ""), sourceChipLabel(rec)));
+    }
+    if (!domainFiltered && dom && dom !== "software" && typeof domainLabel === "function") {
       const dl = domainLabel(dom);
       if (dl) top.appendChild(h("span", "chip dom-chip", dl));
     }
@@ -1387,21 +1392,14 @@ function cardGrid(recs) {
     card.appendChild(h("div", "bd-name", rec.system));
     const es = rec.doc.essence && (rec.doc.essence.beginner || rec.doc.essence.text);
     if (es) card.appendChild(h("p", "bd-essence", es));
-    // the strata: one bar per layer, filled as layers are revealed
-    const strata = h("div", "bd-strata");
-    for (let k = 1; k <= n; k++) {
-      const a = rec.attempts[k];
-      strata.appendChild(h("span", a && a.revealed ? "on" : null));
-    }
     const foot = h("div", "bd-foot");
-    foot.appendChild(h("span", "bd-last", n + " layers · " + (rec.lastOpen ? "opened " + timeAgo(rec.lastOpen) : "not started")));
-    if (pct === 100) {
+    foot.appendChild(h("span", "bd-last", COPY.cardFoot(done, n, rec.lastOpen ? timeAgo(rec.lastOpen) : "")));
+    if (n && done === n) {
       const stamp = h("img", "enso-stamp card-stamp");
       stamp.src = "assets/enso-complete.svg";
-      stamp.alt = "Deconstruct complete";
+      stamp.alt = COPY.cardDone;
       foot.appendChild(stamp);
-    } else if (pct > 0) foot.appendChild(h("span", "bd-pct", pct + "%"));
-    card.appendChild(strata);
+    }
     card.appendChild(foot);
     card.onclick = () => openReader(rec.id);
     grid.appendChild(card);
@@ -1701,8 +1699,8 @@ async function renderLibrary() {
         const lab = guardLabLink(h("a", "bd-card lab-card"));
         lab.href = st.href;
         const top = h("div", "bd-top");
-        top.appendChild(h("span", "chip lab-chip", COPY.labCardChip));
-        top.appendChild(h("span", "chip", COPY.labCardChip3d));
+        // the section heading already says "Field studies"; the chip only says how it's drawn
+        top.appendChild(h("span", "chip lab-chip", COPY.labCardChip3d));
         const go = h("span", "bd-go");
         go.appendChild(icon("arrowUpRight"));
         top.appendChild(go);

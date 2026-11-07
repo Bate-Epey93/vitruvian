@@ -580,8 +580,19 @@ var COPY = {
   sampleNote: "Worked examples of what a Deconstruct looks like. Open one to see how it works, then take apart a system of your own.",
   yoursHeading: "Your Deconstructs",
   yoursEmpty: "Nothing here yet. Name a system above, or dissect a design you're building. The samples below show what you'll get.",
-  /* the badge on every card, and on the search match above the cards */
+  /* the badge on the search match above the cards. A card wears it only
+     when it says more than the section heading: a design, or a shared one */
   sourceChip: { flagship: "Sample", design: "Your design", shared: "Shared with you", own: "Your Deconstruct" },
+  /* the one line at the foot of a Home card: how big the system is, how far
+     you got if you stopped part way, and when you last opened it. A finished
+     one gets the enso stamp beside it instead of a count. */
+  cardFoot: (done, n, ago) => {
+    const lay = n === 1 ? "layer" : "layers";
+    const size = done < n && (done || ago) ? `${done} of ${n} ${lay}` : `${n} ${lay}`;
+    if (ago) return `${size} · opened ${ago}`;
+    return done ? size : `${size} · not started`;
+  },
+  cardDone: "Deconstruct complete",
   homeSearchAria: "Search Home, or name a system to deconstruct",
   homeFilterAria: "Filter what Home shows",
   matchOpen: "Open the Deconstruct \u2192",
@@ -592,8 +603,10 @@ var COPY = {
   labNote: "Machines you can turn over in your hands. Same failure ladder, drawn in three dimensions.",
   /* on a Deconstruct's card when its subject also exists as a field study */
   labChip: "Also in 3D",
-  /* on the field study's own card, and on a search match that is one */
+  /* on a search match that is a field study */
   labCardChip: "Field study",
+  /* the one chip on a field study's own card: the heading above already
+     says Field studies */
   labCardChip3d: "3D",
   labKicker: "Also a machine",
   labOpen: "Open the field study \u2192",

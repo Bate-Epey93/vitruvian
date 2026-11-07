@@ -608,13 +608,6 @@ input,textarea{font-family:var(--sans);}
   display:flex;align-items:center;justify-content:center;
   margin-bottom:2px;
 }
-.bd-topo-badge{
-  position:absolute;right:8px;top:6px;
-  font-family:var(--mono);font-size:9.5px;font-weight:700;
-  padding:2px 6px;border-radius:var(--r-pill);
-  background:color-mix(in srgb,var(--panel) 88%,transparent);
-  color:var(--card-accent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--card-accent) 26%,transparent);
-}
 .bd-topo-svg{width:100%;height:100%;display:block;}
 .topo-node{transition:fill .2s, stroke .2s;}
 .topo-node.unlocked{fill:var(--panel);stroke:var(--card-accent);stroke-width:1.8;}
@@ -634,12 +627,9 @@ input,textarea{font-family:var(--sans);}
 .bd-card .bd-name{font-family:var(--display);font-weight:650;font-size:20px;letter-spacing:-.03em;line-height:1.15;margin-top:6px;}
 .bd-essence{font-size:13.5px;line-height:1.55;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .bd-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
-.bd-strata{display:flex;gap:3px;margin-top:auto;padding-top:8px;}
-.bd-strata span{flex:1;height:4px;border-radius:2px;background:var(--line);}
-.bd-strata span.on{background:var(--accent);}
-.bd-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:20px;}
+/* the card's one progress line, pinned to the bottom so feet align across a row */
+.bd-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:20px;margin-top:auto;padding-top:4px;}
 .bd-last{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;}
-.bd-pct{font-size:12px;font-weight:650;color:var(--accent-deep);font-variant-numeric:tabular-nums;}
 /* field-study card: an anchor that leaves the app shell */
 .lab-card{text-decoration:none;color:inherit;overflow:hidden;}
 .lab-art{position:absolute;right:-18px;bottom:-26px;color:color-mix(in srgb,var(--proposal) 22%,transparent);pointer-events:none;}
@@ -1931,7 +1921,6 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
   box-shadow:inset 0 0 0 1px var(--hair);}
 .home-thumb svg{width:100%!important;min-width:0!important;height:100%!important;}
 .home-cont-text{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0;}
-.home-cont-text .bd-strata{width:100%;margin:6px 0 10px;padding:0;}
 .eyebrow-sm{font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--accent-deep);}
 .home-review .eyebrow-sm{color:var(--proposal);}
 .home-sys{font-family:var(--display);font-weight:650;font-size:24px;letter-spacing:-.03em;line-height:1.1;}
