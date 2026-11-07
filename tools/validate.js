@@ -13,6 +13,27 @@ for (const f of ["content.js", "voice.js", "skill.js", "schema.js"]) {
   (0, eval)(fs.readFileSync(path.join(root, f), "utf8"));
 }
 
+/* Failure-first headings. A layer's problem.title is shown before the reader
+   guesses, and the nodes that layer adds ARE its fix, so a title sharing a
+   real word with one of their labels gives the answer away. Words under four
+   letters and everyday words carry no answer; "node", "service" and "system"
+   are the generic tails of labels ("Cache node"), not the fix itself. A
+   trailing plural is folded so "Caches" still meets "Cache node". */
+const COMMON_WORDS = new Set(("about after again also always another anyone anything away back been before " +
+  "behind being both cannot could does done down each even ever every everyone everything from gets " +
+  "have here into just keep keeps like many more most much must never next nobody none nothing once " +
+  "only onto other over same some someone something still such take takes than that their them then " +
+  "there these they this those through twice under until upon very were what when where which while " +
+  "will with without would your node nodes service services system systems").split(" "));
+function significantWords(text) {
+  return (String(text).toLowerCase().match(/\p{L}+/gu) || [])
+    .filter(w => w.length >= 4 && !COMMON_WORDS.has(w))
+    .map(w => w.length > 4 && w.endsWith("ies") ? w.slice(0, -3) + "y"
+      : w.endsWith("sses") ? w.slice(0, -2)
+      : w.length > 4 && /[^siu]s$/.test(w) ? w.slice(0, -1) : w);
+}
+function isFlagshipPath(p) { return path.relative(root, p).split(path.sep)[0] === "flagships"; }
+
 const targets = process.argv.slice(2).length
   ? process.argv.slice(2)
   : fs.readdirSync(path.join(root, "flagships")).filter(f => f.endsWith(".json")).map(f => path.join("flagships", f));
@@ -27,16 +48,31 @@ for (const t of targets) {
   // ...and to the house voice: the same lint the app runs on generated text
   res.errors = res.errors || [];
   Voice.lintDoc(doc).forEach(v => res.errors.push(`voice (${v.issues.map(i => i.label).join(", ")}) at ${v.path.join(".")}: "${v.issues[0].match}"`));
+  // ...and, for the samples, to failure-first headings. A missing title only
+  // warns: the reader falls back to the layer name, which still renders.
+  const warnings = [];
+  if (isFlagshipPath(p) && Array.isArray(doc.layers)) doc.layers.forEach((L, i) => {
+    const prob = L && L.problem;
+    if (!prob || typeof prob !== "object") return;   // the schema has already said so
+    if (prob.title == null) { warnings.push(`layers[${i}] has no problem.title, so its heading falls back to the layer name`); return; }
+    const titleWords = new Set(significantWords(prob.title));
+    const added = L.diff && Array.isArray(L.diff.add_nodes) ? L.diff.add_nodes : [];
+    for (const n of added) {
+      const shared = n ? significantWords(n.label).find(w => titleWords.has(w)) : null;
+      if (shared) res.errors.push(`layers[${i}].problem.title names the fix: "${prob.title}" shares "${shared}" with new node "${n.label}"`);
+    }
+  });
   if (res.errors.length) res.ok = false;
   if (res.ok) {
     const nodes = doc.visual.nodes.length + doc.layers.reduce((n, L) => n + L.diff.add_nodes.length, 0);
     const edges = doc.visual.edges.length + doc.layers.reduce((n, L) => n + L.diff.add_edges.length, 0);
-    console.log(`✓ ${t}: valid — ${doc.layers.length} layers, ${nodes} nodes, ${edges} edges`);
+    console.log(`✓ ${t}: valid — ${doc.layers.length} layers, ${nodes} nodes, ${edges} edges${warnings.length ? `, ${warnings.length} warning(s)` : ""}`);
   } else {
     failed = true;
     console.log(`✗ ${t}: ${res.errors.length} error(s)`);
     res.errors.forEach(e => console.log(`   · ${e}`));
   }
+  warnings.forEach(w => console.log(`   ⚠ ${w}`));
 }
 
 /* ── Repository lockstep checks (when invoked with no file arguments) ── */

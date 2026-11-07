@@ -67,7 +67,10 @@ var SKILL = (() => {
     layers: [{
       index: "int - 1-based, sequential",
       name: "string",
+      // 40 here though schema.js accepts 60: a title that runs a little long
+      // still passes, so it never costs a repair round
       problem: {
+        title: "string, at most 40 characters, naming what BREAKS in this layer and never the mechanism that fixes it; it is shown before the reader guesses",
         statement: "string - the failure that forces this layer, enthusiast register; name the historical incident when confident",
         beginner: "string - same failure, plain words",
         model: { id: "one of the 14 model ids", application: "string - one sentence: how this model cracks THIS problem" }
@@ -120,7 +123,7 @@ ${designMode}
 METHOD - five movements, in order:
 1. ESSENCE. The system in one breath: what it is, what makes it remarkable. Then 3-6 deep facts - surprising, specific, checkable.
 2. STRIP-DOWN. Remove everything until only the irreducible core remains: the purpose, the actors and what they want, the invariants (what must never be false), the entities, the flows, the hard constraints. This is the system's skeleton.
-3. FAILURE-DRIVEN REBUILD (4-7 layers). Start from the naive version and let each layer be FORCED by a concrete failure of the previous state. Never add a mechanism the failure doesn't demand. Each layer names exactly one thinking model that cracks its problem, poses a gate question (the reader designs before seeing the answer), then gives the solution, both lenses, the tradeoff, HOW IT HOLDS AT SCALE (at_scale), and which invariants it defends. When you know the real historical failure (Clayton Tunnel 1861), use it and set history_confidence accordingly; when you don't, construct the inevitable failure honestly and say so in ordering_note.
+3. FAILURE-DRIVEN REBUILD (4-7 layers). Start from the naive version and let each layer be FORCED by a concrete failure of the previous state. Never add a mechanism the failure doesn't demand. Each layer names exactly one thinking model that cracks its problem, poses a gate question (the reader designs before seeing the answer), then gives the solution, both lenses, the tradeoff, HOW IT HOLDS AT SCALE (at_scale), and which invariants it defends. Each layer's problem.title is the heading the reader sees before guessing, so it names what breaks in words they can picture ("A stalled train gets hit from behind") and never the mechanism that fixes it, not even as its absence ("No block signals"); the mechanism belongs in name. When you know the real historical failure (Clayton Tunnel 1861), use it and set history_confidence accordingly; when you don't, construct the inevitable failure honestly and say so in ordering_note.
 4. STRESS TESTS (2-4). Push the finished system somewhere nasty. Reveal how it copes - or honestly where it breaks.
 5. TRANSFER. Extract the system-neutral principles and map this system's mechanisms to their twins elsewhere.
 
@@ -221,7 +224,7 @@ If you receive a message listing validation errors, return the corrected COMPLET
     },
     layers: [
       { index: 1, name: "The Timetable: One Clock, One Plan",
-        problem: { statement: "Two trains, one track, and nothing that coordinates them. Each driver knows only what he can see, and he cannot see far enough to matter.", beginner: "Two trains share one track, but neither driver knows where the other is.", model: { id: "single-source-of-truth", application: "Give every train one authoritative plan, the timetable, so that 'where should everyone be?' has exactly one answer." } },
+        problem: { title: "Trains see each other too late to stop", statement: "Two trains, one track, and nothing that coordinates them. Each driver knows only what he can see, and he cannot see far enough to matter.", beginner: "Two trains share one track, but neither driver knows where the other is.", model: { id: "single-source-of-truth", application: "Give every train one authoritative plan, the timetable, so that 'where should everyone be?' has exactly one answer." } },
         gate: { question: "It's 1830. No telegraph, no radio; trains outrun every message. With only paper and clocks, how do you keep two trains from meeting?", hint: "If information can't travel faster than the trains, agree on everything before anyone moves." },
         solution: "The timetable: every movement planned in advance against one standard clock, plus a time-interval rule (wait N minutes behind the train ahead).",
         user_lens: { gives: "Predictability: a passenger can plan a journey to the minute.", costs: "Rigidity: the plan outranks the person. Miss the train and the system does not care." },
@@ -233,7 +236,7 @@ If you receive a message listing validation errors, return the corrected COMPLET
         beginner_analogy: "Like a family sharing one bathroom by agreeing on a morning schedule. It works until someone takes too long, because the schedule can't see.",
         diff: { add_nodes: [{ id: "timetable", label: "Timetable", kind: "store", lane: "control", order: 0 }], add_edges: [{ id: "e_plan1", from: "timetable", to: "train1", kind: "control", label: "departs 09:00" }], highlight: ["train1", "train2", "track_main"], remove: [] } },
       { index: 2, name: "The Block System: Space, Not Time",
-        problem: { statement: "Time-based separation rests on a false assumption: 'enough time has passed, so the track must be clear.' A broken-down train doesn't move because ten minutes elapsed. Clayton Tunnel, 1861: 23 dead.", beginner: "The old rule was 'wait 10 minutes, then go.' But waiting doesn't move a broken train.", model: { id: "first-principles", application: "Safety requires KNOWING the section is empty, not inferring it from elapsed time. Build on confirmed knowledge, not clocks." } },
+        problem: { title: "A stalled train gets hit from behind", statement: "Time-based separation rests on a false assumption: 'enough time has passed, so the track must be clear.' A broken-down train doesn't move because ten minutes elapsed. Clayton Tunnel, 1861: 23 dead.", beginner: "The old rule was 'wait 10 minutes, then go.' But waiting doesn't move a broken train.", model: { id: "first-principles", application: "Safety requires KNOWING the section is empty, not inferring it from elapsed time. Build on confirmed knowledge, not clocks." } },
         gate: { question: "The telegraph now exists: you can message between fixed points along the line. Redesign train separation so it depends on knowledge, not assumption.", hint: "What if permission to enter were a physical object that can't be duplicated?" },
         solution: "Divide the line into blocks, one train per block, ever. Entry only after the signalman ahead confirms by telegraph that the block is clear. On single track: the token, one brass object per section. No token, no entry.",
         user_lens: { gives: "Invisible safety: boarding without wondering if the track ahead is clear.", costs: "Drivers lose authority: the signal decides, not the person driving." },
