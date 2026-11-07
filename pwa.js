@@ -15,6 +15,22 @@ if(isStandalone()) document.body.classList.add("standalone");
 /* ── Service worker: register + update flow ── */
 if("serviceWorker" in navigator){
   navigator.serviceWorker.register("./sw.js").then(reg => {
+    /* updatefound fires once per worker. One that finished installing
+       before this page loaded (the toast ignored, a pull to refresh, a trip
+       to a lab page and back) sits in reg.waiting with no event left to
+       fire, and the old cache kept being served with no prompt at all. */
+    if(reg.waiting && navigator.serviceWorker.controller){
+      showUpdateToast(() => reg.waiting && reg.waiting.postMessage("SKIP_WAITING"));
+    }
+    /* An installed app kept in the background never navigates, so the
+       browser never checks for a new sw.js. Check on return to the app,
+       at most every 30 minutes; updatefound below takes it from there. */
+    let lastCheck = Date.now();
+    document.addEventListener("visibilitychange", () => {
+      if(document.visibilityState !== "visible" || Date.now() - lastCheck < 30 * 60 * 1000) return;
+      lastCheck = Date.now();
+      reg.update().catch(() => {});
+    });
     reg.addEventListener("updatefound", () => {
       const nw = reg.installing;
       nw.addEventListener("statechange", () => {
@@ -24,9 +40,26 @@ if("serviceWorker" in navigator){
       });
     });
   }).catch(e => console.warn("sw registration failed", e));
+  /* claim() in sw.js activate also fires controllerchange on a first visit,
+     when the page had no controller at all, and the reload then threw away
+     whatever a new visitor had typed a few seconds in. Only a swap from one
+     worker to another means this page is running old code. */
+  let prevController = navigator.serviceWorker.controller;
   let refreshed = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if(!refreshed){ refreshed = true; location.reload(); }
+    const swapped = !!prevController;
+    prevController = navigator.serviceWorker.controller;
+    if(swapped && !refreshed){
+      refreshed = true;
+      /* A reload mid-generation aborts the stream after its tokens are billed
+         and saves nothing. Wait for it to settle; old code runs a little
+         longer, which costs nothing. */
+      if(typeof genInFlight === "function" && genInFlight()){
+        window.addEventListener("sdc:gensettled", () => location.reload(), { once: true });
+        return;
+      }
+      location.reload();
+    }
   });
 }
 function showUpdateToast(activate){
@@ -34,6 +67,12 @@ function showUpdateToast(activate){
   toast.hidden = false;
   document.getElementById("updateReload").onclick = async () => {
     if(typeof flushSaves === "function") await flushSaves();   // pending attempt writes flush first
+    /* same reason as controllerchange above: never swap code under a run */
+    if(typeof genInFlight === "function" && genInFlight()){
+      document.getElementById("updateReload").textContent = "Update after this finishes";
+      window.addEventListener("sdc:gensettled", activate, { once: true });
+      return;
+    }
     activate();
   };
 }

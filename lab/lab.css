@@ -65,6 +65,13 @@
   backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
 .st-btn:hover { border-color:var(--accent); color:var(--accent); }
 .st-btn.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+/* Between the phone layout and a wide window the stage is only 520 to
+   760px across: a study's HUD on the left and a row of buttons on the
+   right do not both fit, and the buttons landed on the readout. Stacked
+   down the right edge they cost height, which this layout has spare. */
+@media (min-width:861px) and (max-width:1240px) {
+  .stage-ctrls { flex-direction:column; align-items:flex-end; }
+}
 
 /* ── document pane ── */
 .lab-doc { overflow-y:auto; min-width:0;

@@ -84,6 +84,10 @@ var LabPage = (function () {
       b.textContent = "";
       b.appendChild(buildThemeIcon(dark ? "sun" : "moon"));
       b.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+      /* splash.js only sets the browser bar at load; a toggle here has to
+         carry it too, in the colours applyTheme() in engine.js uses */
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute("content", dark ? "#0c0c0e" : "#f6f5f2");
     }
     $("themeBtn").addEventListener("click", function () {
       document.documentElement.dataset.theme = currentTheme() === "dark" ? "light" : "dark";
@@ -114,10 +118,17 @@ var LabPage = (function () {
         });
         return b;
       }
-      els.expBtn = toggle(C.controls.explode, function (on) { ctl.setExplode(on ? 1 : 0); });
-      bar.appendChild(els.expBtn);
-      els.cutBtn = toggle(C.controls.cutaway, function (on) { ctl.setCutaway(on); });
-      bar.appendChild(els.cutBtn);
+      /* Exploded and Cutaway only where the scene can honour them, the same
+         test as the third toggle below: a button that lights over an
+         unchanged drawing reads as broken. */
+      if (ctl.setExplode) {
+        els.expBtn = toggle(C.controls.explode, function (on) { ctl.setExplode(on ? 1 : 0); });
+        bar.appendChild(els.expBtn);
+      }
+      if (ctl.setCutaway) {
+        els.cutBtn = toggle(C.controls.cutaway, function (on) { ctl.setCutaway(on); });
+        bar.appendChild(els.cutBtn);
+      }
       /* the optional third toggle: a study names it and names the two
          states it switches the scene between */
       if (C.altMode && ctl.setMode) {
@@ -125,7 +136,9 @@ var LabPage = (function () {
         bar.appendChild(els.altBtn);
       }
       var reset = h("button", "st-btn", C.controls.reset);
-      reset.addEventListener("click", function () { ctl.resetCamera(); });
+      /* through smoothCameraChange, like double-click: it stops a coasting
+         orbit first, which would otherwise carry on from the home view */
+      reset.addEventListener("click", function () { smoothCameraChange(function () { ctl.resetCamera(); }); });
       bar.appendChild(reset);
       root.appendChild(bar);
     }
@@ -174,8 +187,14 @@ var LabPage = (function () {
       });
       els.timeline.textContent = "";
       els.timeline.appendChild(row);
+      /* Centre the current chip by scrolling the row alone. scrollIntoView
+         also scrolls every ancestor, and on a phone's first load that
+         carried the doc pane down past the study's title. */
       var cur = row.querySelector(".tl-on");
-      if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: "nearest", inline: "center" });
+      if (cur) {
+        var rr = row.getBoundingClientRect(), cr = cur.getBoundingClientRect();
+        row.scrollLeft += (cr.left + cr.width / 2) - (rr.left + rr.width / 2);
+      }
     }
 
     function band(cls, label, text) {
@@ -254,7 +273,9 @@ var LabPage = (function () {
       card.appendChild(h("h2", "lc-name", t.name));
 
       els.demoLabel.textContent = t.demoLabel;
-      if (els.cutNote) els.cutNote.hidden = !cfg.cutaway;
+      /* the note is about what the drawing exaggerates, which a cutaway is
+         only one case of; a layer with no cutaway can still ask for it */
+      if (els.cutNote) els.cutNote.hidden = !(cfg.cutaway || cfg.note);
 
       if (step === 1) {
         var prob = h("div", "problem-card");
@@ -315,15 +336,20 @@ var LabPage = (function () {
       renderTimeline();
 
       /* the scene owns these; the buttons only report them */
-      setToggle(els.cutBtn, !!ctl.scene.clip);
-      setToggle(els.expBtn, ctl.scene.explodeAmount > 0);
+      if (els.cutBtn) setToggle(els.cutBtn, !!ctl.scene.clip);
+      if (els.expBtn) setToggle(els.expBtn, ctl.scene.explodeAmount > 0);
       if (els.altBtn) setToggle(els.altBtn, ctl.state.mode === C.altMode.on);
       canvas.setAttribute("aria-label", C.a11y.canvas + ": " + t.name);
       if (focus) {
         kick.focus({ preventScroll: true });
         live.textContent = "Layer " + layerIndex + ", " + t.name + ". " + st.label + ".";
+        /* measured against the pane itself: offsetTop counts from <body>,
+           so it also carried the top bar and, on a phone, the whole stage */
         var doc = $("docInner").parentElement;
-        if (doc && doc.scrollTo) doc.scrollTo({ top: Math.max(0, els.timeline.offsetTop - 12) });
+        if (doc && doc.scrollTo) {
+          var top = els.timeline.getBoundingClientRect().top - doc.getBoundingClientRect().top + doc.scrollTop;
+          doc.scrollTo({ top: Math.max(0, top - 12) });
+        }
       }
       if (opts.instruments && opts.instruments.layerChanged) opts.instruments.layerChanged(api);
     }
@@ -432,8 +458,14 @@ var LabPage = (function () {
       stopCameraMotion();
       pointers[e.pointerId] = [e.clientX, e.clientY];
       canvas.setPointerCapture(e.pointerId);
-      drag = [e.clientX, e.clientY];
-      orbitSamples = [{ t: performance.now(), x: e.clientX, y: e.clientY }];
+      /* A finger joining starts a pinch, which measures its own spread
+         from scratch. It must not take over `drag`, or the first finger
+         later orbits from where the second one landed. */
+      pinch = 0;
+      if (Object.keys(pointers).length === 1) {
+        drag = [e.clientX, e.clientY];
+        orbitSamples = [{ t: performance.now(), x: e.clientX, y: e.clientY }];
+      } else orbitSamples = [];
       $("hint").classList.add("gone");
     });
     canvas.addEventListener("pointermove", function (e) {
@@ -467,9 +499,19 @@ var LabPage = (function () {
     });
     function endPointer(e) {
       delete pointers[e.pointerId];
-      if (!Object.keys(pointers).length) {
+      var left = Object.keys(pointers);
+      pinch = 0;
+      /* Fingers almost never leave a pinch together. The one still down
+         orbits on from where it actually is, not from a stale position. */
+      if (left.length === 1) {
+        var p = pointers[left[0]];
+        drag = [p[0], p[1]];
+        orbitSamples = [{ t: performance.now(), x: p[0], y: p[1] }];
+        return;
+      }
+      if (!left.length) {
         var hadDrag = !!drag;
-        drag = null; pinch = 0;
+        drag = null;
         if (hadDrag && !RM && orbitSamples.length >= 2) {
           var now = performance.now();
           while (orbitSamples.length > 2 && now - orbitSamples[0].t > 95) orbitSamples.shift();
@@ -503,7 +545,15 @@ var LabPage = (function () {
     canvas.addEventListener("wheel", function (e) {
       e.preventDefault();
       stopCameraMotion();
-      ctl.dolly(e.deltaY > 0 ? 1.09 : 0.92);
+      /* Zoom by how far the wheel moved, not by the event count: a trackpad
+         sends dozens of small deltas per swipe, and a fixed step per event
+         ran the camera into its limit. A mouse notch (about 100px) still
+         comes out near the old 9%. Line and page deltas are put in pixels
+         first, and a pinch, which arrives as small ctrl+wheel deltas, is
+         scaled up to keep pace with the fingers. */
+      var dy = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1);
+      if (e.ctrlKey) dy *= 4;
+      ctl.dolly(Math.exp(Math.max(-120, Math.min(120, dy)) * 0.0009));
     }, { passive: false });
     canvas.addEventListener("dblclick", function () { smoothCameraChange(function () { ctl.resetCamera(); }); });
 

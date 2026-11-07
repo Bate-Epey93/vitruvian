@@ -193,6 +193,9 @@ var Schema = (() => {
       else {
         if (!isFullStr(p.statement)) err(`${w}.problem.statement must be a non-empty string`);
         if (!isFullStr(p.beginner)) err(`${w}.problem.beginner must be a non-empty string`);
+        /* optional, so every existing library, backup and share link stays
+           valid: the failure-first heading shown before the reader guesses */
+        if (p.title != null && (!isFullStr(p.title) || p.title.length > 60)) err(`${w}.problem.title must be a non-empty string of 60 characters or fewer`);
         if (!isObj(p.model)) err(`${w}.problem.model missing`);
         else {
           if (!MODEL_LIBRARY.some(m => m.id === p.model.id)) err(`${w}.problem.model.id "${p.model.id}" is not in the model library`);

@@ -123,12 +123,25 @@ var Generator = (() => {
           // Fable/Mythos: whole fallback chain declined — partial text is not a document
           if (ev.type === "message_delta" && ev.delta && ev.delta.stop_reason === "refusal")
             throw fail("refusal", "The model declined this request (safety classifiers). Try a different model, or rephrase the system.");
-          if (ev.type === "error") throw fail("http", (ev.error && ev.error.message) || "stream error", text);
+          // An overload that arrives mid-stream is as retryable as one that
+          // arrives as a status code, so map it the way httpError does
+          if (ev.type === "error") {
+            const t = ev.error && ev.error.type;
+            if (t === "overloaded_error" || t === "api_error") throw fail("overloaded", "Anthropic is overloaded right now. Retry in a moment.", text);
+            if (t === "rate_limit_error") throw fail("rate", "Rate limited by Anthropic. Wait a minute and try again.", text);
+            throw fail("http", (ev.error && ev.error.message) || "stream error", text);
+          }
         }
       }
     } catch (e) {
       if (isAbort(e, signal)) throw fail("aborted", "Cancelled.");
-      throw e;
+      if (e && e.kind) throw e;                            // toobig, refusal, mapped stream errors
+      /* Anything else is reader.read() rejecting: the connection dropped
+         mid-stream (a phone locking, an app switch, a tunnel). It used to
+         surface with no kind, so no Retry and no raw download. "offline" is
+         a kind the engine already offers Retry for, and the partial text
+         rides along so the tokens paid for so far can still be saved. */
+      throw fail("offline", "The connection dropped mid-generation. Retry to start again.", text || undefined);
     }
     return text;
   }
@@ -215,7 +228,17 @@ Return ONLY a JSON array of {"i": <number>, "text": "<rewritten passage>"}, one 
   async function generate({ apiKey, modelId, system, focus, speed, mode, onProgress, voice = true, signal }) {
     const result = await generateRaw({ apiKey, modelId, system, focus, speed, mode, onProgress, signal });
     if (!voice) return { ...result, voice: { flagged: 0, fixed: 0, off: true } };
-    const v = await voicePass({ apiKey, modelId, doc: result.doc, onProgress, signal, validate: d => Schema.validate(d, { strict: true }).ok });
+    /* By the voice pass the study is complete, validated and paid for. A
+       Cancel here stops the edit, not the study: keep the document as it
+       stands (straighten has already run on it in place) and flag the skip
+       so the caller can say so. */
+    let v;
+    try {
+      v = await voicePass({ apiKey, modelId, doc: result.doc, onProgress, signal, validate: d => Schema.validate(d, { strict: true }).ok });
+    } catch (e) {
+      if (e.kind === "aborted") return { doc: result.doc, repaired: result.repaired, voice: { flagged: 0, fixed: 0, cancelled: true } };
+      throw e;
+    }
     return { doc: v.doc, repaired: result.repaired, voice: { flagged: v.flagged, fixed: v.fixed } };
   }
   async function generateRaw({ apiKey, modelId, system, focus, speed, mode, onProgress, signal }) {
@@ -248,12 +271,20 @@ Return ONLY a JSON array of {"i": <number>, "text": "<rewritten passage>"}, one 
     /* one repair round — the loop is insurance, not a crutch */
     if (onProgress) onProgress({ phase: "repair", tokens: 0 });
     const repairMsg = `Your document failed validation with these exact errors:\n${errors.map(e => "- " + e).join("\n")}\n\nReturn the corrected COMPLETE JSON document only: no prose, no code fences.`;
-    const text2 = await streamCall(apiKey, modelId, {
-      ...base,
-      // omit the assistant turn when the first response was blank — an empty
-      // content block would make a malformed request instead of retrying cleanly
-      messages: [...base.messages, ...(text.trim() ? [{ role: "assistant", content: text }] : []), { role: "user", content: repairMsg }]
-    }, onProgress, seen, signal);
+    let text2;
+    try {
+      text2 = await streamCall(apiKey, modelId, {
+        ...base,
+        // omit the assistant turn when the first response was blank — an empty
+        // content block would make a malformed request instead of retrying cleanly
+        messages: [...base.messages, ...(text.trim() ? [{ role: "assistant", content: text }] : []), { role: "user", content: repairMsg }]
+      }, onProgress, seen, signal);
+    } catch (e) {
+      // the first response failed validation but was paid for: whatever stops
+      // the repair (a Cancel included) carries it, unless it has its own text
+      if (!e.raw && text.trim()) e.raw = text;
+      throw e;
+    }
 
     const doc2 = parseDoc(text2);                          // throws kind:"invalid" with raw attached
     const res2 = Schema.validate(doc2, { strict: true });
@@ -314,22 +345,43 @@ Return ONLY a JSON array of {"i": <number>, "text": "<rewritten passage>"}, one 
     if (typeof w.assessment !== "string" || !w.assessment.trim()) throw fail("invalid", "The verdict was empty.");
     const lanes = new Set(doc.visual.lanes.map(l => l.id));
     const invIds = new Set(doc.strip_down.invariants.map(i => i.id));
+    const B = SKILL.BOUNDS;
+    const clip = (s, max) => s.length > max ? s.slice(0, max - 1) + "…" : s;
     // existing node/edge ids across the whole doc
     const existing = new Set();
     doc.visual.nodes.forEach(n => existing.add(n.id));
     doc.visual.edges.forEach(e => existing.add(e.id));
     doc.layers.forEach(L => { L.diff.add_nodes.forEach(n => existing.add(n.id)); L.diff.add_edges.forEach(e => existing.add(e.id)); });
+    /* Two different id sets on purpose. A new id must not reuse ANY id the
+       doc ever had, a removed one included, because the layout places every
+       node that ever existed; `taken` also grows as proposals are accepted,
+       so the batch can't repeat an id. But the proposal is drawn on the
+       study's final state, so endpoints and highlights must exist THERE: an
+       edge to a node a later layer removed was accepted and never drawn. */
+    const taken = new Set(existing);
+    const fin = Diagram.stateAt(doc, doc.layers.length);
     const d = w.diff || (w.diff = {});
     // keep only structurally sound proposed nodes; edges whose endpoints resolve
-    const nodeIds = new Set(existing);
-    d.add_nodes = (Array.isArray(d.add_nodes) ? d.add_nodes : []).filter(n =>
-      n && typeof n.id === "string" && !existing.has(n.id) && typeof n.label === "string" &&
-      NODE_KINDS.includes(n.kind) && lanes.has(n.lane) && Number.isInteger(n.order));
-    d.add_nodes.forEach(n => nodeIds.add(n.id));
-    d.add_edges = (Array.isArray(d.add_edges) ? d.add_edges : []).filter(e =>
-      e && typeof e.id === "string" && !existing.has(e.id) && EDGE_KINDS.includes(e.kind) &&
-      nodeIds.has(e.from) && nodeIds.has(e.to));
-    d.highlight = (Array.isArray(d.highlight) ? d.highlight : []).filter(id => existing.has(id));
+    const nodeIds = new Set(fin.nodes.keys());
+    d.add_nodes = (Array.isArray(d.add_nodes) ? d.add_nodes : []).filter(n => {
+      if (!(n && typeof n.id === "string" && !taken.has(n.id) && typeof n.label === "string" &&
+        NODE_KINDS.includes(n.kind) && lanes.has(n.lane) && Number.isInteger(n.order))) return false;
+      taken.add(n.id);
+      nodeIds.add(n.id);
+      // the canvas is sized from the largest order: one stray 40 made it ~5x wide
+      n.order = Math.max(0, Math.min(B.orderMax, n.order));
+      n.label = clip(n.label, B.nodeLabelMax);
+      return true;
+    });
+    d.add_edges = (Array.isArray(d.add_edges) ? d.add_edges : []).filter(e => {
+      if (!(e && typeof e.id === "string" && !taken.has(e.id) && EDGE_KINDS.includes(e.kind) &&
+        nodeIds.has(e.from) && nodeIds.has(e.to))) return false;
+      taken.add(e.id);
+      if (typeof e.label === "string") e.label = clip(e.label, B.edgeLabelMax);
+      else delete e.label;
+      return true;
+    });
+    d.highlight = (Array.isArray(d.highlight) ? d.highlight : []).filter(id => fin.nodes.has(id) || fin.edges.has(id));
     w.defends = (Array.isArray(w.defends) ? w.defends : []).filter(id => invIds.has(id));
     w.stresses = (Array.isArray(w.stresses) ? w.stresses : []).filter(id => invIds.has(id));
     w.alternatives = (Array.isArray(w.alternatives) ? w.alternatives : []).filter(a => a && a.name && a.note);
@@ -341,9 +393,12 @@ Return ONLY a JSON array of {"i": <number>, "text": "<rewritten passage>"}, one 
     async function call() {
       let res;
       try {
+        // 16000 not 4000: thinking shares the ceiling with the verdict, and at
+        // medium effort a sprawling proposal thought past 4000 and truncated
+        // the JSON. Billed per token generated, not per the cap.
         res = await fetch(API, {
           method: "POST", headers: headers(apiKey, modelId), signal,
-          body: JSON.stringify({ model: modelId, max_tokens: 4000, ...effortFor(modelId, speed), ...fallbackFor(modelId), system: p.system, messages: [{ role: "user", content: p.user }] })
+          body: JSON.stringify({ model: modelId, max_tokens: 16000, ...effortFor(modelId, speed), ...fallbackFor(modelId), system: p.system, messages: [{ role: "user", content: p.user }] })
         });
       } catch (e) {
         if (isAbort(e, signal)) throw fail("aborted", "Cancelled.");
@@ -352,7 +407,11 @@ Return ONLY a JSON array of {"i": <number>, "text": "<rewritten passage>"}, one 
       if (!res.ok) throw await httpError(res);
       const data = await res.json();
       if (data.stop_reason === "refusal") throw fail("refusal", "The model declined this proposal. Try a different model.");
-      return data.content.map(b => b.text || "").join("").trim();
+      const text = data.content.map(b => b.text || "").join("").trim();
+      // "toobig", not "invalid": the retry below is the same request and would
+      // only truncate the same way, at the user's expense
+      if (data.stop_reason === "max_tokens") throw fail("toobig", "The verdict hit the output limit. Try a shorter or narrower change.", text);
+      return text;
     }
     let text = await call(), w;
     try { w = sanitizeWhatif(parseDoc(text), doc); }

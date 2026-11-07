@@ -22,7 +22,7 @@ This file collects ideas surfaced during build sessions that were never built, o
 
 | Idea | What it would do | Notes / effort |
 |---|---|---|
-| Hostile corpus of 10–12 diverse systems | A real generality test (power grid, DNS, peer review, hospital triage, card payments, "the internet") rather than three hand-authored flagships passing the validator. | Medium-large. `flagships/` holds only railway/whatsapp/youtube; tools/validate.js defaults to that directory. |
+| Hostile corpus of 10–12 diverse systems | A real generality test (power grid, DNS, peer review, hospital triage, card payments, "the internet") rather than the hand-authored flagships passing the validator. | Medium-large. `flagships/` now holds 25 hand-authored studies across five domains, including non-software ones (clearinghouse, Toyota kanban, immune system, gearbox, escapement); a corpus of model-*generated* documents across that range is what is still missing. |
 | Backfill path for old Deconstructs | `at_scale`, `developer.approach` and `vocab` are strict-required on generation but optional on import, so pre-existing studies open without the Under-load band, the Start-here line, or any chips — with no way to fix them short of regenerating. | Medium. schema.js:172-175, 187-190, 191-197. An on-demand Probe-style tagging call was proposed and never built. |
 | Cross-check `software_only` against `meta.domain` | Technology tags are gated to software by prompt instruction only; the validator never checks it, so a misbehaving generation would pass. | Small. skill.js:139 states the rule; schema.js has no corresponding check. |
 | Quantified capacity, not prose | The Under-load band answers scale in words, with a shared generic NUMBERS_LIBRARY beneath it — the "a million users a second" question is still narrative rather than modelled per system. | Large, and content-heavy. renderer-doc.js:516-545. |
@@ -38,11 +38,11 @@ This file collects ideas surfaced during build sessions that were never built, o
 
 | Idea | What it would do | Notes / effort |
 |---|---|---|
-| Keyless generation behind a managed proxy | Everything except the three precached flagships needs the user's own Anthropic key. The marketing guide names BYOK the mainstream-buyer blocker; the proxy it prescribes does not exist. | Large — it is the "no backend" non-goal being reversed. generator.js:35-38, storage.js:22. |
+| Keyless generation behind a managed proxy | Everything except the 25 precached flagships needs the user's own Anthropic key. The marketing guide names BYOK the mainstream-buyer blocker; the proxy it prescribes does not exist. | Large — it is the "no backend" non-goal being reversed. generator.js:35-38, storage.js:22. |
 | Execute the 90-day launch plan | The plan is written (personas, competitor table, $72/yr pricing, Seed/Beta/Launch arc at marketing/build-guide.js:238-242) but nothing has shipped against it: no waitlist, no lead magnet, no audience channel. | Effort is the user's, not the code's. |
 | SEO surface for the flagships | Meta tags and three share pages exist; missing entirely are robots.txt, sitemap.xml, canonical tags and long-form indexable "how X actually works" pages — the channel the plan calls the content mine. | Medium. tools/build-share-pages.js is the natural place to extend. |
 | Paid trademark clearance before charging | The 2026-07 scan found Vitruvian marks in PE, fitness and telecom — low risk for a free app, explicitly needing re-verification before commercial distribution. Fallback noted: "Vitruvian Systems". | External cost. build-guide.js:132, :270. |
-| Public gallery / community sharing | Deferred as a v1 non-goal but the export format was designed to allow it. Share pages exist for the three built-in flagships only, not user Deconstructs. The marketing guide never mentions it as a channel, so this has gone quiet rather than advanced. | Large; needs a backend, so blocked behind the proxy decision. |
+| Public gallery / community sharing | Deferred as a v1 non-goal but the export format was designed to allow it. Static share pages exist for all 25 built-in flagships, and user Deconstructs now travel as self-contained `#/import/` links, but there is still no hosted gallery. The marketing guide never mentions it as a channel, so this has gone quiet rather than advanced. | Large; needs a backend, so blocked behind the proxy decision. |
 | Non-engineer positioning to match the Rosetta | The Rosetta spine was placed outside the Developer box specifically so marketers and ops readers see it, but all three marketing personas are engineer-shaped. | Copy work, no code. |
 | Share the release-log artifact | The branded timeline is published and current (through v1.21.0) but still private; sharing is a user-side action in the page menu. | Trivial, user-side. |
 
@@ -65,7 +65,7 @@ This file collects ideas surfaced during build sessions that were never built, o
 - Hard caps force abstraction over density: ≤5 lanes, ≤22 nodes, ≤2 per grid cell, 24-char node labels, 16-char edge labels, 3 vocabulary tags per layer.
 - Content quality for an arbitrary system cannot be guaranteed — validation only promises that what passes renders legibly; substance is the skill's job.
 - The written breakdown is the product and the diagram an enhancement; failure paths (one repair call, then raw-text download) exist so the document is never lost.
-- Wide diagrams are panned, not reflowed or scaled — mitigated by pinch-zoom, a fit-width floor and follow-the-story auto-pan, but never squeezed to fit a phone.
+- Wide diagrams are scaled, not reflowed: since v2.8–2.9 the drawing contain-fits its frame on every screen (up to 2.2× on large displays), so a dense system on a phone is whole but small, and reading its labels means zooming in.
 - Edge labels still crowd near the control lane on the densest flagship; the Manhattan-with-crossings routing is the accepted v1 tradeoff, and YouTube has since grown to 18 nodes / 27 edges.
 - The brand tagline is hidden while reading, to reclaim ~450px for the audience switch.
 - Service-worker fixes reach installed copies only after the Update-ready prompt or a relaunch — inherent to a cache-first PWA.
@@ -74,7 +74,7 @@ This file collects ideas surfaced during build sessions that were never built, o
 - Rosetta translations are deliberately sparse — a model with no honest term in a domain is omitted rather than invented (97 of 98 possible terms).
 - Layers with no genuine vocabulary match ship untagged rather than mislabelled; technology tags never attach to non-software systems.
 - `meta.domain` is a single value, so a hybrid system like YouTube has one "called here" answer where several would be valid.
-- Generation, AI-compare and Probe all require the user's own API key; only the three precached flagships work fully offline.
+- Generation, AI-compare and Probe all require the user's own API key; the 25 precached flagships and both 3D field studies work fully offline.
 - Probe is one bounded question per layer, not freeform chat. Accounts, cloud sync, in-app editing and any backend remain unbuilt v1 non-goals.
 
 ## Explicitly declined

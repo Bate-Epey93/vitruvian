@@ -1,4 +1,4 @@
-const CACHE_VERSION = "vitruvian-v2.13.4";  // bump on EVERY deploy, including content edits
+const CACHE_VERSION = "vitruvian-v2.14.0";  // bump on EVERY deploy, including content edits
 const SHELL = [
   "./",
   "./index.html",
@@ -82,10 +82,30 @@ self.addEventListener("activate", e => {
     ).then(() => self.clients.claim())
   );
 });
+/* CacheStorage is per origin, and bate-epey93.github.io is shared with
+   sibling apps whose activate handlers delete every cache but their own,
+   this one included. install never runs again until sw.js changes, so a
+   wiped precache stayed wiped and the next offline launch was a browser
+   error page. Each navigation now checks the shell is still there and
+   refills it if not, with cache:"reload" for the same reason install uses
+   it. index.html goes in last as the marker: a refill cut short leaves no
+   marker, so the next navigation tries again. Misses are not cached one by
+   one: that could keep a stale HTTP-cache copy under this version's name. */
+let refilling = null;
+function ensureShell() {
+  if (refilling) return refilling;
+  const MARK = "./index.html";
+  const put = (c, u) => fetch(new Request(u, { cache: "reload" })).then(r => { if (r.ok) return c.put(u, r); });
+  refilling = caches.open(CACHE_VERSION).then(c => c.match(MARK).then(hit => hit ? null
+    : Promise.all(SHELL.filter(u => u !== MARK).map(u => put(c, u))).then(() => put(c, MARK))
+  )).catch(() => {}).finally(() => { refilling = null; });
+  return refilling;
+}
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
   if (url.origin !== location.origin) return;   // never cache/serve api.anthropic.com
+  if (e.request.mode === "navigate") e.waitUntil(ensureShell());
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then(hit => hit || fetch(e.request))
   );

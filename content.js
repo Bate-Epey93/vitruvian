@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "2.13.3",
+  appVersion: "2.14.0",
   flagshipVersion: 14,                   // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   // foundations first, then the systems built on them — YouTube last in software, then non-software & 3D companion flagships
   flagshipNames: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue", "notification-system", "rate-limiter", "search-typeahead", "url-shortener", "ride-matching", "ticket-booking", "content-delivery-network", "recommendation-feed", "payment-ledger", "video-transcoding", "news-feed", "photo-store", "realtime-chat", "whatsapp", "youtube", "railway", "clearinghouse", "toyota-kanban", "immune-system", "manual-gearbox", "clock-escapement"],
@@ -737,7 +737,11 @@ var COPY = {
     { id: "models", screen: "models", target: ".ml-card, .model-card, .ml-grid",
       title: "The same idea, everywhere",
       text: "Fourteen thinking models account for nearly every layer in every system here. Open one to see every place it recurs across your library. That recurrence is the thing worth carrying away." },
-    { id: "set-model", screen: "settings", target: ".set-block",
+    // not ".set-block": the first of those is Reading level, so this card
+    // ringed the wrong control. The key field is the only password input on
+    // Settings; ".set-key" goes first so a key block that carries that class
+    // gets the ring as a whole.
+    { id: "set-model", screen: "settings", target: ".set-key, input[type=password]",
       title: "Your key, your model",
       text: "Generation runs on your own Anthropic key, straight from the browser. Nothing is sent anywhere else and no account is needed. The model field takes any Anthropic id, so a new model needs no app update." },
     { id: "set-tips", screen: "settings", target: ".set-tips",

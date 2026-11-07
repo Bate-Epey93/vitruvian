@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'; connect-src 'self' https://api.anthropic.com">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'; connect-src 'self' https://api.anthropic.com; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Vitruvian · The anatomy of everyday systems</title>
 <meta name="description" content="Everyday systems, deconstructed one failure at a time. Free, offline, no account.">
 <meta property="og:type" content="website">
@@ -101,7 +101,10 @@
 
 </div>
 
-<div class="save-toast" id="saveToast">Saved</div>
+<!-- a live region, so toast() confirmations (key saved, link copied,
+     imported) are spoken as well as shown. It starts empty: the toast is
+     only faded out, so placeholder text would read as a stale "Saved". -->
+<div class="save-toast" id="saveToast" role="status" aria-live="polite"></div>
 
 <!-- UPDATE TOAST (shown by pwa.js when a new version is waiting) -->
 <div class="update-toast" id="updateToast" hidden>

@@ -362,7 +362,10 @@ var TXScene = (function () {
     /* ── kinematics: one integrated angle per driving shaft, everything else derived ── */
     function kinematics(dt) {
       var omegaIn = S.engineRpm * TAU / 60 * VIS;
-      var omegaMain = S.roadRpm * TAU / 60 * VIS;
+      /* reverse is the one gear that turns the road the other way; run
+         forward through it, the mainshaft spun against the reverse gear
+         keyed to it */
+      var omegaMain = S.roadRpm * TAU / 60 * VIS * (S.gear === -1 ? -1 : 1);
       S.thInput += omegaIn * dt;
       S.thMain += omegaMain * dt;
       S.thCounter = meshAngle(S.thInput, PHI_M2C, Z_IN, Z_CD);
@@ -510,7 +513,7 @@ var TXScene = (function () {
       if (prof === "interlock" && sg.name === "recover") {
         S.leverRail = lerp(lerp(fromRail, toRail, 0.45), fromRail, easeInOut(sg.u));
         S.leverRow = (a ? a.row : 0) * easeInOut(sg.u);
-        S.sleeve[a.slv] = engaged * a.dir;
+        if (a && a.slv) S.sleeve[a.slv] = engaged * a.dir;
         S.clutch = 1 - easeInOut(sg.u);
       }
       if ((prof === "noSynchro" || prof === "noDogs") && sg.name === "recover") {
@@ -597,11 +600,32 @@ var TXScene = (function () {
     function idleStep(dt) {
       if (sc.reducedMotion) return;
       if (S.gear && S.clutch < 0.1) {
-        S.roadRpm = Math.min(S.roadRpm + 40 * dt, 3400 / Math.abs(RATIO[S.gear]));
+        /* A downshift can land the road above what the new gear carries.
+           Engine braking takes it down over a second or two; clamping it
+           dropped road and engine by half in a single frame. */
+        var cap = 3400 / Math.abs(RATIO[S.gear]);
+        if (S.roadRpm > cap) S.roadRpm += (cap - S.roadRpm) * Math.min(1, dt * 1.2);
+        else S.roadRpm = Math.min(S.roadRpm + 40 * dt, cap);
         S.engineRpm = Math.abs(S.roadRpm * RATIO[S.gear]);
       } else if (!S.gear) {
         S.engineRpm += (900 - S.engineRpm) * Math.min(1, dt * 1.6);
       }
+    }
+
+    /* Put the bench in one gear and nothing else: every sleeve, rod and
+       the idler home, then the one sleeve that gear needs. A demo starts
+       from here as well as a layer, or a replay after a free shift keeps
+       the reader's sleeve engaged beside the demo's. */
+    function seatGear(g) {
+      S.gear = g;
+      S.engineRpm = g ? Math.abs(S.roadRpm * RATIO[g]) : 900;
+      S.clutch = 0;
+      S.slideGear = 0; S.idler = 0;
+      Object.keys(S.sleeve).forEach(function (k) { S.sleeve[k] = 0; });
+      Object.keys(S.rod).forEach(function (k) { S.rod[k] = 0; });
+      if (g && ASM[g] && ASM[g].slv) S.sleeve[ASM[g].slv] = TRAVEL * ASM[g].dir;
+      S.leverRail = g && ASM[g] ? ASM[g].rail : 1;
+      S.leverRow = g && ASM[g] ? ASM[g].row : 0;
     }
 
     /* ── public surface ── */
@@ -614,9 +638,13 @@ var TXScene = (function () {
       /* start a shift; the machine takes it from there */
       beginShift: function (to, profile) {
         if (S.playing) return false;
-        S.from = S.gear || 4;
+        /* neutral is a place to start from: reading it as 4th snapped the
+           lever and the 3-4 sleeve into 4th before the shift began */
+        S.from = S.gear;
         S.to = to;
-        S.baseProfile = profile || "modern";
+        /* reverse has no synchroniser to run, so a shift into it that
+           names no profile is the sliding idler's, in either mode */
+        S.baseProfile = profile || (to === -1 ? "reverse" : "modern");
         S.profile = profileFor(S.baseProfile);
         S.startRpm = S.engineRpm;
         S.t = 0;
@@ -631,8 +659,8 @@ var TXScene = (function () {
          deciding what the current mode does to the shift, are both
          things only the machine knows. */
       beginDemo: function (demo) {
-        if (!demo) return false;
-        S.gear = demo.from;
+        if (!demo || S.playing) return false;
+        seatGear(demo.from);
         return this.beginShift(demo.to, demo.profile);
       },
 
@@ -670,21 +698,17 @@ var TXScene = (function () {
            unless a layer insists on one */
         if (cfg.mode) S.mode = cfg.mode;
         applySynchroVisibility();
-        S.gear = cfg.gear == null ? 4 : cfg.gear;
         S.roadRpm = cfg.roadRpm == null ? 1700 : cfg.roadRpm;
-        S.engineRpm = S.gear ? Math.abs(S.roadRpm * RATIO[S.gear]) : 900;
-        S.clutch = 0;
-        S.slideGear = 0; S.idler = 0;
-        Object.keys(S.sleeve).forEach(function (k) { S.sleeve[k] = 0; });
-        Object.keys(S.rod).forEach(function (k) { S.rod[k] = 0; });
-        if (S.gear && ASM[S.gear] && ASM[S.gear].slv) S.sleeve[ASM[S.gear].slv] = TRAVEL * ASM[S.gear].dir;
-        S.leverRail = S.gear && ASM[S.gear] ? ASM[S.gear].rail : 1;
-        S.leverRow = S.gear && ASM[S.gear] ? ASM[S.gear].row : 0;
+        seatGear(cfg.gear == null ? 4 : cfg.gear);
         S.from = S.gear; S.to = cfg.demo ? cfg.demo.to : S.gear;
         S.baseProfile = cfg.demo ? cfg.demo.profile : "modern";
         S.profile = profileFor(S.baseProfile);
         S.startRpm = S.engineRpm;
         S.t = 0; S.playing = false; S.phase = "idle"; S.crashed = false; S.blocked = false;
+        /* say so: the shell's phase line only moves on an emit, and would
+           otherwise keep the last layer's phase, a red Clash included */
+        lastPhase = "idle";
+        emit("phase", "idle");
         applyTorque();
         kinematics(0);
       },
@@ -713,8 +737,13 @@ var TXScene = (function () {
         S.mode = m;
         applySynchroVisibility();
         /* recompute from what the layer asked for, so toggling back restores
-           the layer's own shift rather than a generic one */
-        if (!S.playing) { S.profile = profileFor(S.baseProfile); pose(S.t); }
+           the layer's own shift rather than a generic one. Re-pose only a
+           shift that has started: posing t=0 from idle put the phase at
+           clutchIn, and the idle loop stopped running behind it. */
+        if (!S.playing) {
+          S.profile = profileFor(S.baseProfile);
+          if (S.t > 0) pose(S.t);
+        }
       },
       /* what Play would run right now on this layer */
       demoProfile: function (cfg) { return profileFor(cfg && cfg.demo ? cfg.demo.profile : "modern"); },

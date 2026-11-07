@@ -147,10 +147,17 @@
         layerOf = api.layer;
         buildHud(root);
         buildGate(root, api);
+        /* A focused gate button is exactly where the label says to press
+           these, so only typing fields are skipped. A key with a modifier
+           belongs to the browser (Cmd/Ctrl+R reloads), and a key that
+           changes nothing on this layer is left alone too. */
         document.addEventListener("keydown", function (e) {
-          if (e.target && /^(INPUT|TEXTAREA|BUTTON)$/.test(e.target.tagName) && e.key.length === 1) return;
+          var tag = e.target && e.target.tagName;
+          if (tag === "TEXTAREA" || tag === "INPUT" || e.metaKey || e.ctrlKey || e.altKey) return;
           var m = { "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, r: -1, R: -1, n: 0, N: 0 };
-          if (m[e.key] !== undefined) { requestShift(api, m[e.key]); e.preventDefault(); }
+          if (m[e.key] === undefined || !api.layer().free) return;
+          requestShift(api, m[e.key]);
+          e.preventDefault();
         });
       },
       layerChanged: function (api) {

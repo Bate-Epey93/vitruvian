@@ -84,16 +84,21 @@ var ESCScene = (function () {
      realArc   degrees it swings in the machine itself
      bias      seconds per day at half wind, the residual error
      drift     seconds per day across the full range of the wind
+     Both arcs are amplitude, degrees each side of centre: what the
+     HUD row is called, and how a watchmaker quotes a balance. The
+     copy's end-to-end figures ("eighty degrees", "four to six") are
+     double these. `bias` is the copy's figure for a good example of
+     each, so the foliot gains its fifteen minutes a day.
      The ladder is `drift`, and only `drift`. `bias` is not
      monotonic and is not supposed to be: a lever watch is less
      accurate than a Graham regulator and still beat it, because
      being carried does not disturb it. */
   var MECH = {
-    foliot:   { drawnArc: 50,  realArc: 50,  bias: 0,   drift: 1200, wheel: "ratchet", crown: true },
-    pendulum: { drawnArc: 45,  realArc: 45,  bias: 12,  drift: 40,   wheel: "ratchet", crown: true },
-    anchor:   { drawnArc: 16,  realArc: 5,   bias: 8,   drift: 12,   wheel: "ratchet" },
-    deadbeat: { drawnArc: 14,  realArc: 4,   bias: 0.8, drift: 1.5,  wheel: "ratchet" },
-    lever:    { drawnArc: 135, realArc: 135, bias: 5,   drift: 0.4,  wheel: "club" }
+    foliot:   { drawnArc: 50,  realArc: 50,  bias: 900, drift: 1200, wheel: "ratchet", crown: true },
+    pendulum: { drawnArc: 45,  realArc: 46,  bias: 12,  drift: 40,   wheel: "ratchet", crown: true },
+    anchor:   { drawnArc: 16,  realArc: 3,   bias: 8,   drift: 12,   wheel: "ratchet" },
+    deadbeat: { drawnArc: 14,  realArc: 2,   bias: 0.8, drift: 1.5,  wheel: "ratchet" },
+    lever:    { drawnArc: 135, realArc: 310, bias: 5,   drift: 0.4,  wheel: "club" }
   };
   var MECH_ORDER = ["foliot", "pendulum", "anchor", "deadbeat", "lever"];
 
@@ -666,8 +671,11 @@ var ESCScene = (function () {
         sc.camera.dist = Math.max(90, Math.min(4000, sc.camera.dist * f));
         sc.invalidate();
       },
-      setExplode: function (v) { sc.explodeAmount = v; sc.invalidate(); },
-      setCutaway: function (on) { sc.clip = on ? [0, 0, 1, 4] : null; sc.invalidate(); },
+      /* No setExplode or setCutaway. Every part here is a profile in the
+         drawing plane, none carries an explode vector, and a section
+         through a flat part shows the face it already shows, so both
+         buttons lit over an unchanged drawing. Without the two methods
+         the shell leaves them off. */
       setMode: function (m) { S.mode = m; },
 
       hoverLabel: function (x, y) {
@@ -715,13 +723,17 @@ var ESCScene = (function () {
       camera: { yaw: -0.34, pitch: 0.15, target: [8, -48, 0], radius: 196 },
       demo: { mech: "pendulum" }
     },
+    /* `note` shows the copy's note on what the drawing exaggerates. It
+       goes on these two because they are where the swing is drawn
+       several times its real size, the HUD says "drawn" beside the real
+       figure, and the recoil (or its absence) is the argument. */
     {
       id: "anchor",
       mech: "anchor", drive: 0.5,
       groups: ["plate", "train", "wheelR", "anchor", "pivot", "pendA"],
       dim: ["train", "plate"],
       camera: { yaw: -0.15, pitch: 0.10, target: [0, 24, 0], radius: 124 },
-      demo: { mech: "anchor" }
+      demo: { mech: "anchor" }, note: true
     },
     {
       id: "deadbeat",
@@ -729,7 +741,7 @@ var ESCScene = (function () {
       groups: ["plate", "train", "wheelR", "deadbeat", "pivot", "pendA"],
       hide: ["plate", "barrel"],
       camera: { yaw: -0.11, pitch: 0.07, target: [0, 50, 0], radius: 94 },
-      demo: { mech: "deadbeat" }
+      demo: { mech: "deadbeat" }, note: true
     },
     {
       id: "lever",

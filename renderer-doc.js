@@ -53,9 +53,21 @@ var DocView = (() => {
       { label: "The solution", short: "Solution", tone: "teal" },
       { label: "The tradeoff", short: "Tradeoff", tone: "amber" }
     ];
-    // "The Read Storm: Cache the Redirect" → the half that names the failure.
-    // The half after the colon names the fix, so it waits for step 3.
+    // What to call a layer before its fix is shown. The name can't be split
+    // for this: most lead with the fix ("Cache-Aside: Put the Hot Answer in
+    // Memory", "Jidoka & The Andon Cord: ..."), so the half before the colon
+    // gave the answer away on the Problem and Your guess steps. A document
+    // that names the failure on its own (problem.title) gets that title;
+    // anything else gets a neutral one rather than a guess.
+    /* The heading shown before the reader guesses. Most layer names put the
+       fix before the colon ("Cache-Aside: ..."), so taking that half — which
+       this used to do, despite its name — named the answer on the very step
+       that asks you to guess it. A layer can now carry problem.title, written
+       failure-first; until the flagships carry one, the old heading stays so
+       nothing regresses in the meantime. */
     function failurePart(L) {
+      const t = L.problem && L.problem.title;
+      if (typeof t === "string" && t.trim()) return t.trim();
       const i = L.name.indexOf(":");
       return i > 0 ? L.name.slice(0, i).trim() : "The next failure";
     }
@@ -79,6 +91,16 @@ var DocView = (() => {
 
     /* Link a reader card to its diagram parts: hover to preview, tap to lock (Wave E · Proposal #3). */
     let activeSpotCard = null;
+    // Unlock whatever holds the spotlight, pill text included. Every path that
+    // hands the spotlight to something else goes through here, or the old
+    // card keeps saying "locked" while the diagram shows another thing.
+    function releaseSpot() {
+      if (!activeSpotCard) return;
+      activeSpotCard.classList.remove("spot-on", "spot-preview");
+      const p = activeSpotCard.querySelector(".trace-pill");
+      if (p && p._defaultText) p.textContent = p._defaultText;
+      activeSpotCard = null;
+    }
     function wireSpot(cardEl, ids, kind, customLabel) {
       ids = (ids || []).filter(Boolean);
       if (!ids.length) return;                       // nothing to locate (e.g. a layer with no highlights)
@@ -104,7 +126,10 @@ var DocView = (() => {
       });
       cardEl.addEventListener("pointerleave", () => {
         if (!activeSpotCard) {
-          diagram.spotlight(null);
+          /* end only the preview: a Spine, key entry or traced part that was
+             lit before the cursor crossed this card comes back, rather than
+             being wiped by the card's own hover */
+          diagram.endPreview();
           cardEl.classList.remove("spot-preview");
         }
       });
@@ -118,11 +143,7 @@ var DocView = (() => {
           tracePill.textContent = pillText;
           return;
         }
-        if (activeSpotCard) {
-          activeSpotCard.classList.remove("spot-on", "spot-preview");
-          const oldPill = activeSpotCard.querySelector(".trace-pill");
-          if (oldPill && oldPill._defaultText) oldPill.textContent = oldPill._defaultText;
-        }
+        releaseSpot();
         diagram.spotlight(ids, kind);
         diagram.focus(ids);                  // pan the spotlighted parts into view (mobile)
         cardEl.classList.add("spot-on");
@@ -179,7 +200,9 @@ var DocView = (() => {
           lastShown = pos;
           diagram.show(pos, { animate: !!animate });
           const added = diffAddedIds(L);
-          if (!onePage && step === 4 && L.at_scale && loadPathIds(L).length) {
+          /* Spine, when on, owns the spotlight; the load path stepping over it
+             left the Spine button lit with nothing drawn behind it */
+          if (!onePage && step === 4 && L.at_scale && loadPathIds(L).length && !diagram.isSpineOn()) {
             diagram.spotlight(loadPathIds(L), "load");
             capText(`Layer ${pos} of ${N} · amber = the load path`);
           } else capText(`Layer ${pos} of ${N} · ${L.name}`);
@@ -226,12 +249,15 @@ var DocView = (() => {
         if (layerObj && p >= 1 && p <= N) {
           const dotsWrap = h("span", "tl-microdots");
           const a = attemptFor(layerObj.index);
-          const currentStep = (p === pos && !onePage) ? step : (a.revealed ? 4 : 1);
+          // a layer you haven't reached shows no steps done, and the enso dot
+          // means a rule was actually picked: reading to step 3 sets
+          // `revealed` without any prediction
+          const currentStep = (p === pos && !onePage) ? step : (a.revealed ? 4 : 0);
           for (let s = 1; s <= 4; s++) {
             const dot = h("span", "tl-dot" + (s <= currentStep ? " done" : ""));
             dotsWrap.appendChild(dot);
           }
-          if (a.predict || a.revealed) {
+          if (a.predict) {
             const ensoDot = h("span", "tl-dot enso");
             ensoDot.title = "Gate prediction answered";
             dotsWrap.appendChild(ensoDot);
@@ -246,25 +272,31 @@ var DocView = (() => {
           const popTitle = popover.querySelector(".tl-pop-title");
           const popSub = popover.querySelector(".tl-pop-sub");
           const popMeta = popover.querySelector(".tl-pop-meta");
+          /* text only: an accent line and a plain line, both optional */
+          const setMeta = (accent, plain) => {
+            popMeta.textContent = "";
+            if (accent) popMeta.appendChild(h("span", "tl-pop-model", accent));
+            if (plain) popMeta.appendChild(h("span", null, plain));
+          };
 
           if (p === 0) {
             popLayer.textContent = "MEET THE SYSTEM";
             popDelta.textContent = "Overview";
             popTitle.textContent = doc.meta.system;
             popSub.textContent = (doc.essence && (doc.essence.beginner || doc.essence.text)) || "Baseline system architecture and rules.";
-            popMeta.innerHTML = `<span>${doc.strip_down.invariants.length} invariants to defend</span>`;
+            setMeta(null, `${doc.strip_down.invariants.length} invariants to defend`);
           } else if (p === N + 1) {
             popLayer.textContent = "TRIALS";
             popDelta.textContent = "Stress Tests";
             popTitle.textContent = "Architectural Stress Tests";
             popSub.textContent = "Test how this system survives sudden spikes, partitioned links, and cascade failures.";
-            popMeta.innerHTML = `<span style="color:var(--accent)">✦ Failure Mode Analysis</span>`;
+            setMeta("✦ Failure Mode Analysis");
           } else if (p === N + 2) {
             popLayer.textContent = "TRANSFER";
             popDelta.textContent = "Synthesis";
             popTitle.textContent = "Where Else This Pattern Lives";
             popSub.textContent = "Cross-domain models that repeat this design move in other engineering disciplines.";
-            popMeta.innerHTML = `<span style="color:var(--accent)">✦ Cross-Domain Transfer</span>`;
+            setMeta("✦ Cross-Domain Transfer");
           } else if (layerObj) {
             popLayer.textContent = `LAYER ${p} OF ${N}`;
             const addN = (layerObj.diff.add_nodes || []).length;
@@ -273,9 +305,17 @@ var DocView = (() => {
             const a = attemptFor(layerObj.index);
             popTitle.textContent = a.revealed || (p === pos && step >= 3) ? layerObj.name : failurePart(layerObj);
             popSub.textContent = layerObj.problem ? (audience === "beginner" ? layerObj.problem.beginner : layerObj.problem.statement) : "";
-            const modelName = layerObj.thinking_model || (layerObj.problem && layerObj.problem.model && layerObj.problem.model.name) || "";
-            popMeta.innerHTML = (modelName ? `<span style="color:var(--accent)">✦ ${modelName}</span>` : "") +
-              (layerObj.defends && layerObj.defends.length ? `<span> · Defends ${layerObj.defends.map(ruleLabel).join(", ")}</span>` : "");
+            /* The model's name comes from the app's own library, never from
+               the document: a document can arrive by share link, and this
+               field used to go into innerHTML, so a crafted name could inject
+               a redirect, a global stylesheet or a fake key form on this
+               origin. Everything here is text nodes now. */
+            const pm = layerObj.problem && layerObj.problem.model;
+            const known = pm && typeof modelById === "function" ? modelById(pm.id) : null;
+            const modelName = known ? known.name : "";
+            const defends = layerObj.defends && layerObj.defends.length
+              ? `${modelName ? " · " : ""}Defends ${layerObj.defends.map(ruleLabel).join(", ")}` : "";
+            setMeta(modelName ? "✦ " + modelName : null, defends || null);
           }
 
           const sRect = scrubEl.getBoundingClientRect();
@@ -306,6 +346,18 @@ var DocView = (() => {
       seg(N + 1, "Trials", pos === N + 1 ? "on" : pos > N + 1 ? "done" : "todo", "Trials: stress tests");
       seg(N + 2, "Transfer", pos === N + 2 ? "on" : "todo", "Transfer: what to take with you");
       scrubEl.appendChild(row);
+      /* The row is rebuilt at scrollLeft 0 on every move, so on a phone the
+         current stop drifts off the right edge from layer 4 or so. Centre it
+         when it isn't in view. Next frame, because the first render happens
+         before the reader screen is shown and has no layout yet; instant,
+         because a new row has no earlier position to glide from. */
+      const cur = row.querySelector("[aria-current]");
+      if (cur) requestAnimationFrame(() => {
+        if (!row.isConnected || row.scrollWidth <= row.clientWidth) return;
+        const off = cur.getBoundingClientRect().left - row.getBoundingClientRect().left + row.scrollLeft;
+        if (off < row.scrollLeft || off + cur.offsetWidth > row.scrollLeft + row.clientWidth)
+          row.scrollLeft = off - (row.clientWidth - cur.offsetWidth) / 2;
+      });
     }
 
     /* ── The step card's chrome: where you are, the four steps, and one
@@ -421,6 +473,7 @@ var DocView = (() => {
       if (study) {
         const box = h("a", "lab-offer");
         box.href = study.href;
+        if (typeof guardLabLink === "function") guardLabLink(box);   // opens in a new tab while a generation runs
         box.appendChild(h("div", "mono-label", COPY.labKicker));
         box.appendChild(h("p", "lab-offer-text", study.blurb));
         box.appendChild(h("span", "lab-offer-cta", COPY.labOpen));
@@ -566,7 +619,7 @@ var DocView = (() => {
         head.appendChild(stamp);
       }
       // the name can spoil the solution — withhold it at the gate
-      head.appendChild(h("div", "layer-name", gated ? "The next failure" : L.name));
+      head.appendChild(h("div", "layer-name", gated ? failurePart(L) : L.name));
       root.appendChild(head);
 
       const prob = h("div", "problem-card");
@@ -676,6 +729,7 @@ var DocView = (() => {
         a.ts = Date.now();
         clearTimeout(saveTimer);
         saveTimer = setTimeout(persist, 600);
+        syncReveal();
       };
       card.appendChild(ta);
 
@@ -697,7 +751,14 @@ var DocView = (() => {
         hint2.hidden = true;
       };
       const reveal = h("button", "gbtn primary", COPY.gateReveal);
+      // Strict mode holds here as it does in step view: no fix on an empty
+      // sketch. This gate only renders while Strict is on and the layer is
+      // unread, so locked(L) is just "no sketch yet".
+      const strictNote = h("span", "step-note", "Write your fix first: Strict mode is on.");
+      const syncReveal = () => { reveal.disabled = locked(L); strictNote.hidden = !reveal.disabled; };
+      syncReveal();
       reveal.onclick = () => {
+        if (locked(L)) return;
         clearTimeout(saveTimer);
         a.revealed = true;
         a.ts = Date.now();
@@ -705,7 +766,7 @@ var DocView = (() => {
         hintTier = 0;
         render(true);       // re-render revealed; diagram animates the additions
       };
-      actions.append(hint1, hint2, reveal);
+      actions.append(hint1, hint2, reveal, strictNote);
       card.appendChild(actions);
       root.appendChild(card);
     }
@@ -822,7 +883,7 @@ var DocView = (() => {
           chip.title = "Tap to highlight what defends this rule";
           chip.addEventListener("click", () => {
             if (activeSpotCard === chip) { diagram.spotlight(null); chip.classList.remove("spot-on"); activeSpotCard = null; return; }
-            if (activeSpotCard) activeSpotCard.classList.remove("spot-on");
+            releaseSpot();
             diagram.spotlight(defended, "solution");
             diagram.focus(defended);
             chip.classList.add("spot-on");
@@ -1124,6 +1185,7 @@ var DocView = (() => {
       if (study) {
         const box = h("a", "lab-offer");
         box.href = study.href;
+        if (typeof guardLabLink === "function") guardLabLink(box);   // opens in a new tab while a generation runs
         box.appendChild(h("div", "mono-label", COPY.labKicker));
         box.appendChild(h("p", "lab-offer-text", study.blurb));
         box.appendChild(h("span", "lab-offer-cta", COPY.labOpen));
@@ -1209,7 +1271,11 @@ var DocView = (() => {
       if (!live) return;
       let say;
       if (pos === 0) say = "Meet the system. " + MEET[step - 1].label + ".";
-      else if (pos <= N) say = `Layer ${pos} of ${N}. ` + (onePage ? doc.layers[pos - 1].name : STEPS[step - 1].label + ".");
+      else if (pos <= N) {
+        // one-page view withholds the name at the gate; so must the live region
+        const L = doc.layers[pos - 1];
+        say = `Layer ${pos} of ${N}. ` + (onePage ? (challenge && !attemptFor(L.index).revealed ? failurePart(L) : L.name) : STEPS[step - 1].label + ".");
+      }
       else if (pos === N + 1) say = "Trials: stress tests.";
       else say = "Transfer: what to take with you.";
       live.textContent = say;
@@ -1286,6 +1352,10 @@ var DocView = (() => {
     let bDownAt = 0, bWasBefore = false;
     function onKey(ev) {
       if (!docPane.isConnected || !docPane.offsetParent || typing(ev.target) || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+      // nothing moves the reader while something sits on top of it: the System
+      // sheet, the Sequence and Vocabulary overlays (.seq-overlay covers both),
+      // a tip card. keyup is left alone so letting go of B still ends Before.
+      if (sheetEl || document.querySelector(".seq-overlay, .tip-card")) return;
       if (ev.key === "ArrowRight" || ev.key === "ArrowLeft") {
         ev.preventDefault();
         const dir = ev.key === "ArrowRight" ? 1 : -1;
@@ -1314,6 +1384,9 @@ var DocView = (() => {
       setOnePage(v) { onePage = !!v; before = false; render(); },
       setBefore,
       openSheet,
+      // for callers that take the diagram spotlight from outside the doc pane
+      // (a node click, the origin card's close): unlock the card that held it
+      releaseSpot,
       /* the abstraction level changed under us; redraw at the same place */
       refresh() { syncDiagram(false); },
       get before() { return before; },

@@ -197,13 +197,22 @@ var Diagram = (() => {
 
     /* Rewire. An edge now wholly inside one box is interior and goes; edges
        that land on the same pair merge and carry the count, so the drawing
-       never claims one path where there were three. */
-    const merged = new Map();
+       never claims one path where there were three.
+
+       edgeOf is memberOf for edges: every caller id (a red "what breaks"
+       edge, a load path, a card's parts) has to find what now draws it, or
+       a highlight on an edge simply vanishes under Abstraction. */
+    const merged = new Map(), firstOf = new Map(), edgeOf = new Map();
     st.edges.forEach(e => {
       const from = memberOf.get(e.from) || e.from;
       const to = memberOf.get(e.to) || e.to;
-      if (from === to) return;
+      if (from === to) {
+        if (memberOf.has(e.from)) edgeOf.set(e.id, from);   // interior: what it carried is now the box
+        return;
+      }
       const key = from + ">" + to;
+      edgeOf.set(e.id, "fold:" + key);
+      if (!firstOf.has(key)) firstOf.set(key, e);
       const hit = merged.get(key);
       if (hit) {
         hit.n++;
@@ -214,9 +223,16 @@ var Diagram = (() => {
       }
       merged.set(key, Object.assign({}, e, { id: "fold:" + key, from, to, n: 1 }));
     });
+    /* A line the fold left alone (both ends still live, nothing merged into
+       it) keeps its own id. Renaming it bought nothing and broke every lookup
+       by the id the document gave it. */
     const edges = new Map();
-    merged.forEach(e => edges.set(e.id, e));
-    return { nodes, edges, memberOf };
+    merged.forEach((m, key) => {
+      const e = firstOf.get(key);
+      if (m.n === 1 && m.from === e.from && m.to === e.to) { m.id = e.id; edgeOf.delete(e.id); }
+      edges.set(m.id, m);
+    });
+    return { nodes, edges, memberOf, edgeOf };
   }
 
   /* ── Edge routing: orthogonal with port discipline. Forward edges leave
@@ -434,9 +450,15 @@ var Diagram = (() => {
     const layout = computeLayout(doc);
     const laneColor = id => LANE_COLORS[(layout.laneIndex[id] || 0) % LANE_COLORS.length];
     container.textContent = "";
+    /* A group, not an img: an img hides every child from assistive tech, and
+       the parts are controls (trace, open a folded box, drill in). Except
+       when the diagram is drawn inside a button or link, as a Models card's
+       thumbnail is: there it is that control's picture, so it stays one img
+       and its parts get no tab stops of their own. */
+    const asPicture = !!(container.closest && container.closest("button, a[href], [role=button]"));
     const svg = el("svg", {
       viewBox: `0 0 ${layout.width} ${layout.height}`,
-      class: "dg-svg", role: "img",
+      class: "dg-svg", role: asPicture ? "img" : "group",
       "aria-label": `System diagram: ${doc.meta.system}`
     }, container);
     // render at natural width so dense diagrams keep readable node sizes and
@@ -475,7 +497,12 @@ var Diagram = (() => {
     let shownIds = new Set();
     let lastState = null, lastPos = {}, lastHl = new Set();   // the sim reads the shown state
     let traced = null, freshTimer = null, raceOn = false, spineOn = false, onDrillCb = null, onRenderCb = null;
-    let onSelectCb = null;
+    let onSelectCb = null, onZoomCb = null;
+    let hovered = null;      // node under a hovering pointer; show() resets it with the nodes it drew
+    /* The locked spotlight (a card, the Spine, a key entry, a trace), kept in
+       caller ids. A hover preview borrows the drawing and must hand it back,
+       and without this it handed back nothing. */
+    let held = null;
     /* Every part exists because something broke, which is the whole claim of
        this app — and until now the diagram could not be asked. The diffs
        already say who added what; this is just the index. */
@@ -521,18 +548,19 @@ var Diagram = (() => {
     let suppressClickUntil = 0, flipRaf = 0;
 
     /* trace: tap a node to light it + every edge touching it and dim the
-       rest — follow one part's responsibilities. Tap again to clear. */
-    svg.addEventListener("click", ev => {
-      if (performance.now() < suppressClickUntil) return;
+       rest — follow one part's responsibilities. Tap again to clear.
+       A tap and Enter/Space on a focused part run the same path, so nothing
+       here is mouse- or touch-only. */
+    function activate(target, ev) {
       // semantic zoom takes priority: a tap on the ⊕ badge drills into the
       // node's nested Deconstruct rather than tracing or faulting it
-      const badge = ev.target.closest && ev.target.closest(".dg-drill-badge");
+      const badge = target.closest && target.closest(".dg-drill-badge");
       if (badge) {
         const dg = badge.closest(".dg-node");
         const sub = dg && dg.getAttribute("data-expand");
         if (sub && onDrillCb) { ev.stopPropagation(); onDrillCb(sub, dg.getAttribute("data-id")); return; }
       }
-      const g = ev.target.closest && ev.target.closest(".dg-node");
+      const g = target.closest && target.closest(".dg-node");
       if (!g || !svg.contains(g) || !lastState) {
         if (traced) {
           traced = null; spotlight(null);
@@ -550,8 +578,12 @@ var Diagram = (() => {
       const fn = lastState.nodes.get(id);
       if (fn && fn.folded) {
         ev.stopPropagation();
+        const hadFocus = g.contains(document.activeElement);
         openLanes.add(fn.lane);
         show(lastUpto, lastOpts);
+        // the box was just removed from under the keyboard; land on what it held
+        const first = hadFocus && nodesG.querySelector(`[data-id="${CSS.escape(fn.members[0])}"] [tabindex]`);
+        if (first) first.focus();
         return;
       }
       if (traced === id) {
@@ -570,6 +602,18 @@ var Diagram = (() => {
                      layerName: (at != null && at >= 0 && doc.layers[at]) ? doc.layers[at].name : null,
                      does: roleOf(id) });
       }
+    }
+    svg.addEventListener("click", ev => {
+      if (performance.now() < suppressClickUntil) return;
+      activate(ev.target, ev);
+    });
+    /* Mid-Pulse, Enter on a part faults it exactly as a tap does. That is
+       deliberate: chaos testing is part of what the diagram teaches. */
+    svg.addEventListener("keydown", ev => {
+      if ((ev.key !== "Enter" && ev.key !== " ") || ev.repeat) return;
+      if (!(ev.target.closest && ev.target.closest(".dg-node"))) return;
+      ev.preventDefault();                   // Space would otherwise scroll the pane
+      activate(ev.target, ev);
     });
 
     /* Hover isolation: on a pointer that can hover, passing over a node
@@ -579,7 +623,6 @@ var Diagram = (() => {
        above stays their only path in; a click-trace outranks the preview. */
     const canHover = typeof matchMedia === "function" && matchMedia("(hover:hover)").matches;
     if (canHover) {
-      let hovered = null;
       const relate = id => {
         const ids = [id];
         lastState.edges.forEach(e => { if (e.from === id || e.to === id) ids.push(e.id); });
@@ -592,7 +635,7 @@ var Diagram = (() => {
         if (!id || id === hovered) return;
         hovered = id;
         spotlight(relate(id), "trace", { preview: true });
-        if (opts.onNodeHover) opts.onNodeHover(id, true);
+        if (mountOpts.onNodeHover) mountOpts.onNodeHover(id, true);
       });
       svg.addEventListener("pointerout", ev => {
         if (traced || !hovered) return;
@@ -605,8 +648,8 @@ var Diagram = (() => {
         if (from && toNode === from) return;
         const prev = hovered;
         hovered = null;
-        spotlight(null);
-        if (opts.onNodeHover) opts.onNodeHover(prev, false);
+        endPreview();                        // give back any locked spotlight the preview covered
+        if (mountOpts.onNodeHover) mountOpts.onNodeHover(prev, false);
       });
     }
 
@@ -632,24 +675,26 @@ var Diagram = (() => {
          none of them needs to know. Every id the caller passed is remapped
          through the fold, or a highlight on a node that just went inside a box
          would simply vanish. */
-      let foldMap = null;
+      let foldMap = null, edgeMap = null;
       if (foldKeep > 0 && upto > foldKeep) {
         const folded = foldState(st, doc, upto, foldKeep, openLanes);
-        if (folded.memberOf.size) { st = folded; foldMap = folded.memberOf; }
+        if (folded.memberOf.size) { st = folded; foldMap = folded.memberOf; edgeMap = folded.edgeOf; }
       }
-      const thru = ids => (ids || []).map(id => (foldMap && foldMap.get(id)) || id);
+      const thru = ids => (ids || []).map(id => (foldMap && (foldMap.get(id) || edgeMap.get(id))) || id);
       const ghostSet = new Set(thru(ghost)), stressSet = new Set(thru(stress));   // what-if: proposed elements + stressed existing ones
       const hl = new Set(thru(highlight));
-      lastFold = foldMap ? { keep: foldKeep, memberOf: foldMap,
+      lastFold = foldMap ? { keep: foldKeep, memberOf: foldMap, edgeOf: edgeMap,
                              boxes: [...st.nodes.values()].filter(n => n.folded).length,
                              opened: openLanes.size,
                              hidden: foldMap.size } : null;
 
       /* A folded box has an id the precomputed layout has never seen. Its
          place is a pure function of lane and order, the same one computeLayout
-         uses, so it can simply be filled in. */
+         uses, so it can simply be filled in. Every render, not once: a box's
+         order is its earliest member's, which moves with the layer and the
+         keep level, and a cached column can land it on a live node. */
       st.nodes.forEach(n => {
-        if (!layout.pos[n.id]) {
+        if (n.folded || !layout.pos[n.id]) {
           layout.pos[n.id] = { x: GUTTER + n.order * COL_W + COL_W / 2,
                                y: layout.laneY[n.lane] + LANE_H / 2 };
         }
@@ -718,6 +763,20 @@ var Diagram = (() => {
         const p = pos[n.id];
         const g = el("g", { transform: `translate(${p.x} ${p.y})`, "data-id": n.id }, nodesG);
         drawNode(g, n, laneColor(n.lane));
+        /* The keyboard control is the node's filled shape, not its group: the
+           drill badge below is a control of its own, and a button inside a
+           button is hidden from assistive tech (its children are
+           presentational). Click and keydown both resolve .dg-node from here. */
+        const face = !asPicture && g.querySelector(".dg-fill");
+        if (face) {
+          const at = originOf.get(n.id);
+          const origin = at == null ? "" : at < 0 ? ", there from the start" : `, added in layer ${at + 1}`;
+          face.setAttribute("tabindex", "0");
+          face.setAttribute("role", "button");
+          face.setAttribute("aria-label", n.folded
+            ? `${n.label}, ${n.folded} parts folded together`
+            : `${n.label}, ${n.kind}, ${laneLabelById[n.lane] || n.lane} lane${origin}`);
+        }
         // semantic zoom: a node that is a system in its own right gets a drill
         // badge (⊕) at its top-right corner; tapping it opens the nested study
         if (typeof n.expands_to === "string" && n.expands_to.trim()) {
@@ -727,9 +786,11 @@ var Diagram = (() => {
           g.setAttribute("data-expand", sub);
           const bx = (n.kind === "actor" ? ACTOR_R : NODE_W / 2) - 3;
           const by = -(n.kind === "actor" ? ACTOR_R : NODE_H / 2) + 3;
+          const say = built ? `Zoom into "${sub}"` : `Generate "${sub}" (uses API key)`;
           const badge = el("g", { class: "dg-drill-badge" + (built ? "" : " dg-drill-gen"), transform: `translate(${bx} ${by})` }, g);
+          if (!asPicture) { badge.setAttribute("tabindex", "0"); badge.setAttribute("role", "button"); badge.setAttribute("aria-label", say); }
           badge.style.setProperty("--lane-c", laneColor(n.lane));
-          txt(el("title", {}, badge), built ? `Zoom into "${sub}"` : `Generate "${sub}" (uses API key)`);
+          txt(el("title", {}, badge), say);
           el("circle", { r: 16, class: "dg-drill-hit" }, badge);
           el("circle", { r: 7.5, class: "dg-drill-disc" }, badge);
           el("line", { x1: -3.2, y1: 0, x2: 3.2, y2: 0, class: "dg-drill-plus" }, badge);
@@ -879,8 +940,19 @@ var Diagram = (() => {
         });
       }
 
-      svg.classList.remove("dg-has-spot");   // a fresh render clears any spotlight
+      // a fresh render clears any spotlight, locked or previewed: the nodes that
+      // wore it are gone, and a leftover preview class greys the whole drawing
+      svg.classList.remove("dg-has-spot", "dg-has-spot-preview");
+      held = null;
+      if (hovered) {
+        // the next pointerover on the rebuilt node must not be taken for this one
+        const was = hovered;
+        hovered = null;
+        if (mountOpts.onNodeHover) mountOpts.onNodeHover(was, false);
+      }
+      const hadTrace = traced;
       traced = null;
+      if (hadTrace && onSelectCb) onSelectCb(null);   // the "why is this here" card belongs to the trace it described
       // delta emphasis: for a beat, what carried over recedes so what's new reads first
       if (animate && !RM) {
         svg.classList.add("dg-fresh");
@@ -899,19 +971,22 @@ var Diagram = (() => {
 
     /* spotlight: dim everything, then light the given ids (nodes/edges + their
        labels, matched by data-id) in the card's colour. kind = problem|solution.
-       Empty/null clears. Used by the reader to link a card to its diagram parts. */
+       Empty/null clears; with { preview: true } it ends the preview instead
+       (see endPreview). Used by the reader to link a card to its diagram parts. */
     /* Ids handed in from outside are pre-fold: a layer's highlight, a load
        path, the nodes a step wants in view. Mapping them here means every
        call site keeps working with the ids it already knows. */
     function viaFold(ids) {
       if (!lastFold || !lastFold.memberOf || !ids) return ids;
       const out = [];
-      ids.forEach(id => { const m = lastFold.memberOf.get(id); out.push(m || id); });
+      ids.forEach(id => { const m = lastFold.memberOf.get(id) || lastFold.edgeOf.get(id); out.push(m || id); });
       return out;
     }
     function spotlight(ids, kind, opts) {
-      ids = viaFold(ids);
       const isPreview = !!(opts && opts.preview);
+      if (isPreview && !(ids && ids.length)) { endPreview(); return; }
+      if (!isPreview) held = (ids && ids.length) ? { ids, kind } : null;
+      ids = viaFold(ids);
       // strip every dg-spot* class (problem/solution/load/future kinds, preview or locked), or a
       // leftover kind class keeps its stroke on after toggle-off
       svg.querySelectorAll(".dg-spot, .dg-spot-preview").forEach(e => [...e.classList].filter(c => c.indexOf("dg-spot") === 0).forEach(c => e.classList.remove(c)));
@@ -934,18 +1009,28 @@ var Diagram = (() => {
         });
       }
     }
+    /* End a hover preview: the locked spotlight comes back if there is one,
+       otherwise the drawing clears. */
+    function endPreview() {
+      if (held) spotlight(held.ids, held.kind);
+      else spotlight(null);
+    }
 
     /* ── Race spotlight: a node with ≥2 incoming PAYLOAD edges has concurrent
        writers — two flows can land at once, and unless it serializes them the
        result is a race (lost update, interleaving). Purely structural, so it's
        computable on any state; the ring makes contention points visible and
        the sim (under load) shows tokens actually colliding there. ── */
+    /* Measured on the unfolded state. A folded box is several parts drawn as
+       one, so asking the box who writes to it answers a question about a
+       component that does not exist. Results are mapped onto the drawing. */
     function contendedIds() {
       if (!lastState) return [];
+      const raw = stateAt(doc, lastUpto);
       const writers = {};                                  // node id → set of DISTINCT source nodes
-      lastState.edges.forEach(e => {
+      raw.edges.forEach(e => {
         if (e.kind !== "payload" || e.from === e.to) return;   // a self-loop isn't a second writer
-        if (!lastState.nodes.has(e.from) || !lastState.nodes.has(e.to)) return;
+        if (!raw.nodes.has(e.from) || !raw.nodes.has(e.to)) return;
         (writers[e.to] = writers[e.to] || new Set()).add(e.from);   // parallel edges from one source count once
       });
       return Object.keys(writers).filter(id => writers[id].size >= 2);
@@ -955,7 +1040,7 @@ var Diagram = (() => {
       svg.querySelectorAll(".dg-contended").forEach(e => e.classList.remove("dg-contended"));
       if (!on) return 0;
       const ids = contendedIds();
-      ids.forEach(id => {
+      new Set(viaFold(ids)).forEach(id => {
         const g = nodesG.querySelector(`[data-id="${CSS.escape(id)}"]`);
         if (g) g.classList.add("dg-contended");
       });
@@ -1090,12 +1175,18 @@ var Diagram = (() => {
       spineOn = on;
       svg.querySelectorAll(".dg-choke").forEach(e => e.classList.remove("dg-choke"));
       if (!on || !lastState) { spotlight(null); return null; }
-      const s = spineOf(lastState);
+      /* Unfolded, like the layer-0 baseline it is compared with. On the folded
+         state a box of redundant replicas is one node, so removing it removes
+         all of them and the box reads as a single point of failure; and a
+         lane's hops vanish into a box. spotlight() and viaFold map the
+         answer onto whatever is drawn. */
+      const raw = stateAt(doc, lastUpto);
+      const s = spineOf(raw);
       if (!s.hops) { spotlight(null); return { hops: 0, chokes: 0, ratio: 1 }; }
-      const chokes = chokepointsOf(lastState);
+      const chokes = chokepointsOf(raw);
       const onSpine = new Set(s.nodes);
       spotlight([...s.edges, ...s.nodes], "spine");
-      chokes.forEach(id => {
+      new Set(viaFold(chokes)).forEach(id => {
         const g = nodesG.querySelector(`[data-id="${CSS.escape(id)}"]`);
         if (g) g.classList.add("dg-choke");
       });
@@ -1145,6 +1236,10 @@ var Diagram = (() => {
     const zoomCtl = (() => {
       const MAXZ = 3.2;              // above MAXUP, so Fit is never the largest the reader can get
       let settleRaf = null;
+      /* Zoom settles later than the call that asked for it (animations,
+         pinch, double-tap), so the host's readout is told when it lands
+         instead of reading the size the moment it asked. */
+      const notify = () => { if (onZoomCb) onZoomCb(); };
       /* the frame's real inside width: the container's own padding is 20px a
          side, and guessing 24 for the pair left a sliver still scrolling */
       const innerW = () => {
@@ -1194,12 +1289,13 @@ var Diagram = (() => {
       }
       function animateTo(target, cx, cy, ms = 160) {
         if (settleRaf) cancelAnimationFrame(settleRaf);
-        if (RM) { apply(target, cx, cy); return; }
+        if (RM) { apply(target, cx, cy); notify(); return; }
         const from = current(), t0 = performance.now();
         const step = now => {
           const p = Math.min(1, (now - t0) / ms);
           apply(from + (target - from) * (1 - Math.pow(1 - p, 3)), cx, cy);   // ease-out cubic
           if (p < 1) settleRaf = requestAnimationFrame(step);
+          else { settleRaf = null; notify(); }
         };
         settleRaf = requestAnimationFrame(step);
       }
@@ -1262,6 +1358,7 @@ var Diagram = (() => {
           const cR = container.getBoundingClientRect();
           apply(pinch.z0 * Math.hypot(a.x - b2.x, a.y - b2.y) / pinch.d0,
                 (a.x + b2.x) / 2 - cR.left, (a.y + b2.y) / 2 - cR.top);
+          notify();
         }
       }, { passive: false });
       function endPan(e) {
@@ -1328,9 +1425,19 @@ var Diagram = (() => {
          again whenever the reading sheet is dragged — and a fit measured
          against a zero-width container collapses to the 0.2 floor. So a
          frame with no width to measure is skipped and retried rather than
-         acted on. */
+         acted on.
+
+         Hidden (a screen behind display:none) or detached is not "not laid
+         out yet": no frame will ever measure it, and retrying left a 60 Hz
+         loop behind for every study the reader had opened. The
+         ResizeObserver below fits again when the frame gets its size back. */
       let retry = 0;
       function fit() {
+        if (!container.isConnected || !container.getClientRects().length) {
+          cancelAnimationFrame(retry);
+          retry = 0;
+          return null;
+        }
         const w = innerW();
         if (!(w > 80)) {
           cancelAnimationFrame(retry);
@@ -1343,29 +1450,32 @@ var Diagram = (() => {
         container.scrollLeft = 0;
         container.scrollTop = 0;
         syncPanClass();
+        notify();
         return z;
       }
       /* the frame changes size when the sheet is dragged or the window is
          resized; a fitted drawing should stay fitted through both */
+      let ro = null, roRaf = 0;
       if (typeof ResizeObserver === "function") {
-        let roRaf = 0;
-        new ResizeObserver(() => {
+        ro = new ResizeObserver(() => {
           if (!autoFit) return;
           cancelAnimationFrame(roRaf);
           roRaf = requestAnimationFrame(fit);
-        }).observe(container);
+        });
+        ro.observe(container);
       }
       function full() {
         svg.style.minWidth = "0";
         svg.style.width = layout.width + "px";
         syncPanClass();
+        notify();
         return 1;
       }
       function by(f, animate) {
         stopCoast();
         const cx = container.clientWidth / 2, cy = container.clientHeight / 2;
         const target = Math.max(fitZ(), Math.min(MAXZ, current() * f));
-        if (animate === false) apply(target, cx, cy); else animateTo(target, cx, cy);
+        if (animate === false) { apply(target, cx, cy); notify(); } else animateTo(target, cx, cy);
         return target;
       }
       function atFactor(f, clientX, clientY) {
@@ -1375,9 +1485,17 @@ var Diagram = (() => {
         const cx = clientX != null ? clientX - cR.left : container.clientWidth / 2;
         const cy = clientY != null ? clientY - cR.top : container.clientHeight / 2;
         const target = Math.max(fitZ(), Math.min(MAXZ, current() * f));
-        return apply(target, cx, cy);
+        const z = apply(target, cx, cy);
+        notify();
+        return z;
       }
-      return { fitZ, current, fit, full, by, atFactor,
+      function destroy() {
+        if (ro) ro.disconnect();
+        cancelAnimationFrame(retry); cancelAnimationFrame(roRaf);
+        if (settleRaf) cancelAnimationFrame(settleRaf);
+        stopCoast();
+      }
+      return { fitZ, current, fit, full, by, atFactor, destroy,
                /* whether the drawing is already sitting at its fitted size, so
                   a Fit control can say whether tapping it would do anything */
                fits: () => Math.abs(current() - fitZ()) < 0.02 };
@@ -1584,6 +1702,7 @@ var Diagram = (() => {
       }
       function frame(now) {
         if (!running) return;
+        if (!svg.isConnected) { stopInternal(); return; }   // orphaned by a remount: nothing will ever stop it otherwise
         const dt = Math.min(50, now - last) / 1000;
         last = now;
         const graph = payloadGraph();
@@ -1706,7 +1825,11 @@ var Diagram = (() => {
         });
         tokens = tokens.filter(t => t.el.isConnected);
         emitStats(now);
-        if (mode === "replay" && !tokens.some(t => !t.dead)) { stopInternal(); return; }
+        /* Wait for the list to empty, not for the last token to die: a dead
+           token stays listed until its crash animation has played and kill()
+           removes it, and stopping at the moment of death cut the second
+           crash, the one the replay exists to show. */
+        if (mode === "replay" && !tokens.length) { stopInternal(); return; }
         raf = requestAnimationFrame(frame);
       }
       function stopInternal() {
@@ -1782,7 +1905,7 @@ var Diagram = (() => {
       };
     })();
 
-    return { show, spotlight, focus, layout, laneColor, sim, zoom: zoomCtl, raceSpotlight, contendedIds, spineSpotlight, stateAt: u => stateAt(doc, u), doc,
+    return { show, spotlight, endPreview, focus, layout, laneColor, sim, zoom: zoomCtl, raceSpotlight, contendedIds, spineSpotlight, stateAt: u => stateAt(doc, u), doc,
              setFold(keep) { foldKeep = Math.max(0, keep | 0); openLanes = new Set(); return foldKeep; },
              getFold() { return foldKeep; },
              foldInfo() { return lastFold; },
@@ -1794,9 +1917,22 @@ var Diagram = (() => {
              zoomAtFactor(f, cx, cy) { autoFit = false; return zoomCtl.atFactor(f, cx, cy); },
              zoomFull() { autoFit = false; return zoomCtl.full(); },
              isAutoFit() { return autoFit; },
+             /* so a host about to lay its own spotlight can leave the Spine standing */
+             isSpineOn() { return spineOn; },
              fitsWhole() { return zoomCtl.fits(); },
              onSelect(fn) { onSelectCb = fn; },
+             /* called whenever the zoom settles, however it got there (buttons,
+                wheel, pinch, double-tap, a refit) */
+             onZoom(fn) { onZoomCb = fn; },
              redraw() { show(lastUpto, lastOpts); },
+             /* Teardown for a host that is done with this diagram: the observer,
+                the frame loops and the timers otherwise outlive the drawing. */
+             destroy() {
+               sim.stop();
+               zoomCtl.destroy();
+               if (flipRaf) { cancelAnimationFrame(flipRaf); flipRaf = 0; }
+               clearTimeout(freshTimer);
+             },
              onDrill(fn) { onDrillCb = fn; }, onRender(fn) { onRenderCb = fn; if (lastState) fn(lastState); } };
   }
 
@@ -1810,9 +1946,11 @@ var Diagram = (() => {
     tog.className = "dgl-tog";
     tog.textContent = "key ▸";
     tog.setAttribute("aria-label", "Toggle diagram key");
+    tog.setAttribute("aria-expanded", "false");
     tog.onclick = () => {
       const open = wrap.classList.toggle("open");
       tog.textContent = open ? "key ▾" : "key ▸";
+      tog.setAttribute("aria-expanded", String(open));
     };
     wrap.appendChild(tog);
 

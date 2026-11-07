@@ -128,7 +128,7 @@ var TX_COPY = {
   },
   a11y: {
     canvas: "Three-dimensional drawing of a five-speed manual gearbox",
-    gate: "Gear selector. Use the arrow keys to move through the gate, or press 1 to 5, R, or N.",
+    gate: "Gear selector. Press 1 to 5 for a gear, R for reverse, or N for neutral.",
     rmNote: "Reduced motion is on: nothing animates on its own. Use the scrubber to move through each shift."
   },
   companion: {

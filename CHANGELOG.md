@@ -4,6 +4,69 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [2.14.0] — 2026-11-07 · A full audit, and everything it found
+
+An adversarial review read the whole app across ten lenses (diagram, reader, library, generation and data, security, deployment, the 3D lab, a first-time walkthrough in a real browser, clutter, and the value proposition) and had every finding checked by two independent verifiers before anything was changed. 104 distinct issues came out of it; 59 were confirmed before fixing began, none were refuted, and the 44 left unverified by a usage limit were each checked as they were fixed. 97 are fixed here; one turned out not to be a bug, and the rest need a decision rather than code (listed at the end).
+
+### Security
+- **A crafted share link could run its own HTML on this origin.** The timeline popover wrote a layer's thinking-model name into `innerHTML`, so a `#/import/` link could carry a redirect to a fake key prompt, a global stylesheet, or a form posting elsewhere, saved permanently and fired on every visit. The popover is now built from text nodes and takes the model's name from the app's own library, never from the document. (This also fixes the popover never showing a model for any real document: it read a field real documents do not have.)
+- **A backup could plant an API key.** A meta row keyed `__proto__` replaced the settings object's prototype on load, so a key it carried read as if it were set. Those keys are now skipped on read and on restore, which also defuses any such row already stored.
+- **Share links are capped**: 512 KB of token and 2 MB once inflated, so a crafted link can no longer inflate a gigabyte and kill the tab.
+- **Text from someone else's file never reaches a native dialog unflattened.** Import and restore errors could echo a crafted field into a browser alert whose title bar is this site. Shared-link errors now show in-app, and every other path flattens and truncates.
+- **Shared studies are marked as shared**, with a "Shared with you" label on their card, rather than passing as something the reader generated.
+- **The CSP adds `object-src 'none'`, `base-uri 'none'` and `form-action 'none'`** on the app and both field studies.
+
+### Data loss
+- **Dropping a backup on Home silently replaced the whole library.** The import button even invited backups in its tooltip. It now asks first, as Settings always did, and says how many of your own studies would go.
+- **One malformed entry in a backup wiped the library, every setting and the API key, then failed.** A throw inside the restore transaction let the `clear()` before it commit alone. Restores now validate every record's id first, refuse a file with nothing restorable before touching anything, and abort the whole transaction on any error.
+- **A study with no attempts recorded crashed Home on every launch.** Restores now normalise every record, and boot repairs any already stored.
+- **Saved grafts on a sample were deleted at every content update.** The re-seed now keeps every field a reader attached.
+- **The last keystrokes of a sketch were dropped** when leaving the reader by any route that skipped the save flush.
+- **A cancel during the voice pass threw away a finished, validated document.** It is kept and saved, with a note that the voice edit was skipped; a cancel during repair keeps the paid first response downloadable.
+- **A background generation was lost to an app update.** The update reload now waits until the run settles, and field-study links open in a new tab while one is running.
+- **A generation that failed out of sight vanished**, with its Retry and raw download. It stays on the pill, in red, until viewed or dismissed. Starting a second run asks before cancelling the first, and finishing on Home no longer scrolls you away or steals focus.
+
+### Reader and diagram
+- **Hovering a node threw on every move**, so diagram-to-prose highlighting never worked. It does now.
+- **Crossing a node with the mouse erased a locked spotlight** (a locked card, Spine, or a key entry) while its control still said it was on. A hover is now a preview that gives back whatever was lit.
+- **Abstraction renamed every edge**, so red failure edges, load paths and replay chains disappeared under it; folded boxes could also be drawn on top of a live node, and Spine and Races reported single points of failure that do not exist. All three corrected.
+- **Readers were never torn down**: every study opened left a perpetual animation loop, a document-level key listener holding the previous reader, and a Pulse that kept running after you left. Leaving now stops and releases all of it.
+- **Arrow and B keys drove the reader underneath open overlays**; the zoom readout ran one step behind; the origin card outlived the part it described; strict mode was not enforced in one-page view; the timeline mis-reported progress and did not keep the current layer in view on phones.
+- **Diagram parts, the drill badge and "why is this part here" are reachable by keyboard and screen reader.**
+
+### Library, routing and onboarding
+- **A malformed, deleted or unknown study link** used to blank the app or silently keep the old screen under the new URL. Every unresolvable link now lands on the library and says so.
+- Opening a study from Practice, Models or Vocabulary, or drilling into a sub-system, overwrote the previous history entry; Back now returns where you came from. A drill loop no longer leaves a wrong breadcrumb.
+- The landing page no longer reappears on every launch; the shortcut actions no longer open an empty Home; Home no longer renders twice or shows two contradicting empty states; the search banner no longer offers an unrelated 3D study.
+- Tip cards stay on screen on phones and scroll their target into view; a tip that could never fire now can.
+- Settings: toggling a switch no longer wipes a key typed but not saved; the key banner lands on the key field; inputs have accessible names; the reading-level switch shows its selected pill and exposes it to assistive tech.
+- The cost estimate prices each model correctly and counts the repair pass.
+
+### Layout
+- The reader's topbar tools overlapped the reading-level switch between about 1100 and 1360px, so a click on System sheet could switch to Developer. Labels now drop to icons below 1400px.
+- The phone step footer pins to the bottom of the sheet again; toasts sit above the tab bar and are announced to screen readers; the theme toggle is back on phones outside the reader; the landing arrow no longer cuts through "makes sense" on narrow screens.
+
+### Deployment and PWA
+- **Sibling apps on the shared `github.io` origin deleted Vitruvian's offline cache**, and it was never rebuilt. The worker now notices and re-caches.
+- **A first visit was force-reloaded a few seconds in**, discarding whatever a new visitor had typed. The update prompt also never reappeared after a reload or a trip to a lab page. Both fixed.
+- Mid-stream connection drops kept their error kind, so Retry and the raw download appear; what-if requests get enough tokens for their thinking and check for truncation.
+- The model index was rebuilt from every study on every save, for a view that no longer read it. First boot fetches the 25 samples in parallel and no longer pays for 25 full-store rebuilds.
+
+### 3D field studies
+- **The gearbox**: reverse engaged at road speed and then counter-rotated against its own shaft; any shift from neutral first snapped into 4th; Replay after a free shift left two sleeves engaged; a downshift to 1st at speed demanded 6,163 rpm and dropped road speed 45% in one frame; the phase readout kept the previous layer's phase. All corrected.
+- **The escapement**: the Exploded and Cutaway toggles did nothing there and are gone; the foliot showed "0 s/day" in the green "matched" colour; amplitude readouts contradicted the copy; the note on what the drawing exaggerates never appeared.
+- Both: a pinch released one finger at a time made the camera jump; Reset view did not stop orbit momentum; one trackpad swipe hit the zoom limit; shortcut keys swallowed browser shortcuts and ignored focus; on phones each step change scrolled past its own heading, and landscape and mid-width layouts covered the readouts.
+
+### Internal
+- `POSSIBLE-UPGRADES.md` no longer contradicts what ships (it still said three flagships, and that diagrams are "never squeezed to fit a phone").
+- The internal strategy documents are git-ignored, so a broad `git add` can no longer publish them from this public repository.
+- `CONFIG.appVersion` and `CACHE_VERSION` agree again; the previous release had bumped one and not the other.
+
+### Not changed, and why
+- **A sample deleted from the library comes back at the next content update**, though the dialog says "cannot be undone". Whether samples should be deletable at all, or offer "Reset progress" instead, is a product decision left open.
+- **Problem headings still name the fix on most samples** (the text before a layer name's colon is the mechanism, not the failure). The reader now prefers a failure-first `problem.title` when a layer has one, and the schema accepts it; writing those titles for all 141 sample layers is content work offered separately.
+- **The API key lives in IndexedDB on an origin shared with the owner's other apps**, so code in any of them could read it. The fix is an origin of Vitruvian's own, which is a hosting decision rather than a code change.
+
 ## [2.13.3] — 2026-10-30 · Fix card click-to-open and resolve leftover radar reference
 
 ### Fixed

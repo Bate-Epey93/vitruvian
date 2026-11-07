@@ -1,3 +1,8 @@
 node_modules/
 .DS_Store
 .claude-launch-check
+
+# Internal strategy documents. This repo is public and GitHub Pages serves
+# every tracked file, so anything commercial stays out of git entirely.
+commercialization.html
+marketing/commercialization-strategy.html

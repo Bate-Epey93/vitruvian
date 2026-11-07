@@ -541,8 +541,19 @@ input,textarea{font-family:var(--sans);}
 .db-ico{color:var(--accent);width:19px;height:19px;}
 .deconstruct-bar input{flex:1;min-width:0;border:none;background:transparent;outline:none;
   font-size:16.5px;color:var(--ink);padding:11px 4px;}
-.deconstruct-bar input::placeholder{color:var(--faint);}
-:root[data-theme="dark"] .deconstruct-bar input::placeholder{color:var(--muted);}
+/* --faint read about 2:1 on the white field; --muted clears 4.5:1 on --panel
+   in both themes, and this placeholder is the only instruction for the
+   primary action */
+.deconstruct-bar input::placeholder{color:var(--muted);}
+/* On a phone the labelled button left the field about 90px ("A system tc").
+   The arrow circle carries the action alone there; the label stays in the
+   accessibility tree as the button's name, since ctaButton sets no
+   aria-label. */
+@media(max-width:480px){
+  .db-field{padding-left:16px;}
+  .deconstruct-bar .big-btn{padding:6px;}
+  .deconstruct-bar .btn-label{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;}
+}
 .own-design-btn{margin:0;}
 .lib-subbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:2px 0 8px;}
 .lib-filters{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
@@ -906,10 +917,17 @@ input,textarea{font-family:var(--sans);}
   .sheet-grip:focus-visible .sheet-grip-bar{background:var(--accent);box-shadow:0 0 0 3px var(--accent-wash);}
   .cap-toggle{display:none;}
   .diagram-scroll{padding:10px;place-items:start;}
-  .doc-pane{flex:1;overflow-y:auto;padding-bottom:76px;}
+  /* the reserve under the prose is the pinned footer's height, which grows
+     by the home-indicator inset like the footer does */
+  .doc-pane{flex:1;overflow-y:auto;padding-bottom:calc(76px + env(safe-area-inset-bottom));}
   .doc-inner{padding:4px 18px 16px;}
   .move-sketch{min-height:86px;}
-  .step-foot{
+  /* The base .step-foot and .step-body > .step-foot rules sit later in the
+     file, so a bare .step-foot here lost the cascade: the footer stayed
+     sticky and floated 76px above the sheet's bottom with prose under it.
+     This selector outranks both, so the footer pins to .doc-sheet (the
+     nearest positioned box) as intended. */
+  .doc-sheet .step-body > .step-foot{
     position:absolute;bottom:0;left:0;right:0;z-index:35;margin-top:0;
     padding:10px 18px calc(10px + env(safe-area-inset-bottom));
     background:color-mix(in srgb,var(--canvas) 92%,transparent);
@@ -1291,6 +1309,12 @@ g.dg-node.dg-enter{animation:dg-fade .45s var(--ease) both;}
 .update-toast[hidden]{display:none;}
 .update-toast button{font-size:13px;font-weight:650;background:var(--paper);color:var(--ink);border:none;border-radius:var(--r-pill);padding:7px 14px;cursor:pointer;}
 .update-toast button:hover{background:var(--accent);color:#fff;}
+/* The bottom edge is taken on small screens: by the reader's pinned step
+   footer at 860px and below, and by the tab bar at 760px and below. Toasts
+   ride in the lane the background pill already uses, one row higher while
+   that pill is up, since it stacks above them. */
+@media(max-width:860px){.save-toast,.update-toast{bottom:calc(74px + env(safe-area-inset-bottom));}}
+@media(max-width:760px){body:has(.gen-bg-pill:not([hidden])) :is(.save-toast,.update-toast){bottom:calc(128px + env(safe-area-inset-bottom));}}
 
 .modal-scrim{position:fixed;inset:0;background:rgba(12,12,14,.4);opacity:0;pointer-events:none;transition:opacity .3s var(--ease);z-index:70;
   display:grid;place-items:center;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);}
@@ -1411,8 +1435,13 @@ g.dg-node.dg-enter{animation:dg-fade .45s var(--ease) both;}
   font-size:13.5px;line-height:1.55;color:var(--ink);
   background:var(--panel);border-radius:var(--r-md);
   box-shadow:inset 0 0 0 1px var(--hair), var(--sh-2);
-  padding:10px 15px;margin:0 12px 10px;
+  padding:10px 15px;margin:0;
   display:flex;gap:11px;align-items:flex-start;
+  /* out of the layout flow: in it, the caption appearing shrank the diagram's
+     frame and the drawing refitted itself mid-replay. engine.js sets bottom
+     from the chrome below the drawing; z-index 8 keeps a tapped origin card
+     (9) on top of it. */
+  position:absolute;left:12px;right:12px;z-index:8;
 }
 /* the caution sign: hand-drawn, like everything else on the canvas it sits
    beside. Nudged down a hair so it sits on the first line's baseline rather
@@ -1782,19 +1811,7 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 .tl-pop-title{font-family:var(--display);font-weight:700;font-size:14px;letter-spacing:-.015em;margin-bottom:2px;color:var(--ink);}
 .tl-pop-sub{font-size:11.8px;color:var(--muted);line-height:1.4;margin-bottom:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .tl-pop-meta{display:flex;flex-wrap:wrap;gap:5px;padding-top:5px;border-top:1px solid var(--hair);font-size:10.5px;font-family:var(--mono);color:var(--muted);}
-.tl-cur{flex:0 0 auto;display:flex;flex-direction:column;justify-content:center;gap:3px;padding:4px 10px 5px;border-radius:10px;
-  background:var(--panel);box-shadow:inset 0 0 0 1.5px var(--ink),var(--sh-1);max-width:300px;}
-.tl-cur-name{display:flex;align-items:baseline;gap:7px;min-width:0;}
-.tl-cur-n{font-family:var(--mono);font-size:12px;font-weight:700;}
-.tl-cur-t{font-size:12.5px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.tl-ticks{display:flex;gap:2px;}
-.tl-tick{display:inline-flex;align-items:center;gap:4px;border:none;background:none;cursor:pointer;padding:0 6px 0 0;
-  font-size:11px;font-weight:500;color:var(--muted);white-space:nowrap;}
-.tl-tick:hover{color:var(--ink);}
-.tl-dot{width:6px;height:6px;border-radius:50%;background:var(--line);flex-shrink:0;}
-.tl-tick.past .tl-dot{background:var(--ink-soft);}
-.tl-tick.on{color:var(--ink);font-weight:700;}
-.tl-tick.on .tl-dot{background:var(--ink);box-shadow:0 0 0 2px color-mix(in srgb,var(--ink) 18%,transparent);}
+.tl-pop-model{color:var(--accent);}
 
 /* ═══ Lab tools ═══ */
 .lab-menu{position:absolute;right:10px;bottom:58px;z-index:20;width:290px;padding:6px;border-radius:var(--r-md);
@@ -1826,10 +1843,6 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 @media(max-width:860px){
   .step-title{font-size:26px;margin-bottom:14px;}
   .step-text{font-size:16px;}
-  .tl-cur-t{max-width:150px;}
-  .tl-tick-t{display:none;}
-  .tl-tick{padding:0 3px;}
-  .tl-dot{width:8px;height:8px;}
   .lab-menu{right:8px;bottom:52px;width:min(290px,calc(100vw - 32px));}
 }
 @media(max-width:560px){
@@ -2034,6 +2047,10 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
 .gen-bg-pill.ready{box-shadow:var(--sh-3),inset 0 0 0 1.5px var(--accent);}
 .gbp-dot{width:8px;height:8px;border-radius:50%;background:var(--proposal);flex-shrink:0;animation:gbp-pulse 1.3s ease-in-out infinite;}
 .gbp-dot.ready{background:var(--accent);animation:none;}
+/* a run that failed out of sight keeps its pill, in red and still, until it
+   is viewed or dismissed */
+.gbp-dot.failed{background:var(--failure);animation:none;}
+.gen-bg-pill.failed{box-shadow:var(--sh-3),inset 0 0 0 1.5px var(--failure);}
 @keyframes gbp-pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.4;transform:scale(.85);}}
 .gbp-text{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:550;}
 .gbp-btn{padding:5px 11px;font-size:12px;flex-shrink:0;}
@@ -2076,6 +2093,13 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
    diagram and prose keep the whole screen. */
 @media(max-width:1100px){
   .brand-sub{display:none;}
+}
+/* The labelled reader tools need about 1370px of bar beside the full audience
+   switch and the nav island. .tb-right is an equal flex share with
+   min-width:0 and flex-end, so below that width its tools overflow LEFT
+   across the audience switch and take its clicks (System sheet landed on
+   Developer at 1150px). The labels go a little above that line for slack. */
+@media(max-width:1400px){
   .ctx-btn .tbtn-label{display:none;}
   .ctx-btn{padding:8px;width:36px;height:36px;justify-content:center;}
 }
@@ -2116,7 +2140,9 @@ details.sketch-fold > *:last-child{margin-bottom:14px;}
   body.reading .tb-nav{display:none;}
   .tbtn-label{display:none;}
   .tbtn{padding:8px;}
-  #themeBtn{display:none;}
+  /* the reader's bar is full (back, audience switch, menu), so the toggle
+     steps out there only; elsewhere it stays, as it is the one control that
+     sets the theme */
   body.reading #themeBtn{display:none;}
 }
 @media(max-width:420px){

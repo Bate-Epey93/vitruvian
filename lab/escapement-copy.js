@@ -19,7 +19,7 @@ var ESC_COPY = {
   intro: "A clock is two machines married badly. One stores energy and wants to release all of it at once. The other counts. The escapement is the joint between them, and almost every advance in timekeeping for six hundred years was a change to that joint.",
 
   hint: "Drag to orbit · scroll to zoom · double-click to reset",
-  cutawayNote: "Three things here are drawn larger than life. Pallets and teeth, because a wristwatch escapement is the width of a fingernail. The swing, because an anchor pendulum really moves five degrees and five degrees is nothing to look at — the readout shows the real figure beside the drawn one. And the recoil, because an escapement that does not visibly recoil is a drawing of nothing. Which escapements recoil at all is not exaggerated: two of these five do it exactly zero times.",
+  cutawayNote: "Three things here are drawn larger than life. Pallets and teeth, because a wristwatch escapement is the width of a fingernail. The swing, because an anchor pendulum really moves two or three degrees each side of centre, which is nothing to look at — the readout shows the real figure beside the drawn one. And the recoil, because an escapement that does not visibly recoil is a drawing of nothing. Which escapements recoil at all is not exaggerated: two of these five do it exactly zero times.",
 
   /* the four headings every layer card carries, in order */
   bands: {
@@ -57,7 +57,7 @@ var ESC_COPY = {
       beginner: "Replace the thing that swings as hard as you push it with a thing that swings at its own speed no matter how you push it.",
       analogy: "a child on a swing, who takes the same time per swing whether you push gently or hard. Only the height changes.",
       solution: "Hang the oscillator instead of balancing it. A pendulum's period comes from its length and from gravity, and almost not at all from how hard it is pushed. The same verge and crown wheel, now with a pendulum where the foliot was.",
-      tradeoff: "The verge needs a wide swing to work — eighty degrees or more. A pendulum is only truly isochronous at small arcs: over about five degrees the period grows with the swing, so the drive force leaks back into the rate through the width of the arc instead of through the speed of the bar.",
+      tradeoff: "The verge needs a wide swing to work — eighty degrees or more end to end, forty each side of centre. A pendulum is only truly isochronous at small arcs: over about five degrees the period grows with the swing, so the drive force leaks back into the rate through the width of the arc instead of through the speed of the bar.",
       atScale: "From fifteen minutes a day to about fifteen seconds. One change, a sixty-fold improvement, and the minute hand becomes worth fitting.",
       demoLabel: "Swing wide, as the verge demands"
     },
@@ -67,7 +67,7 @@ var ESC_COPY = {
       problem: "The wide arc is the verge's fault, not the pendulum's. The geometry puts the pallets across the face of the wheel, and that forces the staff through a large angle for every tooth.",
       beginner: "Move the pallets to the rim of the wheel instead of across its face, and the same tooth can be caught with a much smaller movement.",
       analogy: "catching a door by its handle rather than by its hinge — far less movement at your end for the same movement at the door.",
-      solution: "An anchor straddling the rim of the escape wheel, pivoted above it, with a pallet reaching down on each side. The pendulum now works through four to six degrees, deep in the region where its period does not care about its amplitude. It also makes the long seconds pendulum practical, and with it the longcase clock.",
+      solution: "An anchor straddling the rim of the escape wheel, pivoted above it, with a pallet reaching down on each side. The pendulum now works through four to six degrees (two or three each side of centre), deep in the region where its period does not care about its amplitude. It also makes the long seconds pendulum practical, and with it the longcase clock.",
       tradeoff: "The pallet faces are flat, so after a tooth drops, the pendulum's remaining swing drives the wheel backwards. That is recoil: the whole train, and the weight behind it, are pushed back against the pendulum every beat. The drive force is coupled to the pendulum again, through a different door.",
       atScale: "Ten seconds a day in a good longcase, and visible on the dial: watch the second hand of a recoil clock and it steps forward, then twitches back, every beat.",
       demoLabel: "Watch the wheel step back after each drop"

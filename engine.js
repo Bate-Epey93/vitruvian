@@ -93,10 +93,14 @@ function ctaButton(label, cls, iconName) {
 let meta = {};                    // cached meta map
 let currentView = null;           // DocView instance when reading
 let currentRec = null;            // open breakdown record
+let currentDiagram = null;        // the reader's Diagram, retired on leaving (retireDiagram)
 let suppressRoute = false;        // prevents hash sync feedback loops during popstate
 let activeModelId = null;         // current model detail id on #/models/<id>
 let activeVocabId = null;         // current vocab focus id on #/vocab/<id>
-let activeGen = null;             // background generation state { controller, systemName, phaseText, readyRec }
+let activeGen = null;             // background generation state { controller, systemName, phaseText, readyRec, error }
+let genFormOwner = null;          // controller of the run the generate form on screen started; null for a fresh form
+let genRunView = null;            // { controller, nodes }: a running form set aside when another form replaced it
+let originEscHandler = null;      // the one live origin-card Escape listener (openReader)
 
 function bytesToBase64Url(bytes) {
   let bin = "";
@@ -114,13 +118,23 @@ function base64UrlToBytes(b64u) {
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
 }
-async function streamBytes(stream) {
+/* A shared link is attacker-controlled input. Real ones run 20 to 100 KB of
+   token and a few hundred KB inflated; deflate can expand roughly a
+   thousand-fold, so an uncapped decode of a 1 MB token inflates about a
+   gigabyte and kills the tab. Both ends are capped. */
+const SHARE_MAX_TOKEN = 512 * 1024;      // characters of token
+const SHARE_MAX_RAW = 2 * 1024 * 1024;   // bytes once inflated, ~8x the largest real doc
+async function streamBytes(stream, maxBytes = Infinity) {
   const reader = stream.getReader();
   const chunks = [];
   let total = 0;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
+    if (total + value.byteLength > maxBytes) {
+      reader.cancel().catch(() => {});
+      throw new Error("This shared link is too large to import.");
+    }
     chunks.push(value);
     total += value.byteLength;
   }
@@ -145,6 +159,7 @@ async function encodeSharePayload(doc) {
 }
 async function decodeSharePayload(token) {
   const str = String(token || "").trim();
+  if (str.length > SHARE_MAX_TOKEN) throw new Error("This shared link is too large to import.");
   const isDeflated = str.startsWith("z.");
   const payload = (str.startsWith("z.") || str.startsWith("u.")) ? str.slice(2) : str;
   const bytes = base64UrlToBytes(payload);
@@ -153,13 +168,23 @@ async function decodeSharePayload(token) {
     if (typeof DecompressionStream !== "function") throw new Error("This browser cannot decompress portable links.");
     const ds = new DecompressionStream("deflate-raw");
     const w = ds.writable.getWriter();
-    w.write(bytes);
-    w.close();
-    rawBytes = await streamBytes(ds.readable);
+    w.write(bytes).catch(() => {});
+    w.close().catch(() => {});
+    rawBytes = await streamBytes(ds.readable, SHARE_MAX_RAW);
+  } else if (rawBytes.byteLength > SHARE_MAX_RAW) {
+    throw new Error("This shared link is too large to import.");
   }
   return JSON.parse(new TextDecoder().decode(rawBytes));
 }
-async function saveOrReuseImportedDoc(doc) {
+/* Text from an imported file or a shared link is someone else's, shown
+   under this app's name. Anything of theirs that reaches a native dialog
+   (whose title bar is the trusted origin) is flattened to one short line, so
+   a field cannot be used to stage a fake security notice. */
+function safeLine(v, n = 60) {
+  const t = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
+  return t.length > n ? t.slice(0, n - 1) + "…" : t;
+}
+async function saveOrReuseImportedDoc(doc, source = "generated") {
   const res = Schema.validate(doc);
   if (!res.ok) {
     const err = new Error("Not a valid Deconstruct:\n" + res.errors.slice(0, 6).join("\n"));
@@ -177,7 +202,7 @@ async function saveOrReuseImportedDoc(doc) {
   const rec = {
     id: "imp_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
     system: doc.meta.system, created: Date.now(),
-    source: "generated", schemaVersion: 1, doc,
+    source, schemaVersion: 1, doc,
     attempts: {}, progress: { layersRead: 0, gatesAnswered: 0, position: 0 }
   };
   await Store.saveBreakdown(rec);
@@ -186,10 +211,22 @@ async function saveOrReuseImportedDoc(doc) {
 async function importBreakdownJsonText(rawText) {
   const parsed = JSON.parse(rawText);
   if (parsed && Array.isArray(parsed.breakdowns) && (parsed.app === "vitruvian" || parsed.tool === "vitruvian" || parsed.tool === "system-deconstructor")) {
+    /* A backup is a full restore, not an import: it replaces the library,
+       every attempt and every synced setting. Dropping one on Home used to do
+       that silently. It now asks exactly as Settings does, and says how much
+       is about to go. */
+    const mine = (await Store.getBreakdowns()).filter(b => b.source !== "flagship").length;
+    const ask = `This is a full backup with ${parsed.breakdowns.length} Deconstruct${parsed.breakdowns.length === 1 ? "" : "s"}.\n\n` +
+      `Restoring it REPLACES your current library` + (mine ? ` (${mine} of your own studies)` : "") +
+      `, your progress and your settings. Your API key stays.\n\nRestore it?`;
+    if (!confirm(ask)) return null;
     const results = await Store.importAll(parsed);
     const okCount = results.filter(r => r.ok).length;
+    meta = await Store.getMeta();
+    applyTheme(meta.theme || document.documentElement.dataset.theme);
+    renderAudSwitch();
     await renderLibrary();
-    toast(`Imported ${okCount}/${results.length} Deconstructs from backup`);
+    toast(`Restored ${okCount}/${results.length} Deconstructs (library replaced)`);
     return null;
   }
   const doc = (parsed && parsed.doc && parsed.doc.meta) ? parsed.doc : parsed;
@@ -199,10 +236,42 @@ async function importBreakdownJsonText(rawText) {
   return rec;
 }
 
+/* A generation lives only in this page. Leaving the document mid-run aborts
+   the stream after its tokens are billed, and nothing is saved. pwa.js reads
+   genInFlight() before reloading, and waits for "sdc:gensettled". */
+function genInFlight() { return !!(activeGen && !activeGen.readyRec && !activeGen.error); }
+function guardUnload(e) { if (genInFlight()) { e.preventDefault(); e.returnValue = ""; } }
+/* A field study is its own page, so following one unloads the app and the
+   run with it. While one runs, the study opens in a new tab instead. Decided
+   at click time, so a card drawn before the run started is covered too. */
+function guardLabLink(a) {
+  a.addEventListener("click", () => {
+    if (genInFlight()) { a.target = "_blank"; a.rel = "noopener"; }
+    else a.removeAttribute("target");
+  });
+  return a;
+}
+/* The pill's View: puts back the form a newer one set aside, so its progress,
+   or its error and raw-output download, is what the reader lands on. A
+   failure is seen once it is shown. */
+function viewGenRun() {
+  const root = $("screen-generate").firstElementChild;
+  if (activeGen && genRunView && genRunView.controller === activeGen.controller) {
+    root.textContent = "";
+    root.append(...genRunView.nodes);
+    genFormOwner = genRunView.controller;
+    genRunView = null;
+  }
+  if (activeGen && activeGen.error) activeGen = null;
+  show("generate");
+}
+
 function syncGenBgPill() {
   let pill = $("genBgPill");
   const screen = document.body.dataset.screen || "library";
-  const shouldShow = !!activeGen && (screen !== "generate" || !!activeGen.readyRec);
+  // on the generate screen the run's own form already shows it; any other form does not
+  const onOwnForm = screen === "generate" && !!activeGen && genFormOwner === activeGen.controller;
+  const shouldShow = !!activeGen && (!onOwnForm || !!activeGen.readyRec);
   if (!shouldShow) {
     if (pill) pill.hidden = true;
     return;
@@ -216,6 +285,7 @@ function syncGenBgPill() {
   }
   pill.hidden = false;
   pill.textContent = "";
+  pill.classList.toggle("failed", !activeGen.readyRec && !!activeGen.error);
   if (activeGen.readyRec) {
     const rec = activeGen.readyRec;
     pill.classList.add("ready");
@@ -234,12 +304,25 @@ function syncGenBgPill() {
       syncGenBgPill();
     };
     pill.append(dot, txt, openBtn, closeBtn);
+  } else if (activeGen.error) {
+    pill.classList.remove("ready");
+    const dot = h("span", "gbp-dot failed");
+    const txt = h("span", "gbp-text", `"${activeGen.systemName}" failed · ${activeGen.error}`);
+    const viewBtn = h("button", "gbtn gbp-btn", "View");
+    viewBtn.onclick = viewGenRun;
+    const closeBtn = h("button", "gbp-close", "×");
+    closeBtn.setAttribute("aria-label", "Dismiss notification");
+    closeBtn.onclick = () => {
+      activeGen = null;
+      syncGenBgPill();
+    };
+    pill.append(dot, txt, viewBtn, closeBtn);
   } else {
     pill.classList.remove("ready");
     const dot = h("span", "gbp-dot");
     const txt = h("span", "gbp-text", `Deconstructing "${activeGen.systemName}" · ${activeGen.phaseText || "Working…"}`);
     const viewBtn = h("button", "gbtn gbp-btn", "View");
-    viewBtn.onclick = () => show("generate");
+    viewBtn.onclick = viewGenRun;
     const cancelBtn = h("button", "gbp-close", "×");
     cancelBtn.title = "Cancel generation";
     cancelBtn.setAttribute("aria-label", "Cancel generation");
@@ -289,9 +372,15 @@ function syncRoute(mode = "push") {
     else history.pushState(state, "", hash);
   } catch (e) {}
 }
+/* A chat app can mangle a link into a broken %-escape, and decodeURIComponent
+   throws on one. The raw text simply matches nothing, which the routes
+   already handle. */
+function safeDecode(s) {
+  try { return decodeURIComponent(s); } catch (e) { return s; }
+}
 async function resolveStudySlug(slugOrId) {
   if (!slugOrId) return null;
-  const decoded = decodeURIComponent(slugOrId);
+  const decoded = safeDecode(slugOrId);
   const direct = await Store.getBreakdown(decoded).catch(() => null);
   if (direct) return direct;
   const flag = await Store.getBreakdown("flagship-" + decoded).catch(() => null);
@@ -299,6 +388,13 @@ async function resolveStudySlug(slugOrId) {
   const want = decoded.trim().toLowerCase();
   const all = await Store.getBreakdowns();
   return all.find(b => (b.system || "").trim().toLowerCase() === want) || null;
+}
+async function linkMissed(msg) {
+  await renderLibrary();
+  show("library", { noRoute: true });
+  toast(msg);
+  try { history.replaceState({ screen: "library", drillStack: [] }, "", "#/"); } catch (_) {}
+  return true;
 }
 async function applyUrlRoute(hashStr, histState) {
   const hStr = (hashStr || location.hash || "#/").replace(/^#/, "");
@@ -324,17 +420,25 @@ async function applyUrlRoute(hashStr, histState) {
         }
         return true;
       }
+      /* A study link that resolves to nothing — deleted, never imported here,
+         or a mangled escape — used to return false, which the back button
+         ignores: the old screen stayed up under a URL that no longer matched
+         it. Land on the library and say so, as the catch below does. */
+      return await linkMissed("That study is not in your library");
     }
     const modelsMatch = hStr.match(/^\/models(?:\/([^/]+))?/);
     if (modelsMatch) {
-      await renderModels(modelsMatch[1] ? decodeURIComponent(modelsMatch[1]) : undefined);
+      await renderModels(modelsMatch[1] ? safeDecode(modelsMatch[1]) : undefined);
       show("models", { noRoute: true });
       return true;
     }
     const vocabMatch = hStr.match(/^\/vocab(?:\/([^/]+))?/);
     if (vocabMatch) {
-      await renderVocab(vocabMatch[1] ? decodeURIComponent(vocabMatch[1]) : undefined);
+      await renderVocab(vocabMatch[1] ? safeDecode(vocabMatch[1]) : undefined);
       show("vocab", { noRoute: true });
+      // only now: the screen was display:none while it rendered, and a hidden one cannot scroll
+      const focused = $("screen-vocab").querySelector(".vocab-card.focused");
+      if (focused) requestAnimationFrame(() => focused.scrollIntoView({ block: "center", behavior: RM_PREF() ? "auto" : "smooth" }));
       return true;
     }
     if (hStr === "/practice" || hStr === "/drill") {
@@ -361,14 +465,16 @@ async function applyUrlRoute(hashStr, histState) {
     if (importMatch) {
       try {
         const doc = await decodeSharePayload(importMatch[1]);
-        const { rec, existed } = await saveOrReuseImportedDoc(doc);
+        const { rec, existed } = await saveOrReuseImportedDoc(doc, "shared");
         await renderLibrary();
         toast(existed ? `Opened "${rec.system}"` : `Imported shared Deconstruct: ${rec.system}`);
         await openReader(rec.id, null, { noRoute: true });
         try { history.replaceState({ screen: "reader", drillStack: [{ id: rec.id, system: rec.system }] }, "", `#/study/${encodeURIComponent(studySlug(rec))}`); } catch (e) {}
         return true;
       } catch (e) {
-        alert("Could not import shared Deconstruct:\n" + e.message);
+        /* in-app, one line, never a native dialog: the message can carry the
+           link author's own text, echoed back by the validator */
+        toast("Could not import that shared link · " + safeLine(e.message.split("\n").slice(-1)[0], 80));
         await renderLibrary();
         show("library", { noRoute: true });
         return true;
@@ -383,6 +489,7 @@ async function applyUrlRoute(hashStr, histState) {
         show("whatif", { noRoute: true, keepRec: true });
         return true;
       }
+      return await linkMissed("That study is not in your library");
     }
     if (hStr === "/" || hStr === "") {
       await renderLibrary();
@@ -390,6 +497,16 @@ async function applyUrlRoute(hashStr, histState) {
       return true;
     }
     return false;
+  } catch (e) {
+    /* Whatever a link carries, it must not leave the app blank: the screen it
+       asked for may be half-built, so land on the library and clear the hash
+       so a reload recovers. replaceState, never push: popstate runs this too. */
+    console.error(e);
+    await renderLibrary();
+    show("library", { noRoute: true });
+    toast("That link could not be opened");
+    try { history.replaceState({ screen: "library", drillStack: [] }, "", "#/"); } catch (_) {}
+    return true;
   } finally {
     suppressRoute = false;
   }
@@ -429,6 +546,16 @@ async function toggleTheme() {
 
 /* ═══ Screen switching ═══ */
 const SCREENS = ["landing", "library", "reader", "generate", "models", "vocab", "drill", "tutorial", "whatif", "settings"];
+/* A reader left behind kept its Pulse running into a detached SVG, on every
+   screen after, one more for each study opened. Stop it on the way out.
+   destroy() is the renderer's teardown for the rest (its fit and resize
+   loops); it is called only where the renderer provides it. */
+function retireDiagram() {
+  if (!currentDiagram) return;
+  currentDiagram.sim.stop();
+  if (typeof currentDiagram.destroy === "function") currentDiagram.destroy();
+  currentDiagram = null;
+}
 function show(screen, opts = {}) {
   SCREENS.forEach(s => { $("screen-" + s).hidden = s !== screen; });
   document.body.classList.toggle("reading", screen === "reader");   // frees topbar room for the audience switch
@@ -451,8 +578,15 @@ function show(screen, opts = {}) {
   if (screen !== "reader") setTimeout(() => { if (document.body.dataset.screen === screen) featureTips.visit(screen); }, 650);
   if (!opts.noRoute) syncRoute(opts.replace ? "replace" : "push");
   if (screen !== "reader") {
+    /* destroy() cancels the reader's debounced save, so write the live record
+       first, or the last keystrokes of a sketch are lost on any exit that did
+       not pass through flushSaves(). IndexedDB runs transactions on one store
+       in order, so this need not be awaited. */
+    if (currentView && currentRec) Store.saveBreakdownLight(currentRec);
     if (currentView) currentView.destroy();   // cancel any pending debounce timer
     currentView = null;
+    retireDiagram();
+    if (originEscHandler) { document.removeEventListener("keydown", originEscHandler); originEscHandler = null; }
     if (!opts.keepRec) currentRec = null;
   }
 }
@@ -467,6 +601,20 @@ async function boot() {
     meta.challengeModeDefault = false;
     meta.challengeDefaultV2 = true;
     await Store.saveMeta({ challengeModeDefault: false, challengeDefaultV2: true });
+  }
+  /* Repair any stored record missing the fields every screen assumes. Older
+     or hand-made backups could store a study with no attempts, and the
+     Library then threw on every boot and every tap of Home — the app stuck at
+     its top bar until someone cleared site data. Cheap, idempotent, and it
+     runs before anything reads them. */
+  {
+    const isObj = v => !!v && typeof v === "object" && !Array.isArray(v);
+    for (const r of await Store.getBreakdowns()) {
+      if (isObj(r.attempts) && isObj(r.progress)) continue;
+      if (!isObj(r.attempts)) r.attempts = {};
+      if (!isObj(r.progress)) r.progress = { layersRead: 0, gatesAnswered: 0, position: 0 };
+      await Store.saveBreakdownLight(r);
+    }
   }
   // v2: reading counts as progress. Before, only the challenge gate marked a
   // layer done, and gates are off by default, so a reader who finished a whole
@@ -500,12 +648,17 @@ async function boot() {
   let handled = false;
   if (hasExplicitHash) {
     await renderLibrary();                // back button needs a library behind it
-    handled = await applyUrlRoute(location.hash, history.state);
+    // backstop: a throw here skipped show() and dismissSplash, a blank app
+    try { handled = await applyUrlRoute(location.hash, history.state); } catch (e) { handled = false; }
   }
   if (!handled) {
     if (!meta.landingSeen) {
       renderLanding();
       show("landing", { replace: true });
+      /* auto-shows once, however the reader leaves it: only the CTA set this,
+         so tapping Home instead brought the landing back on every launch */
+      meta.landingSeen = true;
+      await Store.saveMeta({ landingSeen: true });
     } else {
       await renderLibrary();
       show("library", { replace: true });
@@ -537,14 +690,24 @@ async function seedFlagships() {
   const prev = {};
   (await Store.getBreakdowns()).forEach(b => { if (b.source === "flagship") prev[b.id] = b; });
   let okCount = 0;
-  for (const n of names) {
+  /* Fetch them all at once. One after another, a first visit (no service
+     worker yet) held the splash for a round trip per flagship. A failed one
+     comes back null and is skipped, as before. */
+  const docs = await Promise.all(names.map(n =>
+    fetch("flagships/" + n + ".json", { cache: "no-cache" })  // revalidate: pick up content updates
+      .then(res => res.ok ? res.json() : null)
+      .catch(() => null)));   // offline first-open of a partial cache: retry next boot
+  for (let k = 0; k < names.length; k++) {
+    const n = names[k], doc = docs[k];
+    if (!doc) continue;
     try {
-      const res = await fetch("flagships/" + n + ".json", { cache: "no-cache" });  // revalidate: pick up content updates
-      if (!res.ok) continue;
-      const doc = await res.json();
       if (!Schema.validate(doc).ok) continue;
       const id = "flagship-" + n, was = prev[id];
+      /* Spread the old record first, so anything a reader attached to a
+         sample survives a content update. Saved grafts (whatifs) were being
+         wiped on every flagshipVersion bump; so would any field added later. */
       await Store.saveBreakdown({
+        ...(was || {}),
         id, system: doc.meta.system, source: "flagship", schemaVersion: 1, doc,
         created: was ? was.created : Date.now(),
         lastOpen: was ? was.lastOpen : undefined,
@@ -601,11 +764,18 @@ function renderAudSwitch() {
       };
       box.appendChild(b);
     });
+    /* First measured at boot, while the switch is hidden, the pill came out
+       0px wide and stayed so: every reader opened with no level marked. The
+       switch resizes when it is shown and when its labels swap to letters,
+       so re-measure then. The pill is absolute, so this cannot feed itself. */
+    if (typeof ResizeObserver === "function") new ResizeObserver(() => renderAudSwitch()).observe(box);
   } else {
     box.querySelectorAll("button").forEach(b => {
       b.classList.toggle("on", b.dataset.aud === meta.audienceMode);
     });
   }
+  // say which level is on, not only paint it: a screen reader heard three equal buttons
+  box.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.aud === meta.audienceMode)));
   requestAnimationFrame(() => {
     const onBtn = box.querySelector("button.on");
     if (onBtn && pill) {
@@ -708,20 +878,51 @@ function headArrow(head) {
     const H = head.getBoundingClientRect();
     const A = from.getBoundingClientRect(), B = to.getBoundingClientRect();
     if (!A.width || !B.width) return false;
-    /* under both words, dipping between them. When the line wraps and the
-       second word sits lower, the dip simply becomes a longer fall. */
-    const x1 = A.left - H.left + A.width / 2, y1 = A.bottom - H.top + 3;
-    const x2 = B.left - H.left + B.width / 2, y2 = B.bottom - H.top + 3;
-    const drop = Math.max(14, Math.abs(y2 - y1) * 0.5 + 14);
-    /* The dip falls below the headline's own box, so the canvas is sized to
-       hold it rather than relying on overflow surviving every browser. The
-       h1 carries matching bottom padding, so nothing below gets covered. */
-    const need = Math.ceil(Math.max(y1, y2) + drop + 8);
+    let d, need;
+    if (Math.abs(B.top - A.top) < A.height / 2) {
+      /* one line: under both words, dipping between them */
+      const x1 = A.left - H.left + A.width / 2, y1 = A.bottom - H.top + 3;
+      const x2 = B.left - H.left + B.width / 2, y2 = B.bottom - H.top + 3;
+      const drop = Math.max(14, Math.abs(y2 - y1) * 0.5 + 14);
+      /* The dip falls below the headline's own box, so the canvas is sized to
+         hold it rather than relying on overflow surviving every browser. The
+         h1 carries matching bottom padding, so nothing below gets covered. */
+      need = Math.ceil(Math.max(y1, y2) + drop + 8);
+      d = `M ${x1.toFixed(1)} ${y1.toFixed(1)} C ${x1.toFixed(1)} ${(y1 + drop).toFixed(1)}, ` +
+          `${x2.toFixed(1)} ${(y2 + drop).toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+    } else {
+      /* Wrapped, which at these sizes is nearly always. The lines touch at
+         this leading, so a fall from under the first word cut straight
+         through whatever sat beneath it, usually the second word itself.
+         Bracket the two line ends on the right instead, where nothing is
+         written. That needs both words to end their lines (trailing
+         punctuation allowed); when either does not, there is no clear side,
+         so the arrow stands down and only the colour hand-off runs. */
+      const range = document.createRange();
+      range.selectNodeContents(from.parentNode);
+      const rects = Array.from(range.getClientRects()).filter(r => r.width > 0);
+      const rightIn = (lo, hi) => rects.reduce((m, r) => {
+        const c = (r.top + r.bottom) / 2;
+        return c >= lo && c <= hi ? Math.max(m, r.right) : m;
+      }, -Infinity);
+      const endA = rightIn(A.top, A.bottom), endB = rightIn(B.top, B.bottom);
+      if (endA - A.right > A.height * 0.6 || endB - B.right > B.height * 0.6) {
+        svg.style.display = "none";
+        len = 0;
+        return true;
+      }
+      const edge = rightIn(A.top, B.bottom) - H.left;   // the widest line the bracket passes
+      const x1 = endA - H.left + 6, y1 = A.top - H.top + A.height * 0.55;
+      const x2 = endB - H.left + 6, y2 = B.top - H.top + B.height * 0.55;
+      const cx = edge + 26;
+      need = Math.ceil(Math.max(y1, y2) + 8);
+      d = `M ${x1.toFixed(1)} ${y1.toFixed(1)} C ${cx.toFixed(1)} ${y1.toFixed(1)}, ` +
+          `${cx.toFixed(1)} ${y2.toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+    }
+    svg.style.display = "";
     svg.setAttribute("viewBox", `0 0 ${Math.round(H.width)} ${need}`);
     svg.setAttribute("width", Math.round(H.width));
     svg.setAttribute("height", need);
-    const d = `M ${x1.toFixed(1)} ${y1.toFixed(1)} C ${x1.toFixed(1)} ${(y1 + drop).toFixed(1)}, ` +
-              `${x2.toFixed(1)} ${(y2 + drop).toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}`;
     path.setAttribute("d", d);
     len = path.getTotalLength();
     if (!(len > 0)) return false;
@@ -738,6 +939,7 @@ function headArrow(head) {
   }
 
   function place(u) {
+    if (!len) return;                      // arrow stood down: nothing to travel
     const p = path.getPointAtLength(len * u);
     tok.setAttribute("cx", p.x);
     tok.setAttribute("cy", p.y);
@@ -937,10 +1139,14 @@ function renderTutorial(from) {
   root.textContent = "";
   const T = COPY.tutorial;
   const back = h("button", "gbtn", returnId ? "‹ Back to the Deconstruct" : "‹ Back");
-  back.onclick = () => {
+  /* Only Settings goes back to Settings. A guide reached by URL, reload or
+     history comes from the router with no origin worth keeping, and landed
+     on Settings, a screen the reader never came from. */
+  back.onclick = async () => {
     if (returnId) { openReader(returnId); }
     else if (from === "landing") { renderLanding(); show("landing"); }
-    else { renderSettings(); show("settings"); }
+    else if (from === "settings") { renderSettings(); show("settings"); }
+    else { await renderLibrary(); show("library"); }
   };
   root.appendChild(back);
   root.appendChild(h("div", "kicker", T.kicker));
@@ -1151,7 +1357,8 @@ function cardGrid(recs) {
 
     const top = h("div", "bd-top");
     const chipCls = rec.source === "flagship" ? " flagship" : (rec.source === "design" ? " design" : "");
-    const chipLabel = rec.source === "flagship" ? "Sample" : (rec.source === "design" ? "Your design" : "Your Deconstruct");
+    const chipLabel = rec.source === "flagship" ? "Sample" : rec.source === "design" ? "Your design"
+                    : rec.source === "shared" ? "Shared with you" : "Your Deconstruct";
     top.appendChild(h("span", "chip" + chipCls, chipLabel));
     if (dom && dom !== "software" && typeof domainLabel === "function") {
       const dl = domainLabel(dom);
@@ -1254,24 +1461,36 @@ function findBestInstantMatch(all, q) {
   const s = (q || "").trim().toLowerCase();
   if (s.length < 2) return null;
   // 1. Exact or prefix or substring breakdown match
+  /* A study's 3D lab comes from the study itself, as on its library card.
+     Taken from the query, "car" paired the card network with The Gear Change. */
   const exactRec = all.find(r => (r.system || "").trim().toLowerCase() === s || studySlug(r).toLowerCase().replace(/-/g, " ") === s);
-  if (exactRec) return { kind: "rec", rec: exactRec };
-  const fs = fieldStudyFor(s) || FIELD_STUDIES.find(st => st.name.toLowerCase().includes(s) || st.terms.some(t => t.includes(s)));
+  if (exactRec) return { kind: "rec", rec: exactRec, fs: fieldStudyFor(exactRec.system) };
   const subRec = all.find(r => (r.system || "").toLowerCase().includes(s) || studySlug(r).toLowerCase().replace(/-/g, " ").includes(s));
-  if (subRec) return { kind: "rec", rec: subRec, fs };
+  if (subRec) return { kind: "rec", rec: subRec, fs: fieldStudyFor(subRec.system) };
+  const fs = fieldStudyFor(s) || FIELD_STUDIES.find(st => st.name.toLowerCase().includes(s) || st.terms.some(t => t.includes(s)));
   if (fs) return { kind: "lab", st: fs };
   return null;
 }
 
 async function renderLibrary() {
+  /* Read before touching the screen. With the await between the clear and
+     the appends, two quick taps on Home interleaved and built the whole
+     screen twice; now each call rebuilds it in one pass and the last wins. */
+  const all = (await Store.getBreakdowns()).sort((a, b) => (b.lastOpen || b.created) - (a.lastOpen || a.created));
   const root = $("screen-library").firstElementChild;
+  /* A background Deconstruct finishing re-renders Home under a reader who may
+     be scrolled down or typing a search. The rebuilt search box gets their
+     focus and caret back, and the scroll is put back if it moved. */
+  const prevFocus = document.activeElement;
+  const hadFocus = !!prevFocus && prevFocus.id === "deconInput";
+  const caret = hadFocus ? [prevFocus.selectionStart, prevFocus.selectionEnd] : null;
+  const keepTop = $("screen-library").scrollTop;
   root.textContent = "";
   const head = h("header", "lib-hero");
   head.appendChild(h("h1", "title", "What do you want to understand?"));
   head.appendChild(h("p", "subtitle", COPY.libraryLede));
   root.appendChild(head);
 
-  const all = (await Store.getBreakdowns()).sort((a, b) => (b.lastOpen || b.created) - (a.lastOpen || a.created));
   const flagships = all.filter(b => b.source === "flagship");
   const yours = all.filter(b => b.source !== "flagship");
 
@@ -1398,7 +1617,7 @@ async function renderLibrary() {
       openBtn.onclick = () => openReader(rec.id);
       acts.appendChild(openBtn);
       if (hit.fs) {
-        const labLink = h("a", "gbtn", "Open 3D study ↗");
+        const labLink = guardLabLink(h("a", "gbtn", "Open 3D study ↗"));
         labLink.href = hit.fs.href;
         acts.appendChild(labLink);
       }
@@ -1413,7 +1632,7 @@ async function renderLibrary() {
       info.appendChild(h("span", "omni-match-title", st.name));
       info.appendChild(h("span", "omni-match-sub", st.sub));
       const acts = h("div", "omni-match-actions");
-      const openLink = h("a", "gbtn primary", "Open 3D study →");
+      const openLink = guardLabLink(h("a", "gbtn primary", "Open 3D study →"));
       openLink.href = st.href;
       acts.appendChild(openLink);
       const genBtn = h("button", "gbtn ghost", "Deconstruct in 2D");
@@ -1442,9 +1661,11 @@ async function renderLibrary() {
     if (!isFiltered || fYours.length || libFilter === "yours") {
       bodyWrap.appendChild(sectionHead(COPY.yoursHeading, fYours.length ? fYours.length + (isFiltered ? " matching" : " so far") : null));
       if (fYours.length) bodyWrap.appendChild(cardGrid(fYours));
-      else {
+      /* filtered to nothing, the no-match panel below speaks (with its reset);
+         a second panel here contradicted it */
+      else if (!isFiltered) {
         const empty = h("div", "empty-panel");
-        empty.appendChild(h("p", null, isFiltered ? "No saved studies match this filter." : COPY.yoursEmpty));
+        empty.appendChild(h("p", null, COPY.yoursEmpty));
         bodyWrap.appendChild(empty);
       }
     }
@@ -1463,7 +1684,7 @@ async function renderLibrary() {
       if (!isFiltered) bodyWrap.appendChild(h("p", "lib-note", COPY.labNote));
       const labGrid = h("div", "card-grid");
       fLabs.forEach(st => {
-        const lab = h("a", "bd-card lab-card");
+        const lab = guardLabLink(h("a", "bd-card lab-card"));
         lab.href = st.href;
         const top = h("div", "bd-top");
         top.appendChild(h("span", "chip lab-chip", "Field study"));
@@ -1543,7 +1764,7 @@ async function renderLibrary() {
     try {
       const rec = await importBreakdownJsonText(await file.text());
       if (rec) openReader(rec.id);
-    } catch (e) { alert("Could not import: " + e.message); }
+    } catch (e) { alert("Could not import: " + safeLine(e.message, 160)); }
   });
   importRow.appendChild(imp);
   const about = setFace(h("button", "gbtn ghost"), "info", "About Vitruvian");
@@ -1560,6 +1781,11 @@ async function renderLibrary() {
   root.appendChild(importRow);
 
   const libScreen = $("screen-library");
+  if (hadFocus) {
+    input.focus({ preventScroll: true });
+    try { input.setSelectionRange(caret[0], caret[1]); } catch (e) {}
+  }
+  if (!libScreen.hidden && libScreen.scrollTop !== keepTop) libScreen.scrollTo({ top: keepTop, behavior: "instant" });
   if (libScreen && !libScreen._dropWired) {
     libScreen._dropWired = true;
     let dragDepth = 0;
@@ -1589,7 +1815,7 @@ async function renderLibrary() {
       try {
         const rec = await importBreakdownJsonText(await file.text());
         if (rec) openReader(rec.id);
-      } catch (err) { alert("Could not import dropped file: " + err.message); }
+      } catch (err) { alert("Could not import dropped file: " + safeLine(err.message, 160)); }
     });
   }
 }
@@ -1652,7 +1878,11 @@ async function drillInto(sub) {
   const match = all.filter(b => (b.system || "").trim().toLowerCase() === want)
                    .sort((a, b) => (a.source === "flagship" ? -1 : 1) - (b.source === "flagship" ? -1 : 1))[0];
   if (match) {
-    if (!drillStack.some(e => e.id === match.id)) drillStack.push({ id: match.id, system: match.system });
+    /* already on the trail (B expands back to A): cut back to it, or the
+       crumb went on calling the last entry "here" while A was open */
+    const at = drillStack.findIndex(e => e.id === match.id);
+    if (at >= 0) drillStack = drillStack.slice(0, at + 1);
+    else drillStack.push({ id: match.id, system: match.system });
     openReader(match.id, null, { keepStack: true });
     return;
   }
@@ -1693,7 +1923,8 @@ const featureTips = (() => {
     const root = $("screen-" + tip.screen);
     if (!root || root.hidden) return null;
     const sels = tip.target.split(",").map(x => x.trim());
-    const hit = root => sels.map(sel => root.querySelector(sel)).find(el => el && el.offsetParent);
+    // getClientRects, not offsetParent: SVG targets (the drill badge) have no offsetParent
+    const hit = root => sels.map(sel => root.querySelector(sel)).find(el => el && el.getClientRects().length > 0);
     return hit(root) || hit(document);
   };
 
@@ -1704,6 +1935,7 @@ const featureTips = (() => {
     card = null; queue = []; i = 0;
     document.removeEventListener("keydown", onKey, true);
     window.removeEventListener("resize", place);
+    document.removeEventListener("scroll", place, true);
   }
   async function markDone(id) {
     const d = Object.assign({}, done()); d[id] = true;
@@ -1727,8 +1959,21 @@ const featureTips = (() => {
     let top = t.bottom + 12;
     if (top + ch > innerHeight - 12) top = t.top - ch - 12;
     if (top < 12) top = Math.max(12, Math.min(innerHeight - ch - 12, t.top + 12));
-    card.style.top = top + "px";
+    // never past the bottom edge: a card whose buttons are off screen cannot be closed on a phone
+    card.style.top = Math.max(12, Math.min(top, innerHeight - ch - 12)) + "px";
     card.style.left = Math.max(16, Math.min(innerWidth - w - 16, t.left + t.width / 2 - w / 2)) + "px";
+  }
+
+  /* A target below the fold put the card below the fold too. Scroll it into
+     view first, moving only the screen's own scroller: scrollIntoView would
+     also shift the reader's clipped panes, which are laid out by hand. The
+     scroll is smooth, so place() follows it on scroll. */
+  function reveal(el) {
+    const scr = el.closest(".screen");
+    if (!scr) return;
+    const r = el.getBoundingClientRect(), s = scr.getBoundingClientRect();
+    if (r.top >= s.top && r.bottom <= s.bottom) return;
+    scr.scrollTop += r.top - s.top - Math.max(16, (s.height - r.height) / 3);
   }
 
   function paint() {
@@ -1742,6 +1987,7 @@ const featureTips = (() => {
     card.querySelector(".tip-title").textContent = tip.title;
     card.querySelector(".tip-text").textContent = tip.text;
     card.querySelector(".tip-next").textContent = i === queue.length - 1 ? "Got it" : "Next";
+    reveal(ringed);
     place();
     card.querySelector(".tip-next").focus();
   }
@@ -1771,6 +2017,7 @@ const featureTips = (() => {
     card.append(count, title, text, row);
     document.addEventListener("keydown", onKey, true);
     window.addEventListener("resize", place);
+    document.addEventListener("scroll", place, true);   // screens scroll themselves; capture catches them
     document.body.appendChild(card);
   }
 
@@ -1961,12 +2208,17 @@ function paneSplitDrag(wrap, split) {
 }
 
 async function openReader(id, layerIndex, opts = {}) {
+  /* same reason as in show(): a drill, breadcrumb or vocab jump re-opens the
+     reader without passing show()'s teardown, so the outgoing study's last
+     edits are written before its view is torn down below */
+  if (currentView) await flushSaves();
   const allBreakdowns = await Store.getBreakdowns();
   const rec = allBreakdowns.find(b => b.id === id) || await Store.getBreakdown(id);
   if (!rec) return;
   const knownSystemNames = new Set(allBreakdowns.map(b => (b.system || "").trim().toLowerCase()));
   const hasStudy = sub => knownSystemNames.has(String(sub || "").trim().toLowerCase());
   if (currentView) currentView.destroy();   // re-open (e.g. from Models index) skips show()'s teardown
+  retireDiagram();                          // likewise the previous study's diagram and its Pulse
   currentRec = rec;
   // a plain open (library, Models, deep link) starts a fresh breadcrumb; a
   // drill keeps the stack the caller already pushed onto
@@ -1983,14 +2235,17 @@ async function openReader(id, layerIndex, opts = {}) {
   const dscroll = h("div", "diagram-scroll");
   const dcap = h("div", "diagram-cap");
   const capState = h("span", "diagram-cap-state", "");
+  /* All .collapsed has ever hidden is the key (styles.css); the drawing stays.
+     The button is only shown on wide screens, where it is the one way to put
+     the key away, so it is named for what it does. */
   const capToggle = setFace(h("button", "gbtn sim-btn icon-only cap-toggle"), "chevronDown");
-  capToggle.setAttribute("aria-label", "Hide diagram");
-  capToggle.title = "Hide diagram";
+  capToggle.setAttribute("aria-label", "Hide key");
+  capToggle.title = "Hide key";
   capToggle.onclick = () => {
     const collapsed = dpane.classList.toggle("collapsed");
     setFace(capToggle, collapsed ? "chevronUp" : "chevronDown");
-    capToggle.setAttribute("aria-label", collapsed ? "Show diagram" : "Hide diagram");
-    capToggle.title = collapsed ? "Show diagram" : "Hide diagram";
+    capToggle.setAttribute("aria-label", collapsed ? "Show key" : "Hide key");
+    capToggle.title = collapsed ? "Show key" : "Hide key";
   };
   const playBtn = setFace(h("button", "gbtn sim-btn sim-primary"), "play", "Pulse");
   playBtn.title = "Send live traffic through this state";
@@ -2182,6 +2437,8 @@ async function openReader(id, layerIndex, opts = {}) {
     }
   });
 
+  currentDiagram = diagram;
+
   // Corner Registration Marks (Wave E · Proposal #5)
   ["tl", "tr", "bl", "br"].forEach(pos => {
     const mark = h("div", "reg-mark " + pos);
@@ -2280,6 +2537,9 @@ async function openReader(id, layerIndex, opts = {}) {
     }
   };
   /* ── zoom (Wave E · Proposal #5) ── */
+  /* the renderer calls back after every zoom, however it happened —
+     double-click, pinch, wheel — so the readout and Fit stay true without
+     each control having to remember to repaint */
   const paintZoom = () => {
     const whole = diagram.fitsWhole();
     const currentZ = diagram.zoom.current();
@@ -2290,6 +2550,7 @@ async function openReader(id, layerIndex, opts = {}) {
     zoomBar.hidden = whole && diagram.isAutoFit() && !diagram.doc.layers.length;
     zFit.textContent = (diagram.isAutoFit() || Math.abs(currentZ - fitZ) < 0.03) ? "FIT" : `${pct}% ↺`;
   };
+  diagram.onZoom(paintZoom);
   zOut.onclick = () => { diagram.zoomBy(1 / 1.25); paintZoom(); };
   zIn.onclick = () => { diagram.zoomBy(1.25); paintZoom(); };
   zFit.onclick = () => { diagram.fitNow(); paintZoom(); };
@@ -2313,13 +2574,20 @@ async function openReader(id, layerIndex, opts = {}) {
     closeOrigin();
     diagram.spotlight(null);
   };
-  document.addEventListener("keydown", e => {
+  /* One live listener, replaced on every open. Each reader used to add its
+     own and never remove it, so every Escape ran one per study opened, and
+     each kept its whole reader (diagram, record, DOM) reachable. Held at
+     module level rather than torn down with the view, because two opens in
+     quick succession can skip that teardown. */
+  if (originEscHandler) document.removeEventListener("keydown", originEscHandler);
+  originEscHandler = e => {
     if (e.key === "Escape" && !originCard.hidden && originCard.isConnected) {
       e.stopPropagation();
       closeOrigin();
       diagram.spotlight(null);
     }
-  });
+  };
+  document.addEventListener("keydown", originEscHandler);
   diagram.onSelect(sel => {
     if (!sel) { closeOrigin(); return; }
     oTitle.textContent = sel.label;
@@ -2391,6 +2659,12 @@ async function openReader(id, layerIndex, opts = {}) {
       text = (s.length > 150 ? s.slice(0, 147) + "…" : s) + (s.endsWith(".") ? "" : ".");
     }
     capText.textContent = text;
+    /* styles.css lays the caption over the drawing, out of the flow: as a
+       flex row it took height from the drawing, which refit smaller
+       mid-replay and back 7s later. It sits on the drawing's bottom edge, as
+       the origin card does, so the key, scrubber and control bar stay clear. */
+    const gap = dpane.getBoundingClientRect().bottom - dscroll.getBoundingClientRect().bottom;
+    caption.style.bottom = Math.max(12, Math.round(gap) + 12) + "px";
     caption.hidden = false;
     clearTimeout(captionTimer);
     captionTimer = setTimeout(() => { caption.hidden = true; }, 7000);
@@ -2422,6 +2696,11 @@ async function openReader(id, layerIndex, opts = {}) {
   // gates are opt-in: on only if this breakdown enabled them, or the user set the default on
   const challengeOn = rec.challengeMode != null ? rec.challengeMode : meta.challengeModeDefault === true;
 
+  /* mount() renders at once, and every render reports its place. Until this
+     reader has pushed its own history entry, that report would rewrite the
+     previous screen's entry (the parent study on a drill, or Practice,
+     Models, Vocabulary), and Back skipped it. */
+  let routed = false;
   currentView = DocView.mount({
     docPane, diagram, rec, scrubEl,
     audience: meta.audienceMode || "enthusiast",
@@ -2432,7 +2711,7 @@ async function openReader(id, layerIndex, opts = {}) {
     onReplay: runReplay,
     onTools,
     onNavigate() {
-      if (document.body.dataset.screen === "reader") syncRoute("replace");
+      if (routed && document.body.dataset.screen === "reader") syncRoute("replace");
     },
     async onOpen(id) { await flushSaves(); openReader(id); },
     async onFinish() { await flushSaves(); await renderLibrary(); show("library"); },
@@ -2452,9 +2731,11 @@ async function openReader(id, layerIndex, opts = {}) {
 
   buildReaderMenu(rec, challengeOn);
   show("reader", { noRoute: true });
+  if (!opts.noRoute) syncRoute("push");   // the reader takes its own entry first
+  routed = true;
+  // so the replace a jump makes lands on the reader's entry
   if (layerIndex != null) currentView.goToLayer(layerIndex);
   else if (Array.isArray(opts.posStep)) currentView.goToPosStep(opts.posStep[0], opts.posStep[1]);
-  if (!opts.noRoute) syncRoute("push");
   setTimeout(() => { if (currentRec === rec) featureTips.visit("reader"); }, 750);
 }
 
@@ -2558,6 +2839,8 @@ function openSequence(rec) {
 let vocabFilter = "all";
 async function renderVocab(focusId) {
   activeVocabId = focusId || null;
+  // read first, as renderLibrary: overlapping calls cannot interleave
+  const recs = await Store.getBreakdowns().catch(() => []);
   const root = $("screen-vocab").firstElementChild;
   root.textContent = "";
   root.appendChild(h("div", "kicker", "The engineering vocabulary"));
@@ -2567,7 +2850,7 @@ async function renderVocab(focusId) {
   // where each id appears across the reader's library
   const uses = {};
   try {
-    (await Store.getBreakdowns()).forEach(b => {
+    recs.forEach(b => {
       if (!b.doc || !b.doc.layers) return;
       b.doc.layers.forEach(L => ((L.developer && L.developer.vocab) || []).forEach(id => {
         (uses[id] = uses[id] || []).push({ system: b.system, id: b.id, index: L.index, name: L.name });
@@ -2615,10 +2898,6 @@ async function renderVocab(focusId) {
     grid.appendChild(card);
   });
   root.appendChild(grid);
-  if (focusId) {
-    const el = grid.querySelector(".focused");
-    if (el) el.scrollIntoView({ block: "center", behavior: RM_PREF() ? "auto" : "smooth" });
-  }
 }
 function RM_PREF() { return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
 
@@ -2762,7 +3041,11 @@ function buildReaderMenu(rec, challengeOn) {
     let url = "";
     let msg = COPY.shareCopied;
     if (rec.source === "flagship") {
-      url = CONFIG.siteUrl + "#/study/" + rec.id.replace("flagship-", "");
+      /* the sample's own share page, not the bare #/study link: unfurlers
+         never see a #fragment, so that one previewed as the generic site
+         card. The page carries the study's title and image and redirects to
+         the same #/study route. tools/validate.js keeps one per sample. */
+      url = CONFIG.siteUrl + "share/" + encodeURIComponent(studySlug(rec)) + ".html";
     } else {
       try {
         const token = await encodeSharePayload(rec.doc);
@@ -3054,16 +3337,33 @@ function bridgeNotes(doc) {
   return lines.join("\n");
 }
 
+/* The Opus 5.5 bands at the bottom are the measured ones. The rest scale them
+   by each family's price per token against Opus 5.5's $4/$20 per MTok:
+   Fable and Mythos 2.5x, the $5/$25 Opus ids 1.25x, Sonnet 5 and 5.5 half,
+   Haiku 4.5 a quarter, Haiku 5.5 a fortieth. A validation repair resends the
+   prompt and the first answer and can roughly double a run; it is rare, and
+   left out. */
 function modelCostEstimate(modelId, speed, voiceOn) {
   const m = String(modelId || CONFIG.defaultModel || "").toLowerCase();
   const fast = speed === "fast";
   const speedTag = fast ? "Fast" : "Balanced";
   const voiceTag = voiceOn ? " + voice pass" : "";
+  if (/fable|mythos/.test(m)) {
+    return fast ? `${speedTag}${voiceTag} · ~45–90s · typically $0.55–$0.95 on your key`
+                : `${speedTag}${voiceTag} · ~60–150s · typically $0.80–$1.40 on your key`;
+  }
   if (m.includes("sonnet")) {
-    return `${speedTag}${voiceTag} · ~25–45s · typically $0.08–$0.16 on your key`;
+    return `${speedTag}${voiceTag} · ~25–45s · typically ${fast ? "$0.11–$0.19" : "$0.16–$0.28"} on your key`;
+  }
+  if (/haiku-5/.test(m)) {
+    return `${speedTag}${voiceTag} · ~15–25s · typically under $0.02 on your key`;
   }
   if (m.includes("haiku")) {
-    return `${speedTag}${voiceTag} · ~15–25s · typically $0.02–$0.05 on your key`;
+    return `${speedTag}${voiceTag} · ~15–25s · typically $0.08–$0.14 on your key`;
+  }
+  if (/opus-5(?!-5)|opus-4-[5-8]/.test(m)) {
+    return fast ? `${speedTag}${voiceTag} · ~30–50s · typically $0.28–$0.48 on your key`
+                : `${speedTag}${voiceTag} · ~45–80s · typically $0.40–$0.70 on your key`;
   }
   if (fast) {
     return `${speedTag}${voiceTag} · ~30–50s · typically $0.22–$0.38 on your key`;
@@ -3075,6 +3375,13 @@ function modelCostEstimate(modelId, speed, voiceOn) {
 function renderGenerate(systemName, mode) {
   const design = mode === "design";
   const root = $("screen-generate").firstElementChild;
+  /* A run still going (or failed unseen) keeps its form: clearing it lost
+     the progress, and later the error and the raw-output download, for good.
+     It is set aside for the pill's View to put back. */
+  if (activeGen && !activeGen.readyRec && genFormOwner === activeGen.controller) {
+    genRunView = { controller: activeGen.controller, nodes: Array.from(root.childNodes) };
+  }
+  genFormOwner = null;
   root.textContent = "";
   root.appendChild(h("div", "kicker", design ? COPY.ownDesignKicker : "New Deconstruct"));
   root.appendChild(h("h1", "title", design ? COPY.ownDesignTitle : systemName));
@@ -3113,7 +3420,7 @@ function renderGenerate(systemName, mode) {
   const est = modelCostEstimate(activeModel, meta.genSpeed || "balanced", meta.voicePass !== false);
   root.appendChild(h("p", "lib-note", `Model: ${activeModel} · ${est}`));
 
-  const startBtn = h("button", "big-btn", design ? COPY.ownDesignBtn : "Generate (1–3 minutes)");
+  const startBtn = h("button", "big-btn", design ? COPY.ownDesignBtn : "Generate");   // the time is in the estimate line above
   root.appendChild(startBtn);
   const prog = h("div", "gen-progress");
   root.appendChild(prog);
@@ -3124,13 +3431,18 @@ function renderGenerate(systemName, mode) {
       if (dq.what.value.trim().length < 12) { dq.what.focus(); toast("Say a little more about what it does"); return; }
       subject = COPY.dissectQuestions.map(([id, label]) => dq[id].value.trim() ? label + "\n" + dq[id].value.trim() : "").filter(Boolean).join("\n\n");
     }
-    if (activeGen && activeGen.controller) {
+    /* One run at a time. Starting from another form used to cancel the one
+       in flight without a word, after its tokens were billed. */
+    if (genInFlight()) {
+      if (!confirm(`"${activeGen.systemName}" is still being built. Cancel it and start this one?`)) return;
       try { activeGen.controller.abort(); } catch (e) {}
     }
     const controller = new AbortController();
     const displaySubject = design ? (dq.what.value.trim().split(/[\n.]/)[0].slice(0, 42) || "Design review") : systemName;
+    genFormOwner = controller;
     activeGen = { controller, systemName: displaySubject, phaseText: COPY.genPhases.start, readyRec: null };
     syncGenBgPill();
+    window.addEventListener("beforeunload", guardUnload);   // a desktop backstop; iOS standalone ignores it
 
     startBtn.disabled = true;
     if (dq) Object.values(dq).forEach(t => t.disabled = true);
@@ -3188,8 +3500,10 @@ function renderGenerate(systemName, mode) {
       };
       await Store.saveBreakdown(rec);
       if (repaired) toast("Validated after one repair pass");
+      else if (voice && voice.cancelled) toast("Saved without the voice edit");   // cancelled late: the document was already whole
       else if (voice && voice.fixed) toast(`Edited ${voice.fixed} passage${voice.fixed > 1 ? "s" : ""} for voice`);
-      if (document.body.dataset.screen === "generate") {
+      // open it only over its own form; any other form is the reader's work in progress
+      if (document.body.dataset.screen === "generate" && genFormOwner === controller) {
         activeGen = null;
         syncGenBgPill();
         openReader(rec.id);
@@ -3201,24 +3515,38 @@ function renderGenerate(systemName, mode) {
         if (document.body.dataset.screen === "library") await renderLibrary();
       }
     } catch (e) {
+      const titles = {
+        key: "Invalid API key", rate: "Rate limited", overloaded: "Anthropic is overloaded",
+        offline: "You're offline", toobig: "Too large", invalid: "The model returned an invalid document",
+        http: "API error", refusal: "The model declined"
+      };
       if (activeGen && activeGen.controller === controller) {
-        activeGen = null;
+        /* A failure the reader is not looking at used to vanish with the
+           pill, and its Retry and raw-output download with it. It stays on
+           the pill until they View it or dismiss it. */
+        if (e.kind !== "aborted" && !(document.body.dataset.screen === "generate" && genFormOwner === controller)) {
+          activeGen.error = titles[e.kind] || "Generation failed";
+        } else {
+          activeGen = null;
+        }
         syncGenBgPill();
       }
       prog.textContent = "";
       if (e.kind === "aborted") {
         prog.appendChild(h("p", "lib-note", "Generation cancelled. No further tokens will be billed."));
+        /* a cancel during the repair pass still holds the first response,
+           which was paid for; keep it downloadable */
+        if (e.raw) {
+          const b = h("button", "gbtn", "Download raw output");
+          b.onclick = () => download("raw-deconstruct.txt", e.raw);
+          prog.appendChild(b);
+        }
         startBtn.disabled = false;
         if (focus) focus.disabled = false;
         if (dq) Object.values(dq).forEach(t => t.disabled = false);
         return;
       }
       const box = h("div", "gen-error");
-      const titles = {
-        key: "Invalid API key", rate: "Rate limited", overloaded: "Anthropic is overloaded",
-        offline: "You're offline", toobig: "Too large", invalid: "The model returned an invalid document",
-        http: "API error", refusal: "The model declined"
-      };
       box.appendChild(h("h3", null, titles[e.kind] || "Generation failed"));
       box.appendChild(h("p", null, e.message));
       if (Array.isArray(e.errors) && e.errors.length) {
@@ -3248,6 +3576,12 @@ function renderGenerate(systemName, mode) {
       startBtn.disabled = false;
       if (focus) focus.disabled = false;
       if (dq) Object.values(dq).forEach(t => t.disabled = false);
+    } finally {
+      // a run cancelled for a newer one settles while that one still streams
+      if (!genInFlight()) {
+        window.removeEventListener("beforeunload", guardUnload);
+        window.dispatchEvent(new Event("sdc:gensettled"));
+      }
     }
   };
 }
@@ -3342,13 +3676,25 @@ function modelUses(recs, id) {
   }));
   return out;
 }
+/* The screen is its own scroll box and kept its offset across the swap, so a
+   model opened from low in the list landed mid-page with its title far above.
+   A model opens at its top; "All models" returns to where the list was.
+   Instant, because .screen scrolls smoothly. */
+let modelsIndexScroll = 0;
 async function renderModels(detailId) {
+  // a bookmark to a model since renamed opens the index, not a blank screen
+  if (detailId && !MODEL_LIBRARY.some(x => x.id === detailId)) detailId = undefined;
+  const scr = $("screen-models");
+  const showing = !scr.hidden;
+  const fromDetail = showing && !!activeModelId;
+  if (detailId && !fromDetail) modelsIndexScroll = showing ? scr.scrollTop : 0;
   activeModelId = detailId || null;
-  const root = $("screen-models").firstElementChild;
+  const recs = await Store.getBreakdowns();   // read first, as renderLibrary: overlapping calls cannot interleave
+  const root = scr.firstElementChild;
   root.textContent = "";
-  const recs = await Store.getBreakdowns();
   if (detailId) {
     renderModel(root, recs, detailId);
+    scr.scrollTo({ top: 0, behavior: "instant" });
     if (document.body.dataset.screen === "models" && !suppressRoute) syncRoute("push");
     return;
   }
@@ -3369,6 +3715,7 @@ async function renderModels(detailId) {
     grid.appendChild(card);
   });
   root.appendChild(grid);
+  scr.scrollTo({ top: fromDetail ? modelsIndexScroll : 0, behavior: "instant" });
   if (document.body.dataset.screen === "models" && !suppressRoute) syncRoute("push");
 }
 
@@ -3632,9 +3979,9 @@ async function exportPulseGIF(diagram, onProgress) {
    fix, cost and probe questions ask you to recall first, then compare. ═══ */
 let reviewState = null;
 async function renderDrill(opts = {}) {
+  const recs = await Store.getBreakdowns();   // read first, as renderLibrary: overlapping calls cannot interleave
   const root = $("screen-drill").firstElementChild;
   root.textContent = "";
-  const recs = await Store.getBreakdowns();
   const audience = meta.audienceMode || "enthusiast";
   if (!opts.keep || !reviewState) {
     reviewState = { deck: Review.deck(recs, { systems: opts.systems || null, audience }), i: 0, right: 0, checked: 0, systems: opts.systems || null, label: opts.label || null };
@@ -3737,12 +4084,13 @@ function practiceDone(root, st) {
   root.appendChild(row);
 }
 
-function renderSettings(banner) {
+/* drafts: { key, model }, the two text fields as typed, when this screen
+   re-renders itself (see refresh below) */
+function renderSettings(banner, drafts) {
   const root = $("screen-settings").firstElementChild;
   root.textContent = "";
   root.appendChild(h("div", "kicker", "Settings"));
   root.appendChild(h("h1", "title", "How you learn"));
-  if (banner) root.appendChild(h("div", "narrowing-note", banner));
 
   /* About / how it works → landing + tutorial */
   const ab = h("div", "set-block");
@@ -3758,12 +4106,26 @@ function renderSettings(banner) {
 
   /* API key */
   const kb = h("div", "set-block");
-  kb.appendChild(h("h3", null, "Anthropic API key"));
+  const kh = h("h3", null, "Anthropic API key");
+  kh.id = "set-key-h";   // names the field below for screen readers
+  kb.appendChild(kh);
+  /* Every banner asks for the key, so it sits with the key. Under the title
+     it was several blocks above the field, and the screen kept its old
+     scroll, so a reader sent here to add a key often saw neither. */
+  if (banner) kb.appendChild(h("div", "narrowing-note", banner));
   kb.appendChild(h("p", "note", COPY.keyNotice));
   const key = h("input");
   key.type = "password";
   key.placeholder = "sk-ant-…";
-  key.value = meta.apiKey || "";
+  key.setAttribute("aria-labelledby", "set-key-h");
+  key.value = drafts ? drafts.key : (meta.apiKey || "");
+  // callers show() the screen right after; a hidden screen cannot scroll.
+  // Not on a re-render from a control lower down: it would yank the page here.
+  if (banner && !drafts) requestAnimationFrame(() => {
+    if ($("screen-settings").hidden || !kb.isConnected) return;
+    kb.scrollIntoView({ block: "start" });
+    key.focus({ preventScroll: true });
+  });
   const krow = h("div", "set-row");
   const ksave = h("button", "gbtn primary", "Save key");
   ksave.onclick = async () => {
@@ -3786,12 +4148,15 @@ function renderSettings(banner) {
 
   /* model */
   const mb = h("div", "set-block");
-  mb.appendChild(h("h3", null, "Model"));
+  const mh = h("h3", null, "Model");
+  mh.id = "set-model-h";
+  mb.appendChild(mh);
   mb.appendChild(h("p", "note", "Any Anthropic model id; new models need no app update."));
   mb.appendChild(h("p", "note", COPY.modelCostNote));
   const mi = h("input");
   mi.type = "text";
-  mi.value = meta.modelId || CONFIG.defaultModel;
+  mi.setAttribute("aria-labelledby", "set-model-h");
+  mi.value = drafts ? drafts.model : (meta.modelId || CONFIG.defaultModel);
   const mrow = h("div", "set-row");
   ["claude-opus-5-5", "claude-opus-5", "claude-opus-4-8"].forEach(preset => {
     const b = h("button", "gbtn", preset.replace("claude-", ""));
@@ -3807,6 +4172,12 @@ function renderSettings(banner) {
   mrow.appendChild(msave);
   mb.append(mi, mrow);
 
+  /* Every control below re-renders the screen. A key pasted but not yet
+     saved, a model id mid-edit and the add-your-key banner lived only in the
+     DOM, so a toggle flipped before "Save key" wiped them. They carry across;
+     the banner only while no key is saved. */
+  const refresh = () => renderSettings(meta.apiKey ? undefined : banner, { key: key.value, model: mi.value });
+
   /* how you learn: everything that changes what reading feels like */
   const toggle = (on, label, flip) => {
     const t = h("div", "toggle" + (on ? " on" : ""));
@@ -3814,12 +4185,12 @@ function renderSettings(banner) {
     t.setAttribute("aria-checked", String(!!on));
     t.tabIndex = 0;
     t.append(h("span", "tg-track"), h("span", "tg-label", label));
-    t.onclick = async () => { await flip(); renderSettings(); };
+    t.onclick = async () => { await flip(); refresh(); };
     t.onkeydown = async e => {
       if (e.key === " " || e.key === "Enter") {
         e.preventDefault();
         await flip();
-        renderSettings();
+        refresh();
       }
     };
     return t;
@@ -3830,11 +4201,12 @@ function renderSettings(banner) {
   const seg = h("div", "seg");
   COPY.audienceModes.forEach(m => {
     const b = h("button", meta.audienceMode === m.id ? "on" : "", m.label);
+    b.setAttribute("aria-pressed", String(meta.audienceMode === m.id));
     b.onclick = async () => {
       meta.audienceMode = m.id;
       await Store.saveMeta({ audienceMode: m.id });
       renderAudSwitch();
-      renderSettings();
+      refresh();
     };
     seg.appendChild(b);
   });
@@ -3859,7 +4231,7 @@ function renderSettings(banner) {
   tagain.onclick = async () => {
     await featureTips.reset();
     if (!featureTips.enabled) await featureTips.setEnabled(true);
-    renderSettings();
+    refresh();
     toast("Tips reset. They start again as you move through the app.");
   };
   const tleft = h("p", "note");
@@ -3875,10 +4247,11 @@ function renderSettings(banner) {
   const gseg = h("div", "seg");
   [["balanced", "Balanced"], ["fast", "Fast"]].forEach(([id, label]) => {
     const b = h("button", (meta.genSpeed || "balanced") === id ? "on" : "", label);
+    b.setAttribute("aria-pressed", String((meta.genSpeed || "balanced") === id));
     b.onclick = async () => {
       meta.genSpeed = id;
       await Store.saveMeta({ genSpeed: id });
-      renderSettings();
+      refresh();
     };
     gseg.appendChild(b);
   });
@@ -3913,9 +4286,9 @@ function renderSettings(banner) {
       applyTheme(meta.theme || document.documentElement.dataset.theme);   // a restored backup may carry a different theme
       renderAudSwitch();
       toast(`Restored ${results.length - bad.length}/${results.length} Deconstructs`);
-      if (bad.length) alert("Skipped invalid entries:\n" + bad.map(r => `${r.system || r.id}: ${r.errors[0]}`).join("\n"));
+      if (bad.length) alert("Skipped invalid entries:\n" + bad.slice(0, 8).map(r => `${safeLine(r.system || r.id, 40)}: ${safeLine(r.errors[0], 60)}`).join("\n"));
       renderSettings();
-    } catch (e) { alert("Restore failed: " + e.message); }
+    } catch (e) { alert("Restore failed: " + safeLine(e.message, 120)); }
   });
   brow.append(bexp, bres);
   bb.appendChild(brow);
@@ -3937,7 +4310,10 @@ function renderSettings(banner) {
 }
 
 /* ═══ Launcher shortcut routing (pwa.js calls these) ═══ */
-function launchNew() {
+/* Both render Home before showing it: on a first launch boot drew only the
+   landing, so a shortcut opened an empty Home with nothing to type into. */
+async function launchNew() {
+  await renderLibrary();
   show("library");
   const i = $("deconInput");
   if (i) i.focus();
@@ -3947,6 +4323,7 @@ async function launchResume() {
     const rec = await Store.getBreakdown(meta.lastOpenBreakdown);
     if (rec) { openReader(rec.id); return; }
   }
+  await renderLibrary();
   show("library");
 }
 

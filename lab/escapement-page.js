@@ -103,9 +103,9 @@
     els.drift.textContent = "±" + (d >= 100 ? Math.round(d / 60) + " min" : d >= 10 ? Math.round(d) + " s" : d.toFixed(1) + " s") + " / day";
     els.barFill.style.width = driftBar(d) + "%";
     els.barFill.classList.toggle("wide", d > 30);
-    /* the real swing, and the drawn one beside it only where the two
-       differ — which is exactly the layers where five degrees would
-       otherwise be a straight line */
+    /* the real amplitude, and the drawn one beside it only where the
+       two differ: the anchor and deadbeat, whose real swing would be a
+       straight line, and the lever, drawn at well under its real one */
     var real = ctl.realArc(), drawn = S.amp;
     els.amp.textContent = Math.round(real) + "°"
       + (Math.abs(drawn - real) > 1 ? " · drawn " + Math.round(drawn) + "°" : "");
@@ -175,10 +175,17 @@
         buildHud(root);
         buildDrive(root);
         buildBench(root);
+        /* A focused bench button is exactly where the label says to press
+           1 to 5, so only typing fields are skipped. A key with a modifier
+           belongs to the browser (Cmd/Ctrl+1 switches tabs), and a key
+           that changes nothing on this layer is left alone too. */
         document.addEventListener("keydown", function (e) {
-          if (e.target && /^(INPUT|TEXTAREA|BUTTON)$/.test(e.target.tagName) && e.key.length === 1) return;
+          var tag = e.target && e.target.tagName;
+          if (tag === "TEXTAREA" || tag === "INPUT" || e.metaKey || e.ctrlKey || e.altKey) return;
           var i = "12345".indexOf(e.key);
-          if (i >= 0) { pick(ESCScene.order[i]); e.preventDefault(); }
+          if (i < 0 || !api.layer().free) return;
+          pick(ESCScene.order[i]);
+          e.preventDefault();
         });
       },
       layerChanged: function (a) {
