@@ -4,6 +4,13 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [2.15.1] — 2026-11-08 · The arrow, the button, and a reset
+
+- **The landing headline's arrow draws again, at every width.** 2.14.0 stood it down whenever "together," fell mid-line, which at most widths it did, so the arrow had quietly gone. The line now breaks after "together,", the headline is sized by its column rather than the window (three lines from a 320px phone to a wide screen), and the arrow runs out to the right, down and back in, the way the diagram's edges do.
+- **The landing button names the system on the stage**: "Deconstruct a payment ledger", "Deconstruct YouTube". It still opens that system at its first failure, or where you stopped if you have started it.
+- **A sample can be reset.** Its ⋯ menu offers Reset progress: your place, guesses and answers in it are cleared, the sample and any grafts you saved on it stay, and it reopens at the start. Samples cannot be deleted, because the next content update brings them back.
+- Internal planning documents are no longer published with the app.
+
 ## [2.15.0] — 2026-11-07 · Less on screen, and the first minute makes sense
 
 The audit's second half: thirteen changes that take things off the screen rather than add to it, each reviewed in a sandbox before shipping, then a second adversarial review of all of them together. Every confirmed finding from that review is fixed here.

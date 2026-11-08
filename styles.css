@@ -452,8 +452,20 @@ input,textarea{font-family:var(--sans);}
 .hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.12fr);gap:64px;align-items:center;min-height:min(640px,calc(100dvh - 180px));}
 .hero-copy{display:flex;flex-direction:column;align-items:flex-start;}
 .landing-head{font-family:var(--display);font-weight:650;font-size:clamp(38px,4vw,58px);line-height:1.02;
-  letter-spacing:-.045em;margin:22px 0 22px;text-wrap:balance;padding-bottom:30px;}
+  letter-spacing:-.045em;margin:22px 0 22px;text-wrap:balance;padding-bottom:6px;}
 .landing-head{position:relative;}
+/* Sized by the copy column, not the window. Set by the window, the type
+   outgrew its column on a phone (38px) and on a laptop (4vw in a column
+   under 500px), every line wrapped, and the headline ran to five or six
+   lines. At 10% of the column, "Put it back together," fits on one line
+   with room after it for the arrow's bracket, so the headline is three
+   lines at every width. The column is an fr track on both layouts, so
+   containing it does not collapse it. */
+@media(max-width:480px){.landing-head{font-size:clamp(28px,8.8vw,38px);}}
+@supports (font-size:1cqi){
+  .hero-copy{container-type:inline-size;}
+  .landing-head{font-size:clamp(28px,10cqi,58px);}
+}
 .landing-head > span{display:block;}
 .landing-head .lh-soft{color:var(--muted);}
 /* roughened letterforms. Display size only — the same displacement at body
@@ -462,17 +474,18 @@ input,textarea{font-family:var(--sans);}
 /* the two ideas the arrow runs between: inline, so they keep wrapping with
    the sentence rather than becoming blocks */
 .landing-head .lh-from,.landing-head .lh-to{display:inline;position:relative;
-  transition:color .45s var(--ease);}
+  transition:color .45s var(--ease);white-space:nowrap;}
 .landing-head .lh-from.lit,.landing-head .lh-to.lit{color:var(--accent-deep);}
 /* Sits over the text rather than under it: a negative z-index would put it
    behind an opaque ancestor, and pointer-events:none means it can never
-   be in the way. The headline reserves the room the dip needs. */
+   be in the way. The bracket runs beside the text, so the headline needs
+   no extra room below for it. */
 .lh-arrow{position:absolute;left:0;top:0;pointer-events:none;overflow:visible;}
 /* the true curve carries the token and is never painted; the roughened
    copy is what the reader sees */
 .lh-arrow .lh-true{fill:none;stroke:none;}
-.lh-arrow .lh-ink{fill:none;stroke:var(--accent-deep);stroke-width:2;
-  stroke-linecap:round;stroke-linejoin:round;opacity:.55;}
+.lh-arrow .lh-ink{fill:none;stroke:var(--accent-deep);stroke-width:2.25;
+  stroke-linecap:round;stroke-linejoin:round;opacity:.85;}
 .lh-tok{fill:var(--accent-deep);transition:opacity .3s var(--ease);}
 @media(prefers-reduced-motion:reduce){
   .landing-head .lh-from,.landing-head .lh-to{transition:none;}
@@ -481,6 +494,11 @@ input,textarea{font-family:var(--sans);}
 .landing-lede{font-size:clamp(16.5px,1.6vw,19px);line-height:1.55;color:var(--ink-soft);max-width:44ch;margin-bottom:34px;text-wrap:pretty;}
 .hero-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 .landing-cta{font-size:15px;}
+/* The button names the sample on stage, and the longest ("Deconstruct a
+   content delivery network") is wider than a 320px phone's column. It
+   wraps to two balanced lines there rather than pushing the page sideways. */
+.landing-cta{white-space:normal;max-width:100%;text-align:left;}
+.landing-cta .btn-label{min-width:0;text-wrap:balance;}
 .landing-foot{font-size:13px;color:var(--muted);margin-top:22px;}
 .landing-guide{margin-top:14px;padding:4px 2px;background:none;border:0;cursor:pointer;
   font-size:14px;font-weight:600;color:var(--accent-deep);

@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "2.15.0",
+  appVersion: "2.15.1",
   flagshipVersion: 15,                   // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   // foundations first, then the systems built on them — YouTube last in software, then non-software & 3D companion flagships
   flagshipNames: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue", "notification-system", "rate-limiter", "search-typeahead", "url-shortener", "ride-matching", "ticket-booking", "content-delivery-network", "recommendation-feed", "payment-ledger", "video-transcoding", "news-feed", "photo-store", "realtime-chat", "whatsapp", "youtube", "railway", "clearinghouse", "toyota-kanban", "immune-system", "manual-gearbox", "clock-escapement"],
@@ -942,6 +942,11 @@ var COPY = {
   menuNotesHint: "Notes to paste into UX-First Studio's Structure It station",
   menuGuide: "Field guide",
   menuDelete: "Delete this Deconstruct",
+  /* A sample cannot be deleted (it comes back with the next content update),
+     so its menu offers what deleting one was really for: starting over. */
+  menuReset: "Reset progress",
+  resetConfirm: name => `Reset "${name}"? Your place, guesses and answers in it are cleared and it starts again from the beginning. The sample stays, and so do any grafts you saved on it.`,
+  resetDone: name => `"${name}" starts again from the beginning.`,
   requestLink: "Request a system →",
   studioUrl: "https://bate-epey93.github.io/uxfirst-studio/",
   /* ---------- LANDING (first-run explainer) ---------- */
@@ -991,11 +996,42 @@ var COPY = {
        about eleven taps from here (Home, a card, the tips, two Meet steps).
        The primary button goes straight to it; the library is the second
        choice, and the field guide a quiet third. */
-    /* "Watch it break" left a first-time visitor asking what breaks, and
-       "Deconstruct" is a word they have not met yet. This says plainly what
-       happens next. The stage picks a different sample each visit, and the
-       button opens whichever one it is showing. */
-    cta: "Watch an example",
+    /* The button names the system on the stage, so it says plainly what
+       happens next and teaches the app's own verb on a thing the visitor
+       can already see. The stage picks a different sample each visit; each
+       has its noun here, article included, because "a" or "an" or none is
+       not something a rule gets right ("object storage", "WhatsApp").
+       ctaFallback shows only before the stage has picked, or for a sample
+       with no noun yet. */
+    cta: what => `Deconstruct ${what}`,
+    ctaFallback: "Watch an example",
+    ctaNoun: {
+      "clearinghouse": "a card network",
+      "clock-escapement": "a clock escapement",
+      "content-delivery-network": "a content delivery network",
+      "distributed-cache": "a distributed cache",
+      "immune-system": "the immune system",
+      "manual-gearbox": "a manual gearbox",
+      "message-queue": "a message queue",
+      "news-feed": "a news feed",
+      "notification-system": "a notification system",
+      "object-storage": "object storage",
+      "payment-ledger": "a payment ledger",
+      "photo-store": "a photo store",
+      "railway": "a railway network",
+      "rate-limiter": "a rate limiter",
+      "realtime-chat": "real-time chat",
+      "recommendation-feed": "a recommendation feed",
+      "ride-matching": "ride matching",
+      "search-typeahead": "search typeahead",
+      "ticket-booking": "ticket booking",
+      "toyota-kanban": "a production line",
+      "unique-id-generator": "a unique ID generator",
+      "url-shortener": "a URL shortener",
+      "video-transcoding": "video transcoding",
+      "whatsapp": "WhatsApp",
+      "youtube": "YouTube"
+    },
     browse: n => `Browse all ${n}`,
     browseAria: n => `Browse all ${n} systems`,
     footnote: "Your Deconstructs stay on this device. There is no cloud to sign up for."

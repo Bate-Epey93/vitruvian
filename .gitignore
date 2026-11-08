@@ -2,7 +2,12 @@ node_modules/
 .DS_Store
 .claude-launch-check
 
-# Internal strategy documents. This repo is public and GitHub Pages serves
-# every tracked file, so anything commercial stays out of git entirely.
+# Internal documents. This repo is public and GitHub Pages serves every
+# tracked file, so strategy, marketing and planning stay on this machine:
+# the commercialization plan, the marketing guide and the tooling that
+# builds it, and the improvements backlog. Untracking keeps them off the
+# site and out of new commits; commits made before 2.15.1 still hold them.
 commercialization.html
-marketing/commercialization-strategy.html
+marketing/
+tools/make-marketing-assets.js
+POSSIBLE-UPGRADES.md

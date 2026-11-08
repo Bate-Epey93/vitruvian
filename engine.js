@@ -100,6 +100,11 @@ let meta = {};                    // cached meta map
 let currentView = null;           // DocView instance when reading
 let currentRec = null;            // open breakdown record
 let currentDiagram = null;        // the reader's Diagram, retired on leaving (retireDiagram)
+/* Records a reset has replaced. A Compare or Ask still in flight when the
+   reader resets a sample lands later on the old view's record and would
+   save it back over the reset; onSave skips anything in here. A WeakSet,
+   not a flag on the record, because the record itself is what gets stored. */
+const retiredRecs = new WeakSet();
 let suppressRoute = false;        // prevents hash sync feedback loops during popstate
 let activeModelId = null;         // current model detail id on #/models/<id>
 let activeVocabId = null;         // current vocab focus id on #/vocab/<id>
@@ -950,7 +955,17 @@ function markedLine(line, L) {
   const mk = (cls, text) => { const e = h("span", cls, text); return e; };
   span.appendChild(document.createTextNode(line.slice(0, a)));
   span.appendChild(mk("lh-from", L.headlineFrom));
-  span.appendChild(document.createTextNode(line.slice(a + L.headlineFrom.length, b)));
+  /* Break the line after the first word's own punctuation, so both words
+     always end a line and the arrow always has the clear right-hand side
+     to run down. Left to wrap, "together" landed mid-line at most widths
+     and the arrow had nowhere to go. */
+  const mid = line.slice(a + L.headlineFrom.length, b);
+  const cut = mid.match(/^(\S*)\s+([\s\S]*)$/);
+  if (cut) {
+    span.appendChild(document.createTextNode(cut[1]));
+    span.appendChild(h("br", "lh-br"));
+    span.appendChild(document.createTextNode(cut[2]));
+  } else span.appendChild(document.createTextNode(mid));
   span.appendChild(mk("lh-to", L.headlineTo));
   span.appendChild(document.createTextNode(line.slice(b + L.headlineTo.length)));
   return span;
@@ -1000,13 +1015,16 @@ function headArrow(head) {
     if (!A.width || !B.width) return false;
     let d, need;
     if (Math.abs(B.top - A.top) < A.height / 2) {
-      /* one line: under both words, dipping between them */
+      /* One line: under both words, dipping between them. markedLine breaks
+         the line after the first word, so this is reached only if the copy
+         ever stops leaving a space to break at. */
       const x1 = A.left - H.left + A.width / 2, y1 = A.bottom - H.top + 3;
       const x2 = B.left - H.left + B.width / 2, y2 = B.bottom - H.top + 3;
       const drop = Math.max(14, Math.abs(y2 - y1) * 0.5 + 14);
       /* The dip falls below the headline's own box, so the canvas is sized to
          hold it rather than relying on overflow surviving every browser. The
-         h1 carries matching bottom padding, so nothing below gets covered. */
+         h1's bottom padding is sized for the bracket, not this, so the dip
+         may touch the lede's top margin. */
       need = Math.ceil(Math.max(y1, y2) + drop + 8);
       d = `M ${x1.toFixed(1)} ${y1.toFixed(1)} C ${x1.toFixed(1)} ${(y1 + drop).toFixed(1)}, ` +
           `${x2.toFixed(1)} ${(y2 + drop).toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}`;
@@ -1031,13 +1049,19 @@ function headArrow(head) {
         len = 0;
         return true;
       }
+      /* An edge the way the diagrams draw one: out to the right, down, and
+         back in, with rounded corners. The bow scales with the type, so it
+         reads as an arrow at 58px and still fits a phone's margin at 34. */
       const edge = rightIn(A.top, B.bottom) - H.left;   // the widest line the bracket passes
-      const x1 = endA - H.left + 6, y1 = A.top - H.top + A.height * 0.55;
-      const x2 = endB - H.left + 6, y2 = B.top - H.top + B.height * 0.55;
-      const cx = edge + 26;
+      const x1 = endA - H.left + 8, y1 = A.top - H.top + A.height * 0.55;
+      const x2 = endB - H.left + 8, y2 = B.top - H.top + B.height * 0.55;
+      const bow = Math.max(16, Math.min(34, A.height * 0.6));
+      const cx = edge + bow;
+      const r = Math.max(2, Math.min(12, (y2 - y1) / 2, bow - 4));
       need = Math.ceil(Math.max(y1, y2) + 8);
-      d = `M ${x1.toFixed(1)} ${y1.toFixed(1)} C ${cx.toFixed(1)} ${y1.toFixed(1)}, ` +
-          `${cx.toFixed(1)} ${y2.toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+      const f = v => v.toFixed(1);
+      d = `M ${f(x1)} ${f(y1)} H ${f(cx - r)} Q ${f(cx)} ${f(y1)} ${f(cx)} ${f(y1 + r)} ` +
+          `V ${f(y2 - r)} Q ${f(cx)} ${f(y2)} ${f(cx - r)} ${f(y2)} H ${f(x2)}`;
     }
     svg.style.display = "";
     svg.setAttribute("viewBox", `0 0 ${Math.round(H.width)} ${need}`);
@@ -1144,7 +1168,7 @@ function renderLanding() {
      partway through, and arriving at a step saves it as their place. So a
      study already started opens where they left it instead of moving their
      bookmark back to layer 1. */
-  const cta = ctaButton(L.cta, "landing-cta");
+  const cta = ctaButton(L.ctaFallback, "landing-cta");
   cta.onclick = async () => {
     await leave();
     const rec = await heroRecord();
@@ -1208,10 +1232,10 @@ function renderLanding() {
   });
   root.appendChild(grid);
   revealOnScroll(root);
-  mountHero({ dg, hsTitle, hsLayer, steps, note });
+  mountHero({ dg, hsTitle, hsLayer, steps, note, cta });
 }
 
-/* The system on the stage, and the one "Watch an example" opens. A
+/* The system on the stage, and the one the landing button names and opens. A
    different sample each time the landing is drawn, and never the same one
    twice running, so a returning visitor sees the range rather than the URL
    shortener forever. The button reads heroRecId, so it always opens the
@@ -1242,6 +1266,10 @@ async function mountHero(el) {
   const doc = rec.doc, N = doc.layers.length;
   const diagram = Diagram.mount(el.dg, doc);
   el.hsTitle.textContent = doc.meta.system;
+  /* the button names what the stage shows ("Deconstruct a message queue") */
+  const noun = L.ctaNoun && L.ctaNoun[String(rec.id).replace(/^flagship-/, "")];
+  const ctaLabel = el.cta && el.cta.querySelector(".btn-label");
+  if (ctaLabel && noun) ctaLabel.textContent = L.cta(noun);
   const segs = [];
   for (let i = 0; i <= N; i++) { const sg = h("span", "hs-seg"); el.steps.appendChild(sg); segs.push(sg); }
   /* Failure is the whole proposition, and a stage that only ever added boxes
@@ -3188,7 +3216,7 @@ async function openReader(id, layerIndex, opts = {}) {
                     (s.onSpine < s.chokes ? ` (${s.onSpine} on the spine)` : ""));
     toast(parts.join(" · "));
   };
-  /* Arriving by "Watch an example", the first thing on screen is the failure
+  /* Arriving by the landing button, the first thing on screen is the failure
      replaying itself, so the arrival tip waits for the collision instead of
      opening over it. With no replay coming it is offered as usual; the cap
      below keeps a replay that never lands from holding it back for good. */
@@ -3263,7 +3291,7 @@ async function openReader(id, layerIndex, opts = {}) {
     onSheetClose() { featureTips.trigger("ctx"); },
     async onOpen(id) { await flushSaves(); openReader(id); },
     async onFinish() { await flushSaves(); await renderLibrary(); show("library"); },
-    onSave(r) { Store.saveBreakdownLight(r); },
+    onSave(r) { if (!retiredRecs.has(r)) Store.saveBreakdownLight(r); },
     canCompare() {
       if (!navigator.onLine) return { ok: false, reason: "You're offline. " + COPY.gateCompareOffline };
       if (!meta.apiKey) return { ok: false, reason: "No API key set. " + COPY.gateCompareOffline };
@@ -3702,8 +3730,34 @@ function buildReaderMenu(rec, challengeOn) {
 
   /* Only the reader's own Deconstructs can be deleted. A sample deleted here
      lost its progress and came back with the next content update
-     (seedFlagships), so the entry promised something it could not keep. */
-  if (rec.source !== "flagship") {
+     (seedFlagships), so the entry promised something it could not keep.
+     A sample offers a reset instead: progress and answers go, the sample
+     and its saved grafts stay, and it reopens at the start. The reader is
+     torn down first (show cancels its debounced save and flushes), so
+     nothing it still holds can be written back over the reset. */
+  if (rec.source === "flagship") {
+    pop.appendChild(h("div", "menu-sep"));
+    add(pop, COPY.menuReset, async () => {
+      if (!confirm(COPY.resetConfirm(rec.system))) return;
+      await flushSaves();
+      await renderLibrary();
+      /* No history entries: the reader's own entry carries its old place
+         (#/study/x/5.3), and Back onto it would reopen there and save that
+         place into the reset record. So nothing is pushed, and the entry is
+         rewritten to the bare study once the reader reopens. */
+      show("library", { noRoute: true });
+      retiredRecs.add(rec);                 // after the teardown save, before anything late can land
+      const fresh = await Store.getBreakdown(rec.id).catch(() => null);
+      if (!fresh) return;
+      fresh.attempts = {};
+      fresh.progress = { layersRead: 0, gatesAnswered: 0, position: 0 };
+      delete fresh.lastOpen;
+      await Store.saveBreakdownLight(fresh);
+      await openReader(fresh.id, null, { noRoute: true });
+      syncRoute("replace");
+      toast(COPY.resetDone(fresh.system));
+    }, "danger");
+  } else {
     pop.appendChild(h("div", "menu-sep"));
     add(pop, COPY.menuDelete, async () => {
       if (!confirm(`Delete "${rec.system}" and its attempts? This cannot be undone.`)) return;
