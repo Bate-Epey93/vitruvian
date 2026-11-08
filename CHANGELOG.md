@@ -4,6 +4,14 @@ All notable changes to **Vitruvian** — a zero-backend, installable PWA that de
 
 Live at <https://bate-epey93.github.io/vitruvian/>. The format follows [Keep a Changelog](https://keepachangelog.com/); this project versions the app (`CONFIG.appVersion`) and the service-worker cache (`CACHE_VERSION`) together, bumped on every deploy.
 
+## [2.16.0] — 2026-11-08 · The name as a system, and straight in
+
+- **A new opening.** The splash spells VITRUVIAN as a small system: nine hand-sketched boxes on one lane, each drawn in, wired to the next in the diagram's lane colours, and a payload that runs along the boxes' edges, letter by letter, to the end. It stays up until the payload arrives, about three seconds, and once the app is ready a tap or a key skips the rest. Typing into a field that is already focused (the New Deconstruct shortcut) skips it too and keeps the letters, and a tip that opens then does not take them. With reduced motion on, it shows the finished word, still, and leaves at once.
+- **Nothing is lost behind it.** A message raised while the app opens (a link to a study that is not on this device, a shared link that will not import) waits for the splash to go, and so does the first tip for the screen underneath.
+- **The landing has Home's field.** "Search or name a system" sits under the introduction and works as Home's does: with no key, a sample's name opens the sample; anything else is generated, asking for a key first if there is none. A match shows under the field, as on Home, with its own Open button, and a screen reader is told about it. On a phone, the field moves to the top of the screen when the keyboard opens, so the match stays in view.
+- **The sample's button sits under the sample**, so "Deconstruct a rate limiter" is beside the rate limiter it opens. "Browse all 25" is now "Browse Deconstructs". The stage's diagram is a picture now, not a set of tab stops between the keyboard and that button.
+- **No grey box on tap.** Touch browsers painted a square highlight over every button you tapped; the buttons' own pressed state is the only one now.
+
 ## [2.15.1] — 2026-11-08 · The arrow, the button, and a reset
 
 - **The landing headline's arrow draws again, at every width.** 2.14.0 stood it down whenever "together," fell mid-line, which at most widths it did, so the arrow had quietly gone. The line now breaks after "together,", the headline is sized by its column rather than the window (three lines from a 320px phone to a wide screen), and the arrow runs out to the right, down and back in, the way the diagram's edges do.

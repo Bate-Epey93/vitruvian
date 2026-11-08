@@ -24,7 +24,7 @@ var CONFIG = {
   money:      "#9a6212",
   vermillion: "#D95B31",                // EnsoKit seal — human completion marks only
   storageKey: "system_deconstructor_v1",  // NEVER change: existing installs' data lives under this key
-  appVersion: "2.15.1",
+  appVersion: "2.16.0",
   flagshipVersion: 15,                   // bump when flagship JSON content changes → re-seeds for existing users (attempts preserved)
   // foundations first, then the systems built on them — YouTube last in software, then non-software & 3D companion flagships
   flagshipNames: ["unique-id-generator", "distributed-cache", "object-storage", "message-queue", "notification-system", "rate-limiter", "search-typeahead", "url-shortener", "ride-matching", "ticket-booking", "content-delivery-network", "recommendation-feed", "payment-ledger", "video-transcoding", "news-feed", "photo-store", "realtime-chat", "whatsapp", "youtube", "railway", "clearinghouse", "toyota-kanban", "immune-system", "manual-gearbox", "clock-escapement"],
@@ -615,6 +615,8 @@ var COPY = {
   },
   cardDone: "Deconstruct complete",
   homeSearchAria: "Search Home, or name a system to deconstruct",
+  landingSearchAria: "Find a sample, or name a system to deconstruct",
+  matchSay: name => `${name} is already here. Its Open button follows the Deconstruct button.`,
   homeFilterAria: "Filter what Home shows",
   matchOpen: "Open the Deconstruct \u2192",
   noMatchQuery: q => `Nothing on this device matches "${q}". Press Deconstruct above to generate it.`,
@@ -1032,8 +1034,7 @@ var COPY = {
       "whatsapp": "WhatsApp",
       "youtube": "YouTube"
     },
-    browse: n => `Browse all ${n}`,
-    browseAria: n => `Browse all ${n} systems`,
+    browse: "Browse Deconstructs",
     footnote: "Your Deconstructs stay on this device. There is no cloud to sign up for."
   },
 

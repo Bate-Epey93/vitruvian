@@ -707,17 +707,93 @@ async function boot() {
 }
 
 /* The splash (static HTML in index.html) stays up until the first screen has
-   rendered, but never less than long enough for the enso stroke + seal to
-   land — and reduced-motion users aren't made to wait for choreography. */
+   rendered, and never less than long enough for the payload to run the
+   word's boxes to the end (tools/make-splash.js prints this figure).
+   Reduced-motion users get the finished word, still, and aren't made to
+   wait for choreography. Once the app is ready, a tap or a key skips the
+   rest. */
+const SPLASH_MIN_MS = 2850;
+/* Up means covering the app: present, and not already cleared by its CSS
+   safety (which hides it without removing it if boot never finished). */
+function splashUp() {
+  const sp = document.getElementById("splash");
+  return !!(sp && getComputedStyle(sp).visibility !== "hidden");
+}
 function dismissSplash() {
   const sp = document.getElementById("splash");
   if (!sp) return;
   const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const minShow = reduced ? 300 : 1350;
-  setTimeout(() => {
+  /* Timed from when the splash's animations began (first paint), not from
+     navigation: on a slow first load the blocking CSS and rough.js put
+     first paint late enough that a navigation-timed minimum faded the
+     splash before the payload arrived. Both clocks share one origin. */
+  let t0 = 0;
+  try {
+    const starts = (sp.getAnimations ? sp.getAnimations({ subtree: true }) : [])
+      .map(a => a.startTime).filter(n => typeof n === "number" && isFinite(n));
+    if (starts.length) t0 = Math.min(...starts);
+  } catch (e) { /* no Web Animations API: time from navigation */ }
+  const minShow = reduced ? 300 : t0 + SPLASH_MIN_MS;
+  let gone = false, keySkipped = false;
+  const keepFocus = e => e.preventDefault();
+  /* What the splash held back gets its turn once it is gone: a toast raised
+     during boot (a missing study, a bad shared link) and the tip for the
+     screen underneath. */
+  const release = () => {
+    sp.remove();
+    sp.removeEventListener("mousedown", keepFocus);
+    window.removeEventListener("keydown", onKey, true);
+    if (keySkipped) eatRepeats();
+    if (toast._held) { const m = toast._held; toast._held = null; toast(m); }
+    featureTips.flush();
+  };
+  const hide = () => {
+    if (gone) return;
+    gone = true;
+    sp.removeEventListener("click", hide);
     sp.classList.add("splash-hide");
-    setTimeout(() => sp.remove(), 450);
-  }, Math.max(0, minShow - performance.now()));
+    /* no fade to wait for under reduced motion (transitions are 0s there) */
+    setTimeout(release, reduced ? 0 : 450);
+  };
+  /* click, not pointerdown: hiding sets pointer-events:none at once, and on
+     touch the click that follows a pointerdown would then land on whatever
+     was under the finger. Keys are spent on the splash, through its fade
+     too, so the one that skips cannot also act on the screen below. Three
+     exceptions: shortcuts with a modifier and the function keys (reload,
+     devtools) pass through, and so does typing into a field something
+     already focused (the New Deconstruct launcher focuses Home's field),
+     which skips the splash and keeps its letters. */
+  const onKey = e => {
+    if (e.ctrlKey || e.metaKey || e.altKey || /^F\d{1,2}$/.test(e.key)) return;
+    const t = e.target;
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) { hide(); return; }
+    keySkipped = true;
+    e.preventDefault();
+    e.stopPropagation();
+    hide();
+  };
+  /* The skipping key may still be held: its repeats are part of the same
+     press, not a step through the reader underneath. Eaten until the key
+     comes up or a fresh key goes down. */
+  const eatRepeats = () => {
+    const eat = e => {
+      if (e.type === "keydown" && e.repeat) { e.preventDefault(); e.stopPropagation(); return; }
+      window.removeEventListener("keydown", eat, true);
+      window.removeEventListener("keyup", eat, true);
+    };
+    window.addEventListener("keydown", eat, true);
+    window.addEventListener("keyup", eat, true);
+  };
+  /* Already cleared by its CSS safety (boot ran past it): adding the hide
+     class now would drop that animation's fill and make it "up" again for
+     the fade, holding keys, toasts and tips over a screen already showing. */
+  if (!splashUp()) { gone = true; release(); return; }
+  /* a tap that skips leaves focus where boot put it (Home's field for the
+     New Deconstruct shortcut, the step title in the reader) */
+  sp.addEventListener("mousedown", keepFocus);
+  sp.addEventListener("click", hide);
+  window.addEventListener("keydown", onKey, true);
+  setTimeout(hide, Math.max(0, minShow - performance.now()));
 }
 
 async function seedFlagships() {
@@ -1153,7 +1229,6 @@ function renderLanding() {
   roughInkDefs();
   headArrow(head);
   copy.appendChild(h("p", "landing-lede", L.lede));
-  const actions = h("div", "hero-actions");
   // either way out counts as having seen the landing
   const leave = async () => {
     stopHero();
@@ -1180,11 +1255,78 @@ function renderLanding() {
     await renderLibrary();
     show("library");
   };
-  const n = CONFIG.flagshipNames.length;
-  const browse = h("button", "gbtn ghost", L.browse(n));
-  browse.setAttribute("aria-label", L.browseAria(n));
+  /* Home's field, on the first screen, so a visitor who arrived with a
+     system in mind starts on it at once. It behaves as Home's does: with no
+     key, a sample's name opens the sample; anything else (or anything, with
+     a key) is generated, asking for a key first if there is none, and a
+     match under the field opens the sample either way. */
+  /* Home's order, so a name opens the same study from either field. Read
+     again on focus and on submit: a Deconstruct that finished in the
+     background while the landing was open must match too. */
+  const readAll = () => Store.getBreakdowns()
+    .then(list => list.sort((a, b) => (b.lastOpen || b.created) - (a.lastOpen || a.created)))
+    .catch(() => []);
+  let allP = readAll();
+  const bar = h("div", "deconstruct-bar landing-bar");
+  const field = h("label", "db-field");
+  field.appendChild(icon("sparkle", "db-ico"));
+  const input = h("input");
+  input.id = "landingInput";
+  input.placeholder = COPY.deconstructPlaceholderShort;
+  input.maxLength = 120;
+  input.autocomplete = "off";
+  input.setAttribute("aria-label", COPY.landingSearchAria);
+  field.appendChild(input);
+  const go = ctaButton(COPY.deconstructBtn);
+  const submit = async () => {
+    if (!input.value.trim()) { input.focus(); return; }
+    submitDeconstruct(input.value, await readAll());
+  };
+  go.onclick = submit;
+  field.appendChild(go);
+  bar.appendChild(field);
+  copy.appendChild(bar);
+  const matchSlot = h("div", "omni-match-slot landing-match");
+  copy.appendChild(matchSlot);
+  const said = { key: "" };
+  input.onkeydown = e => {
+    if (e.key === "Enter") submit();
+    else if (e.key === "Escape" && input.value) { e.stopPropagation(); input.value = ""; matchSlot.textContent = ""; announceMatch(null, said); }
+  };
+  input.oninput = async () => {
+    const q = input.value;
+    const all = await allP;
+    if (input.value !== q) return;            // a newer keystroke is on its way
+    matchSlot.textContent = "";
+    const banner = matchBanner(all, q.trim());
+    if (banner) matchSlot.appendChild(banner);
+    announceMatch(banner, said);
+  };
+  /* On a phone the field sits low enough that the keyboard covers the match
+     under it. When the keyboard actually comes up (the visible viewport
+     shrinks while the field has focus), the field is lifted to the top of
+     the screen. A focus with no keyboard (a hardware one, a refocus, a
+     window coming back) changes nothing. */
+  input.addEventListener("focus", () => {
+    allP = readAll();
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const h0 = vv.height;
+    const done = () => { vv.removeEventListener("resize", onResize); clearTimeout(stop); };
+    const onResize = () => {
+      if (document.activeElement !== input) { done(); return; }
+      if (vv.height > h0 - 120) return;       // still opening, or not a keyboard
+      done();
+      try { bar.scrollIntoView({ block: "start", behavior: RM_PREF() ? "instant" : "smooth" }); }
+      catch (e) { bar.scrollIntoView(true); }
+    };
+    const stop = setTimeout(done, 1500);
+    vv.addEventListener("resize", onResize);
+  });
+  const actions = h("div", "hero-actions");
+  const browse = h("button", "gbtn", L.browse);
   browse.onclick = async () => { await leave(); await renderLibrary(); show("library"); };
-  actions.append(cta, browse);
+  actions.append(browse);
   copy.appendChild(actions);
   const learn = h("button", "landing-guide", L.learn);
   learn.onclick = () => { stopHero(); renderTutorial("landing"); show("tutorial"); };
@@ -1193,18 +1335,30 @@ function renderLanding() {
   hero.appendChild(copy);
 
   // the stage: shell + core, the core holds a live diagram
-  const stage = h("div", "hero-stage reveal");
+  const stage = h("div", "hero-stage");
   const core = h("div", "hs-core");
-  const bar = h("div", "hs-bar");
+  const hsBar = h("div", "hs-bar");
   const hsTitle = h("span", "hs-title", "");
   const hsLayer = h("span", "hs-layer", "");
-  bar.append(hsTitle, hsLayer);
+  hsBar.append(hsTitle, hsLayer);
   const dg = h("div", "hs-diagram");
+  /* A picture here, not a diagram to work: its nodes are focusable in the
+     reader, and on the stage they put a few dozen tab stops, rebuilt every
+     beat, between the reader and the button under it. The caption says
+     what each beat shows. */
+  dg.inert = true;
+  dg.setAttribute("inert", "");
   const steps = h("div", "hs-steps");
   const note = h("div", "hs-note", "");
-  core.append(bar, dg, note, steps);
+  core.append(hsBar, dg, note, steps);
   stage.appendChild(core);
-  hero.appendChild(stage);
+  /* The sample's own button sits under the sample it names. */
+  const stageCol = h("div", "hero-show reveal");
+  stageCol.appendChild(stage);
+  const ctaRow = h("div", "hero-cta-row");
+  ctaRow.appendChild(cta);
+  stageCol.appendChild(ctaRow);
+  hero.appendChild(stageCol);
   root.appendChild(hero);
 
   // numbers that are true today, read from the library itself
@@ -1805,6 +1959,95 @@ function findBestInstantMatch(all, q) {
   return null;
 }
 
+/* The deconstruct field's two moves, shared by Home and the landing. A name
+   that has a sample or a lab behind it opens that when there is no key to
+   generate with; anything else is generated, asking for a key first. */
+function startDeconstruct(name, all) {
+  if (!name) return;
+  const start = () => { renderGenerate(name); show("generate"); };
+  if (!meta.apiKey) {
+    openKeySheet({ action: "deconstruct", echo: COPY.keySheetEcho.deconstruct(safeLine(name, 60)), hit: findBestInstantMatch(all, name), resume: start });
+    return;
+  }
+  start();
+}
+function submitDeconstruct(raw, all) {
+  const name = String(raw || "").trim();
+  if (!name) return;
+  const hit = findBestInstantMatch(all, name);
+  if (hit && !meta.apiKey) {
+    if (hit.kind === "rec") { openReader(hit.rec.id); return; }
+    if (hit.kind === "lab") { location.href = hit.st.href; return; }
+  }
+  startDeconstruct(name, all);
+}
+/* What the typed name already matches, as a banner under the field: the
+   sample (open it, its lab, or generate fresh) or a lab. Null for no match. */
+function matchBanner(all, q) {
+  const hit = findBestInstantMatch(all, q);
+  if (!hit) return null;
+  const banner = h("div", "omni-match");
+  const name = hit.kind === "rec" ? hit.rec.system : hit.st.name;
+  banner.dataset.match = (hit.kind === "rec" ? hit.rec.id : hit.st.href) || name;
+  banner.dataset.say = COPY.matchSay(name);
+  const info = h("div", "omni-match-info");
+  if (hit.kind === "rec") {
+    const rec = hit.rec;
+    info.appendChild(h("span", "chip flagship", sourceChipLabel(rec)));
+    info.appendChild(h("span", "omni-match-title", rec.system));
+    info.appendChild(h("span", "omni-match-sub", `${rec.doc.layers.length} layers · works offline`));
+    const acts = h("div", "omni-match-actions");
+    const openBtn = h("button", "gbtn primary", COPY.matchOpen);
+    openBtn.type = "button";
+    openBtn.onclick = () => openReader(rec.id);
+    acts.appendChild(openBtn);
+    if (hit.fs) {
+      const labLink = guardLabLink(h("a", "gbtn", COPY.labOpenAlso));
+      labLink.href = hit.fs.href;
+      acts.appendChild(labLink);
+    }
+    const genBtn = h("button", "gbtn ghost", "Generate fresh");
+    genBtn.type = "button";
+    genBtn.onclick = () => startDeconstruct(q.trim(), all);
+    acts.appendChild(genBtn);
+    banner.append(info, acts);
+  } else if (hit.kind === "lab") {
+    const st = hit.st;
+    info.appendChild(h("span", "chip lab-chip", COPY.labCardChip));
+    info.appendChild(h("span", "omni-match-title", st.name));
+    info.appendChild(h("span", "omni-match-sub", st.sub));
+    const acts = h("div", "omni-match-actions");
+    const openLink = guardLabLink(h("a", "gbtn primary", COPY.labOpen));
+    openLink.href = st.href;
+    acts.appendChild(openLink);
+    const genBtn = h("button", "gbtn ghost", "Deconstruct in 2D");
+    genBtn.type = "button";
+    genBtn.onclick = () => startDeconstruct(q.trim(), all);
+    acts.appendChild(genBtn);
+    banner.append(info, acts);
+  }
+  return banner;
+}
+
+/* The banner appears with no other sign, so a screen reader is told once
+   per new match, not on every keystroke that rebuilds the same one. Each
+   field keeps its own memory of what it last said. */
+const homeMatchSaid = { key: "" };
+function announceMatch(banner, said) {
+  const key = banner ? banner.dataset.match : "";
+  if (key === said.key) return;
+  said.key = key;
+  const live = $("liveRegion");
+  if (!live) return;
+  /* cleared first, then written a tick later: some screen readers (VoiceOver
+     especially) do not re-read a region whose text did not change, which is
+     exactly the case after Escape or on the other field */
+  live.textContent = "";
+  if (!banner) return;
+  const say = banner.dataset.say;
+  setTimeout(() => { if (said.key === key) live.textContent = say; }, 50);
+}
+
 async function renderLibrary() {
   /* Read before touching the screen. With the await between the clear and
      the appends, two quick taps on Home interleaved and built the whole
@@ -1839,27 +2082,7 @@ async function renderLibrary() {
   input.autocomplete = "off";
   field.appendChild(input);
   const go = ctaButton(COPY.deconstructBtn);
-  const launchGenerate = name => {
-    if (!name) return;
-    const start = () => { renderGenerate(name); show("generate"); };
-    if (!meta.apiKey) {
-      openKeySheet({ action: "deconstruct", echo: COPY.keySheetEcho.deconstruct(safeLine(name, 60)), hit: findBestInstantMatch(all, name), resume: start });
-      return;
-    }
-    start();
-  };
-  const launch = () => {
-    const name = input.value.trim();
-    if (!name) return;
-    const hit = findBestInstantMatch(all, name);
-    // When no API key is configured, pressing Enter or Deconstruct on a matching
-    // offline study opens it immediately instead of asking for a key.
-    if (hit && !meta.apiKey) {
-      if (hit.kind === "rec") { openReader(hit.rec.id); return; }
-      if (hit.kind === "lab") { location.href = hit.st.href; return; }
-    }
-    launchGenerate(name);
-  };
+  const launch = () => submitDeconstruct(input.value, all);
   go.onclick = launch;
   input.onkeydown = e => {
     if (e.key === "Enter") launch();
@@ -1945,46 +2168,9 @@ async function renderLibrary() {
 
   function paintMatchBanner(q) {
     matchSlot.textContent = "";
-    const hit = findBestInstantMatch(all, q);
-    if (!hit) return;
-    const banner = h("div", "omni-match");
-    const info = h("div", "omni-match-info");
-    if (hit.kind === "rec") {
-      const rec = hit.rec;
-      info.appendChild(h("span", "chip flagship", sourceChipLabel(rec)));
-      info.appendChild(h("span", "omni-match-title", rec.system));
-      info.appendChild(h("span", "omni-match-sub", `${rec.doc.layers.length} layers · works offline`));
-      const acts = h("div", "omni-match-actions");
-      const openBtn = h("button", "gbtn primary", COPY.matchOpen);
-      openBtn.type = "button";
-      openBtn.onclick = () => openReader(rec.id);
-      acts.appendChild(openBtn);
-      if (hit.fs) {
-        const labLink = guardLabLink(h("a", "gbtn", COPY.labOpenAlso));
-        labLink.href = hit.fs.href;
-        acts.appendChild(labLink);
-      }
-      const genBtn = h("button", "gbtn ghost", "Generate fresh");
-      genBtn.type = "button";
-      genBtn.onclick = () => launchGenerate(q.trim());
-      acts.appendChild(genBtn);
-      banner.append(info, acts);
-    } else if (hit.kind === "lab") {
-      const st = hit.st;
-      info.appendChild(h("span", "chip lab-chip", COPY.labCardChip));
-      info.appendChild(h("span", "omni-match-title", st.name));
-      info.appendChild(h("span", "omni-match-sub", st.sub));
-      const acts = h("div", "omni-match-actions");
-      const openLink = guardLabLink(h("a", "gbtn primary", COPY.labOpen));
-      openLink.href = st.href;
-      acts.appendChild(openLink);
-      const genBtn = h("button", "gbtn ghost", "Deconstruct in 2D");
-      genBtn.type = "button";
-      genBtn.onclick = () => launchGenerate(q.trim());
-      acts.appendChild(genBtn);
-      banner.append(info, acts);
-    }
-    matchSlot.appendChild(banner);
+    const banner = matchBanner(all, q);
+    if (banner) matchSlot.appendChild(banner);
+    announceMatch(banner, homeMatchSaid);
   }
 
   function paintBody() {
@@ -2185,6 +2371,10 @@ function download(name, text) {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 function toast(msg) {
+  /* The splash sits over the toast for up to three seconds, longer than a
+     toast lasts, so one raised during boot waits for it (dismissSplash
+     replays the latest). */
+  if (splashUp()) { toast._held = msg; return; }
   const t = $("saveToast");
   t.textContent = msg;
   t.classList.add("show");
@@ -2271,10 +2461,17 @@ const featureTips = (() => {
      reaching the next one's guess step fires both the install offer and the
      "steps" tip; the offer checks for a tip, so the tip checks for the offer,
      and a used tip is offered again on the next use. */
+  /* The splash too: it now stays up for the payload's run, and a tip
+     opened under it was focused, unseen, and spent by the key that skipped
+     the splash. dismissSplash visits the screen again once it is gone. */
   const busy = () => {
     const sheet = $("installSheet");
-    return !!card || !!(sheet && !sheet.hidden);
+    return !!card || !!(sheet && !sheet.hidden) || splashUp();
   };
+  /* The one visit the splash turned away, replayed by flush() once it is
+     gone, if the reader is still where it was and (for the reader) still on
+     the same study. */
+  let pending = null;
   const done = () => (meta.tipsDone && typeof meta.tipsDone === "object") ? meta.tipsDone : {};
   /* Look inside the screen first, then fall back to the whole page: some of
      what a screen offers lives in the topbar, which is not inside the screen
@@ -2313,7 +2510,15 @@ const featureTips = (() => {
       try { to.focus({ preventScroll: true }); } catch (e) {}
     }
   }
-  function onKey(e) { if (e.key === "Escape") { e.stopPropagation(); dismiss(); } }
+  /* A held key's repeats are not a decision about a tip that opened under
+     it: they neither dismiss it nor press its focused "Got it". */
+  function onKey(e) {
+    if (e.repeat) {
+      if (card && (e.key === "Escape" || card.contains(document.activeElement))) e.preventDefault();
+      return;
+    }
+    if (e.key === "Escape") { e.stopPropagation(); dismiss(); }
+  }
   async function dismiss() { const t = tip; closeByHand(); if (t) await markDone(t.id); }
 
   function place() {
@@ -2402,19 +2607,39 @@ const featureTips = (() => {
     card.querySelector(".tip-text").textContent = t.text;
     reveal(ringed);
     place();
-    card.querySelector(".tip-next").focus();
+    /* Not from someone typing: the card still opens (and is announced), but
+       their next letters stay in their field rather than landing on
+       "Got it", and a space does not spend the tip unread. */
+    const a = document.activeElement;
+    const typing = a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+    if (!typing) card.querySelector(".tip-next").focus();
   }
 
   /* Called whenever a screen settles. Offers one tip: one held from a tool
      used on the way out, else the first unspent tip for this screen that
      waits only for arrival and whose target is on the page. The rest come
      on later arrivals, or when their thing is used. */
-  function visit(screen) {
-    if (!on() || busy()) return;
+  function visit(screen, guard) {
+    if (!on()) return;
+    if (busy()) {
+      if (!card && splashUp()) pending = { screen, guard };
+      return;
+    }
+    if (guard && !guard()) return;
     const spent = done();
     const left = (COPY.tips || []).filter(t => t.screen === screen && !spent[t.id] && find(t));
     const t = left.find(x => held.has(x.id)) || left.find(x => x.when !== "used");
     if (t) open(t);
+  }
+
+  /* Called by dismissSplash once the splash is gone: the visit it turned
+     away, if the reader is still on that screen (and, for the reader, still
+     on the same study). A tip used under the splash was held, and visit
+     prefers held tips. */
+  function flush() {
+    const p = pending;
+    pending = null;
+    if (p && document.body.dataset.screen === p.screen) visit(p.screen, p.guard);
   }
 
   /* Called by the thing a "used" tip describes, every time it is used, so
@@ -2425,7 +2650,9 @@ const featureTips = (() => {
     const t = (COPY.tips || []).find(x => x.id === id);
     if (!t || !on() || done()[id]) return;
     setTimeout(() => {
-      if (!on() || done()[id] || busy()) return;
+      if (!on() || done()[id]) return;
+      if (!card && splashUp()) { held.add(id); return; }
+      if (busy()) return;
       if (document.body.dataset.screen !== t.screen) { held.add(id); return; }
       open(t);
     }, 300);
@@ -2433,6 +2660,7 @@ const featureTips = (() => {
 
   return {
     visit,
+    flush,
     trigger,
     close,
     get enabled() { return on(); },
@@ -3221,7 +3449,7 @@ async function openReader(id, layerIndex, opts = {}) {
      opening over it. With no replay coming it is offered as usual; the cap
      below keeps a replay that never lands from holding it back for good. */
   let tipWait = !!opts.watch && diagram.sim.available && meta.autoReplay !== false && meta.onePage !== true;
-  const offerTip = () => { if (currentRec === rec) featureTips.visit("reader"); };
+  const offerTip = () => { if (currentRec === rec) featureTips.visit("reader", () => currentRec === rec); };
   // scripted incident: two tokens run into the gate's failure, seconds apart.
   // The caption tells the reader what history they just watched.
   diagram.sim.onReplayCrash(() => {
